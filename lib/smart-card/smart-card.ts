@@ -121,18 +121,36 @@ export function isStagedJourneyCard(id: SmartCardId): boolean {
   return id === "journey";
 }
 
-/** First applicable provider wins after canonical priority sorting. */
+/**
+ * First applicable provider wins after canonical priority sorting.
+ *
+ * `excludedIds` lets a SURFACE say which states it does not own. Home passes
+ * the ones NearbyHero and the Activation card own, so that when (say)
+ * `nearby_muddies` ranks highest the engine keeps looking and returns the best
+ * Plan or Event instead. Filtering afterwards in the client would resolve a
+ * card and then silently render nothing -- Home would go blank precisely when
+ * it had something useful to say.
+ */
 export function resolveSmartCard(
   providers: readonly SmartCardProvider[],
-  options: { now: number; acknowledgedIds?: ReadonlySet<string> } = { now: Date.now() }
+  options: {
+    now: number;
+    acknowledgedIds?: ReadonlySet<string>;
+    excludedIds?: ReadonlySet<string> | readonly string[];
+  } = { now: Date.now() }
 ): SmartCard | null {
   const acknowledged = options.acknowledgedIds ?? new Set<string>();
+  const excluded =
+    options.excludedIds instanceof Set
+      ? options.excludedIds
+      : new Set<string>(options.excludedIds ?? []);
   const ordered = [...providers].sort(
     (a, b) => SMART_CARD_PRIORITY[a.id] - SMART_CARD_PRIORITY[b.id]
   );
 
   for (const provider of ordered) {
     if (acknowledged.has(provider.id)) continue;
+    if (excluded.has(provider.id)) continue;
     const card = provider.build();
     if (!card) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;

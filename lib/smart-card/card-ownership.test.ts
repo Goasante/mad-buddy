@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { stripComments } from "@/lib/content/strip-comments";
 import { SMART_CARD_APPROVED_STATES } from "@/lib/smart-card/catalog";
 import { SMART_CARD_IDS } from "@/lib/smart-card/smart-card";
 
@@ -28,7 +29,12 @@ import { SMART_CARD_IDS } from "@/lib/smart-card/smart-card";
  */
 
 const ROOT = process.cwd();
-const dashboard = readFileSync(path.join(ROOT, "components", "dashboard", "dashboard-page.tsx"), "utf8");
+/* Comments stripped: Home documents the OLD gate in prose so the change is
+   legible to the next reader, and a "must not contain" assertion would
+   otherwise be satisfied by an explanation of why that code is gone. */
+const dashboard = stripComments(
+  readFileSync(path.join(ROOT, "components", "dashboard", "dashboard-page.tsx"), "utf8")
+);
 
 /** States Card A owns outright. A Smart Card provider for these would duplicate. */
 const CARD_A_OWNED = [
@@ -64,20 +70,27 @@ describe("Card A keeps its territory", () => {
 });
 
 describe("Home composition still gates the Smart Card", () => {
-  it("renders the Smart Card only for safety or the Journey slot", () => {
-    /* The live gate. Every other built state -- Plan RSVP, live Event, nearby,
-       fallback -- is currently computed and then discarded, which is why
-       widening this condition is a product decision rather than a refactor.
-       If this assertion fails, the gate moved: re-read the composition rules
-       before assuming that is an improvement. */
-    expect(dashboard).toMatch(
-      /smartCard\s*&&\s*\(\s*smartCard\.id\s*===\s*"safe_arrival"\s*\|\|\s*composition\.showJourneyCard\s*\)/
-    );
+  it("gates the Smart Card by TIER, not by a list of ids", () => {
+    /* The old condition named two ids -- safe_arrival and the Journey slot --
+       so twelve of fourteen built states were computed and discarded. A longer
+       id list would reintroduce that one state at a time, so Home asks the
+       canonical helper instead and a new catalog state inherits the right
+       behaviour from its tier. */
+    expect(dashboard).toMatch(/smartCard\s*&&\s*smartCardGate\.eligible/);
+    expect(dashboard).toMatch(/shouldShowSmartCardOnHome\(\{/);
+    expect(dashboard).not.toMatch(/smartCard\.id\s*===\s*"safe_arrival"\s*\|\|\s*composition\.showJourneyCard/);
   });
 
-  it("defers the Smart Card whenever Activation is on screen", () => {
-    // `deferred` is how Card B visually stands down instead of competing.
-    expect(dashboard).toMatch(/deferred=\{Boolean\(activationState\)\s*&&\s*smartCard\.id\s*!==\s*"safe_arrival"\}/);
+  it("counts FirstMuddyCard as Card A when deciding to defer", () => {
+    /* FirstMuddyCard REPLACES ActivationCard, so checking only the second
+       would let Card B compete at full volume with the first-Muddy payoff --
+       the one moment activation exists to produce. */
+    expect(dashboard).toMatch(/cardAVisible:\s*Boolean\(firstMuddy\s*\|\|\s*activationState\)/);
+  });
+
+  it("renders V2, and does not leave V1 on screen beside it", () => {
+    expect(dashboard).toMatch(/<SmartCardHeroV2\s/);
+    expect(dashboard).not.toMatch(/<SmartCardHero\s/);
   });
 
   it("lets FirstMuddyCard replace ActivationCard rather than stack with it", () => {

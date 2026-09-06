@@ -51,7 +51,19 @@ export async function acknowledgeSmartCard(userId: string, cardId: string): Prom
  */
 export async function loadSmartCard(
   userId: string,
-  input: Omit<SmartCardInput, "now"> & { now?: Date }
+  input: Omit<SmartCardInput, "now"> & {
+    now?: Date;
+    /**
+     * States the CALLING SURFACE does not own.
+     *
+     * Home passes the ids NearbyHero and the Activation card own, so if one of
+     * them ranks highest the engine keeps looking and returns the best Card B
+     * state instead. Filtering after resolution would hand Home a card it then
+     * declines to render, blanking the slot exactly when there was something
+     * useful to show.
+     */
+    excludedIds?: readonly string[];
+  }
 ): Promise<SmartCard | null> {
   const now = input.now ?? new Date();
   const env = getSupabaseServerEnv();
@@ -63,6 +75,7 @@ export async function loadSmartCard(
 
   return resolveSmartCard(smartCardProviders({ ...input, now }), {
     now: now.getTime(),
-    acknowledgedIds
+    acknowledgedIds,
+    excludedIds: input.excludedIds
   });
 }

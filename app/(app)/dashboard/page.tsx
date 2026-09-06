@@ -12,6 +12,7 @@ import { countIncomingRequests } from "@/lib/friends/service";
 import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
 import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
+import { HOME_EXCLUDED_SMART_CARD_IDS } from "@/lib/smart-card/home-gate";
 import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
@@ -103,7 +104,11 @@ export default async function DashboardPage() {
         agenda: agenda?.items ?? [],
         weekendPlanCount: isWeekendPlanningWindow(now)
           ? (agenda?.items ?? []).filter(
-              (item) => item.kind === "plan" && isWeekendPlanningWindow(new Date(item.startAt))
+              /* `startsAt` is the agenda projection's field for both kinds.
+                 A plan also carries `startAt` from HomeUpcomingPlan with the
+                 same value, but reading the projection's own field keeps every
+                 agenda consumer on one contract. */
+              (item) => item.kind === "plan" && isWeekendPlanningWindow(new Date(item.startsAt))
             ).length
           : 0,
         nearbyFriends: activation?.nearby ?? [],
@@ -111,7 +116,13 @@ export default async function DashboardPage() {
         muddyCount: activation?.muddyCount ?? 0,
         buddyScore,
         recentAchievement: null,
-        suggestionCount: 0
+        suggestionCount: 0,
+        /* NearbyHero owns the proximity payoff and the Activation card owns
+           cold-start people discovery. Excluding them HERE (rather than after
+           resolution) means that when one of them ranks highest the engine
+           returns the next best Card B state instead of a card Home would
+           decline to render. */
+        excludedIds: HOME_EXCLUDED_SMART_CARD_IDS
       })
     : null;
 

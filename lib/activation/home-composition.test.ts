@@ -1,3 +1,4 @@
+import { shouldShowSmartCardOnHome } from "@/lib/smart-card/home-gate";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { stripComments } from "@/lib/content/strip-comments";
@@ -202,18 +203,29 @@ describe("only one activation system guides at a time", () => {
     expect(composeHome(at({ activationState: "muddy_nearby" })).showJourneyCard).toBe(true);
   });
 
+  /* These two used to read Home's source for the literal gate
+   * `smartCard.id === "safe_arrival" || composition.showJourneyCard`.
+   * Home now decides by TIER through shouldShowSmartCardOnHome, so the rules
+   * are asserted against that helper -- which is also where they are actually
+   * enforced -- rather than against a string that happened to encode them. */
+
   it("never covers a live Safe Arrival", () => {
-    /* Safety is a different card and is gated on its own id, so suppressing
-     * the Journey card cannot hide somebody's journey. */
-    const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
-    expect(home).toContain('smartCard.id === "safe_arrival" || composition.showJourneyCard');
+    // Safety is tier 0: eligible during early activation, and never quiet.
+    expect(
+      shouldShowSmartCardOnHome({ id: "safe_arrival", earlyActivation: true, cardAVisible: true })
+    ).toEqual({ eligible: true, deferred: false, tier: 0 });
   });
 
   it("suppresses rather than merely dimming", () => {
-    // A quieter card giving a competing instruction is still competing.
-    const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
-    const at2 = home.indexOf("<SmartCardHero");
-    expect(home.lastIndexOf("composition.showJourneyCard", at2)).toBeGreaterThan(-1);
+    // A quieter card giving a competing instruction is still competing, so the
+    // Journey card is withheld outright while activation teaches.
+    const gated = shouldShowSmartCardOnHome({
+      id: "journey",
+      earlyActivation: true,
+      cardAVisible: true
+    });
+    expect(gated.eligible).toBe(false);
+    expect(gated.deferred).toBe(false);
   });
 });
 
