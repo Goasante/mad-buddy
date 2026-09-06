@@ -52,10 +52,13 @@ export async function getReadinessReport(): Promise<ReadinessReport> {
     }
   ];
 
-  const missingPaystack = getMissingPaystackWebhookConfig().concat(
-    !hasValue(process.env.PAYSTACK_BUDDY_PLUS_PLAN_CODE) ? ["PAYSTACK_BUDDY_PLUS_PLAN_CODE"] : [],
-    !hasValue(process.env.PAYSTACK_BUDDY_PRO_PLAN_CODE) ? ["PAYSTACK_BUDDY_PRO_PLAN_CODE"] : []
-  );
+  // Current consumer billing authority is Mad Buddy Access. The retired
+  // Buddy Plus / Buddy Pro ladder still has compatibility code, but its plan
+  // codes are not a production-readiness requirement for the current product.
+  // The Access price/plan definition is server-owned in lib/access/product.ts;
+  // this check verifies the Paystack transport/webhook configuration required
+  // by the live checkout + webhook path.
+  const missingPaystack = getMissingPaystackWebhookConfig();
 
   checks.push({
     name: "paystack",

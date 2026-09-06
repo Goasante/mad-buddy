@@ -1,0 +1,32 @@
+# Mad Buddy sensitive-path ownership
+#
+# CODEOWNERS does not enforce review by itself. Enforcement requires a branch
+# protection/ruleset that requires code-owner review. Until then this file is
+# still useful documentation for contributors and PR reviewers.
+
+# Database schema, migrations and generated DB contract
+/supabase/migrations/ @Goasante
+/lib/supabase/ @Goasante
+
+# Authentication, authorization, security and admin authority
+/lib/security/ @Goasante
+/lib/admin/ @Goasante
+/app/api/cron/ @Goasante
+
+# Billing / Mad Buddy Access / Paystack
+/lib/access/ @Goasante
+/lib/paystack/ @Goasante
+/app/api/access/ @Goasante
+/app/api/paystack/ @Goasante
+
+# Safe Arrival and privacy-sensitive location/proximity code
+/lib/safe-arrival/ @Goasante
+/lib/location/ @Goasante
+/lib/proximity/ @Goasante
+
+# CI, release and security workflows
+/.github/workflows/ @Goasante
+
+# Operational authority documentation
+/docs/operations/ @Goasante
+/docs/product/CONTINUATION.md @Goasante
