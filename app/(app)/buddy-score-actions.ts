@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadMyProgress } from "@/lib/progress/my-progress-service";
 import type { MyProgressData } from "@/lib/progress/my-progress";
+import { JOURNEY_STEP_IDS } from "@/lib/journey/journey";
 
 export async function loadBuddyScoreAction(): Promise<MyProgressData> {
   const supabase = await createSupabaseServerClient();
@@ -23,7 +24,9 @@ export async function loadBuddyScoreAction(): Promise<MyProgressData> {
       achievements: { unlockedCount: 0, featured: [], recent: [] },
       milestones: [],
       timeline: [],
-      journey: { completedCount: 0, totalCount: 9, currentStep: null, steps: [] }
+      // Never hard-code the Journey length here: pausing/removing a canonical
+      // step must update the anonymous fallback automatically too.
+      journey: { completedCount: 0, totalCount: JOURNEY_STEP_IDS.length, currentStep: null, steps: [] }
     };
   }
   return loadMyProgress(createSupabaseAdminClient(), user.id);
