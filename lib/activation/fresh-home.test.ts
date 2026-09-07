@@ -171,9 +171,14 @@ describe("the Smart Card yields while activation owns the screen", () => {
    * asserted against the helper rather than against Home's source text. What
    * remains source-level here is that Home actually DELEGATES to it. */
 
-  it("delegates the decision to the canonical tier helper", () => {
-    expect(home).toContain("shouldShowSmartCardOnHome");
-    expect(home).toContain("smartCardGate.eligible");
+  it("delegates the decision to the canonical arbiter", () => {
+    /* The tier helper is still the source of Card B's tier; what changed is
+       that Home no longer asks it directly. Both surfaces' candidates go to
+       `arbitrateHomeCard`, which ranks them on one ladder and returns the
+       single winner -- so an obligation can no longer lose to a nudge just
+       because Card A got to decide first. */
+    expect(home).toContain("arbitrateHomeCard");
+    expect(home).toContain('homeCard.winner === "card_b"');
   });
 
   it("never defers a safety state", () => {

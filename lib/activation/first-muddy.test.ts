@@ -215,8 +215,8 @@ describe("Home shows one activation voice at a time", () => {
   it("replaces the generic card while acknowledging the first Muddy", () => {
     // Two cards asking for the same thing is the app repeating itself at the
     // exact moment it should be warm.
-    expect(home).toContain("{firstMuddy ? (");
-    expect(home).toContain(") : activationState ? (");
+    expect(home).toContain('{homeCard.winner === "card_a" && firstMuddy ? (');
+    expect(home).toContain(') : homeCard.winner === "card_a" && activationState ? (');
   });
 
   it("derives the acknowledgement on the server", () => {

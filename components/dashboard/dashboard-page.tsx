@@ -85,7 +85,7 @@ import {
 } from "@/lib/activation/home-composition";
 import { TopEventsHome } from "@/components/events/top-events-home";
 import type { RankedEvent } from "@/lib/events/ranked-events";
-import { shouldShowSmartCardOnHome } from "@/lib/smart-card/home-gate";
+import { arbitrateHomeCard } from "@/lib/smart-card/home-arbiter";
 import type { SmartCard } from "@/lib/smart-card/smart-card";
 
 type DashboardFriend = {
@@ -860,15 +860,14 @@ export function DashboardPageContent({
    * `firstMuddy || activationState` is deliberate: FirstMuddyCard REPLACES
    * ActivationCard, so checking only the second would miss the state where the
    * relationship payoff owns the screen and let Card B compete with it. */
-  const smartCardGate = useMemo(
+  const homeCard = useMemo(
     () =>
-      smartCard
-        ? shouldShowSmartCardOnHome({
-            id: smartCard.id,
-            earlyActivation: isEarlyActivation(compositionInputs),
-            cardAVisible: Boolean(firstMuddy || activationState)
-          })
-        : { eligible: false, deferred: false, tier: 6 as const },
+      arbitrateHomeCard({
+        activationState,
+        firstMuddyVisible: Boolean(firstMuddy),
+        smartCardId: smartCard?.id ?? null,
+        earlyActivation: isEarlyActivation(compositionInputs)
+      }),
     [smartCard, compositionInputs, firstMuddy, activationState]
   );
 
@@ -1028,7 +1027,7 @@ export function DashboardPageContent({
         {/* The relationship first, the capability second. While this is showing it
             REPLACES the generic activation card -- two cards asking for the same
             thing is the app repeating itself at the moment it should be warm. */}
-        {firstMuddy ? (
+        {homeCard.winner === "card_a" && firstMuddy ? (
           <FirstMuddyCard
             muddy={firstMuddy}
             needsLocation={firstMuddyNeedsLocation}
@@ -1041,7 +1040,7 @@ export function DashboardPageContent({
             sayHiPending={isPending}
             className="mb-4"
           />
-        ) : activationState ? (
+        ) : homeCard.winner === "card_a" && activationState ? (
           <ActivationCard
             state={activationState}
             className="mb-4"
@@ -1090,27 +1089,23 @@ export function DashboardPageContent({
             }
           />
         ) : null}
-        {/* CARD B, gated by TIER rather than by a list of ids.
+        {/* CARD B, when the ARBITER picks it.
 
-            The old condition here was `smartCard.id === "safe_arrival" ||
-            composition.showJourneyCard`. It admitted two of the fourteen states
-            the engine builds, so Plan RSVP, live Events and the rest were
-            computed on every load and discarded. A longer list of ids would
-            reintroduce the same defect one state at a time, so the rule now
-            reads the canonical tier:
+            Card A and Card B used to decide separately: Card A rendered
+            whenever it had anything to say, and Card B was gated and then
+            merely deferred beside it. So a tier-1 obligation -- somebody
+            actually waiting on an answer -- could sit quiet or unrendered
+            under a tier-4 nudge, purely because the nudge belonged to the
+            surface that went first. One card had come to mean half the
+            intelligence.
 
-              0    safety            always, at full volume
-              1-2  answer owed /     always, quiet beside Card A
-                   happening now
-              3-6  momentum,         only once activation has stopped
-                   progression,      being Home's main guide
-                   fallback
-
-            `cardAVisible` counts FirstMuddyCard as well as ActivationCard:
-            either one owns the screen, and deferring against only the second
-            would let Card B compete with the first Muddy payoff. */}
-        {smartCard && smartCardGate.eligible ? (
-          <SmartCardHeroV2 card={smartCard} deferred={smartCardGate.deferred} />
+            Both candidate spaces now go through `arbitrateHomeCard` on one
+            shared tier ladder, and the most urgent wins outright. There is no
+            `deferred` treatment any more, because there is no longer a second
+            card to stand quietly beside. NearbyHero is untouched: it is a
+            separate surface and was never competing for this slot. */}
+        {homeCard.winner === "card_b" && smartCard ? (
+          <SmartCardHeroV2 card={smartCard} />
         ) : null}
 
         {/* HERO: Nearby Muddies.
