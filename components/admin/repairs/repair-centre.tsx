@@ -1,7 +1,12 @@
 "use client";
 
-import { History, Search, Wrench } from "lucide-react";
+import { History, RefreshCw, Search, Stethoscope, Wrench } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
+import {
+  diagnoseAccountAction,
+  signalAccountRefreshAction,
+  type AccountDoctorState
+} from "@/app/(admin)/admin/repairs/doctor-actions";
 import {
   getRecentRepairsAction,
   runAccountRepairAction,
@@ -15,19 +20,29 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { repairRiskTone, repairsByCategory, type RepairDefinition } from "@/lib/admin/repairs";
+import type { AccountDoctorSeverity } from "@/lib/admin/account-doctor";
+import { getRepair, repairRiskTone, repairsByCategory, type RepairDefinition } from "@/lib/admin/repairs";
 import { cn } from "@/lib/utils";
 
-export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] }) {
+export function RepairCentre({
+  allowedRepairIds,
+  initialQuery = ""
+}: {
+  allowedRepairIds: string[];
+  initialQuery?: string;
+}) {
   const allowed = new Set(allowedRepairIds);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<RepairUser[] | null>(null);
   const [searchMessage, setSearchMessage] = useState("");
   const [selected, setSelected] = useState<RepairUser | null>(null);
   const [history, setHistory] = useState<RepairHistoryEntry[]>([]);
+  const [doctor, setDoctor] = useState<AccountDoctorState | null>(null);
   const [pendingRepair, setPendingRepair] = useState<RepairDefinition | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const [isSearching, startSearch] = useTransition();
+  const [isDiagnosing, startDiagnosis] = useTransition();
+  const [isSignalingRefresh, startRefreshSignal] = useTransition();
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -57,12 +72,36 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
     getRecentRepairsAction({ userId }).then((state) => setHistory(state.entries));
   }
 
+  function loadDoctor(userId: string) {
+    startDiagnosis(async () => {
+      const state = await diagnoseAccountAction({ userId });
+      setDoctor(state);
+    });
+  }
+
+  function signalRefresh(userId: string) {
+    startRefreshSignal(async () => {
+      const result = await signalAccountRefreshAction({ userId });
+      setFeedback({ ok: result.ok, text: result.message });
+      if (result.ok) loadHistory(userId);
+    });
+  }
+
   function selectUser(user: RepairUser) {
     setSelected(user);
     setResults(null);
     setQuery("");
     setFeedback(null);
+    setDoctor(null);
     loadHistory(user.userId);
+    loadDoctor(user.userId);
+  }
+
+  function clearSelected() {
+    setSelected(null);
+    setHistory([]);
+    setDoctor(null);
+    setFeedback(null);
   }
 
   const groups = repairsByCategory()
@@ -71,8 +110,10 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
 
   return (
     <div className="space-y-6">
-      {/* Step 1: find an account */}
-      <AdminSection title="Find an account" description="Search by display name or username, then choose the account to repair.">
+      <AdminSection
+        title="Find an account"
+        description="Search by display name or username. Account Doctor checks safe lifecycle metadata as soon as you choose one."
+      >
         {selected ? (
           <Card className="flex flex-wrap items-center justify-between gap-3 p-3.5">
             <div className="flex items-center gap-3">
@@ -82,7 +123,7 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
                 <p className="truncate text-xs text-muted-foreground">@{selected.username}</p>
               </div>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => { setSelected(null); setHistory([]); setFeedback(null); }}>
+            <Button type="button" variant="outline" size="sm" onClick={clearSelected}>
               Change account
             </Button>
           </Card>
@@ -90,7 +131,13 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
           <>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search accounts" aria-label="Search accounts" className="pl-9" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search accounts"
+                aria-label="Search accounts"
+                className="pl-9"
+              />
             </div>
             <div className="mt-3">
               {isSearching ? (
@@ -114,7 +161,7 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
                   ))}
                 </ul>
               ) : (
-                <p className="px-1 text-xs text-muted-foreground">Search for the account you want to repair.</p>
+                <p className="px-1 text-xs text-muted-foreground">Search for the account you want to diagnose or repair.</p>
               )}
             </div>
           </>
@@ -125,7 +172,9 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
         <div
           className={cn(
             "rounded-xl border p-3 text-sm",
-            feedback.ok ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-amber-500/30 bg-amber-500/10 text-amber-100"
+            feedback.ok
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-100"
           )}
           role="status"
         >
@@ -133,7 +182,21 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
         </div>
       ) : null}
 
-      {/* Step 2: choose a repair */}
+      {selected ? (
+        <AccountDoctorPanel
+          state={doctor}
+          pending={isDiagnosing}
+          refreshSignalPending={isSignalingRefresh}
+          allowedRepairIds={allowedRepairIds}
+          onCheckAgain={() => loadDoctor(selected.userId)}
+          onSignalRefresh={() => signalRefresh(selected.userId)}
+          onRepair={(repairId) => {
+            const repair = getRepair(repairId);
+            if (repair && allowed.has(repair.id)) setPendingRepair(repair);
+          }}
+        />
+      ) : null}
+
       {selected ? (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
           <div className="space-y-5">
@@ -166,7 +229,6 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
               <p className="px-1 text-sm text-muted-foreground">You don’t have permission to run any repairs.</p>
             ) : null}
           </div>
-
           <RepairHistory entries={history} />
         </div>
       ) : null}
@@ -178,11 +240,115 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
         onDone={(result) => {
           setFeedback(result);
           setPendingRepair(null);
-          if (result.ok && selected) loadHistory(selected.userId);
+          if (result.ok && selected) {
+            loadHistory(selected.userId);
+            loadDoctor(selected.userId);
+          }
         }}
       />
     </div>
   );
+}
+
+function AccountDoctorPanel({
+  state,
+  pending,
+  refreshSignalPending,
+  allowedRepairIds,
+  onCheckAgain,
+  onSignalRefresh,
+  onRepair
+}: {
+  state: AccountDoctorState | null;
+  pending: boolean;
+  refreshSignalPending: boolean;
+  allowedRepairIds: string[];
+  onCheckAgain: () => void;
+  onSignalRefresh: () => void;
+  onRepair: (repairId: string) => void;
+}) {
+  const allowed = new Set(allowedRepairIds);
+
+  return (
+    <AdminSection
+      title="Account Doctor"
+      description="Checks lifecycle metadata only — never message bodies, exact location, private media, payment credentials, or Safe Arrival details."
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <span className="grid h-9 w-9 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+            <Stethoscope className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span>{pending ? "Checking account health…" : state?.message ?? "Run a health check for this account."}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onCheckAgain} disabled={pending}>
+            <Stethoscope className="h-4 w-4" aria-hidden="true" />
+            {state ? "Check again" : "Run check"}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onSignalRefresh} disabled={refreshSignalPending}>
+            <RefreshCw className={cn("h-4 w-4", refreshSignalPending && "animate-spin")} aria-hidden="true" />
+            Refresh user app
+          </Button>
+        </div>
+      </div>
+
+      <p className="mt-3 text-xs text-muted-foreground">
+        “Refresh user app” changes no account data. It sends an audited refresh signal; an already-open signed-in app refreshes on foreground or within about a minute.
+      </p>
+
+      {state?.ok ? (
+        <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <AdminStatus label={`${state.summary.issue} issues`} tone={state.summary.issue > 0 ? "danger" : "success"} />
+            <AdminStatus label={`${state.summary.attention} attention`} tone={state.summary.attention > 0 ? "warning" : "default"} />
+            <AdminStatus label={`${state.summary.healthy} healthy`} tone="success" />
+            <AdminStatus label={`${state.summary.info} info`} />
+          </div>
+
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {state.findings.map((finding) => (
+              <Card key={finding.id} className="flex min-h-[116px] flex-col justify-between gap-3 p-3.5">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{finding.title}</p>
+                    <AdminStatus label={finding.area} />
+                    <AdminStatus label={doctorSeverityLabel(finding.severity)} tone={doctorTone(finding.severity)} />
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{finding.detail}</p>
+                </div>
+                {finding.repairId && allowed.has(finding.repairId) ? (
+                  <div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onRepair(finding.repairId!)}>
+                      <Wrench className="h-4 w-4" aria-hidden="true" /> Recommended repair
+                    </Button>
+                  </div>
+                ) : null}
+              </Card>
+            ))}
+          </div>
+        </>
+      ) : state && !state.ok ? (
+        <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-100" role="status">
+          {state.message}
+        </p>
+      ) : null}
+    </AdminSection>
+  );
+}
+
+function doctorTone(severity: AccountDoctorSeverity): "success" | "warning" | "danger" | "default" {
+  if (severity === "issue") return "danger";
+  if (severity === "attention") return "warning";
+  if (severity === "healthy") return "success";
+  return "default";
+}
+
+function doctorSeverityLabel(severity: AccountDoctorSeverity) {
+  if (severity === "issue") return "Issue";
+  if (severity === "attention") return "Needs attention";
+  if (severity === "healthy") return "Healthy";
+  return "Info";
 }
 
 function RepairHistory({ entries }: { entries: RepairHistoryEntry[] }) {
@@ -221,33 +387,50 @@ function RepairConfirmDialog({
 }) {
   const [reason, setReason] = useState("");
   const [pending, start] = useTransition();
-
-  // Low-risk repairs with no confirmation still route through here for a single
-  // consistent run path, but auto-run without a modal body when opened.
   const open = Boolean(repair && user);
 
   function run() {
     if (!repair || !user) return;
     start(async () => {
-      const result = await runAccountRepairAction({ userId: user.userId, repairId: repair.id, reason: reason.trim() || undefined });
+      const result = await runAccountRepairAction({
+        userId: user.userId,
+        repairId: repair.id,
+        reason: reason.trim() || undefined
+      });
       onDone({ ok: result.ok, text: result.message });
       setReason("");
     });
   }
 
-  // Auto-run repairs that need neither confirmation nor a reason.
   useEffect(() => {
     if (open && repair && !repair.confirm && !repair.requiresReason) run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!repair || !user) return null;
-  if (!repair.confirm && !repair.requiresReason) return null; // handled by auto-run
+  if (!repair.confirm && !repair.requiresReason) return null;
 
   return (
-    <Modal open={open} onOpenChange={(next) => { if (!next) { onClose(); setReason(""); } }} title={`${repair.label}?`} description={repair.effect}>
+    <Modal
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          onClose();
+          setReason("");
+        }
+      }}
+      title={`${repair.label}?`}
+      description={repair.effect}
+    >
       <div className="space-y-3">
-        <div className={cn("rounded-lg border p-2.5 text-xs", repair.risk === "high" ? "border-red-500/30 bg-red-500/10 text-red-200" : "border-amber-500/25 bg-amber-500/10 text-amber-100")}>
+        <div
+          className={cn(
+            "rounded-lg border p-2.5 text-xs",
+            repair.risk === "high"
+              ? "border-red-500/30 bg-red-500/10 text-red-200"
+              : "border-amber-500/25 bg-amber-500/10 text-amber-100"
+          )}
+        >
           This will run against <span className="font-semibold">{user.name}</span> and is recorded in the audit log.
         </div>
         {repair.requiresReason ? (
@@ -262,8 +445,15 @@ function RepairConfirmDialog({
           />
         ) : null}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => { onClose(); setReason(""); }} disabled={pending}>Cancel</Button>
-          <Button type="button" variant={repair.risk === "high" ? "danger" : "primary"} onClick={run} disabled={pending || (repair.requiresReason && reason.trim().length < 3)}>
+          <Button type="button" variant="outline" onClick={() => { onClose(); setReason(""); }} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant={repair.risk === "high" ? "danger" : "primary"}
+            onClick={run}
+            disabled={pending || (repair.requiresReason && reason.trim().length < 3)}
+          >
             Run repair
           </Button>
         </div>
