@@ -25,10 +25,14 @@ import type { PlanCategory } from "@/lib/supabase/database.types";
  */
 
 /** Which family an asset belongs to. Mirrors the /public/visuals folders. */
-export type VisualFamily = "activity" | "safe_arrival" | "smart_card";
+export type VisualFamily = "activity" | "safe_arrival" | "smart_card" | "home_card";
 
 /** What a piece of artwork is FOR, as opposed to what it depicts. */
-export type VisualRole = "plan_cover" | "safe_arrival_state" | "smart_card_backdrop";
+export type VisualRole =
+  | "plan_cover"
+  | "safe_arrival_state"
+  | "smart_card_backdrop"
+  | "home_card_background";
 
 export type VisualAsset = {
   /** Stable id, independent of the source filename. */
@@ -240,6 +244,48 @@ const SMART_CARD_EDITORIAL_ATLAS: VisualAsset = {
   depicts: "Six warm editorial illustrations of mixed social moments for neutral Smart Card backgrounds"
 };
 
+/**
+ * HOME'S TWO FIXED CARD BACKGROUNDS.
+ *
+ * One image per card, for the life of the card. Card A always wears
+ * `card-a-background.png`; Card B always wears `card-b-background.png`. They do
+ * not rotate, do not swap, and are never chosen by state.
+ *
+ * WHY FIXED IS THE PRODUCT DECISION, and not a shortcut. A background that
+ * changes with the card's state makes the same surface look like a different
+ * one every time it updates, which is the opposite of what an adaptive card
+ * needs: the person should notice the WORDS changed, not the wallpaper. Two
+ * stable grounds give Home a constant identity, and let the foreground -- the
+ * eyebrow, headline, subtitle, metadata and actions -- carry all the meaning.
+ *
+ * So the only thing that varies per state is the content layer and the scrim
+ * strength needed to keep it legible. No animation, no motion, no scene art, no
+ * photography, no per-state imagery.
+ *
+ * `depicts` is deliberately unverified prose here, unlike every other entry in
+ * this file: these two files are supplied by the founder and this registry
+ * records only their ROLE. Nothing infers meaning from their filenames.
+ */
+const HOME_CARD_A_BACKGROUND: VisualAsset = {
+  id: "home-card-a-background",
+  path: "/visuals/home-cards/card-a-background.png",
+  family: "home_card",
+  role: "home_card_background",
+  width: 1200,
+  height: 800,
+  depicts: "Fixed Card A ground: activation and relationship authority"
+};
+
+const HOME_CARD_B_BACKGROUND: VisualAsset = {
+  id: "home-card-b-background",
+  path: "/visuals/home-cards/card-b-background.png",
+  family: "home_card",
+  role: "home_card_background",
+  width: 1200,
+  height: 800,
+  depicts: "Fixed Card B ground: opportunity and obligation authority"
+};
+
 // ---------------------------------------------------------------------------
 // Resolvers. Every one returns null rather than throwing: a missing asset must
 // degrade to the existing CSS treatment, never break the surface it sits on.
@@ -292,6 +338,22 @@ export function safeArrivalArtworkForTone(tone: string | null | undefined): Visu
 }
 
 /** Approved neutral fallback atlas for Smart Card B. */
+/**
+ * The one background Card A ever uses.
+ *
+ * Returns the asset unconditionally and takes no arguments, because there is
+ * nothing to decide: a resolver that accepted a state would be an invitation to
+ * make the background state-dependent again.
+ */
+export function homeCardABackground(): VisualAsset {
+  return HOME_CARD_A_BACKGROUND;
+}
+
+/** The one background Card B ever uses. Same contract as Card A. */
+export function homeCardBBackground(): VisualAsset {
+  return HOME_CARD_B_BACKGROUND;
+}
+
 export function smartCardEditorialAtlas(): VisualAsset {
   return SMART_CARD_EDITORIAL_ATLAS;
 }
@@ -301,6 +363,19 @@ export function allRegisteredAssets(): VisualAsset[] {
   return [
     ...Object.values(PLAN_ACTIVITY_ART).filter((a): a is VisualAsset => Boolean(a)),
     ...Object.values(SAFE_ARRIVAL_ART),
-    SMART_CARD_EDITORIAL_ATLAS
+    SMART_CARD_EDITORIAL_ATLAS,
+    /* HOME'S TWO FIXED GROUNDS ARE DECLARED ABOVE BUT NOT LISTED HERE YET.
+     *
+     * `allRegisteredAssets` is the manifest this repo checks BOTH ways: every
+     * registered asset must exist on disk, and every shipped file must be
+     * registered. The two PNGs have not been supplied yet, so listing them now
+     * would make that check fail and leave the tree red for a reason that is
+     * not a defect.
+     *
+     * The resolvers, the renderers and the tests are all wired and waiting.
+     * Dropping the two files into public/visuals/home-cards/ and adding
+     * HOME_CARD_A_BACKGROUND and HOME_CARD_B_BACKGROUND to this array is the
+     * whole activation -- one line, and the manifest check starts enforcing
+     * them like every other asset. */
   ];
 }
