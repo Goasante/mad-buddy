@@ -14,6 +14,7 @@ import { conversationHref } from "@/lib/messaging/open-conversation";
 import type { SmartCard } from "@/lib/smart-card/smart-card";
 import { smartCardVisualTreatment } from "@/lib/smart-card/visuals";
 import { cn } from "@/lib/utils";
+import { smartCardEditorialAtlas } from "@/lib/visuals/registry";
 
 /**
  * Smart Card B — editorial / cinematic Home presentation.
@@ -30,7 +31,7 @@ import { cn } from "@/lib/utils";
  * viewer-authorized presentation field may safely select gendered variants.
  */
 
-const EDITORIAL_ATLAS = "/visuals/smart-card/editorial-atlas.webp";
+const EDITORIAL_ATLAS = smartCardEditorialAtlas().path;
 
 const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>([
   "safe_arrival",
@@ -169,14 +170,14 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   }
 
   const primaryClassName = cn(
-    "focus-ring inline-flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full px-4 py-2.5 text-sm font-extrabold transition-transform active:scale-[0.985] motion-reduce:active:scale-100 sm:flex-none sm:min-w-[9.5rem]",
+    "focus-ring inline-flex min-h-11 items-center min-w-0 flex-1 justify-center rounded-full px-4 py-2.5 text-sm font-extrabold transition-transform active:scale-[0.985] motion-reduce:active:scale-100 sm:flex-none sm:min-w-[9.5rem]",
     quiet
       ? "bg-[#e88c2b] text-white shadow-[0_8px_18px_rgba(232,140,43,0.18)]"
       : "bg-[#e88c2b] text-white shadow-[0_10px_24px_rgba(232,140,43,0.30)] hover:bg-[#f09a3c]"
   );
 
   const secondaryClassName = cn(
-    "focus-ring inline-flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full border px-4 py-2.5 text-sm font-bold backdrop-blur-sm sm:flex-none sm:min-w-[8.75rem]",
+    "focus-ring inline-flex min-h-11 items-center min-w-0 flex-1 justify-center rounded-full border px-4 py-2.5 text-sm font-bold backdrop-blur-sm sm:flex-none sm:min-w-[8.75rem]",
     quiet
       ? "border-white/30 bg-black/20 text-white"
       : "border-white/60 bg-black/20 text-white hover:bg-black/30"
