@@ -265,9 +265,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "access-billing",
     label: "Access & billing",
     description: "Payment, entitlement, Access projection and safe webhook reconciliation.",
-    diagnostic: "partial",
+    diagnostic: "live",
     repair: "partial",
-    verification: "planned",
+    verification: "live",
     issues: [
       "Payment succeeded but Access is missing",
       "Entitlement/expiry projection is stale",
@@ -309,9 +309,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "privacy-account-ops",
     label: "Privacy & account operations",
     description: "Export, deletion, moderation/restriction and governed account jobs.",
-    diagnostic: "planned",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "live",
     issues: [
       "Export request is stuck",
       "Deletion workflow is stuck",
