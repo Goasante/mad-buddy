@@ -6,8 +6,22 @@ import type { PlanCategory } from "@/lib/supabase/database.types";
  * ONE PLACE THAT KNOWS WHERE ARTWORK LIVES, so no component hardcodes a path
  * and no surface can quietly start using an image that failed review.
  *
- * Existing cover systems remain authority. Photography/illustration is layered
- * in front only where a trustworthy semantic authority already exists.
+ * WHAT THIS DELIBERATELY DOES NOT DO. It does not replace the existing cover
+ * systems. `lib/plans/plan-covers.ts` and `lib/events/event-media.ts` describe
+ * covers as gradient + motif DATA rather than files, which keeps them crisp at
+ * any size, themeable, free of network cost and immune to layout shift. That
+ * remains the final fallback everywhere; photography is layered in front of it
+ * only where a trustworthy semantic authority already exists.
+ *
+ * WHICH IS WHY EVENTS AND GROUPS ARE ABSENT. The supplied library contains
+ * category artwork for both, but neither `events` nor `groups` has a category
+ * column -- so wiring it would have meant inventing a taxonomy to justify the
+ * pictures. The schema is authoritative over the asset library; those families
+ * stay out of the runtime until categorisation is designed deliberately.
+ *
+ * REJECTED ART IS NOT REACHABLE FROM HERE. Assets that failed QA are absent
+ * from this file and were never copied into /public, so there is no path by
+ * which a resolver can return one.
  */
 
 /** Which family an asset belongs to. Mirrors the /public/visuals folders. */
@@ -33,8 +47,21 @@ export type VisualAsset = {
 /**
  * Plan categories that have approved photography.
  *
- * PARTIAL BY DESIGN. Categories without approved photography resolve to the
- * canonical CSS cover rather than receiving semantically wrong artwork.
+ * PARTIAL BY DESIGN. Six of the fifteen categories have no entry, because
+ * their candidate images failed review rather than because they were
+ * forgotten:
+ *
+ *   study     -- library scene, but an Apple logo is visible
+ *   workout   -- gym scene, but Nike marks on socks and shoes
+ *   gaming    -- not reviewed as approved for this pass
+ *   birthday  -- no candidate in the library
+ *   travel    -- candidate depicts a solo summit, closer to hiking
+ *   hiking    -- no approved candidate
+ *   road_trip -- not reviewed as approved for this pass
+ *
+ * Those resolve to the canonical CSS cover, which is a complete answer rather
+ * than a gap. Forcing every category to carry a photograph is how a trademark
+ * ends up shipped in a product surface.
  */
 const PLAN_ACTIVITY_ART: Partial<Record<PlanCategory, VisualAsset>> = {
   coffee: {
@@ -112,10 +139,46 @@ const PLAN_ACTIVITY_ART: Partial<Record<PlanCategory, VisualAsset>> = {
 };
 
 /**
- * Safe Arrival artwork, keyed by Journey-state meaning rather than filenames.
- * Nothing here contains a map, route, pin, distance or live-location claim.
+ * NO GENERAL ACTIVITY MASTER.
+ *
+ * `activity-hangout-general-master` was copied in and registered, and then had
+ * no consumer: a plan with no category resolves to PLAN_COVER_FALLBACK -- the
+ * branded mark -- which is the honest answer, because a photograph of friends
+ * at a table would assert something about a plan nobody has described yet. And
+ * it must never stand in for a category whose own art was rejected, or
+ * somebody planning a workout is shown a picnic.
+ *
+ * So it was removed from /public rather than left there unused, the same rule
+ * applied to the Home ambient pair and the Safe Arrival "ready" image. It
+ * stays in the source library for a surface that genuinely wants "some
+ * activity, unspecified".
+ */
+/**
+ * Safe Arrival artwork, keyed by the REAL lifecycle status.
+ *
+ * THE MISTAKE THIS REPLACES. An earlier version of this registry invented
+ * `ready | active | complete | attention` because those were the artwork
+ * filenames. Safe Arrival's actual statuses are `draft`,
+ * `pending_acknowledgement`, `active`, `extended`, `grace_period`,
+ * `unconfirmed`, `completed`, `cancelled` and `expired` -- so the registry was
+ * describing a state machine the product does not have. Filenames are not a
+ * taxonomy.
+ *
+ * SUPPORTING VISUALS ONLY. Every status line, timer, control and confirmation
+ * stays real UI; this is the backdrop behind JourneyVisual, which is already
+ * `aria-hidden` and decorative.
+ *
+ * All three are abstract light. Nothing shows a map, a route, a pin, a
+ * distance or any depiction of where somebody is -- the artwork must not
+ * reintroduce what this feature spends so much effort keeping out.
  */
 const SAFE_ARRIVAL_ART: Record<string, VisualAsset> = {
+  /* NO `starting` ENTRY. The setup screen renders tone="transit" rather than a
+   * distinct starting tone, so the "ready" image had no way to reach a screen.
+   * It was removed from /public rather than left there unused -- the same rule
+   * applied to the Home artwork. It stays in the source library for whenever a
+   * setup-specific visual is actually designed. */
+  // active / extended / grace_period -- under way.
   in_transit: {
     id: "safe-arrival-in-transit",
     path: "/visuals/safe-arrival/active.jpg",
@@ -125,6 +188,7 @@ const SAFE_ARRIVAL_ART: Record<string, VisualAsset> = {
     height: 543,
     depicts: "Abstract travelling light with a sense of motion"
   },
+  // completed -- confirmed arrival.
   arrived: {
     id: "safe-arrival-arrived",
     path: "/visuals/safe-arrival/complete.jpg",
@@ -137,16 +201,34 @@ const SAFE_ARRIVAL_ART: Record<string, VisualAsset> = {
 };
 
 /**
- * The approved Smart Card editorial fallback atlas.
+ * WAITING, CANCELLED AND EXPIRED CARRY NO ARTWORK, deliberately.
  *
- * It contains six deliberately mixed/neutral social scenes arranged 3x2:
- * UpFor, relationship request, birthday, Linkr/social connection, Plan/Event,
- * and Safe Arrival/in-transit. The renderer crops the atlas by PRODUCT FAMILY;
- * the illustrated people are never presented as the named Muddy/Linkr person.
+ * `waiting` (canonical status `unconfirmed`) is the one worth explaining. The
+ * obvious move is to hand it the "attention" image, and it is wrong. The
+ * lifecycle documents this state as "neutral by construction (spec §9): it
+ * reports 'hasn't confirmed yet', never 'missing', and never implies an
+ * emergency" -- and it asks nothing of the traveller, who may simply have no
+ * signal. Heightened artwork would contradict that in the one place where
+ * being wrong frightens somebody. The status chip already carries the
+ * distinction in words.
  *
- * A display name is not gender authority. Real viewer-authorized user/Event
- * media wins whenever a card has it. Gendered variants must not be selected
- * from a name; they require explicit viewer-authorized presentation data.
+ * `cancelled` and `expired` are endings. The existing neutral treatment says
+ * so; artwork would make a closed session look like a live one. The
+ * `attention` image was removed from /public rather than left unused, because
+ * a shipped file with no consumer is an invitation to find it a job.
+ */
+
+/**
+ * Smart Card B neutral editorial fallback atlas.
+ *
+ * Six approved mixed social scenes are arranged in a 3x2 sprite: UpFor,
+ * relationship request, birthday, Linkr/social connection, Plan/Event and
+ * Safe Arrival/in-transit. The Smart Card renderer crops by PRODUCT FAMILY;
+ * the illustrated people never claim to be a named Muddy or Linkr match.
+ *
+ * Names are not gender authority. Real viewer-authorized user/Event media wins
+ * where available; any future gendered art selection requires explicit,
+ * viewer-authorized presentation data rather than inference from a name.
  */
 const SMART_CARD_EDITORIAL_ATLAS: VisualAsset = {
   id: "smart-card-editorial-atlas",
@@ -159,7 +241,8 @@ const SMART_CARD_EDITORIAL_ATLAS: VisualAsset = {
 };
 
 // ---------------------------------------------------------------------------
-// Resolvers. Every one degrades safely rather than throwing.
+// Resolvers. Every one returns null rather than throwing: a missing asset must
+// degrade to the existing CSS treatment, never break the surface it sits on.
 // ---------------------------------------------------------------------------
 
 /** Approved photography for a Plan category, or null to use the CSS cover. */
@@ -168,13 +251,34 @@ export function planActivityArt(category: PlanCategory | null | undefined): Visu
   return PLAN_ACTIVITY_ART[category] ?? null;
 }
 
-/** Artwork for a Safe Arrival journey key, or null when the state carries none. */
+/**
+ * Artwork for a Safe Arrival journey key, or null when the state carries none.
+ *
+ * Takes the JourneyState key that the UI already derives, so this module never
+ * re-implements the lifecycle. Returns null -- never throws -- for `waiting`,
+ * `cancelled`, `expired` and anything unrecognised.
+ */
 export function resolveSafeArrivalArtwork(journeyKey: string | null | undefined): VisualAsset | null {
   if (!journeyKey) return null;
   return SAFE_ARRIVAL_ART[journeyKey] ?? null;
 }
 
-/** Artwork keyed by the display tone Safe Arrival screens already compute. */
+/**
+ * The same answer, keyed by the display TONE the Safe Arrival screens already
+ * compute (`journeyTone`).
+ *
+ * The screens hold a tone rather than a JourneyState key, so this saves every
+ * caller from re-deriving the lifecycle. The mapping is deliberately partial:
+ *
+ *   transit / extended -> in transit
+ *   arrived            -> arrived
+ *   overdue            -> NOTHING. This is `unconfirmed`, which the lifecycle
+ *                         defines as neutral: "hasn't confirmed yet", never
+ *                         "missing", never an emergency. The chip already says
+ *                         NOT CONFIRMED in words; heightened artwork behind it
+ *                         would turn a quiet state into an alarming one.
+ *   ended              -> NOTHING. A finished session must not look live.
+ */
 export function safeArrivalArtworkForTone(tone: string | null | undefined): VisualAsset | null {
   switch (tone) {
     case "transit":
