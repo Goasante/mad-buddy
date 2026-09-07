@@ -22,8 +22,29 @@ describe("support ticket to Account Doctor priority routing", () => {
     expect(prioritizeDoctorAreas({ category: "privacy", affectedFeature: "Safe Arrival" })[0]).toBe("safe-arrival");
   });
 
+  it("routes unconfirmed and grace-period language to Safe Arrival first", () => {
+    expect(prioritizeDoctorAreas({ category: "other", affectedFeature: "Unconfirmed after grace period" })[0]).toBe(
+      "safe-arrival"
+    );
+  });
+
   it("falls back to category routing when no feature hint is present", () => {
     expect(prioritizeDoctorAreas({ category: "billing", affectedFeature: null })).toEqual(["access-billing"]);
+  });
+
+  it("routes renewal-off and entitlement language to Access/Billing", () => {
+    expect(prioritizeDoctorAreas({ category: "other", affectedFeature: "Non-renewing entitlement" })[0]).toBe(
+      "access-billing"
+    );
+  });
+
+  it("routes export and deletion language to Privacy/Account Operations", () => {
+    expect(prioritizeDoctorAreas({ category: "other", affectedFeature: "Data export stuck" })[0]).toBe(
+      "privacy-account-ops"
+    );
+    expect(prioritizeDoctorAreas({ category: "other", affectedFeature: "Account deletion in progress" })[0]).toBe(
+      "privacy-account-ops"
+    );
   });
 
   it("deduplicates areas when feature and category point to the same checks", () => {
