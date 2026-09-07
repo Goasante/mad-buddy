@@ -7,81 +7,26 @@ import {
   type AccountDoctorState
 } from "@/app/(admin)/admin/repairs/doctor-actions";
 import { requireAdminPermission } from "@/lib/admin/access";
-import type {
-  AccountDoctorFinding,
-  AccountDoctorSeverity
-} from "@/lib/admin/account-doctor";
-import { loadSupportOwnedSnapshot } from "@/lib/admin/support-owned-diagnostics.server";
 import {
-  buildSupportOwnedDiagnostics,
-  type SupportOwnedDiagnostic
-} from "@/lib/admin/support-owned-diagnostics";
-import type { DoctorAreaId } from "@/lib/admin/support-doctor-priority";
+  combineAccountDoctorFindings,
+  summarizeCombinedFindings,
+  unavailableSupportOwnedFinding,
+  type CombinedAccountDoctorFinding,
+  type CombinedAccountDoctorSeverity,
+  type CombinedAccountDoctorSummary
+} from "@/lib/admin/combined-doctor";
+import { loadSupportOwnedSnapshot } from "@/lib/admin/support-owned-diagnostics.server";
+import { buildSupportOwnedDiagnostics } from "@/lib/admin/support-owned-diagnostics";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 
-export type CombinedAccountDoctorSeverity = AccountDoctorSeverity | "product_rule";
-
-export type CombinedAccountDoctorFinding = Omit<AccountDoctorFinding, "area" | "severity"> & {
-  area: string;
-  severity: CombinedAccountDoctorSeverity;
-  operatorAction?: SupportOwnedDiagnostic["operatorAction"];
-};
+export type { CombinedAccountDoctorFinding, CombinedAccountDoctorSeverity } from "@/lib/admin/combined-doctor";
 
 export type CombinedAccountDoctorState = Omit<AccountDoctorState, "findings" | "summary"> & {
   findings: CombinedAccountDoctorFinding[];
-  summary: {
-    issue: number;
-    attention: number;
-    productRule: number;
-    info: number;
-    healthy: number;
-  };
+  summary: CombinedAccountDoctorSummary;
 };
 
 const inputSchema = z.object({ userId: z.string().uuid() });
-
-/* These baseline findings are replaced by the richer privacy-minimised model
- * below. Keeping both would show the operator two different interpretations of
- * the same account fact. Lifecycle-heavy findings remain owned by the base
- * Account Doctor and are never reimplemented here. */
-const REPLACED_BASE_FINDING_IDS = new Set([
-  "account-setup",
-  "stale-status",
-  "presence-signal",
-  "active-rate-limits",
-  "notification-summary"
-]);
-
-const AREA_LABEL: Record<DoctorAreaId, string> = {
-  "account-auth": "Account / Auth",
-  "onboarding-activation": "Onboarding",
-  "profile-media": "Profile / Media",
-  "dob-age": "DOB / Age",
-  "muddies-requests": "Relationships",
-  "blocks-refriend": "Relationships",
-  "direct-messaging": "Messaging",
-  "plan-chat": "Plans",
-  plans: "Plans",
-  upfor: "UpFor",
-  linkr: "Linkr",
-  presence: "Presence",
-  notifications: "Notifications",
-  push: "Push",
-  events: "Events",
-  "safe-arrival": "Safe Arrival",
-  "access-billing": "Access / Billing",
-  "features-tours": "Features / Limits",
-  journey: "Journey",
-  "privacy-account-ops": "Privacy / Account"
-};
-
-const severityRank: Record<CombinedAccountDoctorSeverity, number> = {
-  issue: 0,
-  attention: 1,
-  product_rule: 2,
-  info: 3,
-  healthy: 4
-};
 
 /**
  * The live Account Doctor used by Repair Centre.
@@ -121,28 +66,13 @@ export async function diagnoseCombinedAccountAction(input: unknown): Promise<Com
     };
   }
 
-  const baseFindings: CombinedAccountDoctorFinding[] = base.findings
-    .filter((finding) => !REPLACED_BASE_FINDING_IDS.has(finding.id))
-    .map((finding) => ({ ...finding }));
-
-  const ownedFindings: CombinedAccountDoctorFinding[] = ownedResult.ok
-    ? buildSupportOwnedDiagnostics(ownedResult.snapshot).map(mapOwnedFinding)
+  const findings = ownedResult.ok
+    ? combineAccountDoctorFindings(base.findings, buildSupportOwnedDiagnostics(ownedResult.snapshot))
     : [
-        {
-          id: "support-owned-diagnostics-unavailable",
-          area: "Account / Auth",
-          severity: "issue",
-          title: "Part of Account Doctor could not complete",
-          detail:
-            "The privacy-minimised account, profile, age, Linkr, presence, push and journey checks did not all complete. Do not infer health from missing results; retry the diagnosis or escalate if it repeats.",
-          operatorAction: "escalate"
-        }
-      ];
-
-  const findings = [...baseFindings, ...ownedFindings].sort(
-    (a, b) => severityRank[a.severity] - severityRank[b.severity] || a.area.localeCompare(b.area) || a.id.localeCompare(b.id)
-  );
-  const summary = summarize(findings);
+        ...combineAccountDoctorFindings(base.findings, []),
+        unavailableSupportOwnedFinding()
+      ].sort((a, b) => combinedSeverityRank(a.severity) - combinedSeverityRank(b.severity) || a.area.localeCompare(b.area) || a.id.localeCompare(b.id));
+  const summary = summarizeCombinedFindings(findings);
 
   return {
     ok: true,
@@ -158,27 +88,12 @@ export async function diagnoseCombinedAccountAction(input: unknown): Promise<Com
   };
 }
 
-function mapOwnedFinding(finding: SupportOwnedDiagnostic): CombinedAccountDoctorFinding {
-  return {
-    id: `owned:${finding.id}`,
-    area: AREA_LABEL[finding.areaId],
-    severity: finding.severity,
-    title: finding.title,
-    detail: finding.detail,
-    operatorAction: finding.operatorAction,
-    repairId: finding.operatorAction === "use_named_repair" ? finding.repairId : undefined
-  };
-}
-
-function summarize(findings: readonly CombinedAccountDoctorFinding[]): CombinedAccountDoctorState["summary"] {
-  return findings.reduce(
-    (summary, finding) => {
-      if (finding.severity === "product_rule") summary.productRule += 1;
-      else summary[finding.severity] += 1;
-      return summary;
-    },
-    { issue: 0, attention: 0, productRule: 0, info: 0, healthy: 0 }
-  );
+function combinedSeverityRank(severity: CombinedAccountDoctorSeverity): number {
+  if (severity === "issue") return 0;
+  if (severity === "attention") return 1;
+  if (severity === "product_rule") return 2;
+  if (severity === "info") return 3;
+  return 4;
 }
 
 function emptyCombined(message: string): CombinedAccountDoctorState {
