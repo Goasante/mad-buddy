@@ -38,18 +38,33 @@ for (const person of PEOPLE) {
     email_confirm: true,
     user_metadata: { full_name: person.full_name, username: person.username }
   });
-  if (error) { console.log(`user ${person.email}: ${error.message}`); continue; }
-  ids[person.username] = data.user.id;
+  /* An existing user is the NORMAL case on a stack that has been seeded
+     before, not a failure. Falling through with `continue` left `ids` empty,
+     so the admin assignment below then threw "requires qatester" on every run
+     after the first -- i.e. the seed only worked on a virgin database, which
+     is the one situation where it is least needed. */
+  let userId = data?.user?.id ?? null;
+  if (error) {
+    const { data: existing } = await admin
+      .from("profiles")
+      .select("user_id")
+      .eq("username", person.username)
+      .maybeSingle();
+    userId = existing?.user_id ?? null;
+    if (!userId) { console.log(`user ${person.email}: ${error.message}`); continue; }
+    console.log(`user ${person.email} already exists -> ${userId}`);
+  }
+  ids[person.username] = userId;
 
   // A trigger may already have inserted the profile row; upsert either way.
   const { error: pErr } = await admin.from("profiles").upsert({
-    user_id: data.user.id,
+    user_id: userId,
     username: person.username,
     full_name: person.full_name,
     bio: person.bio || null,
     mood_status: person.mood_status || null
   }, { onConflict: "user_id" });
-  console.log(`user ${person.email} -> ${data.user.id}${pErr ? ` (profile: ${pErr.message})` : ""}`);
+  if (!error) console.log(`user ${person.email} -> ${userId}${pErr ? ` (profile: ${pErr.message})` : ""}`);
 }
 
 /**
