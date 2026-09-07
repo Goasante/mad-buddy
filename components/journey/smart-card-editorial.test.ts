@@ -10,9 +10,10 @@ describe("Smart Card editorial presentation", () => {
     expect(source).toContain('data-smart-card-editorial="true"');
   });
 
-  it("keeps truthful media ahead of fallback illustration", () => {
-    expect(source).toContain('const hasTruthfulMedia = treatment === "media"');
+  it("keeps truthful media ahead of fallback illustration while safety stays neutral", () => {
+    expect(source).toContain('const hasTruthfulMedia = Boolean(card.media?.url) && !safety');
     expect(source).toContain('src={card.media!.url}');
+    expect(source).toContain('if (card.id === "safe_arrival") return "100% 100%"');
   });
 
   it("does not infer gender from names", () => {
