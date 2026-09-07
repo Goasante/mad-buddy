@@ -223,7 +223,8 @@ describe("generated artwork never becomes a person", () => {
   it("no registered asset is offered as an avatar", () => {
     for (const asset of allRegisteredAssets()) {
       expect(asset.role).not.toBe("avatar");
-      expect(["plan_cover", "safe_arrival_state"]).toContain(asset.role);
+      // Smart Card backdrops are decorative scene art, never person identity.
+      expect(["plan_cover", "safe_arrival_state", "smart_card_backdrop"]).toContain(asset.role);
     }
   });
 });

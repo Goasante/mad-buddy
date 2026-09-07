@@ -25,10 +25,10 @@ import type { PlanCategory } from "@/lib/supabase/database.types";
  */
 
 /** Which family an asset belongs to. Mirrors the /public/visuals folders. */
-export type VisualFamily = "activity" | "safe_arrival";
+export type VisualFamily = "activity" | "safe_arrival" | "smart_card";
 
 /** What a piece of artwork is FOR, as opposed to what it depicts. */
-export type VisualRole = "plan_cover" | "safe_arrival_state";
+export type VisualRole = "plan_cover" | "safe_arrival_state" | "smart_card_backdrop";
 
 export type VisualAsset = {
   /** Stable id, independent of the source filename. */
@@ -217,6 +217,29 @@ const SAFE_ARRIVAL_ART: Record<string, VisualAsset> = {
  * `attention` image was removed from /public rather than left unused, because
  * a shipped file with no consumer is an invitation to find it a job.
  */
+
+/**
+ * Smart Card B neutral editorial fallback atlas.
+ *
+ * Six approved mixed social scenes are arranged in a 3x2 sprite: UpFor,
+ * relationship request, birthday, Linkr/social connection, Plan/Event and
+ * Safe Arrival/in-transit. The Smart Card renderer crops by PRODUCT FAMILY;
+ * the illustrated people never claim to be a named Muddy or Linkr match.
+ *
+ * Names are not gender authority. Real viewer-authorized user/Event media wins
+ * where available; any future gendered art selection requires explicit,
+ * viewer-authorized presentation data rather than inference from a name.
+ */
+const SMART_CARD_EDITORIAL_ATLAS: VisualAsset = {
+  id: "smart-card-editorial-atlas",
+  path: "/visuals/smart-card/editorial-atlas.webp",
+  family: "smart_card",
+  role: "smart_card_backdrop",
+  width: 1800,
+  height: 880,
+  depicts: "Six warm editorial illustrations of mixed social moments for neutral Smart Card backgrounds"
+};
+
 // ---------------------------------------------------------------------------
 // Resolvers. Every one returns null rather than throwing: a missing asset must
 // degrade to the existing CSS treatment, never break the surface it sits on.
@@ -268,10 +291,16 @@ export function safeArrivalArtworkForTone(tone: string | null | undefined): Visu
   }
 }
 
+/** Approved neutral fallback atlas for Smart Card B. */
+export function smartCardEditorialAtlas(): VisualAsset {
+  return SMART_CARD_EDITORIAL_ATLAS;
+}
+
 /** Every asset the runtime can reach. Used by tests to police the boundary. */
 export function allRegisteredAssets(): VisualAsset[] {
   return [
     ...Object.values(PLAN_ACTIVITY_ART).filter((a): a is VisualAsset => Boolean(a)),
-    ...Object.values(SAFE_ARRIVAL_ART)
+    ...Object.values(SAFE_ARRIVAL_ART),
+    SMART_CARD_EDITORIAL_ATLAS
   ];
 }
