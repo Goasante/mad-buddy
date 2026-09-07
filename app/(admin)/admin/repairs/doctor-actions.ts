@@ -9,6 +9,10 @@ import {
   type AccountDoctorFinding,
   type AccountDoctorSnapshot
 } from "@/lib/admin/account-doctor";
+import {
+  findStalledSafeArrival,
+  type SafeArrivalView
+} from "@/lib/admin/event-safety-diagnostics";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 
@@ -56,6 +60,21 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
 
   const userId = parsed.data.userId;
   const nowIso = new Date().toISOString();
+  /* `.in()` with an empty array is not a no-op in PostgREST, so an impossible
+     id stands in for "match nothing" rather than risking a match-all. */
+  const NO_MATCH_UUID = "00000000-0000-0000-0000-000000000000";
+
+  /* Resolved before the batch below: an `await` inside a Promise.all array
+     runs before any of its siblings, so nesting this would serialise every
+     other query behind it. */
+  const closedOwnedSessionIds =
+    (
+      await admin
+        .from("hangout_sessions")
+        .select("id")
+        .eq("owner_id", userId)
+        .in("status", ["expired", "cancelled", "converted_to_plan"])
+    ).data?.map((row) => row.id) ?? [];
 
   const [
     profileResult,
@@ -69,7 +88,10 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
     blockResult,
     directMembershipResult,
     planParticipantResult,
-    upForResult
+    upForResult,
+    strandedRequestResult,
+    safeArrivalResult,
+    eventRsvpResult
   ] = await Promise.all([
     admin.from("profiles").select("user_id, is_onboarded, visibility_status, deleted_at").eq("user_id", userId).maybeSingle(),
     admin.from("user_locations").select("user_id").eq("user_id", userId).maybeSingle(),
@@ -101,7 +123,26 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
       .from("hangout_sessions")
       .select("id, status, ends_at")
       .eq("owner_id", userId)
-      .in("status", ["active", "full"])
+      .in("status", ["active", "full"]),
+    /* Requests left waiting on the viewer's own CLOSED UpFors. Someone asked
+       to join something that is over and will never be answered as it
+       stands -- ids and status only, never who asked. */
+    admin
+      .from("hangout_requests")
+      .select("id, hangout_session_id, status")
+      .eq("status", "pending")
+      .in("hangout_session_id", closedOwnedSessionIds.length ? closedOwnedSessionIds : [NO_MATCH_UUID]),
+    /* SAFE ARRIVAL, LIFECYCLE ONLY. No destination, label, note, coordinates
+       or watcher identity is selected here, and none may be added -- see
+       lib/admin/event-safety-diagnostics.ts. `expected_arrival_at` and
+       `grace_period_minutes` are read to compute a BOOLEAN and are never
+       carried into the snapshot. */
+    admin
+      .from("safe_arrival_sessions")
+      .select("id, status, expected_arrival_at, grace_period_minutes")
+      .eq("traveller_id", userId)
+      .in("status", ["draft", "pending_acknowledgement", "active", "grace_period", "extended", "unconfirmed"]),
+    admin.from("event_rsvps").select("event_id, status").eq("user_id", userId).eq("status", "going")
   ]);
 
   const profile = profileResult.data;
@@ -173,6 +214,33 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
     }).length;
   }
 
+  /* Events the account said it is GOING to, but whose circle it is not a
+     joined member of. Only "going" matters -- interested is not circle
+     membership, and treating it as a mismatch would report every browsed
+     Event as broken. */
+  let eventCircleMismatchCount = 0;
+  const goingEventIds = [...new Set((eventRsvpResult.data ?? []).map((row) => row.event_id))];
+  if (goingEventIds.length > 0) {
+    const circles =
+      (await admin.from("event_circles").select("id, event_id").in("event_id", goingEventIds)).data ?? [];
+    const circleIds = circles.map((row) => row.id);
+    const joinedCircleIds = new Set(
+      circleIds.length
+        ? (
+            (
+              await admin
+                .from("event_circle_members")
+                .select("event_circle_id")
+                .eq("user_id", userId)
+                .eq("status", "joined")
+                .in("event_circle_id", circleIds)
+            ).data ?? []
+          ).map((row) => row.event_circle_id)
+        : []
+    );
+    eventCircleMismatchCount = circles.filter((row) => !joinedCircleIds.has(row.id)).length;
+  }
+
   const snapshot: AccountDoctorSnapshot = {
     isOnboarded: Boolean(profile.is_onboarded),
     visibilityStatus: profile.visibility_status ?? null,
@@ -187,7 +255,26 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
     archivedDirectWithLiveFriendshipCount,
     nonJoinedDirectMembershipCount,
     planChatMismatchCount,
-    staleOwnedUpForCount: (upForResult.data ?? []).filter((row) => Boolean(row.ends_at) && row.ends_at! <= nowIso).length
+    staleOwnedUpForCount: (upForResult.data ?? []).filter((row) => Boolean(row.ends_at) && row.ends_at! <= nowIso).length,
+    strandedUpForRequestCount: (strandedRequestResult.data ?? []).length,
+    /* Reduced to counts HERE, at the query boundary, so no journey timing or
+       destination travels any further into Admin. The booleans the diagnostic
+       module needs are computed from expected_arrival_at + grace minutes and
+       then discarded with the rows. */
+    stalledSafeArrivalCount: findStalledSafeArrival(
+      (safeArrivalResult.data ?? []).map((row) => ({
+        sessionId: row.id,
+        status: row.status as SafeArrivalView["status"],
+        pastExpectedArrival: Boolean(row.expected_arrival_at) && row.expected_arrival_at! <= nowIso,
+        pastGracePeriod:
+          Boolean(row.expected_arrival_at) &&
+          Date.parse(row.expected_arrival_at!) + (row.grace_period_minutes ?? 0) * 60_000 <= Date.now(),
+        acknowledgedWatcherCount: 0,
+        pendingWatcherCount: 0
+      }))
+    ).length,
+    unconfirmedSafeArrivalCount: (safeArrivalResult.data ?? []).filter((row) => row.status === "unconfirmed").length,
+    eventCircleMismatchCount: eventCircleMismatchCount
   };
 
   const findings = buildAccountDoctorFindings(snapshot);

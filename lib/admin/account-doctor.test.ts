@@ -21,6 +21,10 @@ function snapshot(overrides: Partial<AccountDoctorSnapshot> = {}): AccountDoctor
     nonJoinedDirectMembershipCount: 0,
     planChatMismatchCount: 0,
     staleOwnedUpForCount: 0,
+    strandedUpForRequestCount: 0,
+    stalledSafeArrivalCount: 0,
+    unconfirmedSafeArrivalCount: 0,
+    eventCircleMismatchCount: 0,
     ...overrides
   };
 }
@@ -78,5 +82,68 @@ describe("Account Doctor", () => {
     expect(summary.issue).toBeGreaterThan(0);
     expect(summary.attention).toBeGreaterThan(0);
     expect(summary.healthy).toBeGreaterThan(0);
+  });
+});
+
+describe("safety findings are reported without offering a repair", () => {
+  it("an unconfirmed arrival is an ISSUE with no repair attached", () => {
+    /* The whole point: this must never render a button. An unconfirmed arrival
+       means somebody did not check in and their watchers were told, so the
+       only correct action is a person looking at it. */
+    const findings = buildAccountDoctorFindings(snapshot({ unconfirmedSafeArrivalCount: 2 }));
+    const finding = findings.find((item) => item.id === "safe-arrival-unconfirmed");
+
+    expect(finding?.severity).toBe("issue");
+    expect(finding?.repairId).toBeUndefined();
+    expect(finding?.detail).toMatch(/escalate it rather than closing it/i);
+  });
+
+  it("a stalled journey is reported separately from an unconfirmed one", () => {
+    const findings = buildAccountDoctorFindings(
+      snapshot({ stalledSafeArrivalCount: 1, unconfirmedSafeArrivalCount: 1 })
+    );
+
+    expect(findings.find((item) => item.id === "safe-arrival-stalled")).toBeDefined();
+    expect(findings.find((item) => item.id === "safe-arrival-unconfirmed")).toBeDefined();
+  });
+
+  it("neither appears on a healthy account", () => {
+    const findings = buildAccountDoctorFindings(snapshot());
+
+    expect(findings.find((item) => item.id === "safe-arrival-stalled")).toBeUndefined();
+    expect(findings.find((item) => item.id === "safe-arrival-unconfirmed")).toBeUndefined();
+  });
+
+  it("no safety finding carries a journey detail", () => {
+    const findings = buildAccountDoctorFindings(
+      snapshot({ stalledSafeArrivalCount: 3, unconfirmedSafeArrivalCount: 2 })
+    );
+    for (const finding of findings.filter((item) => item.id.startsWith("safe-arrival"))) {
+      expect(finding.detail).not.toMatch(/destination|address|route|coordinate|latitude|longitude/i);
+    }
+  });
+});
+
+describe("stranded UpFor requests and Event circles", () => {
+  it("reports people left waiting on a closed UpFor", () => {
+    const finding = buildAccountDoctorFindings(snapshot({ strandedUpForRequestCount: 4 })).find(
+      (item) => item.id === "upfor-stranded-requests"
+    );
+
+    expect(finding?.detail).toMatch(/4 requests are still pending/);
+  });
+
+  it("reports an Event the account is going to but not joined to", () => {
+    const finding = buildAccountDoctorFindings(snapshot({ eventCircleMismatchCount: 1 })).find(
+      (item) => item.id === "event-circle-mismatch"
+    );
+
+    expect(finding?.severity).toBe("attention");
+  });
+
+  it("reports neither when both are clean", () => {
+    const findings = buildAccountDoctorFindings(snapshot());
+    expect(findings.find((item) => item.id === "upfor-stranded-requests")).toBeUndefined();
+    expect(findings.find((item) => item.id === "event-circle-mismatch")).toBeUndefined();
   });
 });
