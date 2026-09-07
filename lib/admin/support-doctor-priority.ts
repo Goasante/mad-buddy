@@ -51,9 +51,28 @@ const FEATURE_HINTS: readonly { needles: readonly string[]; areas: readonly Doct
   { needles: ["glow", "nearby", "location", "proximity", "ghost"], areas: ["presence"] },
   { needles: ["notification", "badge", "alert"], areas: ["notifications", "push"] },
   { needles: ["push", "device token"], areas: ["push", "notifications"] },
-  { needles: ["event", "check-in", "checkin"], areas: ["events"] },
-  { needles: ["safe arrival", "arrival", "journey home"], areas: ["safe-arrival"] },
-  { needles: ["billing", "payment", "paystack", "subscription", "access"], areas: ["access-billing"] },
+  { needles: ["event", "check-in", "checkin", "event circle"], areas: ["events"] },
+  {
+    needles: ["safe arrival", "arrival", "journey home", "unconfirmed", "watcher", "grace period"],
+    areas: ["safe-arrival"]
+  },
+  {
+    needles: [
+      "billing",
+      "payment",
+      "paystack",
+      "subscription",
+      "renewal",
+      "non-renewing",
+      "non renewing",
+      "entitlement",
+      "welcome access",
+      "paid access",
+      "refund",
+      "access"
+    ],
+    areas: ["access-billing"]
+  },
   { needles: ["profile", "photo", "avatar", "showcase", "media"], areas: ["profile-media"] },
   { needles: ["dob", "date of birth", "age"], areas: ["dob-age", "account-auth"] },
   { needles: ["onboarding", "activation", "getting started"], areas: ["onboarding-activation", "account-auth"] },
@@ -62,7 +81,22 @@ const FEATURE_HINTS: readonly { needles: readonly string[]; areas: readonly Doct
   { needles: ["login", "sign in", "signin", "verification", "recovery", "password"], areas: ["account-auth"] },
   { needles: ["tour", "feature flag", "experiment", "rate limit"], areas: ["features-tours"] },
   { needles: ["achievement", "buddy score", "progression"], areas: ["journey"] },
-  { needles: ["privacy", "delete account", "export", "report", "moderation"], areas: ["privacy-account-ops"] }
+  {
+    needles: [
+      "privacy",
+      "delete account",
+      "deletion",
+      "erase account",
+      "erasure",
+      "export",
+      "data export",
+      "download my data",
+      "data request",
+      "report",
+      "moderation"
+    ],
+    areas: ["privacy-account-ops"]
+  }
 ];
 
 /**
