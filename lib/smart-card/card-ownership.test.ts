@@ -70,22 +70,31 @@ describe("Card A keeps its territory", () => {
 });
 
 describe("Home composition still gates the Smart Card", () => {
-  it("gates the Smart Card by TIER, not by a list of ids", () => {
-    /* The old condition named two ids -- safe_arrival and the Journey slot --
-       so twelve of fourteen built states were computed and discarded. A longer
-       id list would reintroduce that one state at a time, so Home asks the
-       canonical helper instead and a new catalog state inherits the right
-       behaviour from its tier. */
-    expect(dashboard).toMatch(/smartCard\s*&&\s*smartCardGate\.eligible/);
-    expect(dashboard).toMatch(/shouldShowSmartCardOnHome\(\{/);
+  it("selects the Smart Card through the ARBITER, not by a list of ids", () => {
+    /* The oldest condition named two ids -- safe_arrival and the Journey slot
+       -- so twelve of fourteen built states were computed and discarded. Tier
+       gating fixed that, but Card A and Card B still decided separately, so an
+       obligation could lose to a nudge purely by surface. One arbiter now ranks
+       both candidate spaces on one ladder. */
+    expect(dashboard).toMatch(/homeCard\.winner\s*===\s*"card_b"\s*&&\s*smartCard/);
+    expect(dashboard).toMatch(/arbitrateHomeCard\(\{/);
     expect(dashboard).not.toMatch(/smartCard\.id\s*===\s*"safe_arrival"\s*\|\|\s*composition\.showJourneyCard/);
   });
 
-  it("counts FirstMuddyCard as Card A when deciding to defer", () => {
-    /* FirstMuddyCard REPLACES ActivationCard, so checking only the second
-       would let Card B compete at full volume with the first-Muddy payoff --
-       the one moment activation exists to produce. */
-    expect(dashboard).toMatch(/cardAVisible:\s*Boolean\(firstMuddy\s*\|\|\s*activationState\)/);
+  it("feeds BOTH surfaces' candidates into the one arbiter", () => {
+    /* FirstMuddyCard REPLACES ActivationCard, so both are passed: ranking only
+       the second would let the first-Muddy payoff bypass arbitration entirely,
+       which is the defect in a different place. */
+    expect(dashboard).toMatch(/firstMuddyVisible:\s*Boolean\(firstMuddy\)/);
+    expect(dashboard).toMatch(/activationState,/);
+    expect(dashboard).toMatch(/smartCardId:\s*smartCard\?\.id\s*\?\?\s*null/);
+  });
+
+  it("renders no `deferred` second card -- there is only ever one", () => {
+    /* Deferral existed so Card B could sit quietly beneath Card A. With one
+       arbitrated winner there is nothing to sit beneath, and a surviving
+       deferred prop would mean both surfaces were rendering again. */
+    expect(dashboard).not.toMatch(/deferred=\{/);
   });
 
   it("renders V2, and does not leave V1 on screen beside it", () => {
@@ -95,7 +104,11 @@ describe("Home composition still gates the Smart Card", () => {
 
   it("lets FirstMuddyCard replace ActivationCard rather than stack with it", () => {
     expect(dashboard).toMatch(/firstMuddy\s*\?\s*\(?\s*<FirstMuddyCard/);
-    expect(dashboard).toMatch(/\)\s*:\s*activationState\s*\?\s*\(?\s*<ActivationCard/);
+    /* Still a replacement, now behind the arbiter: Card A renders only when it
+       actually won the slot. */
+    expect(dashboard).toMatch(
+      /\)\s*:\s*homeCard\.winner\s*===\s*"card_a"\s*&&\s*activationState\s*\?\s*\(?\s*<ActivationCard/
+    );
   });
 
   it("stands NearbyHero down while activation is teaching", () => {
