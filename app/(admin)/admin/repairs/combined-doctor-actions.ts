@@ -39,31 +39,30 @@ export async function diagnoseCombinedAccountAction(input: unknown): Promise<Com
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return emptyCombined("Choose a valid account.");
 
-  let admin: Awaited<ReturnType<typeof requireSafetyAdmin>>["admin"];
-  try {
-    const auth = await requireSafetyAdmin();
-    admin = auth.admin;
-    await requireAdminPermission(admin, auth.context, "admin.support.manage");
-  } catch {
-    return emptyCombined("Admin access is required.");
-  }
-
-  /* Run the established lifecycle diagnosis and the privacy-minimised parallel
-   * snapshot together. The lifecycle action owns search rate-limiting; this
-   * wrapper does not consume a second quota for the same operator click. */
-  const [base, ownedResult] = await Promise.all([
-    diagnoseAccountAction(input),
-    loadSupportOwnedSnapshot(admin, parsed.data.userId)
-      .then((snapshot) => ({ ok: true as const, snapshot }))
-      .catch(() => ({ ok: false as const }))
-  ]);
-
+  /* The lifecycle Doctor owns auth, permission and the admin.search rate limit.
+   * It must finish first. Running our extra reads in parallel would still hit
+   * the database on a rate-limited request even though the response was later
+   * discarded. */
+  const base = await diagnoseAccountAction(input);
   if (!base.ok) {
     return {
       ...base,
       findings: [],
       summary: { issue: 0, attention: 0, productRule: 0, info: 0, healthy: 0 }
     };
+  }
+
+  let ownedResult:
+    | { ok: true; snapshot: Awaited<ReturnType<typeof loadSupportOwnedSnapshot>> }
+    | { ok: false } = { ok: false };
+  try {
+    const auth = await requireSafetyAdmin();
+    await requireAdminPermission(auth.admin, auth.context, "admin.support.manage");
+    const snapshot = await loadSupportOwnedSnapshot(auth.admin, parsed.data.userId);
+    ownedResult = { ok: true, snapshot };
+  } catch {
+    /* Fail closed below. A partial provider failure becomes an operator-visible
+     * issue; no zero/healthy defaults are fabricated. */
   }
 
   const findings = ownedResult.ok
