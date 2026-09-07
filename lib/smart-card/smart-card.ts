@@ -37,6 +37,10 @@ export const SMART_CARD_IDS = [
   "upfor_momentum",
   "owned_upfor_starting",
   "upfor_active_muddy",
+  /* Tier 2, and LAST of the UpFor group deliberately. Something you have
+     already asked to join, or been accepted into, outranks something you might
+     join -- an existing commitment before a new opportunity. */
+  "upfor_opportunity",
   /* Hosting or going, starting soon: a commitment with a time attached, so it
      ranks with the other tier-2 states rather than with Events the viewer only
      bookmarked. */

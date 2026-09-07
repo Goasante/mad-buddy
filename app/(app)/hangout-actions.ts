@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import { deliverNotification } from "@/lib/notifications/server";
@@ -648,6 +649,14 @@ export async function endHangoutAction(
     .eq("id", hangoutId)
     .eq("owner_id", userId);
 
+  /* HOME MUST SHOW THE NEXT TRUTH, without a manual refresh.
+     Home derives its adaptive cards on the server, so a lifecycle change the
+     viewer just caused is invisible until /dashboard is re-rendered -- which is
+     how somebody ends up staring at a card describing a state they have already
+     left. Guarded on success, and scoped to Home only: the UpFor surfaces
+     refresh through their own readers, and invalidating them here would discard
+     warm state they already hold. */
+  revalidatePath("/dashboard");
   return { ok: true, message: "UpFor ended." };
 }
 
@@ -1351,6 +1360,14 @@ export async function requestHangoutAction(
     title: "New UpFor request",
     message: `${name} is interested in joining your UpFor.`
   });
+  /* HOME MUST SHOW THE NEXT TRUTH, without a manual refresh.
+     Home derives its adaptive cards on the server, so a lifecycle change the
+     viewer just caused is invisible until /dashboard is re-rendered -- which is
+     how somebody ends up staring at a card describing a state they have already
+     left. Guarded on success, and scoped to Home only: the UpFor surfaces
+     refresh through their own readers, and invalidating them here would discard
+     warm state they already hold. */
+  revalidatePath("/dashboard");
   return { ok: true, message: "Request sent.", hangoutId };
 }
 
@@ -1441,6 +1458,7 @@ export async function respondHangoutRequestAction(
   if (!decided) {
     // Already answered. Report success -- the caller's intent holds -- but do
     // not emit a second notification for the same decision.
+    revalidatePath("/dashboard");
     return { ok: true, message: "Response sent." };
   }
 
@@ -1461,6 +1479,14 @@ export async function respondHangoutRequestAction(
         ? `${ownerName} accepted you for ${activityLabel}.`
         : `${ownerName} can't make this one.`
   });
+  /* HOME MUST SHOW THE NEXT TRUTH, without a manual refresh.
+     Home derives its adaptive cards on the server, so a lifecycle change the
+     viewer just caused is invisible until /dashboard is re-rendered -- which is
+     how somebody ends up staring at a card describing a state they have already
+     left. Guarded on success, and scoped to Home only: the UpFor surfaces
+     refresh through their own readers, and invalidating them here would discard
+     warm state they already hold. */
+  revalidatePath("/dashboard");
   return { ok: true, message: "Response sent." };
 }
 

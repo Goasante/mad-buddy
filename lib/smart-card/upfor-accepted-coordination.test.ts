@@ -40,6 +40,7 @@ const joined = (
   startsAt: null,
   endsAt: null,
   ownerIsCertainMuddy: true,
+  coordinatedSinceAccepted: false,
   ...over
 });
 
@@ -47,6 +48,7 @@ const context = (over: Partial<HomeUpForContext> = {}): HomeUpForContext => ({
   ownedLive: [],
   ownedScheduled: [],
   joined: [],
+  opportunities: [],
   ...over
 });
 
@@ -289,9 +291,14 @@ describe("Home renders without creating anything", () => {
     expect(provider).not.toMatch(/await |\.from\(|\.rpc\(|openDirectConversation/);
   });
 
-  it("the UpFor projection opens no conversation", () => {
+  /**
+   * The projection may now READ conversations -- that is how it learns whether
+   * the viewer has already coordinated -- but it must never OPEN or write one.
+   * The distinction is the whole point: Home reads, taps mutate.
+   */
+  it("the UpFor projection reads but never opens or writes a conversation", () => {
     const reader = readFileSync("lib/social/home-upfor-context.ts", "utf8");
-    expect(reader).not.toMatch(/openDirectConversation|conversations|\.insert\(|\.upsert\(/);
+    expect(reader).not.toMatch(/openDirectConversation|\.insert\(|\.upsert\(|\.update\(|\.delete\(/);
   });
 
   it("carries the owner id without adding a read", () => {
@@ -302,9 +309,20 @@ describe("Home renders without creating anything", () => {
     expect(reader).toContain(
       '.select("id, owner_id, activity_type, status, starts_at, ends_at, audience_type")'
     );
-    /* And no new per-session lookup was introduced alongside it. */
+    /* And no PER-SESSION lookup was introduced. The reads added since are all
+       batched over the whole candidate set:
+         joined sessions, owner profiles              (2, pre-existing)
+         conversations + messages                     (2, coordination evidence)
+         friendships, sessions, profiles              (3, opportunity discovery)
+       Seven bounded reads, none of them inside a loop. */
     const joinedBlock = reader.slice(reader.indexOf("const joinedSessionIds"));
-    expect(joinedBlock.match(/\.from\(/g) ?? []).toHaveLength(2);
+    expect(joinedBlock.match(/\.from\(/g) ?? []).toHaveLength(7);
+
+    /* The real invariant behind that number: every read is batched over a
+       whole candidate set, so none of them sits inside a loop. */
+    for (const batched of [".in(", "batchBlockedIds"]) {
+      expect(reader, batched).toContain(batched);
+    }
   });
 });
 

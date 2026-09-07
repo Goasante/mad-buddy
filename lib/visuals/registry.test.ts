@@ -223,8 +223,16 @@ describe("generated artwork never becomes a person", () => {
   it("no registered asset is offered as an avatar", () => {
     for (const asset of allRegisteredAssets()) {
       expect(asset.role).not.toBe("avatar");
-      // Smart Card backdrops are decorative scene art, never person identity.
-      expect(["plan_cover", "safe_arrival_state", "smart_card_backdrop"]).toContain(asset.role);
+      /* Smart Card backdrops and Home card grounds are decorative scene art,
+         never person identity. Home's two fixed grounds are the strongest form
+         of that rule: one image per card for the life of the card, chosen by
+         which card it is and never by who is on it. */
+      expect([
+        "plan_cover",
+        "safe_arrival_state",
+        "smart_card_backdrop",
+        "home_card_background"
+      ]).toContain(asset.role);
     }
   });
 });

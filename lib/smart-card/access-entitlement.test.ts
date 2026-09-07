@@ -83,7 +83,8 @@ const ownedWithRequests: NonNullable<SmartCardInput["upFor"]> = {
     }
   ],
   ownedScheduled: [],
-  joined: []
+  joined: [],
+  opportunities: []
 };
 
 /**
@@ -97,12 +98,14 @@ const muddySideJoined = (
   myStatus: "pending" | "accepted"
 ): NonNullable<SmartCardInput["upFor"]> => ({
   ownedLive: [],
+  opportunities: [],
   ownedScheduled: [],
   joined: [
     {
       id: "j1",
       ownerId: "owner-kofi",
       ownerIsCertainMuddy: true,
+      coordinatedSinceAccepted: false,
       ownerName: "Kofi",
       activityType: "coffee",
       activityLabel: "Coffee",

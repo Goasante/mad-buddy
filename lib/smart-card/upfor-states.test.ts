@@ -32,6 +32,7 @@ const joined = (over: Partial<HomeUpForContext["joined"][number]> = {}) => ({
   id: "j1",
   ownerId: "owner-1",
   ownerIsCertainMuddy: true,
+  coordinatedSinceAccepted: false,
   ownerName: "Kofi",
   activityType: "gym" as const,
   activityLabel: "Gym",
@@ -45,6 +46,7 @@ const context = (over: Partial<HomeUpForContext> = {}): HomeUpForContext => ({
   ownedLive: [],
   ownedScheduled: [],
   joined: [],
+  opportunities: [],
   ...over
 });
 

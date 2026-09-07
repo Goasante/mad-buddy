@@ -25,10 +25,10 @@ import type { PlanCategory } from "@/lib/supabase/database.types";
  */
 
 /** Which family an asset belongs to. Mirrors the /public/visuals folders. */
-export type VisualFamily = "activity" | "safe_arrival" | "smart_card";
+export type VisualFamily = "activity" | "safe_arrival" | "home_card";
 
 /** What a piece of artwork is FOR, as opposed to what it depicts. */
-export type VisualRole = "plan_cover" | "safe_arrival_state" | "smart_card_backdrop";
+export type VisualRole = "plan_cover" | "safe_arrival_state" | "home_card_background";
 
 export type VisualAsset = {
   /** Stable id, independent of the source filename. */
@@ -218,26 +218,38 @@ const SAFE_ARRIVAL_ART: Record<string, VisualAsset> = {
  * a shipped file with no consumer is an invitation to find it a job.
  */
 
-/**
- * Smart Card B neutral editorial fallback atlas.
+/* THE SMART CARD EDITORIAL ATLAS IS GONE.
  *
- * Six approved mixed social scenes are arranged in a 3x2 sprite: UpFor,
- * relationship request, birthday, Linkr/social connection, Plan/Event and
- * Safe Arrival/in-transit. The Smart Card renderer crops by PRODUCT FAMILY;
- * the illustrated people never claim to be a named Muddy or Linkr match.
- *
- * Names are not gender authority. Real viewer-authorized user/Event media wins
- * where available; any future gendered art selection requires explicit,
- * viewer-authorized presentation data rather than inference from a name.
- */
-const SMART_CARD_EDITORIAL_ATLAS: VisualAsset = {
-  id: "smart-card-editorial-atlas",
-  path: "/visuals/smart-card/editorial-atlas.webp",
-  family: "smart_card",
-  role: "smart_card_backdrop",
-  width: 1800,
-  height: 880,
-  depicts: "Six warm editorial illustrations of mixed social moments for neutral Smart Card backgrounds"
+ * Six illustrated scenes in a 3x2 sprite, cropped by product family, with real
+ * user media preferred when a card had it. Both were background selection by
+ * STATE, which the fixed two-background direction replaces: Card B now wears
+ * one ground for every state it can render. Nothing consumed the atlas after
+ * that change, and a shipped file with no consumer is an invitation to find it
+ * a job -- so the entry and the file are removed together. */
+
+const HOME_CARD_A_BACKGROUND: VisualAsset = {
+  id: "home-card-a-background",
+  path: "/visuals/home-cards/card-a-background.png",
+  family: "home_card",
+  role: "home_card_background",
+  width: 1672,
+  height: 941,
+  depicts:
+    "Warm Mediterranean terrace at golden hour: a deep maroon wall on the left, an archway onto a sunlit coast. No people."
+};
+
+const HOME_CARD_B_BACKGROUND: VisualAsset = {
+  id: "home-card-b-background",
+  path: "/visuals/home-cards/card-b-background.png",
+  family: "home_card",
+  role: "home_card_background",
+  width: 1672,
+  height: 941,
+  /* Deliberately plain prose. The Safe Arrival guard scans `depicts` for
+     location vocabulary, so this describes the scene and lets the guard's own
+     assertion be the statement about what the artwork does not contain. */
+  depicts:
+    "Warm sunset valley at golden hour: a dark maroon ridge on the left, a lit river and distant peaks. No people."
 };
 
 // ---------------------------------------------------------------------------
@@ -292,8 +304,20 @@ export function safeArrivalArtworkForTone(tone: string | null | undefined): Visu
 }
 
 /** Approved neutral fallback atlas for Smart Card B. */
-export function smartCardEditorialAtlas(): VisualAsset {
-  return SMART_CARD_EDITORIAL_ATLAS;
+/**
+ * The one background Card A ever uses.
+ *
+ * Returns the asset unconditionally and takes no arguments, because there is
+ * nothing to decide: a resolver that accepted a state would be an invitation to
+ * make the background state-dependent again.
+ */
+export function homeCardABackground(): VisualAsset {
+  return HOME_CARD_A_BACKGROUND;
+}
+
+/** The one background Card B ever uses. Same contract as Card A. */
+export function homeCardBBackground(): VisualAsset {
+  return HOME_CARD_B_BACKGROUND;
 }
 
 /** Every asset the runtime can reach. Used by tests to police the boundary. */
@@ -301,6 +325,7 @@ export function allRegisteredAssets(): VisualAsset[] {
   return [
     ...Object.values(PLAN_ACTIVITY_ART).filter((a): a is VisualAsset => Boolean(a)),
     ...Object.values(SAFE_ARRIVAL_ART),
-    SMART_CARD_EDITORIAL_ATLAS
+    HOME_CARD_A_BACKGROUND,
+    HOME_CARD_B_BACKGROUND
   ];
 }

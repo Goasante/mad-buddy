@@ -29,8 +29,8 @@ const SHARED_PROVIDER: Record<string, string> = {
 };
 
 describe("every approved state is classified exactly once", () => {
-  it("covers all 54 approved states", () => {
-    expect(approvedIds).toHaveLength(54);
+  it("covers all 55 approved states", () => {
+    expect(approvedIds).toHaveLength(55);
     const missing = approvedIds.filter((id) => !SMART_CARD_STATE_OWNERSHIP[id]);
     expect(missing, `unclassified: ${missing.join(", ")}`).toEqual([]);
   });
@@ -87,14 +87,14 @@ describe("the closeout totals", () => {
   it("add up to the whole catalog", () => {
     const totals = classificationTotals();
     const sum = Object.values(totals).reduce((a, b) => a + b, 0);
-    expect(sum).toBe(54);
+    expect(sum).toBe(55);
   });
 
   it("match the numbers reported in CONTINUATION.md and PR #27", () => {
     /* Pinned so a future provider cannot change the published totals silently:
        whoever adds one must update the report in the same commit. */
     expect(classificationTotals()).toEqual({
-      CARD_B_WIRED: 28,
+      CARD_B_WIRED: 29,
       CARD_A_OWNED: 6,
       NEARBY_HERO_OWNED: 2,
       OTHER_SURFACE: 7,
@@ -115,6 +115,6 @@ describe("the closeout totals", () => {
       totals.CARD_A_OWNED + totals.NEARBY_HERO_OWNED + totals.OTHER_SURFACE + totals.PRODUCT_PAUSED;
     expect(settled).toBe(16);
     expect(totals.NO_AUTHORITY).toBe(10);
-    expect(settled + totals.NO_AUTHORITY + totals.CARD_B_WIRED).toBe(54);
+    expect(settled + totals.NO_AUTHORITY + totals.CARD_B_WIRED).toBe(55);
   });
 });

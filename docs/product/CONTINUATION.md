@@ -1651,3 +1651,135 @@ build          PASS
 migrations     137, zero diff against main under supabase/
 main           merged clean (b6fc254, PR #28 ops handoff) -- 0 conflicts
 ```
+
+
+---
+
+## Home intelligence correction — Card A ownership and the UpFor lifecycle
+
+Three defects found on a real phone, all the same underlying mistake in
+different places: **a card confusing a STATE with a JOB**, or with somebody
+else's job.
+
+### Card A stopped guiding
+
+`upcomingPlanCount > 0` was the FIRST check in `resolveActivationState`, so one
+future Plan returned `upcoming_plan` ahead of every activation question below
+it. Card A became a permanent "You've got something on / Open your plan"
+billboard, and somebody with no Muddies, no location, or Glow still off was
+never told any of it.
+
+A Plan is a commitment, not an activation step, and it was already owned three
+times over — Card B's `plan_rsvp` / `plan_decision` / `plan_starting` /
+`plan_chat_decision`, plus Home's "Coming Up" rail. Card A's version named
+nothing and outranked everything.
+
+**Corrected ownership:**
+
+| Surface | Owns |
+|---|---|
+| CARD A | activation and relationship progression — and nothing else |
+| CARD B | obligations, live context, decisions, coordination, opportunity |
+| NEARBY HERO | the proximity payoff |
+
+When activation has nothing left to say, Card A resolves to `activated` and
+renders **nothing**. Whitespace beats a prompt that has stopped being true.
+
+`upcoming_plan` is kept in the type and copy map: it is still reachable through
+the explicit relationship-focus path.
+
+### The UpFor lifecycle, end to end
+
+Previously the catalog described `upfor_active_muddy` as *"a relevant Muddy is
+UpFor something now"*, but the wiring only ever looked at sessions the viewer
+had **already requested to join**. The discovery moment never reached Home at
+all. That description was wrong and is corrected here.
+
+```
+a Muddy puts something out   -> upfor_opportunity    "See UpFor"
+the viewer asks to join      -> upfor_active_muddy   "Details" / Waiting on them
+the owner says yes           -> upfor_accepted       "Message <owner>"
+the viewer actually writes   -> the job is DONE, and something else wins
+```
+
+**Discovery** (`upfor_opportunity`, new) reads a bounded, Muddies-only
+projection: friendships, then their ACTIVE, already-started, not-yet-ended
+sessions with `audience_type = all_muddies`. That last narrowing is what makes
+it safe without duplicating anything — `canViewHangout` refuses a non-Muddy for
+every audience except `selected_groups` and then narrows further per audience,
+so Home asks only for the one audience where being a Muddy *is* the whole
+answer. Stranger/"nearby" discovery is the paid expansion side of UpFor and
+stays on the UpFor screen, which resolves it properly.
+
+**Completion** (`coordinatedSinceAccepted`) is the fact that was missing.
+`myStatus === "accepted"` stays true for the life of the session, so selecting
+on it alone made Home repeat "Message Kofi" to somebody who had just messaged
+Kofi. A message now qualifies only if it is in the canonical direct
+conversation, sent **by the viewer**, not `system`, not deleted, and created
+**after** the acceptance timestamp. Opening the conversation does not count;
+yesterday's chat does not count.
+
+Two batched reads answer it for the whole set — conversations by `direct_key`,
+then the viewer's own qualifying messages, newest first, capped. A viewer with
+no accepted UpFor pays nothing. `responded_at` is nullable on legacy rows and
+falls back to the request's `created_at`, which is conservative in the safe
+direction. **No migration.**
+
+**Retirement is per object.** Evidence is per session, so completing one
+acceptance never silences another, and nothing is acknowledged permanently.
+
+### Home refreshes when the person acts
+
+Requesting, responding to, and ending an UpFor now invalidate `/dashboard` on
+success, scoped to Home only. Sending a message already did. Without it a
+viewer sat looking at a card describing a state they had already left.
+
+### Two fixed card backgrounds
+
+Card A always wears `card-a-background.png`; Card B always wears
+`card-b-background.png`. Neither is ever chosen by state.
+
+This replaces two opposite mistakes: Card A hardcoded
+`/home/open-your-plan-bg.webp` outside the registry for exactly one state,
+while Card B cropped one of six atlas scenes by card family and preferred a
+person's photo when the card had one. A ground that changes as the card updates
+makes the same surface look like a different one each time — the person should
+notice the words changed, not the wallpaper.
+
+Only the content layer varies, plus the scrim, which is part of the fixed
+treatment because one ground must stay legible under every headline the card
+can render.
+
+**Status: installed and proven.** Both PNGs ship at
+`public/visuals/home-cards/` (1672x941, verified by reading the file headers and
+by looking at them), are listed in `allRegisteredAssets` so the bidirectional
+manifest check is authoritative — 12 registered, 12 shipped — and are proven on
+real rendered Home by `scripts/hardening/home-static-background-proof.mjs`
+(62/62). That proof reads the resolved image URL and natural size out of the
+DOM, so a missing file shows as `naturalWidth 0` rather than passing because a
+tag exists.
+
+The editorial atlas is gone entirely: entry, resolver and file. Nothing consumed
+it once selection stopped depending on state.
+
+**Screenshot review earned its place.** Card A's privacy footnote used
+`text-muted-foreground/80` — a token calibrated for a plain surface — and over
+the artwork it fell to near invisibility on the one line of that card that must
+be readable. Every DOM assertion passed; only looking at the picture found it.
+
+### Query cost
+
+```
+HOME BATCH READERS        18 -> 18   (unchanged)
+UPFOR CONTEXT STATEMENTS   5 -> 10
+
+  5  existing reads, unchanged
+ +3  discovery      friendships, sessions, profiles
+       skipped entirely when the viewer has no Muddies
+ +2  evidence       conversations (by direct_key), messages (capped, newest first)
+       skipped entirely when no accepted UpFor is in play -- the common case
+
+PROVIDER QUERIES          0
+N+1                       0   every read is batched over a candidate set
+UNBOUNDED HISTORY SCANS   0   capped, newest-first, keyed on indexed columns
+```

@@ -12,6 +12,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { brandSymbol } from "@/lib/brand/assets";
+import { homeCardABackground } from "@/lib/visuals/registry";
 import { cn } from "@/lib/utils";
 
 /**
@@ -301,7 +302,12 @@ export function ActivationCard({
      copy stands everywhere else. */
   const primaryText = primaryLabel ?? copy.actionLabel;
   const Icon = ACTION_ICON[primaryActionFor(state)] ?? copy.icon;
-  const upcomingPlan = state === "upcoming_plan";
+  /* EVERY Card A state now sits on the same fixed ground, so the light/dark
+     treatment is no longer a per-state decision -- and the `upcomingPlan` flag
+     that used to drive it is gone with it. It used to be: only `upcoming_plan`
+     had artwork, so only that state wore white text. Keeping that conditional
+     now would put dark text on dark art in every other state. One ground, one
+     legible treatment. */
 
   return (
     <section
@@ -314,40 +320,42 @@ export function ActivationCard({
            against the edge. Only the vertical is compressed, which is where
            the wasted height actually was. */
         "relative isolate overflow-hidden rounded-[1.25rem] border px-5 py-4 sm:px-6 sm:py-5",
-        upcomingPlan
-          ? "border-white/15 bg-[#160b08] text-white shadow-[0_12px_36px_rgba(78,4,1,0.18)]"
-          : "border-border/70 bg-card/60",
+        "border-white/15 bg-[#160b08] text-white shadow-[0_12px_36px_rgba(78,4,1,0.18)]",
         className
       )}
     >
-      {upcomingPlan ? (
-        <>
-          <Image
-            src="/home/open-your-plan-bg.webp"
-            alt=""
-            fill
-            priority
-            sizes="(max-width: 767px) calc(100vw - 2rem), 720px"
-            className="pointer-events-none absolute inset-0 z-0 object-cover object-[66%_center]"
-            aria-hidden="true"
-          />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(90deg,rgba(18,8,6,0.94)_0%,rgba(18,8,6,0.84)_48%,rgba(18,8,6,0.50)_72%,rgba(18,8,6,0.30)_100%)]"
-          />
-        </>
-      ) : null}
+      {/* CARD A'S ONE GROUND, for every state it renders.
+       *
+       * It used to appear only for `upcoming_plan`, pointing at a hardcoded
+       * /home/open-your-plan-bg.webp that sat outside the visual registry -- so
+       * one state carried older artwork and every other state carried none.
+       *
+       * Home now uses two fixed grounds: Card A always wears this one, Card B
+       * always wears its own, and neither is ever chosen by state. A background
+       * that changes as the card updates makes the same surface look like a
+       * different one each time, which is the opposite of what an adaptive card
+       * needs -- the person should notice the WORDS changed, not the wallpaper.
+       *
+       * So only the content layer varies: eyebrow, headline, body, action. The
+       * scrim below is fixed with it, tuned once so text stays legible over the
+       * art in both themes rather than per state. */}
+      <Image
+        src={homeCardABackground().path}
+        alt=""
+        fill
+        priority
+        sizes="(max-width: 767px) calc(100vw - 2rem), 720px"
+        className="pointer-events-none absolute inset-0 z-0 object-cover object-center"
+        aria-hidden="true"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(90deg,rgba(18,8,6,0.94)_0%,rgba(18,8,6,0.86)_46%,rgba(18,8,6,0.66)_74%,rgba(18,8,6,0.48)_100%)]"
+      />
 
-      {/* Glow, at the lowest possible volume. The metaphor is present so
-          proximity feels like one idea across the product, but it sits behind
-          the words rather than competing with them. */}
-      {upcomingPlan ? null : (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-60"
-          style={{ background: "var(--glow-gradient)" }}
-        />
-      )}
+      {/* The decorative Glow orb is gone. It was already suppressed on the one
+          state that had artwork, because it competed with it; every state has
+          the fixed ground now, so there is nothing left for it to sit behind. */}
 
       {/* The Glow mark belongs to the states that are ABOUT Glow.
           "Glow is on" carried a calendar icon -- borrowed from its Make-a-plan
@@ -355,7 +363,7 @@ export function ActivationCard({
           The mark says it in the product's own language, and no map or radar
           metaphor is introduced to do it. */}
       {state === "no_muddies" || state === "no_one_nearby" ? <GlowIntroMark /> : (
-        <span className={cn("relative z-[1] grid h-11 w-11 place-items-center rounded-full", upcomingPlan ? "bg-white/12 text-white" : "bg-primary/10 text-primary")}>
+        <span className={cn("relative z-[1] grid h-11 w-11 place-items-center rounded-full", "bg-white/12 text-white")}>
           <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
       )}
@@ -370,7 +378,7 @@ export function ActivationCard({
       <h2 id="activation-headline" className="relative z-[1] mt-2.5 text-balance text-xl font-semibold tracking-tight">
         {copy.headline}
       </h2>
-      <p className={cn("relative z-[1] mt-1 max-w-prose text-sm leading-relaxed", upcomingPlan ? "text-white/80" : "text-muted-foreground")}>
+      <p className={cn("relative z-[1] mt-1 max-w-prose text-sm leading-relaxed", "text-white/80")}>
         {copy.body}
       </p>
 
@@ -451,7 +459,13 @@ export function ActivationCard({
           a section, not an icon trio -- the promise is short enough to simply
           say. */}
       {copy.privacyNote ? (
-        <p className="relative mt-2.5 text-xs leading-snug text-muted-foreground/80">
+        /* WHITE, NOT A MUTED TOKEN. `text-muted-foreground/80` is calibrated
+           for a plain card surface; over the fixed artwork it dropped to near
+           invisibility exactly where the promise about location privacy is
+           made -- the one line on this card that must be readable. Screenshot
+           review caught it; the DOM assertions could not. `z-[1]` lifts it
+           above the scrim like the rest of the content layer. */
+        <p className="relative z-[1] mt-2.5 text-xs leading-snug text-white/75">
           {copy.privacyNote}
         </p>
       ) : null}

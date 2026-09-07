@@ -220,22 +220,73 @@ describe("nobody around is an ordinary evening, not a failure", () => {
   });
 });
 
-describe("an arranged Plan outranks discovery", () => {
-  it("leads with the Plan even when somebody is nearby", () => {
-    const both = withState({
+describe("an upcoming Plan does not monopolise the activation card", () => {
+  /**
+   * THIS BLOCK USED TO ASSERT THE OPPOSITE, and a real phone found out why it
+   * was wrong. `upcomingPlanCount > 0` was the FIRST check in the resolver, so
+   * one future Plan returned `upcoming_plan` ahead of every activation question
+   * below it -- and Card A became a permanent "You've got something on / Open
+   * your plan" billboard that never advanced.
+   *
+   * Plans are owned by four surfaces that name the actual Plan: Card B's
+   * plan_rsvp / plan_decision / plan_starting / plan_chat_decision, and Home's
+   * "Coming Up" rail. Card A's version named nothing and outranked everything.
+   * So Card A now answers only its own question -- what does this person need
+   * to do next to get value -- and Plans stay where they are already owned.
+   */
+  it("does not hide a missing first Muddy behind a Plan", () => {
+    /* The worst case the old ordering produced: somebody with no Muddies at all
+       was told to open a plan instead of being helped to start. */
+    expect(resolveActivationState(withState({ upcomingPlanCount: 1 }))).toBe("no_muddies");
+  });
+
+  it("does not hide missing location or Glow behind a Plan", () => {
+    expect(
+      resolveActivationState(withState({ muddyCount: 4, upcomingPlanCount: 1 }))
+    ).toBe("muddies_no_location");
+
+    expect(
+      resolveActivationState(
+        withState({
+          muddyCount: 4,
+          locationGranted: true,
+          visibility: "ghost",
+          upcomingPlanCount: 1
+        })
+      )
+    ).toBe("visibility_off");
+  });
+
+  it("does not hide a stale fix behind a Plan", () => {
+    const stale = withState({
       muddyCount: 4,
       locationGranted: true,
       nearbyMuddyCount: 2,
       upcomingPlanCount: 1
     });
-    expect(resolveActivationState(both)).toBe("upcoming_plan");
+    expect(resolveActivationState(stale)).toBe("location_stale");
   });
 
-  it("leads with the Plan even with no Muddies at all", () => {
-    // Being invited to something counts, whoever arranged it.
-    expect(resolveActivationState(withState({ upcomingPlanCount: 1 }))).toBe("upcoming_plan");
+  /**
+   * And when activation genuinely has nothing left to say, Card A resolves to
+   * `activated` -- which the component renders as NOTHING. Whitespace is better
+   * than a prompt that has stopped being true, and the Plan is still on Home in
+   * the surfaces that own it.
+   */
+  it("steps aside entirely for a fully activated person with a Plan", () => {
+    const mature = withState({
+      muddyCount: 4,
+      locationGranted: true,
+      locationFreshForProximity: true,
+      nearbyMuddyCount: 0,
+      upcomingPlanCount: 1,
+      milestones: new Set(["first_plan_created"])
+    });
+    expect(resolveActivationState(mature)).toBe("activated");
   });
 
+  /* The state itself is retained -- it is still reachable through the explicit
+     relationship-focus path -- and its action is unchanged. */
   it("points at the Plan rather than making another one", () => {
     expect(primaryActionFor("upcoming_plan")).toBe("view_plan");
   });

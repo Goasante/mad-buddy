@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { directConversationKey } from "@/lib/messaging/rules";
+import { batchBlockedIds } from "@/lib/social/permissions";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { countPendingRequests } from "@/lib/social/hangout-requests";
 import { isComingUpUpFor } from "@/lib/social/upfor-lifecycle";
@@ -78,6 +80,42 @@ export type HomeUpForJoinedSession = {
    * tell would be refused -- and never to grant one.
    */
   ownerIsCertainMuddy: boolean;
+  /**
+   * Whether the viewer has ALREADY sent this owner a real message since the
+   * moment their request was accepted.
+   *
+   * THE STATE AND THE JOB ARE DIFFERENT THINGS. `myStatus === "accepted"` is a
+   * state, and it stays true for as long as the UpFor lives. "Message the
+   * owner" is a JOB that state creates, and the job finishes the moment the
+   * viewer actually writes to them. Home used to select on the state alone, so
+   * it kept telling people to message somebody they had just messaged.
+   *
+   * Only a genuine, viewer-authored, non-system, non-deleted message in the
+   * canonical direct conversation, sent AFTER acceptance, counts. Opening the
+   * conversation does not, and yesterday chat does not: the recommendation is
+   * "coordinate about THIS acceptance", so the evidence has to belong to it.
+   *
+   * False for a pending request, which has no such job yet.
+   */
+  coordinatedSinceAccepted: boolean;
+};
+
+/**
+ * A Muddy UpFor the viewer can SEE but has not acted on yet.
+ *
+ * The discovery half of the lifecycle, which Home was missing entirely. The
+ * catalog has always described `upfor_active_muddy` as "a relevant Muddy is
+ * UpFor something now", but the wiring only ever looked at sessions the viewer
+ * had ALREADY requested to join -- so the moment the card exists for, somebody
+ * putting something out that you might want in on, never reached Home.
+ */
+export type HomeUpForOpportunity = {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  activityType: HangoutActivityType;
+  activityLabel: string;
+  endsAt: string;
 };
 
 export type HomeUpForContext = {
@@ -87,9 +125,32 @@ export type HomeUpForContext = {
   ownedScheduled: HomeUpForOwnedSession[];
   /** Sessions the viewer asked to join, and where that request stands. */
   joined: HomeUpForJoinedSession[];
+  /**
+   * Live Muddy UpFors the viewer may see and has NOT requested to join.
+   *
+   * Muddies only, deliberately. Stranger/"nearby" discovery is the paid
+   * expansion side of UpFor and it is expensive to resolve (per-viewer
+   * proximity, stranger eligibility, an Access check); Home is not the surface
+   * to pay for that on every render. Seeing what your own Muddies are up for is
+   * your existing social world, and free.
+   */
+  opportunities: HomeUpForOpportunity[];
 };
 
-const EMPTY: HomeUpForContext = { ownedLive: [], ownedScheduled: [], joined: [] };
+const EMPTY: HomeUpForContext = { ownedLive: [], ownedScheduled: [], joined: [], opportunities: [] };
+
+/**
+ * Cap on the coordination-evidence read.
+ *
+ * The viewer holds at most 12 join requests, so this is generous even if every
+ * one were accepted and chatty. It exists so the query can never become an
+ * unbounded history scan on the Home path, whatever the data does.
+ */
+const MAX_COORDINATION_EVIDENCE_ROWS = 60;
+
+/** Caps on the opportunity read, so Home cost cannot grow with a social graph. */
+const MAX_OPPORTUNITY_MUDDIES = 200;
+const MAX_OPPORTUNITY_SESSIONS = 20;
 
 /** "Coffee", "Gym" -- the noun, without upForTitle's "now" suffix. */
 function activityLabelFor(activity: HangoutActivityType): string {
@@ -115,7 +176,7 @@ export async function loadHomeUpForContext(
       .limit(12),
     admin
       .from("hangout_requests")
-      .select("id, status, hangout_session_id")
+      .select("id, status, hangout_session_id, responded_at, created_at")
       .eq("requester_id", viewerId)
       .in("status", ["pending", "accepted", "maybe"])
       .limit(12)
@@ -213,10 +274,225 @@ export async function loadHomeUpForContext(
         /* See ownerIsCertainMuddy. `selected_groups` is the only audience that
            admits somebody who is not already a Muddy, so it is the only one
            this cannot vouch for. */
-        ownerIsCertainMuddy: session.audience_type !== "selected_groups"
+        ownerIsCertainMuddy: session.audience_type !== "selected_groups",
+        /* Filled in below, once for the whole batch. */
+        coordinatedSinceAccepted: false
       });
     }
   }
 
-  return { ownedLive, ownedScheduled, joined };
+  /* COMPLETION EVIDENCE, for the accepted sessions only.
+     Bounded and batched: at most one extra pair of reads for the whole Home
+     render, and nothing at all for a viewer with no accepted UpFor -- which is
+     most of them. */
+  await markCoordinatedSessions(admin, viewerId, joinedRows, joined);
+
+  const requestedSessionIds = new Set(joinedRows.map((row) => row.hangout_session_id));
+  const opportunities = await loadMuddyOpportunities(admin, viewerId, requestedSessionIds, nowMs);
+
+  return { ownedLive, ownedScheduled, joined, opportunities };
+}
+
+/**
+ * Live UpFors belonging to the viewer's Muddies that they have not acted on.
+ *
+ * BOUNDED, AND MUDDIES ONLY. `getVisibleHangoutsAction` is the canonical feed
+ * and this deliberately does NOT call it: it resolves stranger proximity, runs
+ * an Access check and filters two 50-row candidate sets through per-session
+ * authorization. That is right for the UpFor screen and far too much for every
+ * Home render.
+ *
+ * So this takes the cheap half of the same authority and none of the expensive
+ * half:
+ *
+ *   - friendships the viewer already has (one read)
+ *   - their Muddies' sessions that are ACTIVE, already STARTED and not ended
+ *     (one read, capped)
+ *   - `audience_type = all_muddies` only
+ *
+ * That last narrowing is what makes it safe without re-implementing anything.
+ * `canViewHangout` refuses a non-Muddy for every audience except
+ * `selected_groups`, and then narrows further per audience: `close_friends`
+ * needs a close-friend edge, `selected_circles` a shared circle,
+ * `selected_muddies` an explicit target row. Rather than duplicate those
+ * lookups, Home asks only for the one audience where being a Muddy IS the whole
+ * answer. Everything more specific stays on the UpFor screen, which already
+ * resolves it properly. A narrower Home is the correct trade; a Home that
+ * re-implements audience rules is not.
+ *
+ * Blocks are applied through the same batched helper the rest of the product
+ * uses, so a blocked pair cannot surface here.
+ */
+async function loadMuddyOpportunities(
+  admin: Admin,
+  viewerId: string,
+  requestedSessionIds: ReadonlySet<string>,
+  nowMs: number
+): Promise<HomeUpForOpportunity[]> {
+  const { data: friendships } = await admin
+    .from("friendships")
+    .select("user_one_id, user_two_id")
+    .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`)
+    .is("ended_at", null)
+    .limit(MAX_OPPORTUNITY_MUDDIES);
+
+  const friendIds = [
+    ...new Set(
+      (friendships ?? []).map((row) =>
+        row.user_one_id === viewerId ? row.user_two_id : row.user_one_id
+      )
+    )
+  ].filter((id) => id !== viewerId);
+  if (friendIds.length === 0) return [];
+
+  const nowIso = new Date(nowMs).toISOString();
+  const { data: sessions } = await admin
+    .from("hangout_sessions")
+    .select("id, owner_id, activity_type, ends_at")
+    .in("owner_id", friendIds)
+    .eq("status", "active")
+    .eq("audience_type", "all_muddies")
+    /* A scheduled UpFor is stored as `active` with a future starts_at, so
+       discovery must also require that it has actually begun -- otherwise an
+       18:00 session is announced from 14:00. Same rule as the canonical feed. */
+    .lte("starts_at", nowIso)
+    .gt("ends_at", nowIso)
+    .order("ends_at", { ascending: true })
+    .limit(MAX_OPPORTUNITY_SESSIONS);
+
+  /* Sessions the viewer has already acted on are not opportunities -- they are
+     the pending/accepted states, which own those moments. */
+  const candidates = (sessions ?? []).filter((session) => !requestedSessionIds.has(session.id));
+  if (candidates.length === 0) return [];
+
+  const ownerIds = [...new Set(candidates.map((session) => session.owner_id))];
+  const [blocked, { data: profiles }] = await Promise.all([
+    batchBlockedIds(admin, viewerId, ownerIds),
+    admin
+      .from("profiles")
+      .select("user_id, full_name, visibility_status, deleted_at")
+      .in("user_id", ownerIds)
+  ]);
+
+  const nameById = new Map<string, string>();
+  for (const profile of profiles ?? []) {
+    if (profile.deleted_at || profile.visibility_status === "ghost") continue;
+    nameById.set(profile.user_id, profile.full_name?.split(" ")[0] || "A Muddy");
+  }
+
+  const opportunities: HomeUpForOpportunity[] = [];
+  for (const session of candidates) {
+    if (blocked.has(session.owner_id)) continue;
+    const ownerName = nameById.get(session.owner_id);
+    if (!ownerName) continue;
+    opportunities.push({
+      id: session.id,
+      ownerId: session.owner_id,
+      ownerName,
+      activityType: session.activity_type as HangoutActivityType,
+      activityLabel: activityLabelFor(session.activity_type as HangoutActivityType),
+      endsAt: session.ends_at
+    });
+  }
+  return opportunities;
+}
+
+/**
+ * Which accepted UpFors the viewer has already coordinated about.
+ *
+ * WHY THIS IS NOT A MESSAGE-HISTORY SCAN. The question is a boolean per
+ * accepted session -- did they write to this owner after acceptance? -- and
+ * answering it by loading conversations would put a person message history on
+ * the Home path. Instead:
+ *
+ *   1. resolve the canonical direct conversation for each accepted owner by
+ *      `direct_key`, which is unique per pair (one `.in()`);
+ *   2. ask for the viewer own qualifying messages in those conversations,
+ *      newest first, capped (one `.in()`).
+ *
+ * Two reads for the whole batch, both keyed on indexed columns, neither growing
+ * with the size of any conversation. A viewer with no accepted UpFor pays
+ * nothing: the function returns before either query.
+ *
+ * WHAT COUNTS, deliberately narrow:
+ *   - the viewer is the sender (their coordination, not the owner reply)
+ *   - `message_type` is not `system` (a lifecycle event is not a person)
+ *   - `deleted_at` is null (a retracted message coordinated nothing)
+ *   - `created_at` is after the acceptance timestamp
+ *
+ * `responded_at` is nullable on legacy rows. Those fall back to the request
+ * `created_at`, which is conservative in the safe direction: an older threshold
+ * can only make MORE messages qualify, so the worst case is retiring a card
+ * slightly early rather than nagging somebody who has already written.
+ */
+async function markCoordinatedSessions(
+  admin: Admin,
+  viewerId: string,
+  requestRows: readonly {
+    hangout_session_id: string;
+    status: string;
+    responded_at: string | null;
+    created_at: string | null;
+  }[],
+  joined: HomeUpForJoinedSession[]
+): Promise<void> {
+  const acceptedSessions = joined.filter((session) => session.myStatus === "accepted");
+  if (acceptedSessions.length === 0) return;
+
+  const acceptedAtBySession = new Map<string, number>();
+  for (const row of requestRows) {
+    if (row.status !== "accepted") continue;
+    const stamp = row.responded_at ?? row.created_at ?? null;
+    const ms = stamp ? Date.parse(stamp) : Number.NaN;
+    acceptedAtBySession.set(row.hangout_session_id, Number.isFinite(ms) ? ms : 0);
+  }
+
+  const ownerBySession = new Map(acceptedSessions.map((session) => [session.id, session.ownerId]));
+  const keyByOwner = new Map<string, string>();
+  for (const ownerId of new Set(ownerBySession.values())) {
+    keyByOwner.set(directConversationKey(viewerId, ownerId), ownerId);
+  }
+
+  const { data: conversations } = await admin
+    .from("conversations")
+    .select("id, direct_key")
+    .eq("conversation_type", "direct")
+    .in("direct_key", [...keyByOwner.keys()]);
+
+  const conversationIdByOwner = new Map<string, string>();
+  for (const conversation of conversations ?? []) {
+    const ownerId = conversation.direct_key ? keyByOwner.get(conversation.direct_key) : undefined;
+    if (ownerId) conversationIdByOwner.set(ownerId, conversation.id);
+  }
+  if (conversationIdByOwner.size === 0) return;
+
+  const { data: messages } = await admin
+    .from("messages")
+    .select("conversation_id, created_at")
+    .in("conversation_id", [...conversationIdByOwner.values()])
+    .eq("sender_id", viewerId)
+    .neq("message_type", "system")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(MAX_COORDINATION_EVIDENCE_ROWS);
+
+  /* The NEWEST qualifying message per conversation is all that matters: if the
+     latest one predates acceptance, none of the older ones can postdate it. */
+  const latestByConversation = new Map<string, number>();
+  for (const message of messages ?? []) {
+    const ms = Date.parse(message.created_at);
+    if (!Number.isFinite(ms)) continue;
+    const current = latestByConversation.get(message.conversation_id) ?? 0;
+    if (ms > current) latestByConversation.set(message.conversation_id, ms);
+  }
+
+  for (const session of acceptedSessions) {
+    const conversationId = conversationIdByOwner.get(session.ownerId);
+    if (!conversationId) continue;
+    const latest = latestByConversation.get(conversationId);
+    if (latest === undefined) continue;
+    const acceptedAt = acceptedAtBySession.get(session.id);
+    if (acceptedAt === undefined) continue;
+    session.coordinatedSinceAccepted = latest > acceptedAt;
+  }
 }

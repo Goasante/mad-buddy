@@ -119,14 +119,20 @@ describe("brand and navigation are preserved", () => {
   });
 
   it("uses primary/muted tokens rather than a literal palette", () => {
-    expect(card).toContain("text-primary");
+    /* `text-primary` no longer appears, and its absence is the point.
+       The card used to switch between a token-coloured treatment and a
+       white-on-photo one depending on whether the state had artwork. Every
+       state now sits on the same fixed ground, so there is one legible
+       treatment instead of two -- white over a fixed scrim. The palette
+       contract below is unchanged: chrome stays tokens, and literal colours
+       are allowed only in the scrim that keeps text readable over the art. */
+    expect(card).toContain("text-white");
 
     /* THE CONTRACT IS THE PALETTE, NOT EVERY LITERAL COLOUR.
      *
      * This asserted `not.toMatch(/#[0-9a-fA-F]{6}/)` over the whole file, and
-     * the photo-backed "open your plan" variant later added a dark scrim
-     * (`bg-[#160b08]`) behind /home/open-your-plan-bg.webp so white text stays
-     * legible on a photograph. That is not a bespoke brand palette competing
+     * the photo-backed variant added a dark scrim (`bg-[#160b08]`) behind the
+     * card's background image so white text stays legible over artwork. That is not a bespoke brand palette competing
      * with the design tokens -- it is image legibility, and there is no token
      * for "whatever keeps text readable over THIS picture".
      *
@@ -149,8 +155,10 @@ describe("brand and navigation are preserved", () => {
     expect(outsideScrim).not.toMatch(/#[0-9a-fA-F]{6}/);
     expect(outsideScrim).not.toMatch(/rgba?\(/);
 
-    // And the scrim really is only ever used with the background image.
-    expect(card).toContain("open-your-plan-bg");
+    /* And the scrim really is only ever used with the background image. The
+       image is now Card A's ONE fixed ground, resolved through the visual
+       registry rather than a hardcoded /home/*.webp path. */
+    expect(card).toContain("homeCardABackground()");
   });
 });
 

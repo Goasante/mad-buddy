@@ -14,7 +14,7 @@ import { conversationHref } from "@/lib/messaging/open-conversation";
 import type { SmartCard } from "@/lib/smart-card/smart-card";
 import { smartCardVisualTreatment } from "@/lib/smart-card/visuals";
 import { cn } from "@/lib/utils";
-import { smartCardEditorialAtlas } from "@/lib/visuals/registry";
+import { homeCardBBackground } from "@/lib/visuals/registry";
 
 /**
  * Smart Card B — editorial / cinematic Home presentation.
@@ -31,7 +31,7 @@ import { smartCardEditorialAtlas } from "@/lib/visuals/registry";
  * viewer-authorized presentation field may safely select gendered variants.
  */
 
-const EDITORIAL_ATLAS = smartCardEditorialAtlas().path;
+const HOME_CARD_B_BACKGROUND = homeCardBBackground().path;
 
 const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>([
   "safe_arrival",
@@ -41,49 +41,7 @@ const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>([
   "nearby_muddies"
 ]);
 
-const UPFOR_CARD_IDS = new Set<SmartCard["id"]>([
-  "upfor_requests",
-  "upfor_accepted",
-  "upfor_momentum",
-  "owned_upfor_starting",
-  "upfor_active_muddy",
-  "upfor_scheduled",
-  "upfor_fallback"
-]);
-
-const REQUEST_CARD_IDS = new Set<SmartCard["id"]>([
-  "muddy_request",
-  "suggestions",
-  "profile_blocking"
-]);
-
-const BIRTHDAY_CARD_IDS = new Set<SmartCard["id"]>([
-  "muddy_birthday",
-  "birthday",
-  "achievement",
-  "journey_complete"
-]);
-
-const LINKR_CARD_IDS = new Set<SmartCard["id"]>([
-  "linkr_mutual",
-  "linkr_mutual_event",
-  "event_linkr_ready",
-  "nearby_muddies"
-]);
-
-const PLAN_CARD_IDS = new Set<SmartCard["id"]>([
-  "plan_rsvp",
-  "plan_decision",
-  "plan_starting",
-  "plan_chat_decision",
-  "event_live",
-  "event_commitment_starting",
-  "event_starting",
-  "weekend_plans",
-  "journey",
-  "buddy_progress"
-]);
-
+/** Which states describe a PLACE, so the metadata line gets a pin. */
 const LOCATION_META_IDS = new Set<SmartCard["id"]>([
   "event_live",
   "event_starting",
@@ -91,29 +49,15 @@ const LOCATION_META_IDS = new Set<SmartCard["id"]>([
   "nearby_muddies"
 ]);
 
-/**
- * 3x2 atlas positions:
- * top row    = UpFor / requests / birthday
- * bottom row = Linkr / plan / Safe Arrival
- */
-function fallbackAtlasPosition(card: SmartCard): string {
-  if (card.id === "safe_arrival") return "100% 100%";
-  if (LINKR_CARD_IDS.has(card.id)) return "0% 100%";
-  if (PLAN_CARD_IDS.has(card.id)) return "50% 100%";
-  if (BIRTHDAY_CARD_IDS.has(card.id)) return "100% 0%";
-  if (REQUEST_CARD_IDS.has(card.id)) return "50% 0%";
-  if (UPFOR_CARD_IDS.has(card.id)) return "0% 0%";
-  return "50% 100%";
-}
+/* The five card-family id sets are gone with the atlas they served. Each one
+   existed only to pick which of six illustrated scenes a card should crop --
+   artwork chosen by state, which the fixed two-background system removes. The
+   families themselves still live in the catalog, where they belong. */
 
-function mediaPosition(card: SmartCard): string {
-  const x = card.media?.focalX;
-  const y = card.media?.focalY;
-  if (typeof x !== "number" && typeof y !== "number") return "58% 50%";
-  const px = typeof x === "number" ? Math.round(Math.min(1, Math.max(0, x)) * 100) : 58;
-  const py = typeof y === "number" ? Math.round(Math.min(1, Math.max(0, y)) * 100) : 50;
-  return `${px}% ${py}%`;
-}
+/* The atlas position helpers are gone with the atlas. `fallbackAtlasPosition`
+   cropped one of six scenes out of a sprite by card family, and `mediaPosition`
+   honoured a photo's stored focal point -- both were ways of choosing artwork
+   per state, which the fixed two-background system removes by design. */
 
 function MetadataIcon({ card }: { card: SmartCard }) {
   if (card.id === "safe_arrival") return <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />;
@@ -199,30 +143,39 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
         prominent && !quiet ? "min-h-[15.5rem]" : !quiet ? "min-h-[14.25rem]" : null
       )}
     >
-      {/* Truthful media always wins. The neutral atlas is only a fallback and
-          never claims the illustrated people are the named Muddy/Linkr match. */}
+      {/* CARD B'S ONE GROUND, for every state it renders.
+       *
+       * This used to choose between two things by state: a truthful photo when
+       * the card had one, otherwise a tile cropped out of a six-scene editorial
+       * atlas keyed to the card family. Both are gone.
+       *
+       * Home now uses two fixed grounds -- Card A wears one, Card B wears the
+       * other -- and neither is ever chosen by state. Rotating the art as the
+       * card updates makes the same surface look like a different one every
+       * time, which is the opposite of what an adaptive card needs: the person
+       * should notice the WORDS changed, not the wallpaper. It also removed the
+       * last way illustrated people could sit behind a named person's card.
+       *
+       * Only the content layer varies now -- eyebrow, headline, subtitle,
+       * metadata, actions -- plus the scrim strength below, which still adapts
+       * for legibility because a quiet card and a safety card need different
+       * contrast over the same image. */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        {hasTruthfulMedia ? (
-          <Image
-            src={card.media!.url}
-            alt=""
-            fill
-            priority={prominent}
-            sizes="(max-width: 768px) 100vw, 430px"
-            className={cn("object-cover", quiet ? "opacity-58" : "opacity-95")}
-            style={{ objectPosition: mediaPosition(card) }}
-          />
-        ) : (
-          <span
-            className={cn("absolute inset-0 bg-no-repeat", quiet ? "opacity-45" : safety ? "opacity-72" : "opacity-88")}
-            style={{
-              backgroundImage: `url(${EDITORIAL_ATLAS})`,
-              backgroundSize: "300% 200%",
-              backgroundPosition: fallbackAtlasPosition(card)
-            }}
-          />
-        )}
+        <Image
+          src={HOME_CARD_B_BACKGROUND}
+          alt=""
+          fill
+          priority={prominent}
+          sizes="(max-width: 768px) 100vw, 430px"
+          className={cn("object-cover object-center", quiet ? "opacity-45" : safety ? "opacity-72" : "opacity-88")}
+        />
 
+        {/* THE SCRIM IS PART OF THE FIXED TREATMENT.
+            One ground has to work for every headline this card can render, so
+            the contrast is tuned once rather than per state. Safety keeps its
+            own maroon cast -- the one place the tone itself carries meaning --
+            and the vertical pass below lifts the copy off the art at both
+            edges. */}
         <span
           className={cn(
             "absolute inset-0",
