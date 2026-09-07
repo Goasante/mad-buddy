@@ -119,16 +119,30 @@ export async function runAccountRepairAction(input: unknown): Promise<RepairActi
   if (!result.ok) return result;
 
   revalidatePath("/admin/repairs");
+  if (repair.id === "reconcile_direct_messaging") {
+    revalidatePath("/messages");
+    revalidatePath("/friends");
+    revalidatePath("/dashboard");
+  }
+  if (repair.id === "reconcile_plan_chats") {
+    revalidatePath("/plans");
+    revalidatePath("/messages");
+    revalidatePath("/dashboard");
+  }
   return { ok: true, message: result.message };
 }
 
 /**
  * The one place repairs touch data. Each branch is scoped to a single user and
- * a single table, and reports what changed. No branch deletes account-defining
- * records (profiles, auth, subscriptions, messages).
+ * a canonical invariant. No branch deletes account-defining records such as
+ * profiles, auth identities, subscriptions or messages.
  */
 async function executeRepair(admin: Admin, repairId: string, userId: string): Promise<RepairActionState> {
   switch (repairId) {
+    case "reconcile_direct_messaging":
+      return reconcileDirectMessaging(admin, userId);
+    case "reconcile_plan_chats":
+      return reconcilePlanChats(admin, userId);
     case "pause_visibility": {
       const { error } = await admin.from("profiles").update({ visibility_status: "ghost" }).eq("user_id", userId);
       return error ? fail("pause visibility") : { ok: true, message: "Visibility paused (Ghost Mode)." };
@@ -160,6 +174,134 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
     default:
       return { ok: false, message: "That repair is not available." };
   }
+}
+
+/**
+ * Repairs the exact class of lifecycle mismatch behind "we are Muddies again,
+ * but messages still say Not sent" without weakening block authority.
+ *
+ * It never creates a friendship or a conversation. Only an already-archived
+ * direct conversation for a CURRENT, UNBLOCKED friendship can be reopened.
+ */
+async function reconcileDirectMessaging(admin: Admin, userId: string): Promise<RepairActionState> {
+  const [{ data: friendships, error: friendshipError }, { data: blocks, error: blockError }, { data: memberships, error: membershipError }] =
+    await Promise.all([
+      admin
+        .from("friendships")
+        .select("user_one_id, user_two_id")
+        .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+        .is("ended_at", null),
+      admin
+        .from("blocked_users")
+        .select("blocker_id, blocked_id")
+        .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
+      admin.from("conversation_members").select("conversation_id").eq("user_id", userId)
+    ]);
+
+  if (friendshipError || blockError || membershipError) return fail("inspect direct messaging state");
+
+  const friendIds = new Set(
+    (friendships ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id))
+  );
+  const blockedIds = new Set(
+    (blocks ?? []).map((row) => (row.blocker_id === userId ? row.blocked_id : row.blocker_id))
+  );
+  const eligibleFriendIds = new Set([...friendIds].filter((id) => !blockedIds.has(id)));
+  if (eligibleFriendIds.size === 0) {
+    return { ok: true, message: "No current unblocked Muddy conversations need reconciliation." };
+  }
+
+  const conversationIds = [...new Set((memberships ?? []).map((row) => row.conversation_id))];
+  if (conversationIds.length === 0) {
+    return { ok: true, message: "No existing direct conversations need reconciliation." };
+  }
+
+  const { data: conversations, error: conversationError } = await admin
+    .from("conversations")
+    .select("id, direct_key, status")
+    .eq("conversation_type", "direct")
+    .in("id", conversationIds);
+  if (conversationError) return fail("inspect direct conversations");
+
+  const eligibleConversationIds: string[] = [];
+  const eligibleMemberIds = new Set<string>([userId]);
+  for (const conversation of conversations ?? []) {
+    const otherId = otherUserFromDirectKey(conversation.direct_key, userId);
+    if (!otherId || !eligibleFriendIds.has(otherId)) continue;
+    if (conversation.status !== "archived") continue;
+    eligibleConversationIds.push(conversation.id);
+    eligibleMemberIds.add(otherId);
+  }
+
+  if (eligibleConversationIds.length === 0) {
+    return { ok: true, message: "Direct messaging already matches current friendship and block state." };
+  }
+
+  const now = new Date().toISOString();
+  const { error: conversationUpdateError } = await admin
+    .from("conversations")
+    .update({ status: "active", updated_at: now })
+    .in("id", eligibleConversationIds)
+    .eq("conversation_type", "direct")
+    .eq("status", "archived");
+  if (conversationUpdateError) return fail("reopen eligible direct conversations");
+
+  const { error: memberUpdateError } = await admin
+    .from("conversation_members")
+    .update({ status: "joined", left_at: null, updated_at: now })
+    .in("conversation_id", eligibleConversationIds)
+    .in("user_id", [...eligibleMemberIds]);
+  if (memberUpdateError) return fail("restore direct conversation membership");
+
+  return {
+    ok: true,
+    message: `Direct messaging reconciled (${eligibleConversationIds.length} conversation${eligibleConversationIds.length === 1 ? "" : "s"} restored).`
+  };
+}
+
+/**
+ * Uses the existing canonical Plan lifecycle authority rather than manually
+ * editing conversation membership. This is deliberately a reconciliation, not
+ * an invitation mechanism.
+ */
+async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairActionState> {
+  const { data: participantRows, error: participantError } = await admin
+    .from("plan_participants")
+    .select("plan_id")
+    .eq("user_id", userId)
+    .in("rsvp_status", ["going", "maybe"])
+    .limit(50);
+  if (participantError) return fail("inspect Plan participation");
+
+  const participantPlanIds = [...new Set((participantRows ?? []).map((row) => row.plan_id))];
+  if (participantPlanIds.length === 0) return { ok: true, message: "No active Plan Chat memberships need reconciliation." };
+
+  const { data: plans, error: plansError } = await admin
+    .from("plans")
+    .select("id")
+    .in("id", participantPlanIds)
+    .in("status", ["draft", "inviting", "polling", "confirmed"])
+    .limit(50);
+  if (plansError) return fail("inspect active Plans");
+
+  const planIds = (plans ?? []).map((row) => row.id);
+  if (planIds.length === 0) return { ok: true, message: "No active Plan Chat memberships need reconciliation." };
+
+  let reconciled = 0;
+  for (const planId of planIds) {
+    const { error } = await admin.rpc("reconcile_plan_conversation_members", { p_plan_id: planId });
+    if (error) return fail("reconcile Plan Chat membership");
+    reconciled += 1;
+  }
+
+  return { ok: true, message: `Plan Chats reconciled (${reconciled} active Plan${reconciled === 1 ? "" : "s"} checked).` };
+}
+
+function otherUserFromDirectKey(directKey: string | null, userId: string): string | null {
+  if (!directKey) return null;
+  const pair = directKey.split(":");
+  if (pair.length !== 2 || !pair.includes(userId)) return null;
+  return pair[0] === userId ? pair[1] ?? null : pair[0] ?? null;
 }
 
 function fail(what: string): RepairActionState {
