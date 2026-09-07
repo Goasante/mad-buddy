@@ -79,7 +79,15 @@ try {
       const result = page.locator("button, [role='option']").filter({ hasText: /Kofi/i }).first();
       if ((await result.count()) > 0) {
         await result.click();
-        await page.waitForTimeout(2500);
+        /* Wait for the diagnosis to RESOLVE rather than a fixed delay. The
+           loader grew more reads as areas were wired in, and a timeout that
+           was generous once became a flaky assertion that the Doctor produced
+           nothing -- which reads exactly like a regression. */
+        await page
+          .locator("text=/Checking account health/i")
+          .waitFor({ state: "detached", timeout: 30000 })
+          .catch(() => {});
+        await page.waitForTimeout(800);
       }
     }
 
