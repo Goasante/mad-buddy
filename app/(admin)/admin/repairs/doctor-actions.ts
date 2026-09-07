@@ -180,38 +180,94 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
     if (membership.status !== "joined") nonJoinedDirectMembershipCount += 1;
   }
 
-  const relevantPlanIds = [...new Set((planParticipantResult.data ?? []).map((row) => row.plan_id))];
+  /* PLAN CHAT, AGAINST CANONICAL AUTHORITY.
+   *
+   * This used to count every Going/Maybe participation whose chat membership
+   * was missing, which produced a repair button for states the Plan lifecycle
+   * is refusing on purpose. Three corrections, each mirroring the reconciler:
+   *
+   *   - only ACTIVE plans. A finished or cancelled Plan keeps its chat closed,
+   *     and that is the Plan ending rather than drift.
+   *   - the HOST is admitted unconditionally. reconcile_plan_conversation_
+   *     members inserts the creator separately and excludes them from the
+   *     eligibility predicate (`pp.user_id <> v_creator_id`), so running the
+   *     creator through it would invent an ineligibility the product does not
+   *     have.
+   *   - everyone else goes through `is_plan_participant_eligible`, which is the
+   *     one authority for block-first, friendship-or-source-UpFor eligibility.
+   *     An ineligible participant is a product rule, not repairable drift.
+   *
+   * A Plan with no conversation yet is also NOT drift: the lifecycle creates
+   * one when it is needed.
+   */
+  const participantRows = planParticipantResult.data ?? [];
+  const candidatePlanIds = [...new Set(participantRows.map((row) => row.plan_id))];
   let planChatMismatchCount = 0;
-  if (relevantPlanIds.length > 0) {
-    const planConversations = (
-      await admin
-        .from("conversations")
-        .select("id, context_id")
-        .eq("context_type", "plan")
-        .in("context_id", relevantPlanIds)
-    ).data ?? [];
-    const planConversationIds = planConversations.map((row) => row.id);
-    const joinedIds = new Set<string>();
-    if (planConversationIds.length > 0) {
-      const memberships = (
+  let planChatBlockedByRuleCount = 0;
+
+  if (candidatePlanIds.length > 0) {
+    const activePlans =
+      (
         await admin
-          .from("conversation_members")
-          .select("conversation_id")
-          .eq("user_id", userId)
-          .eq("status", "joined")
-          .in("conversation_id", planConversationIds)
+          .from("plans")
+          .select("id, creator_id")
+          .in("id", candidatePlanIds)
+          .in("status", ["draft", "inviting", "polling", "confirmed"])
       ).data ?? [];
-      for (const membership of memberships) joinedIds.add(membership.conversation_id);
+
+    const activePlanIds = activePlans.map((row) => row.id);
+    if (activePlanIds.length > 0) {
+      const planConversations =
+        (
+          await admin
+            .from("conversations")
+            .select("id, context_id")
+            .eq("context_type", "plan")
+            .in("context_id", activePlanIds)
+        ).data ?? [];
+
+      const conversationByPlan = new Map(
+        planConversations
+          .filter((row): row is typeof row & { context_id: string } => Boolean(row.context_id))
+          .map((row) => [row.context_id, row.id])
+      );
+
+      const joinedIds = new Set<string>();
+      const conversationIds = planConversations.map((row) => row.id);
+      if (conversationIds.length > 0) {
+        const memberships =
+          (
+            await admin
+              .from("conversation_members")
+              .select("conversation_id")
+              .eq("user_id", userId)
+              .eq("status", "joined")
+              .in("conversation_id", conversationIds)
+          ).data ?? [];
+        for (const membership of memberships) joinedIds.add(membership.conversation_id);
+      }
+
+      for (const plan of activePlans) {
+        const conversationId = conversationByPlan.get(plan.id);
+        // No chat yet is normal; the lifecycle makes one when it is needed.
+        if (!conversationId) continue;
+        if (joinedIds.has(conversationId)) continue;
+
+        if (plan.creator_id === userId) {
+          // The host is always admitted, so a missing membership IS drift.
+          planChatMismatchCount += 1;
+          continue;
+        }
+
+        const { data: eligible } = await admin.rpc("is_plan_participant_eligible", {
+          p_plan_id: plan.id,
+          p_host_id: plan.creator_id,
+          p_candidate_id: userId
+        });
+        if (eligible === true) planChatMismatchCount += 1;
+        else planChatBlockedByRuleCount += 1;
+      }
     }
-    const conversationByPlan = new Map(
-      planConversations
-        .filter((row): row is typeof row & { context_id: string } => Boolean(row.context_id))
-        .map((row) => [row.context_id, row.id])
-    );
-    planChatMismatchCount = relevantPlanIds.filter((planId) => {
-      const conversationId = conversationByPlan.get(planId);
-      return !conversationId || !joinedIds.has(conversationId);
-    }).length;
   }
 
   /* Events the account said it is GOING to, but whose circle it is not a
@@ -255,6 +311,7 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
     archivedDirectWithLiveFriendshipCount,
     nonJoinedDirectMembershipCount,
     planChatMismatchCount,
+    planChatBlockedByRuleCount,
     staleOwnedUpForCount: (upForResult.data ?? []).filter((row) => Boolean(row.ends_at) && row.ends_at! <= nowIso).length,
     strandedUpForRequestCount: (strandedRequestResult.data ?? []).length,
     /* Reduced to counts HERE, at the query boundary, so no journey timing or

@@ -98,7 +98,7 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   {
     id: "clear_stuck_status",
     label: "Clear stuck status",
-    description: "Removes statuses whose expiry has already passed. A status with no expiry is indefinite by design and is never touched.",
+    description: "Removes a status whose expiry has already passed. A status that is still current is never touched.",
     effect: "Only expired statuses are removed. A current status the person set deliberately is left exactly as it is.",
     category: "Visibility & presence",
     risk: "medium",

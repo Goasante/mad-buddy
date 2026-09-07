@@ -165,30 +165,20 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
       return reconcilePlanChats(admin, userId);
     case "settle_stranded_upfor_requests":
       return settleStrandedUpForRequests(admin, userId);
-    case "pause_visibility": {
-      const { error } = await admin.from("profiles").update({ visibility_status: "ghost" }).eq("user_id", userId);
-      return error ? fail("pause visibility") : { ok: true, message: "Visibility paused (Ghost Mode)." };
-    }
-    case "reset_glow_signal": {
-      const { data, error } = await admin.from("user_locations").delete().eq("user_id", userId).select("user_id");
-      return error ? fail("reset the glow signal") : { ok: true, message: `Glow signal reset (${data?.length ?? 0} cleared).` };
-    }
+    case "pause_visibility":
+      return pauseVisibility(admin, userId);
+    case "reset_glow_signal":
+      return resetGlowSignal(admin, userId);
     case "clear_stuck_status":
       return clearStuckStatus(admin, userId);
-    case "clear_notification_badge": {
-      const { data, error } = await admin.from("notifications").update({ is_read: true }).eq("user_id", userId).eq("is_read", false).select("id");
-      return error ? fail("clear the notification badge") : { ok: true, message: `Badge cleared (${data?.length ?? 0} marked read).` };
-    }
-    case "clear_push_subscriptions": {
-      const { data, error } = await admin.from("push_subscriptions").delete().eq("user_id", userId).select("id");
-      return error ? fail("reset push devices") : { ok: true, message: `Push devices reset (${data?.length ?? 0} removed).` };
-    }
+    case "clear_notification_badge":
+      return clearNotificationBadge(admin, userId);
+    case "clear_push_subscriptions":
+      return clearWebPushRegistrations(admin, userId);
     case "clear_rate_limits":
       return clearRateLimits(admin, userId);
-    case "reset_onboarding": {
-      const { error } = await admin.from("profiles").update({ is_onboarded: false }).eq("user_id", userId);
-      return error ? fail("re-trigger onboarding") : { ok: true, message: "Onboarding will restart on next open." };
-    }
+    case "reset_onboarding":
+      return resetOnboarding(admin, userId);
     default:
       return { ok: false, message: "That repair is not available." };
   }
@@ -405,21 +395,54 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
 
   const { data: plans, error: plansError } = await admin
     .from("plans")
-    .select("id")
+    .select("id, creator_id")
     .in("id", participantPlanIds)
     .in("status", ["draft", "inviting", "polling", "confirmed"])
     .limit(50);
   if (plansError) return fail("inspect active Plans");
 
-  const planIds = (plans ?? []).map((row) => row.id);
+  /* SCOPED TO GENUINELY ELIGIBLE PLANS.
+   *
+   * Reconciling a Plan the lifecycle is correctly refusing produces no change
+   * and then makes the whole action report `blocked_by_product_rule` -- so
+   * three repaired Plans get reported as a refusal because a fourth was
+   * legitimately closed. Ineligible plans are separated here and reported
+   * alongside the result instead of poisoning it.
+   *
+   * The HOST is not passed through the predicate: reconcile_plan_conversation_
+   * members admits the creator unconditionally and excludes them from it. */
+  const eligiblePlans: string[] = [];
+  let refusedByRule = 0;
+  for (const plan of plans ?? []) {
+    if (plan.creator_id === userId) {
+      eligiblePlans.push(plan.id);
+      continue;
+    }
+    const { data: eligible } = await admin.rpc("is_plan_participant_eligible", {
+      p_plan_id: plan.id,
+      p_host_id: plan.creator_id,
+      p_candidate_id: userId
+    });
+    if (eligible === true) eligiblePlans.push(plan.id);
+    else refusedByRule += 1;
+  }
+
+  const planIds = eligiblePlans;
   if (planIds.length === 0) {
     return {
       ok: true,
       message: "No active Plan Chat memberships need reconciliation.",
-      verification: notApplicable(
-        "the user is a joined member of every active Plan they are going to",
-        "This account has no active Plans, so there is no Plan Chat membership to reconcile."
-      )
+      verification:
+        refusedByRule > 0
+          ? blockedByRule(
+              "the user is a joined member of every active Plan they are going to",
+              "Plan Chat membership is decided by the canonical Plan lifecycle, which Admin does not override",
+              `${refusedByRule} active Plan${refusedByRule === 1 ? "" : "s"} correctly exclude${refusedByRule === 1 ? "s" : ""} this account — a removal, a block against the host, or ineligibility. There is nothing to reconcile.`
+            )
+          : notApplicable(
+              "the user is a joined member of every active Plan they are going to",
+              "This account has no active Plans, so there is no Plan Chat membership to reconcile."
+            )
     };
   }
 
@@ -464,16 +487,16 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
   const invariant = "the user is a joined member of every active Plan Chat they are going to";
 
   if (missing.length > 0) {
-    /* The reconciler ran and still did not admit them. That is the canonical
-       authority declining -- a removed participant, a block against the host,
-       or a closed Plan -- not account drift Admin should force past. */
+    /* These plans were checked as ELIGIBLE before the reconciler ran, so a
+       membership still missing afterwards is a genuine failure rather than the
+       lifecycle declining. Reporting it as a product rule here would hide a
+       real defect behind a reassuring explanation. */
     return {
       ok: true,
       message,
-      verification: blockedByRule(
+      verification: stillBroken(
         invariant,
-        "Plan Chat membership is decided by the canonical Plan lifecycle, which Admin does not override",
-        `${missing.length} Plan Chat${missing.length === 1 ? "" : "s"} still exclude${missing.length === 1 ? "s" : ""} this account. The Plan lifecycle is refusing on purpose — check for a removal, a block against the host, or a closed Plan.`
+        `${missing.length} Plan Chat${missing.length === 1 ? "" : "s"} still exclude${missing.length === 1 ? "s" : ""} this account even though the lifecycle considers them eligible. Escalate rather than re-running.`
       )
     };
   }
@@ -483,9 +506,12 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
     message,
     verification: fixed(
       invariant,
-      conversationIds.length === 0
+      (conversationIds.length === 0
         ? "No Plan Chats exist for these Plans yet, and the account's participation is consistent."
-        : `The account is a joined member of all ${conversationIds.length} active Plan Chat${conversationIds.length === 1 ? "" : "s"}.`
+        : `The account is a joined member of all ${conversationIds.length} eligible Plan Chat${conversationIds.length === 1 ? "" : "s"}.`) +
+        (refusedByRule > 0
+          ? ` ${refusedByRule} further Plan${refusedByRule === 1 ? "" : "s"} correctly exclude${refusedByRule === 1 ? "s" : ""} this account and ${refusedByRule === 1 ? "was" : "were"} left alone.`
+          : "")
     )
   };
 }
@@ -698,6 +724,230 @@ async function clearRateLimits(admin: Admin, userId: string): Promise<RepairActi
       `${activeIds.length} active counter${activeIds.length === 1 ? "" : "s"} cleared, so throttled actions work again. Expired counters were left alone.`
     )
   };
+}
+
+/* THE FIVE REMAINING EXECUTABLE REPAIRS, EACH PROVING ITS OWN INVARIANT.
+ *
+ * These previously reported success on the mutation's return value. Every one
+ * now re-reads the state the operator was told about, and reports
+ * `not_applicable` when the account was ALREADY in the requested state rather
+ * than claiming a repair fixed something that was never wrong.
+ */
+
+async function pauseVisibility(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "the account's visibility is Ghost Mode";
+
+  const { data: before } = await admin
+    .from("profiles")
+    .select("visibility_status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (before?.visibility_status === "ghost") {
+    return {
+      ok: true,
+      message: "Already in Ghost Mode.",
+      verification: notApplicable(invariant, "This account was already in Ghost Mode, so nothing was changed.")
+    };
+  }
+
+  const { error } = await admin.from("profiles").update({ visibility_status: "ghost" }).eq("user_id", userId);
+  if (error) return fail("pause visibility");
+
+  const { data: after } = await admin
+    .from("profiles")
+    .select("visibility_status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const message = "Visibility paused (Ghost Mode).";
+  return after?.visibility_status === "ghost"
+    ? {
+        ok: true,
+        message,
+        verification: fixed(invariant, "The account is now in Ghost Mode and will not appear in proximity.")
+      }
+    : {
+        ok: true,
+        message,
+        verification: stillBroken(invariant, "The account is still not in Ghost Mode after the repair.")
+      };
+}
+
+async function resetGlowSignal(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "the stored glow signal has been cleared";
+
+  const { data: before } = await admin.from("user_locations").select("user_id").eq("user_id", userId);
+  if ((before ?? []).length === 0) {
+    return {
+      ok: true,
+      message: "No stored glow signal.",
+      verification: notApplicable(invariant, "This account had no stored glow signal, so nothing was cleared.")
+    };
+  }
+
+  const { error } = await admin.from("user_locations").delete().eq("user_id", userId);
+  if (error) return fail("reset the glow signal");
+
+  const { data: after } = await admin.from("user_locations").select("user_id").eq("user_id", userId);
+  const message = "Glow signal reset.";
+  if ((after ?? []).length > 0) {
+    /* A device that publishes again immediately is NOT a failed repair, so the
+       wording says what was observed rather than accusing the repair of not
+       running. The invariant claims only that the stored signal was cleared. */
+    return {
+      ok: true,
+      message,
+      verification: stillBroken(
+        invariant,
+        "A glow signal is present again. Either the delete did not apply, or the device published a fresh fix immediately, so check the timestamp before escalating."
+      )
+    };
+  }
+  return {
+    ok: true,
+    message,
+    verification: fixed(
+      invariant,
+      "The stored signal was cleared. The device may publish a fresh one as soon as it reports again, which is normal."
+    )
+  };
+}
+
+async function clearNotificationBadge(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "the account has no unread notifications";
+
+  const { count: before } = await admin
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+  if ((before ?? 0) === 0) {
+    return {
+      ok: true,
+      message: "Badge is already clear.",
+      verification: notApplicable(invariant, "This account had no unread notifications, so nothing was changed.")
+    };
+  }
+
+  const { error } = await admin
+    .from("notifications")
+    .update({ is_read: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+  if (error) return fail("clear the notification badge");
+
+  const { count: after } = await admin
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+  const message = `Badge cleared (${before ?? 0} marked read).`;
+  return (after ?? 0) === 0
+    ? {
+        ok: true,
+        message,
+        verification: fixed(
+          invariant,
+          `The unread badge is now zero. ${before ?? 0} notification${(before ?? 0) === 1 ? " was" : "s were"} marked read; none were deleted.`
+        )
+      }
+    : {
+        ok: true,
+        message,
+        verification: stillBroken(
+          invariant,
+          `${after} notification${after === 1 ? " is" : "s are"} still unread after the repair.`
+        )
+      };
+}
+
+async function clearWebPushRegistrations(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "the account has no stored WEB push registrations";
+
+  const { data: before } = await admin.from("push_subscriptions").select("id").eq("user_id", userId);
+  /* Native tokens are COUNTED only so the verification can say plainly that
+     they were left alone. They are never read, exposed or deleted here -- the
+     repair is web push, and the operator must not be able to report a native
+     push problem as fixed. */
+  const nativeCount = (await admin.from("device_push_tokens").select("id").eq("user_id", userId)).data?.length ?? 0;
+  const nativeNote =
+    nativeCount > 0
+      ? ` ${nativeCount} native app device token${nativeCount === 1 ? " was" : "s were"} left untouched.`
+      : "";
+
+  if ((before ?? []).length === 0) {
+    return {
+      ok: true,
+      message: "No web push registrations stored.",
+      verification: notApplicable(
+        invariant,
+        `This account had no web push registrations, so nothing was changed.${nativeNote}`
+      )
+    };
+  }
+
+  const { error } = await admin.from("push_subscriptions").delete().eq("user_id", userId);
+  if (error) return fail("reset the web push registrations");
+
+  const { data: after } = await admin.from("push_subscriptions").select("id").eq("user_id", userId);
+  const message = `Web push registrations reset (${(before ?? []).length} removed).`;
+  return (after ?? []).length === 0
+    ? {
+        ok: true,
+        message,
+        verification: fixed(
+          invariant,
+          `Web push registrations are cleared, so the browser can register again.${nativeNote}`
+        )
+      }
+    : {
+        ok: true,
+        message,
+        verification: stillBroken(
+          invariant,
+          `${(after ?? []).length} web push registration${(after ?? []).length === 1 ? "" : "s"} remain after the repair.`
+        )
+      };
+}
+
+async function resetOnboarding(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "the account is marked as needing onboarding";
+
+  const { data: before } = await admin
+    .from("profiles")
+    .select("is_onboarded")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (before?.is_onboarded === false) {
+    return {
+      ok: true,
+      message: "Onboarding is already pending.",
+      verification: notApplicable(
+        invariant,
+        "This account was already marked as needing onboarding, so nothing was changed."
+      )
+    };
+  }
+
+  const { error } = await admin.from("profiles").update({ is_onboarded: false }).eq("user_id", userId);
+  if (error) return fail("re-trigger onboarding");
+
+  const { data: after } = await admin
+    .from("profiles")
+    .select("is_onboarded")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const message = "Onboarding will restart on next open.";
+  return after?.is_onboarded === false
+    ? {
+        ok: true,
+        message,
+        verification: fixed(invariant, "The account will be sent through onboarding on next open. No data was deleted.")
+      }
+    : {
+        ok: true,
+        message,
+        verification: stillBroken(invariant, "The account is still marked onboarded after the repair.")
+      };
 }
 
 function otherUserFromDirectKey(directKey: string | null, userId: string): string | null {

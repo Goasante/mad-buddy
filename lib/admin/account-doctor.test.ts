@@ -20,6 +20,7 @@ function snapshot(overrides: Partial<AccountDoctorSnapshot> = {}): AccountDoctor
     archivedDirectWithLiveFriendshipCount: 0,
     nonJoinedDirectMembershipCount: 0,
     planChatMismatchCount: 0,
+    planChatBlockedByRuleCount: 0,
     staleOwnedUpForCount: 0,
     strandedUpForRequestCount: 0,
     stalledSafeArrivalCount: 0,
@@ -145,5 +146,42 @@ describe("stranded UpFor requests and Event circles", () => {
     const findings = buildAccountDoctorFindings(snapshot());
     expect(findings.find((item) => item.id === "upfor-stranded-requests")).toBeUndefined();
     expect(findings.find((item) => item.id === "event-circle-mismatch")).toBeUndefined();
+  });
+});
+
+describe("Plan Chat separates drift from a correct refusal", () => {
+  it("a correct refusal is a product rule with NO repair attached", () => {
+    /* The review finding: every Going/Maybe participant missing chat
+       membership was counted as drift, so an operator was offered a repair
+       button for a Plan the lifecycle is refusing on purpose. */
+    const finding = buildAccountDoctorFindings(snapshot({ planChatBlockedByRuleCount: 2 })).find(
+      (item) => item.id === "plan-chat-blocked-by-rule"
+    );
+
+    expect(finding?.severity).toBe("product_rule");
+    expect(finding?.repairId).toBeUndefined();
+    expect(finding?.detail).toMatch(/refusing on purpose/i);
+  });
+
+  it("genuine drift still offers the canonical reconciler", () => {
+    const finding = buildAccountDoctorFindings(snapshot({ planChatMismatchCount: 1 })).find(
+      (item) => item.id === "plan-chat-mismatch"
+    );
+
+    expect(finding?.repairId).toBe("reconcile_plan_chats");
+  });
+
+  it("both can be reported at once without either hiding the other", () => {
+    const findings = buildAccountDoctorFindings(
+      snapshot({ planChatMismatchCount: 1, planChatBlockedByRuleCount: 1 })
+    );
+
+    expect(findings.find((item) => item.id === "plan-chat-mismatch")).toBeDefined();
+    expect(findings.find((item) => item.id === "plan-chat-blocked-by-rule")).toBeDefined();
+  });
+
+  it("a healthy account reports neither", () => {
+    const findings = buildAccountDoctorFindings(snapshot());
+    expect(findings.find((item) => item.id === "plan-chat-blocked-by-rule")).toBeUndefined();
   });
 });

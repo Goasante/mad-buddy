@@ -5218,6 +5218,13 @@ export type Database = {
         Args: { p_plan_id: string };
         Returns: string;
       };
+      // Contextual Plan participant eligibility (20260907120000). One authority
+      // for block-first, friendship-or-source-UpFor eligibility. The host is
+      // NOT passed through it -- the reconciler admits the creator separately.
+      is_plan_participant_eligible: {
+        Args: { p_plan_id: string; p_host_id: string; p_candidate_id: string };
+        Returns: boolean;
+      };
       // Event Rooms lifecycle authority (20260827120000_event_rooms_productization).
       reconcile_event_room_conversation: {
         Args: { p_room_id: string };

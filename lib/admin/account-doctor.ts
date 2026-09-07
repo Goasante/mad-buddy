@@ -1,4 +1,8 @@
-export type AccountDoctorSeverity = "healthy" | "info" | "attention" | "issue";
+/* `product_rule` matches the combined Doctor's vocabulary: a state that is
+   CORRECT and deliberately refused, which must never render a repair button.
+   Without it a correct refusal renders as generic `info` and loses the one
+   distinction an operator most needs. */
+export type AccountDoctorSeverity = "healthy" | "info" | "attention" | "issue" | "product_rule";
 
 export type AccountDoctorArea =
   | "Account"
@@ -38,6 +42,15 @@ export type AccountDoctorSnapshot = {
   archivedDirectWithLiveFriendshipCount: number;
   nonJoinedDirectMembershipCount: number;
   planChatMismatchCount: number;
+  /**
+   * Active Plans this account is going to whose chat correctly excludes them.
+   *
+   * Counted APART from the mismatch figure. These are the Plan lifecycle
+   * refusing on purpose -- a block, a removal, or genuine ineligibility -- and
+   * folding them into "needs reconciliation" is what put a repair button in
+   * front of a correct refusal.
+   */
+  planChatBlockedByRuleCount: number;
   staleOwnedUpForCount: number;
   /** Requests still waiting on the viewer's own closed UpFors. */
   strandedUpForRequestCount: number;
@@ -63,8 +76,9 @@ export type AccountDoctorSnapshot = {
 const severityRank: Record<AccountDoctorSeverity, number> = {
   issue: 0,
   attention: 1,
-  info: 2,
-  healthy: 3
+  product_rule: 2,
+  info: 3,
+  healthy: 4
 };
 
 export function buildAccountDoctorFindings(snapshot: AccountDoctorSnapshot): AccountDoctorFinding[] {
@@ -105,6 +119,16 @@ export function buildAccountDoctorFindings(snapshot: AccountDoctorSnapshot): Acc
       severity: "healthy",
       title: "Direct messaging lifecycle looks healthy",
       detail: "No archived-live friendship mismatch was detected."
+    });
+  }
+
+  if (snapshot.planChatBlockedByRuleCount > 0) {
+    findings.push({
+      id: "plan-chat-blocked-by-rule",
+      area: "Plans",
+      severity: "product_rule",
+      title: "A Plan Chat correctly excludes this account",
+      detail: `${snapshot.planChatBlockedByRuleCount} active Plan${snapshot.planChatBlockedByRuleCount === 1 ? "" : "s"} the account is going to ${snapshot.planChatBlockedByRuleCount === 1 ? "does" : "do"} not admit them to the chat. The Plan lifecycle is refusing on purpose — a live block, a removal, or ineligibility — so there is nothing to repair. Check with the host rather than reconciling.`
     });
   }
 
