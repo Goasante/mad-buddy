@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { smartCardEditorialAtlas } from "@/lib/visuals/registry";
 
 const source = readFileSync(new URL("./smart-card-v2.tsx", import.meta.url), "utf8");
 
 describe("Smart Card editorial presentation", () => {
-  it("uses the approved neutral illustration atlas as fallback art", () => {
-    expect(source).toContain('/visuals/smart-card/editorial-atlas.webp');
+  it("uses the approved registered neutral illustration atlas as fallback art", () => {
+    expect(smartCardEditorialAtlas().path).toBe("/visuals/smart-card/editorial-atlas.webp");
+    expect(source).toContain("smartCardEditorialAtlas().path");
     expect(source).toContain('backgroundSize: "300% 200%"');
     expect(source).toContain('data-smart-card-editorial="true"');
   });
