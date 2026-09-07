@@ -16,9 +16,7 @@ export type RepairRisk = "low" | "medium" | "high";
 export type RepairCategory =
   | "Messaging & coordination"
   | "Plans & UpFor"
-  | "Visibility & presence"
-  | "Notifications"
-  | "Access & limits";
+  | "Visibility & presence";
 
 export type RepairDefinition = {
   id: string;
@@ -53,8 +51,25 @@ export type RepairDefinition = {
  *   reset_onboarding -- nothing diagnoses onboarding state as WRONG, so the
  *     button could only ever act on a healthy account.
  *
- * Every entry below is reachable from a finding that names an actual broken
- * state. If a governed administrative action is wanted for any of the three
+ * Three more went in a second pass, for the subtler version of the same fault:
+ * they were named by a finding, but the finding could never fire.
+ *
+ *   reset_glow_signal -- the presence loader projects a usable signal as
+ *     `fresh` and everything else as `missing`; it never emits `stale`, because
+ *     an expired location row is not drift (the proximity engine already treats
+ *     it as absent). The "signal is stale" branch is dead code.
+ *   clear_push_subscriptions -- `stalePushDevices` is hard-coded 0, because no
+ *     canonical stale-token rule exists. Its finding can never fire either.
+ *   clear_rate_limits -- this one CAN fire, but "an active rate limit exists"
+ *     is throttling working, not drift. Clearing it is an abuse-control
+ *     decision, and support.manage must not be able to lift a legitimate
+ *     protection because a button was on screen.
+ *
+ * Inventing a stale threshold for the first two would have manufactured the
+ * defect needed to justify the repair. The honest move is fewer repairs.
+ *
+ * Every entry below is reachable from a finding the LIVE loader can actually
+ * produce. If a governed administrative action is wanted for any of these
  * later, it belongs in a separate surface with its own semantics -- not here,
  * where "repair" implies something was broken.
  */
@@ -95,17 +110,6 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
     confirm: true
   },
   {
-    id: "reset_glow_signal",
-    label: "Reset glow signal",
-    description: "Removes the current device location signal so it can refresh cleanly.",
-    effect: "The last known glow signal is cleared; it refreshes on the next update.",
-    category: "Visibility & presence",
-    risk: "low",
-    permission: "admin.support.manage",
-    requiresReason: false,
-    confirm: false
-  },
-  {
     id: "clear_stuck_status",
     label: "Clear stuck status",
     description: "Removes a status whose expiry has already passed. A status that is still current is never touched.",
@@ -114,40 +118,6 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
     risk: "medium",
     permission: "admin.support.manage",
     requiresReason: false,
-    confirm: true
-  },
-  {
-    id: "clear_push_subscriptions",
-    label: "Reset web push registrations",
-    /* Scoped in the NAME. `push_subscriptions` is web push only; native
-       delivery uses `device_push_tokens`, which this does not touch. A label
-       saying "push devices" promised both and delivered one, so an operator
-       would have reported a native-push problem as fixed. */
-    description:
-      "Removes stored WEB push registrations so the browser can re-register. Native app device tokens are not affected.",
-    effect:
-      "Web push stops until the account re-enables notifications in a browser. Push to the mobile app is unchanged.",
-    category: "Notifications",
-    risk: "medium",
-    permission: "admin.support.manage",
-    requiresReason: false,
-    confirm: true
-  },
-  {
-    id: "clear_rate_limits",
-    label: "Clear ALL active rate limits",
-    /* Named for what it actually does. `rate_limits` has no unique constraint
-       on (user_id, action), so one account can hold several live windows for
-       unrelated actions; clearing them is a broad operation, not a targeted
-       one, and the label must not imply otherwise. */
-    description:
-      "Clears EVERY active rate-limit window on this account, not just the one the user reported. Expired counters are left alone.",
-    effect:
-      "All currently throttled actions become available again, including any the user did not mention. Use it when the account is genuinely stuck, not to speed up one action.",
-    category: "Access & limits",
-    risk: "high",
-    permission: "admin.support.manage",
-    requiresReason: true,
     confirm: true
   }
 ];
@@ -167,9 +137,7 @@ export function repairRiskTone(risk: RepairRisk): "default" | "warning" | "dange
 export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
   "Messaging & coordination",
   "Plans & UpFor",
-  "Visibility & presence",
-  "Notifications",
-  "Access & limits"
+  "Visibility & presence"
 ];
 
 /** Catalog grouped by category, in display order — for the UI. */

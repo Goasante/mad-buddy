@@ -123,3 +123,19 @@ export const blockedByRule = (invariant: string, rule: string, summary: string):
   rule,
   summary
 });
+
+/**
+ * The verifier itself could not read the invariant.
+ *
+ * A mutation may well have worked, but nobody can say so -- and "probably
+ * fixed" is the one thing this contract exists to prevent an operator seeing.
+ * It is reported as STILL_BROKEN rather than a fifth outcome, deliberately:
+ * still_broken already means "do not re-run, escalate", which is exactly the
+ * right instruction when verification is unavailable. Inventing a softer
+ * outcome would give an operator somewhere to look away.
+ */
+export const verificationUnavailable = (invariant: string, what: string): RepairVerification => ({
+  outcome: "still_broken",
+  invariant,
+  summary: `The repair ran, but ${what} could not be re-read, so nothing can be confirmed. Treat this as unverified and escalate rather than re-running.`
+});

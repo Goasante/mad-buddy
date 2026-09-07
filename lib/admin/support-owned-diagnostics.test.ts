@@ -75,23 +75,30 @@ describe("support-owned Account Doctor diagnostics", () => {
     expect(finding?.repairId).toBeUndefined();
   });
 
-  it("recommends named presence repair only for genuinely stale state", () => {
-    const finding = find(
-      buildSupportOwnedDiagnostics(snapshot({ presence: { visibility: "visible", signal: "stale", staleStatusCount: 0 } })),
-      "presence-signal"
-    );
-    expect(finding).toMatchObject({ severity: "attention", operatorAction: "use_named_repair", repairId: "reset_glow_signal" });
+  it("never recommends a presence repair, because the loader cannot report stale", () => {
+    /* This used to hand-build `signal: "stale"` and assert a repair was
+       recommended -- a value the live loader CANNOT produce, because an expired
+       location row is not drift and projects as `missing`. The test passed
+       while the feature was dead, which is precisely the failure mode worth
+       pinning. Only the two reachable states are asserted now. */
+    for (const signal of ["fresh", "missing"] as const) {
+      const findings = buildSupportOwnedDiagnostics(
+        snapshot({ presence: { visibility: "visible", signal, staleStatusCount: 0 } })
+      );
+      for (const finding of findings) {
+        expect(finding.repairId).not.toBe("reset_glow_signal");
+      }
+    }
   });
 
-  it("surfaces stale push registrations without exposing endpoints or tokens", () => {
-    const finding = find(
-      buildSupportOwnedDiagnostics(
-        snapshot({ notifications: { unreadCount: 0, webPushDevices: 3, nativePushDevices: 2, stalePushDevices: 2 } })
-      ),
-      "push-device-freshness"
-    );
-    expect(finding).toMatchObject({ severity: "attention", repairId: "clear_push_subscriptions" });
-    expect(finding?.detail).toContain("Raw endpoints and tokens are intentionally hidden");
+  it("reports push registrations without exposing endpoints or tokens, and offers no repair", () => {
+    const findings = buildSupportOwnedDiagnostics(snapshot());
+    const finding = find(findings, "push-device-freshness");
+
+    expect(finding?.detail ?? "").not.toMatch(/endpoint|p256dh|token/i);
+    /* `stalePushDevices` is hard-coded 0 -- there is no canonical stale-token
+       rule -- so no push repair may be recommended from here. */
+    expect(finding?.repairId).toBeUndefined();
   });
 
   it("does not automatically clear a legitimate active rate limit", () => {

@@ -205,8 +205,7 @@ export function buildAccountDoctorFindings(snapshot: AccountDoctorSnapshot): Acc
       area: "Access",
       severity: "attention",
       title: "Active rate-limit window detected",
-      detail: `${snapshot.activeRateLimitCount} rate-limit window${snapshot.activeRateLimitCount === 1 ? " is" : "s are"} still active. Only clear this when support has confirmed a legitimate lockout.`,
-      repairId: "clear_rate_limits"
+      detail: `${snapshot.activeRateLimitCount} rate-limit window${snapshot.activeRateLimitCount === 1 ? " is" : "s are"} still active. This is throttling working, not drift — it clears itself when the window ends. If the account is genuinely stuck, escalate rather than lifting an abuse protection from here.`
     });
   }
 

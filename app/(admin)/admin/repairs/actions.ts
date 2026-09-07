@@ -12,7 +12,8 @@ import {
   fixed,
   notApplicable,
   type RepairVerification,
-  stillBroken
+  stillBroken,
+  verificationUnavailable
 } from "@/lib/admin/repair-verification";
 
 /**
@@ -165,14 +166,8 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
       return reconcilePlanChats(admin, userId);
     case "settle_stranded_upfor_requests":
       return settleStrandedUpForRequests(admin, userId);
-    case "reset_glow_signal":
-      return resetGlowSignal(admin, userId);
     case "clear_stuck_status":
       return clearStuckStatus(admin, userId);
-    case "clear_push_subscriptions":
-      return clearWebPushRegistrations(admin, userId);
-    case "clear_rate_limits":
-      return clearRateLimits(admin, userId);
     default:
       return { ok: false, message: "That repair is not available." };
   }
@@ -327,13 +322,25 @@ async function reconcileDirectMessaging(admin: Admin, userId: string): Promise<R
      actually experiences: every conversation we just touched is active, and
      both people are joined to it. `resolveCanSendMessage` refuses on either
      condition, so checking one would still let a broken thread report FIXED. */
-  const [{ data: verifyConversations }, { data: verifyMembers }] = await Promise.all([
+  const [conversationCheck, memberCheck] = await Promise.all([
     admin.from("conversations").select("id, status").in("id", eligibleConversationIds),
     admin
       .from("conversation_members")
       .select("conversation_id, user_id, status")
       .in("conversation_id", eligibleConversationIds)
   ]);
+  const count = eligibleConversationIds.length;
+  const message = `Direct messaging reconciled (${count} conversation${count === 1 ? "" : "s"} restored).`;
+  const invariant = "every repaired direct conversation is active with both people joined";
+  if (conversationCheck.error || memberCheck.error) {
+    return {
+      ok: true,
+      message,
+      verification: verificationUnavailable(invariant, "the repaired conversations")
+    };
+  }
+  const verifyConversations = conversationCheck.data;
+  const verifyMembers = memberCheck.data;
 
   const stillArchived = (verifyConversations ?? []).filter((row) => row.status !== "active");
   const joinedByConversation = new Map<string, number>();
@@ -342,10 +349,6 @@ async function reconcileDirectMessaging(admin: Admin, userId: string): Promise<R
     joinedByConversation.set(row.conversation_id, (joinedByConversation.get(row.conversation_id) ?? 0) + 1);
   }
   const missingMembers = eligibleConversationIds.filter((id) => (joinedByConversation.get(id) ?? 0) < 2);
-
-  const count = eligibleConversationIds.length;
-  const message = `Direct messaging reconciled (${count} conversation${count === 1 ? "" : "s"} restored).`;
-  const invariant = "every repaired direct conversation is active with both people joined";
 
   if (stillArchived.length > 0 || missingMembers.length > 0) {
     return {
@@ -412,11 +415,15 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
       eligiblePlans.push(plan.id);
       continue;
     }
-    const { data: eligible } = await admin.rpc("is_plan_participant_eligible", {
+    const { data: eligible, error: eligibleError } = await admin.rpc("is_plan_participant_eligible", {
       p_plan_id: plan.id,
       p_host_id: plan.creator_id,
       p_candidate_id: userId
     });
+    /* A FAILED RPC IS NOT A REFUSAL. Counting it as one would tell the operator
+       the lifecycle declined on purpose for a Plan whose eligibility was never
+       determined, and would silently shrink the set the repair then acts on. */
+    if (eligibleError) return fail("check Plan participant eligibility");
     if (eligible === true) eligiblePlans.push(plan.id);
     else refusedByRule += 1;
   }
@@ -447,6 +454,9 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
     reconciled += 1;
   }
 
+  const message = `Plan Chats reconciled (${reconciled} active Plan${reconciled === 1 ? "" : "s"} checked).`;
+  const invariant = "the user is a joined member of every active Plan Chat they are going to";
+
   /* THE INVARIANT, RE-READ. The reconciler returning cleanly is not the claim:
      it runs happily and admits nobody when the person is genuinely ineligible.
      The claim is that this user is now a joined member of each active Plan's
@@ -455,20 +465,27 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
      A Plan with no conversation is not a failure here. The canonical lifecycle
      creates one on reconcile, so its absence means the Plan legitimately has
      none yet, not that the repair failed. */
-  const { data: planConversations } = await admin
+  const { data: planConversations, error: planConversationError } = await admin
     .from("conversations")
     .select("id, context_id")
     .eq("context_type", "plan")
     .in("context_id", planIds);
+  if (planConversationError) {
+    return { ok: true, message, verification: verificationUnavailable(invariant, "the Plan conversations") };
+  }
 
   const conversationIds = (planConversations ?? []).map((row) => row.id);
-  const { data: myMemberships } = conversationIds.length
+  const membershipRead = conversationIds.length
     ? await admin
         .from("conversation_members")
         .select("conversation_id, status")
         .eq("user_id", userId)
         .in("conversation_id", conversationIds)
-    : { data: [] };
+    : { data: [], error: null };
+  if (membershipRead.error) {
+    return { ok: true, message, verification: verificationUnavailable(invariant, "Plan Chat membership") };
+  }
+  const myMemberships = membershipRead.data;
 
   const joined = new Set(
     (myMemberships ?? [])
@@ -476,9 +493,6 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
       .map((row: { conversation_id: string }) => row.conversation_id)
   );
   const missing = conversationIds.filter((id) => !joined.has(id));
-
-  const message = `Plan Chats reconciled (${reconciled} active Plan${reconciled === 1 ? "" : "s"} checked).`;
-  const invariant = "the user is a joined member of every active Plan Chat they are going to";
 
   if (missing.length > 0) {
     /* These plans were checked as ELIGIBLE before the reconciler ran, so a
@@ -546,11 +560,19 @@ async function settleStrandedUpForRequests(admin: Admin, userId: string): Promis
   const attempted = (settled ?? []).length;
 
   // THE INVARIANT, RE-READ.
-  const { data: remaining } = await admin
+  const remainingRead = await admin
     .from("hangout_requests")
     .select("id")
     .eq("status", "pending")
     .in("hangout_session_id", sessionIds);
+  if (remainingRead.error) {
+    return {
+      ok: true,
+      message: `Stranded requests settled (${attempted}).`,
+      verification: verificationUnavailable(invariant, "the remaining requests")
+    };
+  }
+  const remaining = remainingRead.data;
 
   const message = `Stranded requests settled (${attempted}).`;
   if (attempted === 0) {
@@ -630,7 +652,15 @@ async function clearStuckStatus(admin: Admin, userId: string): Promise<RepairAct
     .lte("expires_at", nowIso);
   if (deleteError) return fail("clear the expired statuses");
 
-  const { data: after } = await admin.from("user_statuses").select("id, expires_at").eq("user_id", userId);
+  const afterRead = await admin.from("user_statuses").select("id, expires_at").eq("user_id", userId);
+  if (afterRead.error) {
+    return {
+      ok: true,
+      message: `Expired statuses cleared (${stuckIds.length}).`,
+      verification: verificationUnavailable(invariant, "this account's statuses")
+    };
+  }
+  const after = afterRead.data;
   const remainingStuck = (after ?? []).filter(
     (row) => Boolean(row.expires_at) && row.expires_at! <= new Date().toISOString()
   ).length;
@@ -657,68 +687,6 @@ async function clearStuckStatus(admin: Admin, userId: string): Promise<RepairAct
   };
 }
 
-/**
- * Clears the counters that are actually holding the account back.
- *
- * The repair is called "clear rate-limit lockout", and a lockout is an ACTIVE
- * window. Deleting every row also removed expired counters, which changes
- * nothing for the user but quietly widens the executor past the invariant its
- * label names -- the same shape of problem as clear_stuck_status.
- *
- * Expired rows are inert and are left for ordinary retention to remove.
- */
-async function clearRateLimits(admin: Admin, userId: string): Promise<RepairActionState> {
-  const invariant = "no rate-limit window is still throttling this account";
-  const nowIso = new Date().toISOString();
-
-  const { data: active, error: readError } = await admin
-    .from("rate_limits")
-    .select("id")
-    .eq("user_id", userId)
-    .gt("window_end", nowIso);
-  if (readError) return fail("inspect this account's rate limits");
-
-  const activeIds = (active ?? []).map((row) => row.id);
-  if (activeIds.length === 0) {
-    return {
-      ok: true,
-      message: "No active rate-limit lockout on this account.",
-      verification: notApplicable(
-        invariant,
-        "This account is not currently throttled, so nothing was cleared."
-      )
-    };
-  }
-
-  const { error: deleteError } = await admin.from("rate_limits").delete().in("id", activeIds);
-  if (deleteError) return fail("clear the rate-limit lockout");
-
-  const { data: remaining } = await admin
-    .from("rate_limits")
-    .select("id")
-    .eq("user_id", userId)
-    .gt("window_end", new Date().toISOString());
-
-  const message = `Rate-limit lockout cleared (${activeIds.length} counter${activeIds.length === 1 ? "" : "s"}).`;
-  if ((remaining ?? []).length > 0) {
-    return {
-      ok: true,
-      message,
-      verification: stillBroken(
-        invariant,
-        `${(remaining ?? []).length} counter${(remaining ?? []).length === 1 ? " is" : "s are"} still throttling this account.`
-      )
-    };
-  }
-  return {
-    ok: true,
-    message,
-    verification: fixed(
-      invariant,
-      `${activeIds.length} active counter${activeIds.length === 1 ? "" : "s"} cleared, so throttled actions work again. Expired counters were left alone.`
-    )
-  };
-}
 
 /* THE FIVE REMAINING EXECUTABLE REPAIRS, EACH PROVING ITS OWN INVARIANT.
  *
@@ -729,95 +697,8 @@ async function clearRateLimits(admin: Admin, userId: string): Promise<RepairActi
  */
 
 
-async function resetGlowSignal(admin: Admin, userId: string): Promise<RepairActionState> {
-  const invariant = "the stored glow signal has been cleared";
-
-  const { data: before } = await admin.from("user_locations").select("user_id").eq("user_id", userId);
-  if ((before ?? []).length === 0) {
-    return {
-      ok: true,
-      message: "No stored glow signal.",
-      verification: notApplicable(invariant, "This account had no stored glow signal, so nothing was cleared.")
-    };
-  }
-
-  const { error } = await admin.from("user_locations").delete().eq("user_id", userId);
-  if (error) return fail("reset the glow signal");
-
-  const { data: after } = await admin.from("user_locations").select("user_id").eq("user_id", userId);
-  const message = "Glow signal reset.";
-  if ((after ?? []).length > 0) {
-    /* A device that publishes again immediately is NOT a failed repair, so the
-       wording says what was observed rather than accusing the repair of not
-       running. The invariant claims only that the stored signal was cleared. */
-    return {
-      ok: true,
-      message,
-      verification: stillBroken(
-        invariant,
-        "A glow signal is present again. Either the delete did not apply, or the device published a fresh fix immediately, so check the timestamp before escalating."
-      )
-    };
-  }
-  return {
-    ok: true,
-    message,
-    verification: fixed(
-      invariant,
-      "The stored signal was cleared. The device may publish a fresh one as soon as it reports again, which is normal."
-    )
-  };
-}
 
 
-async function clearWebPushRegistrations(admin: Admin, userId: string): Promise<RepairActionState> {
-  const invariant = "the account has no stored WEB push registrations";
-
-  const { data: before } = await admin.from("push_subscriptions").select("id").eq("user_id", userId);
-  /* Native tokens are COUNTED only so the verification can say plainly that
-     they were left alone. They are never read, exposed or deleted here -- the
-     repair is web push, and the operator must not be able to report a native
-     push problem as fixed. */
-  const nativeCount = (await admin.from("device_push_tokens").select("id").eq("user_id", userId)).data?.length ?? 0;
-  const nativeNote =
-    nativeCount > 0
-      ? ` ${nativeCount} native app device token${nativeCount === 1 ? " was" : "s were"} left untouched.`
-      : "";
-
-  if ((before ?? []).length === 0) {
-    return {
-      ok: true,
-      message: "No web push registrations stored.",
-      verification: notApplicable(
-        invariant,
-        `This account had no web push registrations, so nothing was changed.${nativeNote}`
-      )
-    };
-  }
-
-  const { error } = await admin.from("push_subscriptions").delete().eq("user_id", userId);
-  if (error) return fail("reset the web push registrations");
-
-  const { data: after } = await admin.from("push_subscriptions").select("id").eq("user_id", userId);
-  const message = `Web push registrations reset (${(before ?? []).length} removed).`;
-  return (after ?? []).length === 0
-    ? {
-        ok: true,
-        message,
-        verification: fixed(
-          invariant,
-          `Web push registrations are cleared, so the browser can register again.${nativeNote}`
-        )
-      }
-    : {
-        ok: true,
-        message,
-        verification: stillBroken(
-          invariant,
-          `${(after ?? []).length} web push registration${(after ?? []).length === 1 ? "" : "s"} remain after the repair.`
-        )
-      };
-}
 
 
 function otherUserFromDirectKey(directKey: string | null, userId: string): string | null {

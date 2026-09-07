@@ -241,17 +241,12 @@ export function buildSupportOwnedDiagnostics(snapshot: SupportOwnedSnapshot): Su
     });
   }
 
-  if (snapshot.presence.signal === "stale") {
-    findings.push({
-      id: "presence-signal",
-      areaId: "presence",
-      severity: "attention",
-      title: "Presence signal is stale",
-      detail: "The latest presence signal is outside the freshness window. Account Doctor does not expose its coordinates or numerical distance.",
-      operatorAction: "use_named_repair",
-      repairId: "reset_glow_signal"
-    });
-  } else if (snapshot.presence.signal === "missing") {
+  /* The `stale` branch that used to live here recommended reset_glow_signal.
+     It was unreachable: the loader projects a usable signal as `fresh` and
+     everything else as `missing`, precisely because an expired location row is
+     not drift. A finding that can never fire is worse than none -- it made the
+     coverage map claim a capability no operator could reach. */
+  if (snapshot.presence.signal === "missing") {
     findings.push({
       id: "presence-signal",
       areaId: "presence",
@@ -285,17 +280,12 @@ export function buildSupportOwnedDiagnostics(snapshot: SupportOwnedSnapshot): Su
     });
   }
 
-  if (snapshot.notifications.stalePushDevices > 0) {
-    findings.push({
-      id: "push-device-freshness",
-      areaId: "push",
-      severity: "attention",
-      title: "Stale push registrations detected",
-      detail: `${plural(snapshot.notifications.stalePushDevices, "stale device registration")} detected across ${snapshot.notifications.webPushDevices + snapshot.notifications.nativePushDevices} registered devices. Raw endpoints and tokens are intentionally hidden.`,
-      operatorAction: "use_named_repair",
-      repairId: "clear_push_subscriptions"
-    });
-  } else {
+  /* The stale-push-registration branch that used to live here recommended
+     clear_push_subscriptions. `stalePushDevices` is hard-coded 0 because no
+     canonical stale-token rule exists, so it could never fire. Inventing a
+     threshold would have manufactured the defect needed to justify the repair.
+     What remains is the honest healthy statement. */
+  {
     findings.push({
       id: "push-device-freshness",
       areaId: "push",

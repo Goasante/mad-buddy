@@ -234,7 +234,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "Push devices",
     description: "Device registration, stale subscriptions and multi-device delivery health.",
     diagnostic: "live",
-    repair: "live",
+    repair: "planned",
     verification: "partial",
     issues: [
       "Push suddenly stopped",
@@ -294,7 +294,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "Features, experiments & tours",
     description: "Resolved feature controls, assignment state and product education replay.",
     diagnostic: "live",
-    repair: "live",
+    repair: "planned",
     verification: "partial",
     issues: [
       "Feature appears missing for one account",

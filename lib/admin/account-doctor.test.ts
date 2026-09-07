@@ -50,10 +50,14 @@ describe("Account Doctor", () => {
       severity: "attention",
       repairId: "clear_stuck_status"
     });
-    expect(findings.find((item) => item.id === "active-rate-limits")).toMatchObject({
-      severity: "attention",
-      repairId: "clear_rate_limits"
-    });
+    /* An active rate limit is REPORTED but carries no repair. It is throttling
+       working, not drift, and it clears itself when the window ends -- so
+       support.manage must not be able to lift an abuse protection because a
+       button happened to be on screen. */
+    const rateLimit = findings.find((item) => item.id === "active-rate-limits");
+    expect(rateLimit?.severity).toBe("attention");
+    expect(rateLimit?.repairId).toBeUndefined();
+    expect(rateLimit?.detail).toMatch(/throttling working, not drift/i);
   });
 
   it("does not treat a missing location signal as a defect", () => {
