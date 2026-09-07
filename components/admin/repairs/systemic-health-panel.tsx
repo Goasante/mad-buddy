@@ -9,16 +9,17 @@ export function SystemicHealthPanel({ signals }: { signals: readonly SystemicHea
   const watchCount = assessments.filter((item) => item.severity === "watch").length;
   const brokenAccounts = assessments.reduce((total, item) => total + item.actionableAffectedAccounts, 0);
   const productRuleAccounts = assessments.reduce((total, item) => total + item.productRuleAccounts, 0);
+  const legacyOnlySignals = assessments.filter((item) => !item.recurrenceEvidenceEligible).length;
 
   return (
     <AdminSection
       title="Systemic issue watch"
-      description="Repeated Account Doctor invariant failures are surfaced here so Support does not normalize a product defect into dozens of unrelated manual repairs. Product-rule refusals are shown separately and never contribute to defect thresholds."
+      description="Repeated Account Doctor invariant failures are surfaced here so Support does not normalize a product defect into dozens of unrelated manual repairs. Product-rule refusals and legacy-only drift are excluded from recurrence thresholds."
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard icon={AlertTriangle} label="Possible systemic" value={systemicCount} hint="Signals needing engineering attention" tone={systemicCount > 0 ? "warning" : "success"} />
         <AdminMetricCard icon={Radar} label="Watch list" value={watchCount} hint="Repeated drift below systemic threshold" tone={watchCount > 0 ? "orange" : "default"} />
-        <AdminMetricCard icon={Activity} label="Broken accounts" value={brokenAccounts} hint={`Across ${assessments.length} measured predicates`} tone="default" />
+        <AdminMetricCard icon={Activity} label="Broken accounts" value={brokenAccounts} hint={`Across ${assessments.length} measured predicates · ${legacyOnlySignals} legacy-only`} tone="default" />
         <AdminMetricCard icon={CheckCircle2} label="Rule-correct cases" value={productRuleAccounts} hint="Intentional refusals excluded from incident counts" tone="success" />
       </div>
 
@@ -32,6 +33,7 @@ export function SystemicHealthPanel({ signals }: { signals: readonly SystemicHea
                     <p className="text-sm font-semibold text-[#f1eee9]">{assessment.label}</p>
                     <AdminStatus label={assessment.area} />
                     <AdminStatus label={severityLabel(assessment.severity)} tone={severityTone(assessment.severity)} />
+                    {!assessment.recurrenceEvidenceEligible ? <AdminStatus label="Legacy-only predicate" tone="default" /> : null}
                   </div>
                   <p className="mt-2 text-xs leading-5 text-[#9c9690]">{assessment.guidance}</p>
                 </div>
@@ -54,8 +56,9 @@ export function SystemicHealthPanel({ signals }: { signals: readonly SystemicHea
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <AdminStatus label={assessment.repairablePerAccount ? "Per-account repair available" : "Diagnostic / escalation only"} tone={assessment.repairablePerAccount ? "success" : "default"} />
-                {assessment.engineeringEscalation && assessment.actionableAffectedAccounts > 0 ? <AdminStatus label="Engineering escalation" tone="danger" /> : null}
+                {assessment.engineeringEscalation && assessment.actionableAffectedAccounts > 0 && assessment.recurrenceEvidenceEligible ? <AdminStatus label="Engineering escalation" tone="danger" /> : null}
                 {assessment.productRuleAccounts > 0 ? <AdminStatus label="Product rule cases excluded" tone="success" /> : null}
+                {!assessment.recurrenceEvidenceEligible ? <AdminStatus label="Count is backlog, not recurrence" tone="default" /> : null}
               </div>
             </Card>
           ))}
