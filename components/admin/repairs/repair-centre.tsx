@@ -2,11 +2,12 @@
 
 import { History, RefreshCw, Search, Stethoscope, Wrench } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { signalAccountRefreshAction } from "@/app/(admin)/admin/repairs/doctor-actions";
 import {
-  diagnoseAccountAction,
-  signalAccountRefreshAction,
-  type AccountDoctorState
-} from "@/app/(admin)/admin/repairs/doctor-actions";
+  diagnoseCombinedAccountAction,
+  type CombinedAccountDoctorSeverity,
+  type CombinedAccountDoctorState
+} from "@/app/(admin)/admin/repairs/combined-doctor-actions";
 import {
   getRecentRepairsAction,
   runAccountRepairAction,
@@ -20,7 +21,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import type { AccountDoctorSeverity } from "@/lib/admin/account-doctor";
 import {
   OUTCOME_GUIDANCE,
   OUTCOME_LABEL,
@@ -50,7 +50,7 @@ export function RepairCentre({
   const [searchMessage, setSearchMessage] = useState("");
   const [selected, setSelected] = useState<RepairUser | null>(null);
   const [history, setHistory] = useState<RepairHistoryEntry[]>([]);
-  const [doctor, setDoctor] = useState<AccountDoctorState | null>(null);
+  const [doctor, setDoctor] = useState<CombinedAccountDoctorState | null>(null);
   const [pendingRepair, setPendingRepair] = useState<RepairDefinition | null>(null);
   const [feedback, setFeedback] = useState<RepairFeedback | null>(null);
   const [isSearching, startSearch] = useTransition();
@@ -87,7 +87,7 @@ export function RepairCentre({
 
   function loadDoctor(userId: string) {
     startDiagnosis(async () => {
-      const state = await diagnoseAccountAction({ userId });
+      const state = await diagnoseCombinedAccountAction({ userId });
       setDoctor(state);
     });
   }
@@ -318,7 +318,7 @@ function AccountDoctorPanel({
   onSignalRefresh,
   onRepair
 }: {
-  state: AccountDoctorState | null;
+  state: CombinedAccountDoctorState | null;
   pending: boolean;
   refreshSignalPending: boolean;
   allowedRepairIds: string[];
@@ -331,7 +331,7 @@ function AccountDoctorPanel({
   return (
     <AdminSection
       title="Account Doctor"
-      description="Checks lifecycle metadata only — never message bodies, exact location, private media, payment credentials, or Safe Arrival details."
+      description="Checks lifecycle metadata only — never message bodies, exact location, private media, payment credentials, push tokens, raw DOB, or Safe Arrival details."
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium">
@@ -361,6 +361,7 @@ function AccountDoctorPanel({
           <div className="mt-4 flex flex-wrap gap-2">
             <AdminStatus label={`${state.summary.issue} issues`} tone={state.summary.issue > 0 ? "danger" : "success"} />
             <AdminStatus label={`${state.summary.attention} attention`} tone={state.summary.attention > 0 ? "warning" : "default"} />
+            <AdminStatus label={`${state.summary.productRule} product rules`} tone={state.summary.productRule > 0 ? "warning" : "default"} />
             <AdminStatus label={`${state.summary.healthy} healthy`} tone="success" />
             <AdminStatus label={`${state.summary.info} info`} />
           </div>
@@ -396,16 +397,17 @@ function AccountDoctorPanel({
   );
 }
 
-function doctorTone(severity: AccountDoctorSeverity): "success" | "warning" | "danger" | "default" {
+function doctorTone(severity: CombinedAccountDoctorSeverity): "success" | "warning" | "danger" | "default" {
   if (severity === "issue") return "danger";
-  if (severity === "attention") return "warning";
+  if (severity === "attention" || severity === "product_rule") return "warning";
   if (severity === "healthy") return "success";
   return "default";
 }
 
-function doctorSeverityLabel(severity: AccountDoctorSeverity) {
+function doctorSeverityLabel(severity: CombinedAccountDoctorSeverity) {
   if (severity === "issue") return "Issue";
   if (severity === "attention") return "Needs attention";
+  if (severity === "product_rule") return "Product rule";
   if (severity === "healthy") return "Healthy";
   return "Info";
 }
