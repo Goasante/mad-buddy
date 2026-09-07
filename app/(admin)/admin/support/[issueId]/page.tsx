@@ -162,8 +162,12 @@ export default async function SupportIssueDetailPage({ params }: DetailPageProps
     canSendPasswordReset: access.permissions.has("admin.users.recovery_link")
   };
 
+  /* The ticket ID travels, not its contents. Account Doctor resolves the
+     allowlisted category server-side from this id, so the ordering cannot be
+     steered by a crafted link and no ticket text reaches the prioritiser --
+     see lib/admin/support-ticket-context.ts. */
   const accountDoctorHref = userSummary?.username
-    ? (`/admin/repairs?q=${encodeURIComponent(userSummary.username)}` as Route)
+    ? (`/admin/repairs?q=${encodeURIComponent(userSummary.username)}&ticket=${encodeURIComponent(issueId)}` as Route)
     : null;
 
   return (

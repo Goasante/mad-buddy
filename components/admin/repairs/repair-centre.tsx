@@ -39,10 +39,17 @@ type RepairFeedback = {
 
 export function RepairCentre({
   allowedRepairIds,
-  initialQuery = ""
+  initialQuery = "",
+  prioritisedAreas = []
 }: {
   allowedRepairIds: string[];
   initialQuery?: string;
+  /**
+   * Doctor areas to surface first, derived SERVER-SIDE from the support
+   * ticket's category. Ordering only -- it never changes which checks run,
+   * which repairs are offered, or what any of them are allowed to do.
+   */
+  prioritisedAreas?: string[];
 }) {
   const allowed = new Set(allowedRepairIds);
   const [query, setQuery] = useState(initialQuery);
@@ -189,6 +196,7 @@ export function RepairCentre({
           pending={isDiagnosing}
           refreshSignalPending={isSignalingRefresh}
           allowedRepairIds={allowedRepairIds}
+          prioritisedAreas={prioritisedAreas}
           onCheckAgain={() => loadDoctor(selected.userId)}
           onSignalRefresh={() => signalRefresh(selected.userId)}
           onRepair={(repairId) => {
@@ -314,6 +322,7 @@ function AccountDoctorPanel({
   pending,
   refreshSignalPending,
   allowedRepairIds,
+  prioritisedAreas,
   onCheckAgain,
   onSignalRefresh,
   onRepair
@@ -322,6 +331,7 @@ function AccountDoctorPanel({
   pending: boolean;
   refreshSignalPending: boolean;
   allowedRepairIds: string[];
+  prioritisedAreas: string[];
   onCheckAgain: () => void;
   onSignalRefresh: () => void;
   onRepair: (repairId: string) => void;
@@ -367,7 +377,7 @@ function AccountDoctorPanel({
           </div>
 
           <div className="mt-4 grid gap-2 md:grid-cols-2">
-            {state.findings.map((finding) => (
+            {orderFindings(state.findings, prioritisedAreas).map((finding) => (
               <Card key={finding.id} className="flex min-h-[116px] flex-col justify-between gap-3 p-3.5">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -394,6 +404,54 @@ function AccountDoctorPanel({
         </p>
       ) : null}
     </AdminSection>
+  );
+}
+
+/**
+ * Puts the areas a support ticket is about at the top.
+ *
+ * ORDERING ONLY. Nothing is filtered out: an operator who opens the Doctor from
+ * a billing ticket must still see a safety finding, and hiding a finding
+ * because the ticket did not mention it is how a real problem gets missed. The
+ * sort is stable, so everything else keeps its severity order.
+ *
+ * The catalog ids the prioritiser returns (`direct-messaging`) and the finding
+ * areas the Doctor renders ("Messaging") are different vocabularies, so this
+ * maps between them rather than assuming they match.
+ */
+const AREA_FOR_CATALOG_ID: Record<string, string> = {
+  "account-auth": "Account",
+  "onboarding-activation": "Account",
+  "profile-media": "Account",
+  "dob-age": "Account",
+  "muddies-requests": "Relationships",
+  "blocks-refriend": "Relationships",
+  "direct-messaging": "Messaging",
+  "plan-chat": "Plans",
+  plans: "Plans",
+  upfor: "UpFor",
+  linkr: "Relationships",
+  presence: "Presence",
+  notifications: "Notifications",
+  push: "Notifications",
+  events: "Plans",
+  "safe-arrival": "Account",
+  "access-billing": "Access",
+  "features-tours": "Access",
+  journey: "Account",
+  "privacy-account-ops": "Account"
+};
+
+export function orderFindings<T extends { area: string }>(findings: T[], prioritisedAreas: string[]): T[] {
+  if (prioritisedAreas.length === 0) return findings;
+  const rank = new Map<string, number>();
+  prioritisedAreas.forEach((catalogId, index) => {
+    const area = AREA_FOR_CATALOG_ID[catalogId];
+    if (area && !rank.has(area)) rank.set(area, index);
+  });
+  if (rank.size === 0) return findings;
+  return [...findings].sort(
+    (a, b) => (rank.get(a.area) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.area) ?? Number.MAX_SAFE_INTEGER)
   );
 }
 

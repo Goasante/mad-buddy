@@ -26,6 +26,7 @@ function snapshot(overrides: Partial<AccountDoctorSnapshot> = {}): AccountDoctor
     stalledSafeArrivalCount: 0,
     unconfirmedSafeArrivalCount: 0,
     eventCircleMismatchCount: 0,
+    eventBlockedByRuleCount: 0,
     ...overrides
   };
 }

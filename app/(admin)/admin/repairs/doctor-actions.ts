@@ -10,6 +10,8 @@ import {
   type AccountDoctorSnapshot
 } from "@/lib/admin/account-doctor";
 import {
+  type EventParticipationView,
+  explainEventAccess,
   findStalledSafeArrival,
   type SafeArrivalView
 } from "@/lib/admin/event-safety-diagnostics";
@@ -270,16 +272,31 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
     }
   }
 
-  /* Events the account said it is GOING to, but whose circle it is not a
-     joined member of. Only "going" matters -- interested is not circle
-     membership, and treating it as a mismatch would report every browsed
-     Event as broken. */
+  /* EVENTS, THROUGH THE CANONICAL AUTHORITY.
+   *
+   * This used to compare a `going` RSVP against circle membership and call any
+   * gap drift, which ignored Event status and invitations entirely -- so a
+   * cancelled Event, or one the account was never invited to, produced a
+   * finding that looked repairable. `explainEventAccess` already encodes the
+   * real precedence, so the live Doctor now asks it rather than re-deciding.
+   *
+   * Only canonical facts are read: status, RSVP, whether the Event needs an
+   * invitation, whether this account holds one, and whether it is a joined
+   * circle member. No attendee lists, no Event content, no other members.
+   */
   let eventCircleMismatchCount = 0;
-  const goingEventIds = [...new Set((eventRsvpResult.data ?? []).map((row) => row.event_id))];
-  if (goingEventIds.length > 0) {
+  let eventBlockedByRuleCount = 0;
+  const rsvpRows = eventRsvpResult.data ?? [];
+  const rsvpEventIds = [...new Set(rsvpRows.map((row) => row.event_id))];
+
+  if (rsvpEventIds.length > 0) {
+    const events =
+      (await admin.from("events").select("id, status, visibility").in("id", rsvpEventIds)).data ?? [];
     const circles =
-      (await admin.from("event_circles").select("id, event_id").in("event_id", goingEventIds)).data ?? [];
+      (await admin.from("event_circles").select("id, event_id").in("event_id", rsvpEventIds)).data ?? [];
+    const circleByEvent = new Map(circles.map((row) => [row.event_id, row.id]));
     const circleIds = circles.map((row) => row.id);
+
     const joinedCircleIds = new Set(
       circleIds.length
         ? (
@@ -294,7 +311,41 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
           ).map((row) => row.event_circle_id)
         : []
     );
-    eventCircleMismatchCount = circles.filter((row) => !joinedCircleIds.has(row.id)).length;
+
+    const invitedCircleIds = new Set(
+      circleIds.length
+        ? (
+            (
+              await admin
+                .from("event_circle_invitations")
+                .select("event_circle_id")
+                .eq("invited_user_id", userId)
+                .in("event_circle_id", circleIds)
+            ).data ?? []
+          ).map((row) => row.event_circle_id)
+        : []
+    );
+
+    const rsvpByEvent = new Map(rsvpRows.map((row) => [row.event_id, row.status]));
+
+    for (const event of events) {
+      const circleId = circleByEvent.get(event.id);
+      const outcome = explainEventAccess({
+        eventId: event.id,
+        eventStatus: event.status as EventParticipationView["eventStatus"],
+        rsvp: (rsvpByEvent.get(event.id) ?? null) as EventParticipationView["rsvp"],
+        circleExists: Boolean(circleId),
+        joinedCircle: Boolean(circleId) && joinedCircleIds.has(circleId!),
+        /* `invite` is the visibility that genuinely requires an invitation.
+           link/community/nearby/public do not, so treating them as invite-only
+           would invent a refusal the product does not make. */
+        inviteOnly: event.visibility === "invite",
+        invited: Boolean(circleId) && invitedCircleIds.has(circleId!)
+      });
+
+      if (outcome.outcome === "still_broken") eventCircleMismatchCount += 1;
+      else if (outcome.outcome === "blocked_by_product_rule") eventBlockedByRuleCount += 1;
+    }
   }
 
   const snapshot: AccountDoctorSnapshot = {
@@ -331,7 +382,8 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
       }))
     ).length,
     unconfirmedSafeArrivalCount: (safeArrivalResult.data ?? []).filter((row) => row.status === "unconfirmed").length,
-    eventCircleMismatchCount: eventCircleMismatchCount
+    eventCircleMismatchCount,
+    eventBlockedByRuleCount
   };
 
   const findings = buildAccountDoctorFindings(snapshot);

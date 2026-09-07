@@ -68,6 +68,18 @@ export function SupportOperationsCoverage() {
           <AdminMetricCard icon={CheckCircle2} label="Live repairs" value={counts.repairLive} hint="Areas with executable repair paths" tone="success" />
           <AdminMetricCard icon={ShieldCheck} label="Planned end-to-end" value={counts.planned} hint="Areas still waiting for safe implementation" tone="default" />
         </div>
+
+        {/* Said out loud rather than left as an absence. Systemic detection is
+            built and correct, but nothing persists a repair's VERIFICATION
+            outcome -- the audit row is written before the mutation, so it
+            records the attempt and never the result. A panel fed by attempts,
+            or by a count of currently-failing accounts, would show "possible
+            systemic defect" on a number that means something else. */}
+        <p className="mt-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Systemic defect detection: pending.</span> Repeated failures
+          across accounts are not yet aggregated, because no verification outcomes are stored to aggregate. Treat each
+          finding here as one account until that exists.
+        </p>
       </AdminSection>
 
       <div className="grid gap-3 xl:grid-cols-2">

@@ -71,6 +71,15 @@ export type AccountDoctorSnapshot = {
   unconfirmedSafeArrivalCount: number;
   /** Events the account is going to but is not a joined circle member of. */
   eventCircleMismatchCount: number;
+  /**
+   * Events whose circle correctly excludes this account.
+   *
+   * Separate from the mismatch count for the same reason Plan Chat is: a
+   * cancelled Event, an RSVP of no, or an invite-only Event with no invitation
+   * are the product working, and folding them into "needs review" is what put
+   * a repair next to a correct refusal.
+   */
+  eventBlockedByRuleCount: number;
 };
 
 const severityRank: Record<AccountDoctorSeverity, number> = {
@@ -241,6 +250,16 @@ export function buildAccountDoctorFindings(snapshot: AccountDoctorSnapshot): Acc
       severity: "attention",
       title: "A journey is overdue and awaiting the safety sweep",
       detail: `${snapshot.stalledSafeArrivalCount} journey${snapshot.stalledSafeArrivalCount === 1 ? " is" : "s are"} past both the expected arrival and the grace period. The canonical sweep moves these to unconfirmed and alerts the watchers; Admin must not close them, because doing so would skip that alert. If the sweep looks stuck, escalate it.`
+    });
+  }
+
+  if (snapshot.eventBlockedByRuleCount > 0) {
+    findings.push({
+      id: "event-blocked-by-rule",
+      area: "Plans",
+      severity: "product_rule",
+      title: "An Event circle correctly excludes this account",
+      detail: `${snapshot.eventBlockedByRuleCount} Event${snapshot.eventBlockedByRuleCount === 1 ? "" : "s"} the account has responded to ${snapshot.eventBlockedByRuleCount === 1 ? "does" : "do"} not admit them to the circle — the Event has finished or been cancelled, they answered no or only interested, or it is invite-only and they hold no invitation. There is nothing to repair.`
     });
   }
 

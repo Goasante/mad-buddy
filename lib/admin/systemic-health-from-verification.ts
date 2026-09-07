@@ -14,6 +14,23 @@ export type SystemicVerificationSignalInput = {
 };
 
 /**
+ * NOT YET LIVE. There is no store of historical verification outcomes.
+ *
+ * The repair audit is written BEFORE the mutation, deliberately -- an unlogged
+ * repair is worse than a failed one -- so it records that a repair was
+ * ATTEMPTED and can never record how it turned out. Nothing else persists a
+ * RepairVerification.
+ *
+ * Feeding this from repair attempts, or from a count of currently-failing
+ * accounts, would produce a systemic-defect panel with no recurrence evidence
+ * behind it. That is worse than no panel: an operator would see "possible
+ * systemic defect" and escalate on a number that means something else. So the
+ * coverage map says PENDING and the panel is not rendered.
+ *
+ * The logic below is correct and kept ready. Making it live needs one thing:
+ * persisting each RepairVerification outcome after the mutation, alongside the
+ * audit row that already records the attempt.
+ *
  * Turns Account Doctor verification outcomes into systemic-health counts.
  *
  * This is deliberately the bridge between the two subsystems so callers do not

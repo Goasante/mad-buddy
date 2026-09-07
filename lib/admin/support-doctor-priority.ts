@@ -141,5 +141,31 @@ export function prioritizeDoctorAreas(input: SupportDoctorPriorityInput): Doctor
     for (const area of CATEGORY_PRIORITY[category] ?? []) add(area);
   }
 
+  /* DETERMINISTIC FALLBACK.
+   *
+   * An unrecognised ticket -- `other`, or wording nothing matched -- used to
+   * return an empty list, so the operator got no ordering at all and the
+   * ticket context silently did nothing. This is the order to work in when the
+   * ticket says nothing useful: the areas most likely to explain a vague
+   * "it is not working" report, safety first.
+   *
+   * ONLY when nothing else matched. Appending it to every result would bury a
+   * ticket's real signal under a fixed tail and change orderings that other
+   * callers depend on. */
+  if (ordered.length === 0) {
+    for (const area of DEFAULT_PRIORITY) add(area);
+  }
+
   return ordered;
 }
+
+/** Where to start when the ticket gives no usable signal. */
+const DEFAULT_PRIORITY: readonly DoctorAreaId[] = [
+  "safe-arrival",
+  "account-auth",
+  "direct-messaging",
+  "blocks-refriend",
+  "muddies-requests",
+  "presence",
+  "notifications"
+];
