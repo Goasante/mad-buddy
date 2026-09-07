@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { requireAdminPermission } from "@/lib/admin/access";
+import { recordAdminAuditEvent } from "@/lib/admin/service";
 import {
   accountDoctorSummary,
   buildAccountDoctorFindings,
@@ -19,7 +20,13 @@ export type AccountDoctorState = {
   checkedAt: string | null;
 };
 
+export type AccountRefreshSignalState = { ok: boolean; message: string };
+
 const diagnoseSchema = z.object({ userId: z.string().uuid() });
+const refreshSchema = z.object({
+  userId: z.string().uuid(),
+  reason: z.string().trim().max(300).optional()
+});
 
 type Admin = Awaited<ReturnType<typeof requireSafetyAdmin>>["admin"];
 
@@ -192,6 +199,54 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
     findings,
     summary: accountDoctorSummary(findings),
     checkedAt: nowIso
+  };
+}
+
+/**
+ * Safe "quick refresh" requested by Support.
+ *
+ * This deliberately changes no account data. The audit event itself is the
+ * opaque version signal consumed by /api/account/support-refresh. An already
+ * open authenticated app notices the new version on focus/foreground or the
+ * lightweight heartbeat and refreshes its canonical server render.
+ */
+export async function signalAccountRefreshAction(input: unknown): Promise<AccountRefreshSignalState> {
+  const parsed = refreshSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Choose a valid account." };
+
+  let admin: Admin;
+  let actorId: string;
+  try {
+    const auth = await requireSafetyAdmin();
+    admin = auth.admin;
+    actorId = auth.context.userId;
+    await requireAdminPermission(admin, auth.context, "admin.support.manage");
+    const limit = await consumeRateLimit({ action: "admin.mutate", userId: actorId });
+    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+  } catch {
+    return { ok: false, message: "You don't have permission to refresh this account." };
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("user_id, deleted_at")
+    .eq("user_id", parsed.data.userId)
+    .maybeSingle();
+  if (!profile || profile.deleted_at) return { ok: false, message: "That account is unavailable." };
+
+  const logged = await recordAdminAuditEvent(admin, {
+    actorId,
+    action: "repair:refresh_account_state",
+    targetType: "user",
+    targetId: parsed.data.userId,
+    newState: { signal: "canonical_refresh" },
+    reason: parsed.data.reason || "Support requested account refresh"
+  });
+  if (!logged) return { ok: false, message: "The refresh could not be audited, so no signal was sent." };
+
+  return {
+    ok: true,
+    message: "Refresh signal sent. An open Mad Buddy session will refresh on its next foreground check or heartbeat."
   };
 }
 
