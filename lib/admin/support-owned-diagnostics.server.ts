@@ -73,6 +73,27 @@ export async function loadSupportOwnedSnapshot(
     admin.from("user_achievements").select("achievement_code", { count: "exact", head: true }).eq("user_id", userId)
   ]);
 
+  /* A missing row is a valid diagnostic fact; a failed query is not. Never
+   * turn an unavailable table/read into a zero and accidentally report a
+   * healthy account. Auth is different: a missing auth identity is itself the
+   * linkage finding this module is designed to surface. */
+  const queryErrors = [
+    profileResult.error,
+    activationResult.error,
+    photoResult.error,
+    birthResult.error,
+    linkrResult.error,
+    restrictionResult.error,
+    locationResult.error,
+    statusResult.error,
+    notificationResult.error,
+    webPushResult.error,
+    nativePushResult.error,
+    rateLimitResult.error,
+    achievementResult.error
+  ].filter(Boolean);
+  if (queryErrors.length > 0) throw new Error("Support-owned Account Doctor snapshot could not be loaded.");
+
   const profile = profileResult.data;
   const photos = photoResult.data ?? [];
   const publicShowcasePhotoCount = photos.filter((row) => row.visibility === "everyone").length;
@@ -104,9 +125,7 @@ export async function loadSupportOwnedSnapshot(
    * current rather than as a broken row.
    */
   const presenceSignal: SupportOwnedSnapshot["presence"]["signal"] =
-    canonicalPresence === "fresh" || canonicalPresence === "grace"
-      ? "fresh"
-      : "missing";
+    canonicalPresence === "fresh" || canonicalPresence === "grace" ? "fresh" : "missing";
 
   const visibility = profile?.visibility_status;
   const safeVisibility: SupportOwnedSnapshot["presence"]["visibility"] =
