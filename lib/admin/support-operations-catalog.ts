@@ -235,9 +235,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "events",
     label: "Events",
     description: "RSVP, attendee, check-in and Event conversation lifecycle.",
-    diagnostic: "planned",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "live",
     issues: [
       "Event RSVP/attendee state is wrong",
       "Check-in cannot advance",
@@ -250,9 +250,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "safe-arrival",
     label: "Safe Arrival",
     description: "Journey lifecycle, recipient state and notification reconciliation without location exposure.",
-    diagnostic: "planned",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "live",
     issues: [
       "Journey is stuck",
       "Grace/expired state did not advance",
