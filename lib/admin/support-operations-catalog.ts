@@ -144,9 +144,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "plans",
     label: "Plans",
     description: "RSVP, participant, status and UpFor-conversion lifecycle health.",
-    diagnostic: "partial",
+    diagnostic: "live",
     repair: "partial",
-    verification: "partial",
+    verification: "live",
     issues: [
       "RSVP state is wrong or stuck",
       "Participant state and chat membership disagree",
@@ -159,9 +159,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "upfor",
     label: "UpFor",
     description: "Session expiry, requests, capacity, discovery and conversion state.",
-    diagnostic: "partial",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "live",
     issues: [
       "Expired UpFor is still active",
       "Join request is stuck",
