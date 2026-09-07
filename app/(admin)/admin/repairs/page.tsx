@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-ui";
 import { RepairCentre } from "@/components/admin/repairs/repair-centre";
+import { SupportOperationsCoverage } from "@/components/admin/repairs/support-operations-coverage";
 import { getAdminAccess } from "@/lib/admin/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
@@ -25,12 +26,16 @@ export default async function RepairsPage({ searchParams }: RepairsPageProps) {
   const initialQuery = q?.trim().replace(/[,%()]/g, "").slice(0, 80) ?? "";
 
   return (
-    <div className="space-y-6">
-      <AdminPageHeader
-        title="Account Doctor & repairs"
-        description="Diagnose safe account lifecycle state first, then run narrow audited repairs only when the account actually needs them."
-      />
-      <RepairCentre allowedRepairIds={allowedIds} initialQuery={initialQuery} />
+    <div className="space-y-10">
+      <div className="space-y-6">
+        <AdminPageHeader
+          title="Account Doctor"
+          description="Diagnose safe account lifecycle state, run narrow audited repairs, verify the result, and refresh the user's app without reaching for the codebase for ordinary account drift."
+        />
+        <RepairCentre allowedRepairIds={allowedIds} initialQuery={initialQuery} />
+      </div>
+
+      <SupportOperationsCoverage />
     </div>
   );
 }
