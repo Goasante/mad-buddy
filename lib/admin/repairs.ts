@@ -14,6 +14,7 @@ import type { AdminPermission } from "@/lib/admin/governance";
 export type RepairRisk = "low" | "medium" | "high";
 
 export type RepairCategory =
+  | "Account state"
   | "Messaging & coordination"
   | "Visibility & presence"
   | "Notifications"
@@ -37,6 +38,17 @@ export type RepairDefinition = {
 };
 
 export const REPAIR_CATALOG: readonly RepairDefinition[] = [
+  {
+    id: "refresh_account_state",
+    label: "Refresh account state",
+    description: "Signals an already-open Mad Buddy session to refresh its canonical server state on the next foreground check or support heartbeat.",
+    effect: "No account data is deleted or rewritten. Open signed-in devices refresh server-rendered state automatically; a reopened app is already fresh.",
+    category: "Account state",
+    risk: "low",
+    permission: "admin.support.manage",
+    requiresReason: false,
+    confirm: false
+  },
   {
     id: "reconcile_direct_messaging",
     label: "Repair direct messaging",
@@ -151,6 +163,7 @@ export function repairRiskTone(risk: RepairRisk): "default" | "warning" | "dange
 }
 
 export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
+  "Account state",
   "Messaging & coordination",
   "Visibility & presence",
   "Notifications",
