@@ -66,6 +66,26 @@ describe("every executable repair proves its invariant", () => {
     expect(switchBody).not.toContain(".delete(");
   });
 
+  it("every repair is reachable from a finding that names a broken state", () => {
+    /* POST-WRITE VERIFICATION IS NOT ENOUGH. It proves the mutation did what
+       it said; it says nothing about whether the mutation should have been
+       offered. A repair with no defect predicate is a button that acts on a
+       healthy account, which is how an operator ends up marking somebody's
+       real unread mail as read or setting their privacy mode for them.
+       Three entries were removed for failing this. */
+    const findingSources = [
+      readFileSync("lib/admin/account-doctor.ts", "utf8"),
+      readFileSync("lib/admin/support-owned-diagnostics.ts", "utf8")
+    ].join(" ");
+
+    for (const repair of REPAIR_CATALOG) {
+      expect(
+        findingSources.includes(`"${repair.id}"`),
+        `${repair.id} is executable but no diagnostic ever recommends it`
+      ).toBe(true);
+    }
+  });
+
   it("the catalog and the switch agree on which repairs exist", () => {
     const cases = [...switchBody.matchAll(/case "([a-z_]+)":/g)].map((entry) => entry[1]);
     expect(new Set(cases)).toEqual(new Set(REPAIR_CATALOG.map((repair) => repair.id)));

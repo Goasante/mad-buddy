@@ -224,7 +224,8 @@ export function buildAccountDoctorFindings(snapshot: AccountDoctorSnapshot): Acc
       area: "UpFor",
       severity: "attention",
       title: "People are waiting on a closed UpFor",
-      detail: `${snapshot.strandedUpForRequestCount} request${snapshot.strandedUpForRequestCount === 1 ? " is" : "s are"} still pending on an UpFor that has ended, been cancelled or already become a Plan. They will never be answered as they stand.`
+      detail: `${snapshot.strandedUpForRequestCount} request${snapshot.strandedUpForRequestCount === 1 ? " is" : "s are"} still pending on an UpFor that has ended, been cancelled or already become a Plan. They will never be answered as they stand.`,
+      repairId: "settle_stranded_upfor_requests"
     });
   }
 
@@ -290,6 +291,14 @@ export function accountDoctorSummary(findings: readonly AccountDoctorFinding[]) 
       summary[finding.severity] += 1;
       return summary;
     },
-    { issue: 0, attention: 0, info: 0, healthy: 0 } as Record<AccountDoctorSeverity, number>
+    /* Every severity must be seeded. `product_rule` was missing, so the first
+       one incremented `undefined` and the count rendered NaN -- the exact
+       category an operator most needs to see. Typed as a full Record rather
+       than cast, so adding a severity fails to compile instead of silently
+       producing NaN again. */
+    { issue: 0, attention: 0, product_rule: 0, info: 0, healthy: 0 } satisfies Record<
+      AccountDoctorSeverity,
+      number
+    > as Record<AccountDoctorSeverity, number>
   );
 }

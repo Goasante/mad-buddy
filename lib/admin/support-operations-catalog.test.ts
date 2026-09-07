@@ -92,13 +92,15 @@ describe("the coverage map cannot overclaim capability", () => {
        it advertise capability an operator could not reach. "Live" now has to
        mean there is a repair in the executable catalog behind it. */
     const AREA_TO_REPAIRS: Record<string, readonly string[]> = {
-      "onboarding-activation": ["reset_onboarding"],
+
       "blocks-refriend": ["reconcile_direct_messaging"],
       "direct-messaging": ["reconcile_direct_messaging"],
       "plan-chat": ["reconcile_plan_chats"],
       upfor: ["settle_stranded_upfor_requests"],
-      presence: ["pause_visibility", "reset_glow_signal", "clear_stuck_status"],
-      notifications: ["clear_notification_badge"],
+      presence: ["reset_glow_signal", "clear_stuck_status"],
+      /* `clear_push_subscriptions` belongs to PUSH, not notifications: the
+         notifications area lost its only repair when clear_notification_badge
+         was removed for having no defect predicate. */
       push: ["clear_push_subscriptions"],
       "features-tours": ["clear_rate_limits"]
     };

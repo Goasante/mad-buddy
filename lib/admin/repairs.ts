@@ -18,8 +18,7 @@ export type RepairCategory =
   | "Plans & UpFor"
   | "Visibility & presence"
   | "Notifications"
-  | "Access & limits"
-  | "Onboarding";
+  | "Access & limits";
 
 export type RepairDefinition = {
   id: string;
@@ -37,6 +36,28 @@ export type RepairDefinition = {
   confirm: boolean;
 };
 
+/* WHAT BELONGS ON THIS SHELF.
+ *
+ * A repair needs a DEFECT PREDICATE, not just a verifier. Post-write
+ * verification proves the mutation did what it said; it says nothing about
+ * whether the mutation should have been offered at all. Three entries were
+ * removed for failing that test, and none were unsafe -- they simply were not
+ * repairs, because no diagnostic could ever say the state was wrong:
+ *
+ *   clear_notification_badge -- unread notifications are not a defect. Marking
+ *     somebody's real unread mail as read because an operator clicked a button
+ *     destroys information they had not seen.
+ *   pause_visibility -- Ghost Mode is the USER's privacy choice. Admin setting
+ *     it is a moderation action against an account, not a repair of drift, and
+ *     it must not sit behind support.manage on an always-visible shelf.
+ *   reset_onboarding -- nothing diagnoses onboarding state as WRONG, so the
+ *     button could only ever act on a healthy account.
+ *
+ * Every entry below is reachable from a finding that names an actual broken
+ * state. If a governed administrative action is wanted for any of the three
+ * later, it belongs in a separate surface with its own semantics -- not here,
+ * where "repair" implies something was broken.
+ */
 export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   {
     id: "reconcile_direct_messaging",
@@ -74,17 +95,6 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
     confirm: true
   },
   {
-    id: "pause_visibility",
-    label: "Pause visibility (Ghost Mode)",
-    description: "Switches the account to Ghost Mode so it stops appearing in proximity.",
-    effect: "The account is hidden from nearby glow until they turn visibility back on.",
-    category: "Visibility & presence",
-    risk: "low",
-    permission: "admin.support.manage",
-    requiresReason: false,
-    confirm: false
-  },
-  {
     id: "reset_glow_signal",
     label: "Reset glow signal",
     description: "Removes the current device location signal so it can refresh cleanly.",
@@ -105,17 +115,6 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
     permission: "admin.support.manage",
     requiresReason: false,
     confirm: true
-  },
-  {
-    id: "clear_notification_badge",
-    label: "Clear notification badge",
-    description: "Marks all current notifications as read to clear a stuck badge count.",
-    effect: "The unread badge resets to zero. No notifications are deleted.",
-    category: "Notifications",
-    risk: "low",
-    permission: "admin.support.manage",
-    requiresReason: false,
-    confirm: false
   },
   {
     id: "clear_push_subscriptions",
@@ -150,17 +149,6 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
     permission: "admin.support.manage",
     requiresReason: true,
     confirm: true
-  },
-  {
-    id: "reset_onboarding",
-    label: "Re-trigger onboarding",
-    description: "Marks onboarding incomplete so the account restarts the setup flow.",
-    effect: "The account is sent back through onboarding on next open. No data is deleted.",
-    category: "Onboarding",
-    risk: "high",
-    permission: "admin.users.suspend",
-    requiresReason: true,
-    confirm: true
   }
 ];
 
@@ -181,8 +169,7 @@ export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
   "Plans & UpFor",
   "Visibility & presence",
   "Notifications",
-  "Access & limits",
-  "Onboarding"
+  "Access & limits"
 ];
 
 /** Catalog grouped by category, in display order — for the UI. */

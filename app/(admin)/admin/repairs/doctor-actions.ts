@@ -9,8 +9,8 @@ import {
   type AccountDoctorFinding,
   type AccountDoctorSnapshot
 } from "@/lib/admin/account-doctor";
+import { projectEventViews } from "@/lib/admin/event-doctor-projection";
 import {
-  type EventParticipationView,
   explainEventAccess,
   findStalledSafeArrival,
   type SafeArrivalView
@@ -144,8 +144,43 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
       .select("id, status, expected_arrival_at, grace_period_minutes")
       .eq("traveller_id", userId)
       .in("status", ["draft", "pending_acknowledgement", "active", "grace_period", "extended", "unconfirmed"]),
-    admin.from("event_rsvps").select("event_id, status").eq("user_id", userId).eq("status", "going")
+    /* EVERY RSVP, not just `going`. Filtering to going here meant `interested`
+       and `not_going` never reached explainEventAccess, so the two commonest
+       product-rule states were invisible to the operator -- who would then be
+       told nothing at all about the Event they had just been asked about. The
+       authority decides what each state means; this only supplies the facts. */
+    admin.from("event_rsvps").select("event_id, status").eq("user_id", userId)
   ]);
+
+  /* FAIL CLOSED ON A FAILED READ.
+   *
+   * A missing row is a diagnostic fact; a failed query is not. Every `?? []`
+   * below would otherwise turn an unavailable table into an empty list, and an
+   * empty list reads as "no drift" -- so a broken read would be reported to
+   * the operator as a healthy account, or worse, as a product rule. That is
+   * the same lie the verification contract exists to prevent, one layer up.
+   *
+   * Matches the discipline in lib/admin/support-owned-diagnostics.server.ts. */
+  const lifecycleReadErrors = [
+    profileResult.error,
+    locationResult.error,
+    statusResult.error,
+    notificationResult.error,
+    pushResult.error,
+    rateLimitResult.error,
+    friendshipResult.error,
+    friendRequestResult.error,
+    blockResult.error,
+    directMembershipResult.error,
+    planParticipantResult.error,
+    upForResult.error,
+    strandedRequestResult.error,
+    safeArrivalResult.error,
+    eventRsvpResult.error
+  ].filter(Boolean);
+  if (lifecycleReadErrors.length > 0) {
+    return empty("Account Doctor could not read this account's lifecycle state, so nothing is being reported.");
+  }
 
   const profile = profileResult.data;
   if (!profile || profile.deleted_at) return empty("That account is unavailable.");
@@ -202,31 +237,34 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
    * A Plan with no conversation yet is also NOT drift: the lifecycle creates
    * one when it is needed.
    */
+  /* Secondary reads run AFTER the guard above, so they need their own signal.
+     Any failure here means the Plan/Event picture is incomplete, and an
+     incomplete picture must not be presented as a clean one. */
+  let secondaryReadFailed = false;
+
   const participantRows = planParticipantResult.data ?? [];
   const candidatePlanIds = [...new Set(participantRows.map((row) => row.plan_id))];
   let planChatMismatchCount = 0;
   let planChatBlockedByRuleCount = 0;
 
   if (candidatePlanIds.length > 0) {
-    const activePlans =
-      (
-        await admin
-          .from("plans")
-          .select("id, creator_id")
-          .in("id", candidatePlanIds)
-          .in("status", ["draft", "inviting", "polling", "confirmed"])
-      ).data ?? [];
+    const activePlansResult = await admin
+      .from("plans")
+      .select("id, creator_id")
+      .in("id", candidatePlanIds)
+      .in("status", ["draft", "inviting", "polling", "confirmed"]);
+    if (activePlansResult.error) secondaryReadFailed = true;
+    const activePlans = activePlansResult.data ?? [];
 
     const activePlanIds = activePlans.map((row) => row.id);
     if (activePlanIds.length > 0) {
-      const planConversations =
-        (
-          await admin
-            .from("conversations")
-            .select("id, context_id")
-            .eq("context_type", "plan")
-            .in("context_id", activePlanIds)
-        ).data ?? [];
+      const planConversationsResult = await admin
+        .from("conversations")
+        .select("id, context_id")
+        .eq("context_type", "plan")
+        .in("context_id", activePlanIds);
+      if (planConversationsResult.error) secondaryReadFailed = true;
+      const planConversations = planConversationsResult.data ?? [];
 
       const conversationByPlan = new Map(
         planConversations
@@ -237,16 +275,14 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
       const joinedIds = new Set<string>();
       const conversationIds = planConversations.map((row) => row.id);
       if (conversationIds.length > 0) {
-        const memberships =
-          (
-            await admin
-              .from("conversation_members")
-              .select("conversation_id")
-              .eq("user_id", userId)
-              .eq("status", "joined")
-              .in("conversation_id", conversationIds)
-          ).data ?? [];
-        for (const membership of memberships) joinedIds.add(membership.conversation_id);
+        const membershipsResult = await admin
+          .from("conversation_members")
+          .select("conversation_id")
+          .eq("user_id", userId)
+          .eq("status", "joined")
+          .in("conversation_id", conversationIds);
+        if (membershipsResult.error) secondaryReadFailed = true;
+        for (const membership of membershipsResult.data ?? []) joinedIds.add(membership.conversation_id);
       }
 
       for (const plan of activePlans) {
@@ -261,11 +297,19 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
           continue;
         }
 
-        const { data: eligible } = await admin.rpc("is_plan_participant_eligible", {
+        const { data: eligible, error: eligibleError } = await admin.rpc("is_plan_participant_eligible", {
           p_plan_id: plan.id,
           p_host_id: plan.creator_id,
           p_candidate_id: userId
         });
+        /* A FAILED RPC IS NOT A REFUSAL. Falling through to the else branch
+           would have reported "the Plan lifecycle is refusing on purpose" for
+           an account whose eligibility was never actually determined -- the
+           most misleading sentence Admin could produce. */
+        if (eligibleError) {
+          secondaryReadFailed = true;
+          continue;
+        }
         if (eligible === true) planChatMismatchCount += 1;
         else planChatBlockedByRuleCount += 1;
       }
@@ -290,62 +334,47 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
   const rsvpEventIds = [...new Set(rsvpRows.map((row) => row.event_id))];
 
   if (rsvpEventIds.length > 0) {
-    const events =
-      (await admin.from("events").select("id, status, visibility").in("id", rsvpEventIds)).data ?? [];
-    const circles =
-      (await admin.from("event_circles").select("id, event_id").in("event_id", rsvpEventIds)).data ?? [];
-    const circleByEvent = new Map(circles.map((row) => [row.event_id, row.id]));
+    const eventsResult = await admin.from("events").select("id, status, visibility").in("id", rsvpEventIds);
+    const circlesResult = await admin.from("event_circles").select("id, event_id").in("event_id", rsvpEventIds);
+    if (eventsResult.error || circlesResult.error) secondaryReadFailed = true;
+    const events = eventsResult.data ?? [];
+    const circles = circlesResult.data ?? [];
     const circleIds = circles.map((row) => row.id);
 
-    const joinedCircleIds = new Set(
-      circleIds.length
-        ? (
-            (
-              await admin
-                .from("event_circle_members")
-                .select("event_circle_id")
-                .eq("user_id", userId)
-                .eq("status", "joined")
-                .in("event_circle_id", circleIds)
-            ).data ?? []
-          ).map((row) => row.event_circle_id)
-        : []
-    );
+    const memberResult = circleIds.length
+      ? await admin
+          .from("event_circle_members")
+          .select("event_circle_id")
+          .eq("user_id", userId)
+          .eq("status", "joined")
+          .in("event_circle_id", circleIds)
+      : { data: [], error: null };
+    if (memberResult.error) secondaryReadFailed = true;
+    const joinedCircleIds = new Set((memberResult.data ?? []).map((row) => row.event_circle_id));
 
-    const invitedCircleIds = new Set(
-      circleIds.length
-        ? (
-            (
-              await admin
-                .from("event_circle_invitations")
-                .select("event_circle_id")
-                .eq("invited_user_id", userId)
-                .in("event_circle_id", circleIds)
-            ).data ?? []
-          ).map((row) => row.event_circle_id)
-        : []
-    );
+    const invitationResult = circleIds.length
+      ? await admin
+          .from("event_circle_invitations")
+          .select("event_circle_id")
+          .eq("invited_user_id", userId)
+          .in("event_circle_id", circleIds)
+      : { data: [], error: null };
+    if (invitationResult.error) secondaryReadFailed = true;
+    const invitedCircleIds = new Set((invitationResult.data ?? []).map((row) => row.event_circle_id));
 
-    const rsvpByEvent = new Map(rsvpRows.map((row) => [row.event_id, row.status]));
-
-    for (const event of events) {
-      const circleId = circleByEvent.get(event.id);
-      const outcome = explainEventAccess({
-        eventId: event.id,
-        eventStatus: event.status as EventParticipationView["eventStatus"],
-        rsvp: (rsvpByEvent.get(event.id) ?? null) as EventParticipationView["rsvp"],
-        circleExists: Boolean(circleId),
-        joinedCircle: Boolean(circleId) && joinedCircleIds.has(circleId!),
-        /* `invite` is the visibility that genuinely requires an invitation.
-           link/community/nearby/public do not, so treating them as invite-only
-           would invent a refusal the product does not make. */
-        inviteOnly: event.visibility === "invite",
-        invited: Boolean(circleId) && invitedCircleIds.has(circleId!)
-      });
-
+    /* The SHARED projection, so the local test exercises this exact shape
+       rather than a hand-built copy that cannot notice a loader change. */
+    for (const view of projectEventViews({ events, circles, rsvps: rsvpRows, joinedCircleIds, invitedCircleIds })) {
+      const outcome = explainEventAccess(view);
       if (outcome.outcome === "still_broken") eventCircleMismatchCount += 1;
       else if (outcome.outcome === "blocked_by_product_rule") eventBlockedByRuleCount += 1;
     }
+  }
+
+  if (secondaryReadFailed) {
+    return empty(
+      "Account Doctor could not read this account's Plan or Event state, so nothing is being reported. Retry, and escalate if it persists."
+    );
   }
 
   const snapshot: AccountDoctorSnapshot = {

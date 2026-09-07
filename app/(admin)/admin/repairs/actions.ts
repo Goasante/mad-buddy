@@ -165,20 +165,14 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
       return reconcilePlanChats(admin, userId);
     case "settle_stranded_upfor_requests":
       return settleStrandedUpForRequests(admin, userId);
-    case "pause_visibility":
-      return pauseVisibility(admin, userId);
     case "reset_glow_signal":
       return resetGlowSignal(admin, userId);
     case "clear_stuck_status":
       return clearStuckStatus(admin, userId);
-    case "clear_notification_badge":
-      return clearNotificationBadge(admin, userId);
     case "clear_push_subscriptions":
       return clearWebPushRegistrations(admin, userId);
     case "clear_rate_limits":
       return clearRateLimits(admin, userId);
-    case "reset_onboarding":
-      return resetOnboarding(admin, userId);
     default:
       return { ok: false, message: "That repair is not available." };
   }
@@ -734,43 +728,6 @@ async function clearRateLimits(admin: Admin, userId: string): Promise<RepairActi
  * than claiming a repair fixed something that was never wrong.
  */
 
-async function pauseVisibility(admin: Admin, userId: string): Promise<RepairActionState> {
-  const invariant = "the account's visibility is Ghost Mode";
-
-  const { data: before } = await admin
-    .from("profiles")
-    .select("visibility_status")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (before?.visibility_status === "ghost") {
-    return {
-      ok: true,
-      message: "Already in Ghost Mode.",
-      verification: notApplicable(invariant, "This account was already in Ghost Mode, so nothing was changed.")
-    };
-  }
-
-  const { error } = await admin.from("profiles").update({ visibility_status: "ghost" }).eq("user_id", userId);
-  if (error) return fail("pause visibility");
-
-  const { data: after } = await admin
-    .from("profiles")
-    .select("visibility_status")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const message = "Visibility paused (Ghost Mode).";
-  return after?.visibility_status === "ghost"
-    ? {
-        ok: true,
-        message,
-        verification: fixed(invariant, "The account is now in Ghost Mode and will not appear in proximity.")
-      }
-    : {
-        ok: true,
-        message,
-        verification: stillBroken(invariant, "The account is still not in Ghost Mode after the repair.")
-      };
-}
 
 async function resetGlowSignal(admin: Admin, userId: string): Promise<RepairActionState> {
   const invariant = "the stored glow signal has been cleared";
@@ -812,53 +769,6 @@ async function resetGlowSignal(admin: Admin, userId: string): Promise<RepairActi
   };
 }
 
-async function clearNotificationBadge(admin: Admin, userId: string): Promise<RepairActionState> {
-  const invariant = "the account has no unread notifications";
-
-  const { count: before } = await admin
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("is_read", false);
-  if ((before ?? 0) === 0) {
-    return {
-      ok: true,
-      message: "Badge is already clear.",
-      verification: notApplicable(invariant, "This account had no unread notifications, so nothing was changed.")
-    };
-  }
-
-  const { error } = await admin
-    .from("notifications")
-    .update({ is_read: true })
-    .eq("user_id", userId)
-    .eq("is_read", false);
-  if (error) return fail("clear the notification badge");
-
-  const { count: after } = await admin
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("is_read", false);
-  const message = `Badge cleared (${before ?? 0} marked read).`;
-  return (after ?? 0) === 0
-    ? {
-        ok: true,
-        message,
-        verification: fixed(
-          invariant,
-          `The unread badge is now zero. ${before ?? 0} notification${(before ?? 0) === 1 ? " was" : "s were"} marked read; none were deleted.`
-        )
-      }
-    : {
-        ok: true,
-        message,
-        verification: stillBroken(
-          invariant,
-          `${after} notification${after === 1 ? " is" : "s are"} still unread after the repair.`
-        )
-      };
-}
 
 async function clearWebPushRegistrations(admin: Admin, userId: string): Promise<RepairActionState> {
   const invariant = "the account has no stored WEB push registrations";
@@ -909,46 +819,6 @@ async function clearWebPushRegistrations(admin: Admin, userId: string): Promise<
       };
 }
 
-async function resetOnboarding(admin: Admin, userId: string): Promise<RepairActionState> {
-  const invariant = "the account is marked as needing onboarding";
-
-  const { data: before } = await admin
-    .from("profiles")
-    .select("is_onboarded")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (before?.is_onboarded === false) {
-    return {
-      ok: true,
-      message: "Onboarding is already pending.",
-      verification: notApplicable(
-        invariant,
-        "This account was already marked as needing onboarding, so nothing was changed."
-      )
-    };
-  }
-
-  const { error } = await admin.from("profiles").update({ is_onboarded: false }).eq("user_id", userId);
-  if (error) return fail("re-trigger onboarding");
-
-  const { data: after } = await admin
-    .from("profiles")
-    .select("is_onboarded")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const message = "Onboarding will restart on next open.";
-  return after?.is_onboarded === false
-    ? {
-        ok: true,
-        message,
-        verification: fixed(invariant, "The account will be sent through onboarding on next open. No data was deleted.")
-      }
-    : {
-        ok: true,
-        message,
-        verification: stillBroken(invariant, "The account is still marked onboarded after the repair.")
-      };
-}
 
 function otherUserFromDirectKey(directKey: string | null, userId: string): string | null {
   if (!directKey) return null;

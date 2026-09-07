@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { projectEventViews } from "@/lib/admin/event-doctor-projection";
 import { explainEventAccess, type EventParticipationView } from "@/lib/admin/event-safety-diagnostics";
 import { USERS } from "@/lib/test/acting-user";
 
@@ -110,50 +111,43 @@ async function seedEvent(options: {
   return { eventId: event.id, circleId };
 }
 
-/** Builds the view exactly as the live Doctor does, from real rows. */
+/**
+ * Reads the same rows the live loader reads, then hands them to the SAME
+ * projection it uses. Building the view by hand here would prove the copy, not
+ * the code that ships -- which is exactly how a loader filtering RSVPs to
+ * `going` went unnoticed while this file kept passing.
+ */
 async function readEventView(eventId: string): Promise<EventParticipationView> {
-  const { data: event } = await admin.from("events").select("id, status, visibility").eq("id", eventId).single();
-  const { data: circle } = await admin
-    .from("event_circles")
-    .select("id")
-    .eq("event_id", eventId)
-    .maybeSingle();
-  const { data: rsvp } = await admin
-    .from("event_rsvps")
-    .select("status")
-    .eq("event_id", eventId)
-    .eq("user_id", VIEWER)
-    .maybeSingle();
+  const { data: events } = await admin.from("events").select("id, status, visibility").eq("id", eventId);
+  const { data: circles } = await admin.from("event_circles").select("id, event_id").eq("event_id", eventId);
+  // Every RSVP state, exactly as the loader now selects them.
+  const { data: rsvps } = await admin.from("event_rsvps").select("event_id, status").eq("user_id", VIEWER);
 
-  let joined = false;
-  let invited = false;
-  if (circle) {
-    const { data: membership } = await admin
-      .from("event_circle_members")
-      .select("id")
-      .eq("event_circle_id", circle.id)
-      .eq("user_id", VIEWER)
-      .eq("status", "joined")
-      .maybeSingle();
-    joined = Boolean(membership);
-    const { data: invitation } = await admin
-      .from("event_circle_invitations")
-      .select("id")
-      .eq("event_circle_id", circle.id)
-      .eq("invited_user_id", VIEWER)
-      .maybeSingle();
-    invited = Boolean(invitation);
-  }
+  const circleIds = (circles ?? []).map((row: { id: string }) => row.id);
+  const { data: members } = circleIds.length
+    ? await admin
+        .from("event_circle_members")
+        .select("event_circle_id")
+        .eq("user_id", VIEWER)
+        .eq("status", "joined")
+        .in("event_circle_id", circleIds)
+    : { data: [] };
+  const { data: invitations } = circleIds.length
+    ? await admin
+        .from("event_circle_invitations")
+        .select("event_circle_id")
+        .eq("invited_user_id", VIEWER)
+        .in("event_circle_id", circleIds)
+    : { data: [] };
 
-  return {
-    eventId,
-    eventStatus: event.status,
-    rsvp: (rsvp?.status ?? null) as EventParticipationView["rsvp"],
-    circleExists: Boolean(circle),
-    joinedCircle: joined,
-    inviteOnly: event.visibility === "invite",
-    invited
-  };
+  const views = projectEventViews({
+    events: events ?? [],
+    circles: circles ?? [],
+    rsvps: (rsvps ?? []).filter((row: { event_id: string }) => row.event_id === eventId),
+    joinedCircleIds: new Set((members ?? []).map((row: { event_circle_id: string }) => row.event_circle_id)),
+    invitedCircleIds: new Set((invitations ?? []).map((row: { event_circle_id: string }) => row.event_circle_id))
+  });
+  return views[0];
 }
 
 beforeAll(async () => {

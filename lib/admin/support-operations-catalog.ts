@@ -53,7 +53,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "Onboarding & activation",
     description: "Setup completion, activation milestones and first-value progression.",
     diagnostic: "live",
-    repair: "live",
+    repair: "planned",
     verification: "partial",
     issues: [
       "Onboarding keeps returning",
@@ -219,7 +219,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "Notifications",
     description: "Unread projection, duplicate/stale notification state and safe replay readiness.",
     diagnostic: "live",
-    repair: "live",
+    repair: "planned",
     verification: "partial",
     issues: [
       "Unread badge is stuck",
