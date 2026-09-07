@@ -39,6 +39,25 @@ export type AccountDoctorSnapshot = {
   nonJoinedDirectMembershipCount: number;
   planChatMismatchCount: number;
   staleOwnedUpForCount: number;
+  /** Requests still waiting on the viewer's own closed UpFors. */
+  strandedUpForRequestCount: number;
+  /**
+   * Journeys past their arrival time AND grace period but still marked live.
+   *
+   * A COUNT, deliberately. No destination, timing, route or watcher identity
+   * reaches this snapshot -- see lib/admin/event-safety-diagnostics.ts.
+   */
+  stalledSafeArrivalCount: number;
+  /**
+   * Journeys that ended without the traveller confirming arrival.
+   *
+   * Counted SEPARATELY and never mixed into the stalled figure: an unconfirmed
+   * arrival is a live safety signal, not a stale record, and Admin must never
+   * be offered a way to tidy it away.
+   */
+  unconfirmedSafeArrivalCount: number;
+  /** Events the account is going to but is not a joined circle member of. */
+  eventCircleMismatchCount: number;
 };
 
 const severityRank: Record<AccountDoctorSeverity, number> = {
@@ -165,6 +184,51 @@ export function buildAccountDoctorFindings(snapshot: AccountDoctorSnapshot): Acc
     title: "Relationship state",
     detail: `${snapshot.activeFriendshipCount} active Muddies · ${snapshot.pendingFriendRequestCount} pending requests · ${snapshot.blockCount} active block relationships.`
   });
+
+  if (snapshot.strandedUpForRequestCount > 0) {
+    findings.push({
+      id: "upfor-stranded-requests",
+      area: "UpFor",
+      severity: "attention",
+      title: "People are waiting on a closed UpFor",
+      detail: `${snapshot.strandedUpForRequestCount} request${snapshot.strandedUpForRequestCount === 1 ? " is" : "s are"} still pending on an UpFor that has ended, been cancelled or already become a Plan. They will never be answered as they stand.`
+    });
+  }
+
+  /* SAFETY, AND THE ORDER MATTERS. The unconfirmed count is reported FIRST and
+     carries no repairId: that status means somebody did not confirm arrival
+     and their watchers were told, so it is escalated to a person, never tidied
+     away by Admin. It is deliberately not merged with the stalled count below,
+     which is ordinary lifecycle drift. */
+  if (snapshot.unconfirmedSafeArrivalCount > 0) {
+    findings.push({
+      id: "safe-arrival-unconfirmed",
+      area: "Account",
+      severity: "issue",
+      title: "A journey ended without a confirmed arrival",
+      detail: `${snapshot.unconfirmedSafeArrivalCount} Safe Arrival journey${snapshot.unconfirmedSafeArrivalCount === 1 ? "" : "s"} ended without the traveller confirming arrival, and watchers were notified. This is a safety signal, not a stale record — escalate it rather than closing it.`
+    });
+  }
+
+  if (snapshot.stalledSafeArrivalCount > 0) {
+    findings.push({
+      id: "safe-arrival-stalled",
+      area: "Account",
+      severity: "attention",
+      title: "A journey is still marked live after its grace period",
+      detail: `${snapshot.stalledSafeArrivalCount} journey${snapshot.stalledSafeArrivalCount === 1 ? " is" : "s are"} past both the expected arrival and the grace period but still showing as in progress.`
+    });
+  }
+
+  if (snapshot.eventCircleMismatchCount > 0) {
+    findings.push({
+      id: "event-circle-mismatch",
+      area: "Plans",
+      severity: "attention",
+      title: "Event circle membership needs review",
+      detail: `${snapshot.eventCircleMismatchCount} Event${snapshot.eventCircleMismatchCount === 1 ? "" : "s"} this account is going to ${snapshot.eventCircleMismatchCount === 1 ? "does" : "do"} not have them as a joined circle member.`
+    });
+  }
 
   findings.push({
     id: "notification-summary",

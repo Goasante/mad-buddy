@@ -42,11 +42,29 @@ describe("support operations coverage catalog", () => {
     }
   });
 
-  it("never labels the most sensitive areas as fully implemented while their repairs are still planned", () => {
-    for (const id of ["dob-age", "safe-arrival", "privacy-account-ops"]) {
+  it("keeps the areas where NO repair is ever safe free of one", () => {
+    /* DOB/age and privacy operations have no safe automatic repair at all: age
+       is a legal gate, a spent DOB correction is an intentional lock, and a
+       deletion cannot be proven complete-or-undone from a support console.
+       They stay diagnostic-and-escalation only. */
+    for (const id of ["dob-age", "privacy-account-ops"]) {
       const area = SUPPORT_OPERATIONS_AREAS.find((item) => item.id === id);
       expect(area).toBeDefined();
       expect(area?.repair).toBe("planned");
+    }
+  });
+
+  it("allows Safe Arrival exactly one repair, and only with verification behind it", () => {
+    /* Safe Arrival was in the list above until a repair existed that could be
+       shown safe: `close_stalled_safe_arrival` touches only active/grace/
+       extended journeys past their grace period, and provably leaves an
+       `unconfirmed` one alone (lib/admin/repair-recipes.local.test.ts). The
+       guard therefore becomes "a repair here must never ship without a live
+       verifier", which is the property that actually matters. */
+    const area = SUPPORT_OPERATIONS_AREAS.find((item) => item.id === "safe-arrival");
+    expect(area).toBeDefined();
+    if (area?.repair === "live") {
+      expect(area.verification).toBe("live");
     }
   });
 
