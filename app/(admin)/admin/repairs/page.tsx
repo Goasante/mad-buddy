@@ -19,8 +19,8 @@ export default async function RepairsPage() {
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Repair centre"
-        description="Run safe, scoped fixes for a single account. Every repair is confirmed where it matters and written to the audit log."
+        title="Account Doctor & repairs"
+        description="Diagnose safe account lifecycle state first, then run narrow audited repairs only when the account actually needs them."
       />
       <RepairCentre allowedRepairIds={allowedIds} />
     </div>
