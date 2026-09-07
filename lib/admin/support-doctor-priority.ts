@@ -42,6 +42,23 @@ const CATEGORY_PRIORITY: Partial<Record<SupportCategory, readonly DoctorAreaId[]
   other: []
 };
 
+/**
+ * Whole-word needle matching.
+ *
+ * A plain `includes` routed "Messages / inbox" to DOB/AGE, because "age" is a
+ * substring of "messages" -- so a ticket saying messages will not send put
+ * date-of-birth checks in front of the operator. Short needles are common here
+ * ("age", "dm", "chat"), and short needles are exactly the ones that collide,
+ * so the boundary check is the rule rather than a special case.
+ *
+ * Boundaries are non-letters, which keeps multi-word needles ("date of birth")
+ * working and still matches punctuation-separated text like "Messages / inbox".
+ */
+function matchesWord(haystack: string, needle: string): boolean {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, "i").test(haystack);
+}
+
 const FEATURE_HINTS: readonly { needles: readonly string[]; areas: readonly DoctorAreaId[] }[] = [
   { needles: ["message", "chat", "inbox", "voice note", "dm"], areas: ["direct-messaging", "blocks-refriend"] },
   { needles: ["plan chat"], areas: ["plan-chat", "plans"] },
@@ -113,7 +130,7 @@ export function prioritizeDoctorAreas(input: SupportDoctorPriorityInput): Doctor
   const feature = input.affectedFeature?.trim().toLowerCase() ?? "";
   if (feature) {
     for (const hint of FEATURE_HINTS) {
-      if (hint.needles.some((needle) => feature.includes(needle))) {
+      if (hint.needles.some((needle) => matchesWord(feature, needle))) {
         for (const area of hint.areas) add(area);
       }
     }

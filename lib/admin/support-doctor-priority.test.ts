@@ -57,3 +57,29 @@ describe("support ticket to Account Doctor priority routing", () => {
     expect(prioritizeDoctorAreas({ category: "other", affectedFeature: "something unusual" })).toEqual([]);
   });
 });
+
+describe("short needles do not match inside longer words", () => {
+  it('"age" does not fire on "Messages"', () => {
+    /* The real bug this guards: a plain substring match routed "Messages /
+       inbox" to DOB/age, so a ticket about messages not sending put date-of-
+       birth checks in front of the operator. */
+    expect(prioritizeDoctorAreas({ category: null, affectedFeature: "Messages / inbox" })).not.toContain("dob-age");
+  });
+
+  it('but "age" still fires when the ticket really says age', () => {
+    expect(prioritizeDoctorAreas({ category: null, affectedFeature: "Age verification" })[0]).toBe("dob-age");
+  });
+
+  it('"dm" does not fire on unrelated words containing it', () => {
+    expect(prioritizeDoctorAreas({ category: null, affectedFeature: "Admin badge" })).not.toContain("direct-messaging");
+  });
+
+  it("multi-word needles still match", () => {
+    expect(prioritizeDoctorAreas({ category: null, affectedFeature: "Date of birth is wrong" })[0]).toBe("dob-age");
+  });
+
+  it("a needle at the very start or end of the text still matches", () => {
+    expect(prioritizeDoctorAreas({ category: null, affectedFeature: "age" })[0]).toBe("dob-age");
+    expect(prioritizeDoctorAreas({ category: null, affectedFeature: "problem with age" })[0]).toBe("dob-age");
+  });
+});
