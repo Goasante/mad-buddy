@@ -1750,13 +1750,22 @@ Only the content layer varies, plus the scrim, which is part of the fixed
 treatment because one ground must stay legible under every headline the card
 can render.
 
-**Status: wired, not yet proven.** The two PNGs are not in the repo. They are
-declared in the registry, the resolvers and renderers call them, and the tests
-are written — but they are deliberately not listed in `allRegisteredAssets`,
-which is checked both ways and would otherwise fail on files that do not exist.
-Dropping them into `public/visuals/home-cards/` and adding the two entries is
-the whole activation. **No visual completion is claimed until real artwork has
-been rendered and looked at.**
+**Status: installed and proven.** Both PNGs ship at
+`public/visuals/home-cards/` (1672x941, verified by reading the file headers and
+by looking at them), are listed in `allRegisteredAssets` so the bidirectional
+manifest check is authoritative — 12 registered, 12 shipped — and are proven on
+real rendered Home by `scripts/hardening/home-static-background-proof.mjs`
+(62/62). That proof reads the resolved image URL and natural size out of the
+DOM, so a missing file shows as `naturalWidth 0` rather than passing because a
+tag exists.
+
+The editorial atlas is gone entirely: entry, resolver and file. Nothing consumed
+it once selection stopped depending on state.
+
+**Screenshot review earned its place.** Card A's privacy footnote used
+`text-muted-foreground/80` — a token calibrated for a plain surface — and over
+the artwork it fell to near invisibility on the one line of that card that must
+be readable. Every DOM assertion passed; only looking at the picture found it.
 
 ### Query cost
 
