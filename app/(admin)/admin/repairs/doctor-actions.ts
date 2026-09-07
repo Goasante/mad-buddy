@@ -69,14 +69,18 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
   /* Resolved before the batch below: an `await` inside a Promise.all array
      runs before any of its siblings, so nesting this would serialise every
      other query behind it. */
-  const closedOwnedSessionIds =
-    (
-      await admin
-        .from("hangout_sessions")
-        .select("id")
-        .eq("owner_id", userId)
-        .in("status", ["expired", "cancelled", "converted_to_plan"])
-    ).data?.map((row) => row.id) ?? [];
+  const closedOwnedSessionsResult = await admin
+    .from("hangout_sessions")
+    .select("id")
+    .eq("owner_id", userId)
+    .in("status", ["expired", "cancelled", "converted_to_plan"]);
+  /* A failed read here used to become an empty id list, which then made the
+     stranded-request query search an impossible UUID and report ZERO people
+     waiting -- a healthy answer derived from a broken read. */
+  if (closedOwnedSessionsResult.error) {
+    return empty("Account Doctor could not read this account's UpFor sessions, so nothing is being reported.");
+  }
+  const closedOwnedSessionIds = (closedOwnedSessionsResult.data ?? []).map((row) => row.id);
 
   const [
     profileResult,
@@ -187,15 +191,23 @@ export async function diagnoseAccountAction(input: unknown): Promise<AccountDoct
 
   const directMemberships = directMembershipResult.data ?? [];
   const conversationIds = [...new Set(directMemberships.map((row) => row.conversation_id))];
-  const directConversations = conversationIds.length
-    ? (
-        await admin
-          .from("conversations")
-          .select("id, conversation_type, direct_key, status")
-          .in("id", conversationIds)
-          .eq("conversation_type", "direct")
-      ).data ?? []
-    : [];
+  const directConversationsResult = conversationIds.length
+    ? await admin
+        .from("conversations")
+        .select("id, conversation_type, direct_key, status")
+        .in("id", conversationIds)
+        .eq("conversation_type", "direct")
+    : { data: [], error: null };
+  /* The one that mattered most for the founder's own report: a failed read
+     here produced an empty conversation list, so the Doctor found no archived
+     conversation, no mismatch, and told the operator messaging was healthy --
+     for the exact account whose messaging was broken. */
+  if (directConversationsResult.error) {
+    return empty(
+      "Account Doctor could not read this account's direct conversations, so nothing is being reported."
+    );
+  }
+  const directConversations = directConversationsResult.data ?? [];
 
   const activeFriendIds = new Set(
     (friendshipResult.data ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id))
