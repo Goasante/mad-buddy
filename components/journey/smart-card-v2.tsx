@@ -132,7 +132,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   const treatment = smartCardVisualTreatment(card, deferred);
   const quiet = treatment === "quiet";
   const safety = treatment === "safety";
-  const hasTruthfulMedia = treatment === "media" && Boolean(card.media?.url);
+  const hasTruthfulMedia = Boolean(card.media?.url) && !safety;
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -178,7 +178,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   const secondaryClassName = cn(
     "focus-ring inline-flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full border px-4 py-2.5 text-sm font-bold backdrop-blur-sm sm:flex-none sm:min-w-[8.75rem]",
     quiet
-      ? "border-white/28 bg-black/18 text-white"
+      ? "border-white/30 bg-black/20 text-white"
       : "border-white/60 bg-black/20 text-white hover:bg-black/30"
   );
 
@@ -268,13 +268,13 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
             {card.title}
           </h2>
 
-          <p className={cn("mt-2.5 text-[0.875rem] leading-[1.45] text-white/88", quiet && "text-white/80")}>
+          <p className={cn("mt-2.5 text-[0.875rem] leading-[1.45] text-white/90", quiet && "text-white/80")}>
             {card.subtitle}
           </p>
         </div>
 
         {card.meta || card.socialProof ? (
-          <div className="mt-4 flex max-w-[92%] flex-wrap items-center gap-x-3 gap-y-2 text-[0.78rem] font-semibold text-white/84">
+          <div className="mt-4 flex max-w-[92%] flex-wrap items-center gap-x-3 gap-y-2 text-[0.78rem] font-semibold text-white/85">
             {card.meta ? (
               <span className="inline-flex min-h-6 items-center gap-1.5">
                 <MetadataIcon card={card} />
@@ -295,7 +295,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
           <div className="mt-4 max-w-[72%]">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-extrabold tabular-nums text-white">{card.progress.percent}%</span>
-              <span className="text-xs text-white/72">{card.progress.label}</span>
+              <span className="text-xs text-white/75">{card.progress.label}</span>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
               <div
@@ -335,7 +335,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
         </div>
 
         {intentError ? (
-          <p role="status" className="mt-2.5 text-xs font-medium text-white/86">
+          <p role="status" className="mt-2.5 text-xs font-medium text-white/85">
             {intentError}
           </p>
         ) : null}
