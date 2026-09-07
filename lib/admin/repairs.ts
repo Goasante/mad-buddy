@@ -16,7 +16,6 @@ export type RepairRisk = "low" | "medium" | "high";
 export type RepairCategory =
   | "Messaging & coordination"
   | "Plans & UpFor"
-  | "Safety"
   | "Visibility & presence"
   | "Notifications"
   | "Access & limits"
@@ -75,21 +74,6 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
     confirm: true
   },
   {
-    id: "close_stalled_safe_arrival",
-    label: "Close a finished journey",
-    description:
-      "Expires Safe Arrival journeys that are past both the expected arrival and the grace period but still marked live.",
-    /* The effect line carries the limit deliberately: an operator reading it
-       out must not be able to imply Mad Buddy knows the person is safe. */
-    effect:
-      "The record stops showing as in progress. This corrects the record only — it says nothing about whether the person arrived, and journeys that ended UNCONFIRMED are never touched.",
-    category: "Safety",
-    risk: "high",
-    permission: "admin.support.manage",
-    requiresReason: true,
-    confirm: true
-  },
-  {
     id: "pause_visibility",
     label: "Pause visibility (Ghost Mode)",
     description: "Switches the account to Ghost Mode so it stops appearing in proximity.",
@@ -114,8 +98,8 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   {
     id: "clear_stuck_status",
     label: "Clear stuck status",
-    description: "Removes a status that failed to expire (availability / activity).",
-    effect: "The current status is cleared; the account shows no active status.",
+    description: "Removes statuses whose expiry has already passed. A status with no expiry is indefinite by design and is never touched.",
+    effect: "Only expired statuses are removed. A current status the person set deliberately is left exactly as it is.",
     category: "Visibility & presence",
     risk: "medium",
     permission: "admin.support.manage",
@@ -181,7 +165,6 @@ export function repairRiskTone(risk: RepairRisk): "default" | "warning" | "dange
 }
 
 export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
-  "Safety",
   "Messaging & coordination",
   "Plans & UpFor",
   "Visibility & presence",

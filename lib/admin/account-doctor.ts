@@ -215,8 +215,8 @@ export function buildAccountDoctorFindings(snapshot: AccountDoctorSnapshot): Acc
       id: "safe-arrival-stalled",
       area: "Account",
       severity: "attention",
-      title: "A journey is still marked live after its grace period",
-      detail: `${snapshot.stalledSafeArrivalCount} journey${snapshot.stalledSafeArrivalCount === 1 ? " is" : "s are"} past both the expected arrival and the grace period but still showing as in progress.`
+      title: "A journey is overdue and awaiting the safety sweep",
+      detail: `${snapshot.stalledSafeArrivalCount} journey${snapshot.stalledSafeArrivalCount === 1 ? " is" : "s are"} past both the expected arrival and the grace period. The canonical sweep moves these to unconfirmed and alerts the watchers; Admin must not close them, because doing so would skip that alert. If the sweep looks stuck, escalate it.`
     });
   }
 

@@ -147,10 +147,6 @@ export async function runAccountRepairAction(input: unknown): Promise<RepairActi
     revalidatePath("/upfor");
     revalidatePath("/dashboard");
   }
-  if (repair.id === "close_stalled_safe_arrival") {
-    revalidatePath("/safe-arrival");
-    revalidatePath("/dashboard");
-  }
   // The verification travels with the result: dropping it here would hand the
   // operator a bare "success" for a repair that may have changed nothing.
   return { ok: true, message: result.message, verification: result.verification };
@@ -169,8 +165,6 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
       return reconcilePlanChats(admin, userId);
     case "settle_stranded_upfor_requests":
       return settleStrandedUpForRequests(admin, userId);
-    case "close_stalled_safe_arrival":
-      return closeStalledSafeArrival(admin, userId);
     case "pause_visibility": {
       const { error } = await admin.from("profiles").update({ visibility_status: "ghost" }).eq("user_id", userId);
       return error ? fail("pause visibility") : { ok: true, message: "Visibility paused (Ghost Mode)." };
@@ -179,10 +173,8 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
       const { data, error } = await admin.from("user_locations").delete().eq("user_id", userId).select("user_id");
       return error ? fail("reset the glow signal") : { ok: true, message: `Glow signal reset (${data?.length ?? 0} cleared).` };
     }
-    case "clear_stuck_status": {
-      const { data, error } = await admin.from("user_statuses").delete().eq("user_id", userId).select("id");
-      return error ? fail("clear the status") : { ok: true, message: data && data.length ? "Stuck status cleared." : "No active status to clear." };
-    }
+    case "clear_stuck_status":
+      return clearStuckStatus(admin, userId);
     case "clear_notification_badge": {
       const { data, error } = await admin.from("notifications").update({ is_read: true }).eq("user_id", userId).eq("is_read", false).select("id");
       return error ? fail("clear the notification badge") : { ok: true, message: `Badge cleared (${data?.length ?? 0} marked read).` };
@@ -191,10 +183,8 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
       const { data, error } = await admin.from("push_subscriptions").delete().eq("user_id", userId).select("id");
       return error ? fail("reset push devices") : { ok: true, message: `Push devices reset (${data?.length ?? 0} removed).` };
     }
-    case "clear_rate_limits": {
-      const { data, error } = await admin.from("rate_limits").delete().eq("user_id", userId).select("id");
-      return error ? fail("clear rate limits") : { ok: true, message: `Rate-limit lockout cleared (${data?.length ?? 0} counters).` };
-    }
+    case "clear_rate_limits":
+      return clearRateLimits(admin, userId);
     case "reset_onboarding": {
       const { error } = await admin.from("profiles").update({ is_onboarded: false }).eq("user_id", userId);
       return error ? fail("re-trigger onboarding") : { ok: true, message: "Onboarding will restart on next open." };
@@ -571,63 +561,69 @@ async function settleStrandedUpForRequests(admin: Admin, userId: string): Promis
 }
 
 /**
- * Expires journeys that are past both the arrival time and the grace period.
+ * Removes statuses that FAILED TO EXPIRE, and only those.
  *
- * `unconfirmed` IS EXCLUDED, and that exclusion is the whole safety argument
- * of this repair. That status means the traveller did not confirm arrival and
- * their watchers were told; closing it would erase a signal somebody may still
- * be acting on. The status filter below is the enforcement, not a comment.
+ * This used to delete every status row for the account. The repair is called
+ * "clear stuck status", it sits on an always-visible shelf, and an operator
+ * clicking it could therefore erase a status the person had deliberately set
+ * moments earlier -- an executor broader than the invariant it names.
+ *
+ * The predicate is now the definition of "stuck": an expiry that has already
+ * passed. `user_statuses` holds ONE row per user and `expires_at` is NOT NULL,
+ * so the row this used to delete unconditionally was the person's entire
+ * status -- a current one included. The null-expiry branch below is defensive
+ * only; the column cannot currently be null.
  */
-async function closeStalledSafeArrival(admin: Admin, userId: string): Promise<RepairActionState> {
-  const invariant = "no Safe Arrival session is marked live past its grace period";
+async function clearStuckStatus(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "no status remains past its own expiry";
+  const nowIso = new Date().toISOString();
 
-  const { data: sessions, error } = await admin
-    .from("safe_arrival_sessions")
-    .select("id, status, expected_arrival_at, grace_period_minutes")
-    .eq("traveller_id", userId)
-    .in("status", ["active", "grace_period", "extended"]);
-  if (error) return fail("inspect this account's journeys");
+  const { data: before, error: readError } = await admin
+    .from("user_statuses")
+    .select("id, expires_at")
+    .eq("user_id", userId);
+  if (readError) return fail("inspect this account's statuses");
 
-  const now = Date.now();
-  const stalledIds = (sessions ?? [])
-    .filter(
-      (row) =>
-        Boolean(row.expected_arrival_at) &&
-        Date.parse(row.expected_arrival_at!) + (row.grace_period_minutes ?? 0) * 60_000 <= now
-    )
-    .map((row) => row.id);
+  const rows = before ?? [];
+  const stuckIds = rows.filter((row) => Boolean(row.expires_at) && row.expires_at! <= nowIso).map((row) => row.id);
+  const liveCount = rows.length - stuckIds.length;
 
-  if (stalledIds.length === 0) {
+  if (stuckIds.length === 0) {
     return {
       ok: true,
-      message: "No journeys are stalled past their grace period.",
-      verification: notApplicable(invariant, "This account has no journeys stalled past their grace period.")
+      message: "No expired status to clear.",
+      verification: notApplicable(
+        invariant,
+        liveCount > 0
+          ? `This account has ${liveCount} current status${liveCount === 1 ? "" : "es"} and none of them are stuck, so nothing was changed.`
+          : "This account has no statuses at all."
+      )
     };
   }
 
-  const { error: updateError } = await admin
-    .from("safe_arrival_sessions")
-    .update({ status: "expired", expired_at: new Date().toISOString() })
-    .in("id", stalledIds)
-    /* Restated on the write itself. If a session transitioned to `unconfirmed`
-       between the read above and this update, it must not be caught here. */
-    .in("status", ["active", "grace_period", "extended"]);
-  if (updateError) return fail("close the finished journeys");
+  const { error: deleteError } = await admin
+    .from("user_statuses")
+    .delete()
+    .in("id", stuckIds)
+    /* Restated on the delete: if a row's expiry changed between the read and
+       this write, it must not be caught by an id list gathered earlier. */
+    .lte("expires_at", nowIso);
+  if (deleteError) return fail("clear the expired statuses");
 
-  const { data: stillLive } = await admin
-    .from("safe_arrival_sessions")
-    .select("id")
-    .in("id", stalledIds)
-    .in("status", ["active", "grace_period", "extended"]);
+  const { data: after } = await admin.from("user_statuses").select("id, expires_at").eq("user_id", userId);
+  const remainingStuck = (after ?? []).filter(
+    (row) => Boolean(row.expires_at) && row.expires_at! <= new Date().toISOString()
+  ).length;
+  const remainingLive = (after ?? []).length - remainingStuck;
 
-  const message = `Finished journeys closed (${stalledIds.length}).`;
-  if ((stillLive ?? []).length > 0) {
+  const message = `Expired statuses cleared (${stuckIds.length}).`;
+  if (remainingStuck > 0) {
     return {
       ok: true,
       message,
       verification: stillBroken(
         invariant,
-        `${(stillLive ?? []).length} journey${(stillLive ?? []).length === 1 ? " is" : "s are"} still marked live after the repair.`
+        `${remainingStuck} expired status${remainingStuck === 1 ? "" : "es"} could not be cleared.`
       )
     };
   }
@@ -636,7 +632,70 @@ async function closeStalledSafeArrival(admin: Admin, userId: string): Promise<Re
     message,
     verification: fixed(
       invariant,
-      `${stalledIds.length} finished journey${stalledIds.length === 1 ? "" : "s"} closed. This corrects the record only — it says nothing about whether the person arrived safely, and no watcher alert was withdrawn.`
+      `${stuckIds.length} expired status${stuckIds.length === 1 ? "" : "es"} removed. ${remainingLive} current status${remainingLive === 1 ? " was" : "es were"} left untouched.`
+    )
+  };
+}
+
+/**
+ * Clears the counters that are actually holding the account back.
+ *
+ * The repair is called "clear rate-limit lockout", and a lockout is an ACTIVE
+ * window. Deleting every row also removed expired counters, which changes
+ * nothing for the user but quietly widens the executor past the invariant its
+ * label names -- the same shape of problem as clear_stuck_status.
+ *
+ * Expired rows are inert and are left for ordinary retention to remove.
+ */
+async function clearRateLimits(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "no rate-limit window is still throttling this account";
+  const nowIso = new Date().toISOString();
+
+  const { data: active, error: readError } = await admin
+    .from("rate_limits")
+    .select("id")
+    .eq("user_id", userId)
+    .gt("window_end", nowIso);
+  if (readError) return fail("inspect this account's rate limits");
+
+  const activeIds = (active ?? []).map((row) => row.id);
+  if (activeIds.length === 0) {
+    return {
+      ok: true,
+      message: "No active rate-limit lockout on this account.",
+      verification: notApplicable(
+        invariant,
+        "This account is not currently throttled, so nothing was cleared."
+      )
+    };
+  }
+
+  const { error: deleteError } = await admin.from("rate_limits").delete().in("id", activeIds);
+  if (deleteError) return fail("clear the rate-limit lockout");
+
+  const { data: remaining } = await admin
+    .from("rate_limits")
+    .select("id")
+    .eq("user_id", userId)
+    .gt("window_end", new Date().toISOString());
+
+  const message = `Rate-limit lockout cleared (${activeIds.length} counter${activeIds.length === 1 ? "" : "s"}).`;
+  if ((remaining ?? []).length > 0) {
+    return {
+      ok: true,
+      message,
+      verification: stillBroken(
+        invariant,
+        `${(remaining ?? []).length} counter${(remaining ?? []).length === 1 ? " is" : "s are"} still throttling this account.`
+      )
+    };
+  }
+  return {
+    ok: true,
+    message,
+    verification: fixed(
+      invariant,
+      `${activeIds.length} active counter${activeIds.length === 1 ? "" : "s"} cleared, so throttled actions work again. Expired counters were left alone.`
     )
   };
 }

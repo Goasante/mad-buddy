@@ -92,16 +92,21 @@ export function isSafeArrivalLive(status: SafeArrivalView["status"]): boolean {
 }
 
 /**
- * A journey that is over but still marked live.
+ * A journey that is overdue and waiting on the canonical safety sweep.
  *
- * REAL DRIFT, and the only Safe Arrival state Admin should act on. A session
- * whose grace period elapsed and whose sweep did not run keeps telling the
- * traveller they are mid-journey and keeps watchers on the hook.
+ * NOT REPAIRABLE BY ADMIN, and the reason is the whole point of this module.
+ * `process_due_safe_arrivals` moves an overdue live journey to `unconfirmed`,
+ * writes an `unconfirmed_alert` and NOTIFIES THE WATCHERS; only 12 further
+ * hours unresolved make it `expired`. An Admin repair that wrote `expired`
+ * directly -- which an earlier version of this tranche did -- would skip the
+ * alert entirely, tidying the record of somebody who may never have arrived.
  *
- * `unconfirmed` is EXCLUDED deliberately, and this is the important line in
- * this file. That status means the person did not confirm arrival and their
- * watchers were told. Closing it from Admin would erase a safety signal that
- * somebody may still be acting on. It is escalated, never repaired.
+ * So this reports a state for a HUMAN to escalate: it means the sweep has not
+ * run, which is an ops problem, not account drift.
+ *
+ * `unconfirmed` is excluded for the adjacent reason: there the watchers have
+ * already been told, and closing it would erase a signal somebody may still be
+ * acting on.
  */
 export function findStalledSafeArrival(sessions: readonly SafeArrivalView[]): LifecycleFinding[] {
   return sessions
@@ -112,9 +117,9 @@ export function findStalledSafeArrival(sessions: readonly SafeArrivalView[]): Li
     )
     .map((session) => ({
       id: session.sessionId,
-      repairable: true,
+      repairable: false,
       explanation:
-        "This journey is past its arrival time and grace period but is still marked live, so it keeps showing as in progress."
+        "This journey is past its arrival time and grace period but still marked live, which means the canonical safety sweep has not processed it. Escalate: the sweep moves it to unconfirmed and alerts the watchers, and Admin must not do that itself."
     }));
 }
 
@@ -222,9 +227,26 @@ export function explainEventAccess(view: EventParticipationView): RepairVerifica
 /**
  * Verifier for closing a stalled journey.
  *
- * It claims the record is consistent -- NOT that the person is safe. Admin has
- * no way to know the second thing, and a verifier that implied it would be the
- * most dangerous sentence in this whole system.
+ * NOT WIRED TO A REPAIR, and must not be. An earlier version of this tranche
+ * shipped `close_stalled_safe_arrival`, which took an overdue
+ * active/grace_period/extended journey straight to `expired`. That is NOT what
+ * the canonical lifecycle does.
+ *
+ * `process_due_safe_arrivals` moves an overdue live journey to `unconfirmed`,
+ * writes an `unconfirmed_alert` event and NOTIFIES THE WATCHERS. Only after a
+ * further 12 hours unresolved does it become `expired`. So the repair skipped
+ * the exact escalation Safe Arrival exists to provide: a person who never
+ * arrived would have had their record tidied instead of their watchers told.
+ *
+ * Overdue live journeys are therefore DIAGNOSTIC AND ESCALATION ONLY. Admin
+ * must not reproduce the lifecycle, and must not call the global due-worker
+ * either -- that is a system-wide sweep, and an account repair has to stay
+ * scoped to the account in front of the operator.
+ *
+ * Kept for the day a target-scoped canonical RPC exists. It claims the record
+ * is consistent -- NOT that the person is safe. Admin has no way to know the
+ * second thing, and a verifier that implied it would be the most dangerous
+ * sentence in this whole system.
  */
 export function verifySafeArrivalClosure(input: {
   attempted: number;

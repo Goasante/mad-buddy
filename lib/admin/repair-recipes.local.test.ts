@@ -3,12 +3,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { USERS } from "@/lib/test/acting-user";
 
 /**
- * The two new repair recipes, against real rows.
+ * The UpFor repair recipe, against real rows.
  *
- * The safety-critical claim is negative and cannot be proven by reading code:
- * closing stalled journeys must leave an `unconfirmed` one alone even when it
- * looks identical by timing. So the fixtures below deliberately create both and
- * check that only one moves.
+ * The claims worth proving are negative: a live session's requests must not be
+ * touched, and a settled request must be DECLINED rather than accepted, so the
+ * repair can never add somebody to something.
+ *
+ * A Safe Arrival repair was here and has been removed -- see
+ * lib/admin/event-safety-diagnostics.ts. Writing `expired` directly skipped the
+ * canonical transition to `unconfirmed`, which is what alerts the watchers.
  *
  * These exercise the same statements the server actions issue. Importing the
  * actions directly would require an admin session; what matters here is that
@@ -37,7 +40,6 @@ const ASKER = USERS.C;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let admin: any;
 const madeSessions: string[] = [];
-const madeJourneys: string[] = [];
 
 async function cleanup() {
   for (const id of madeSessions) {
@@ -45,12 +47,6 @@ async function cleanup() {
     await admin.from("hangout_sessions").delete().eq("id", id);
   }
   madeSessions.length = 0;
-  for (const id of madeJourneys) {
-    await admin.from("safe_arrival_events").delete().eq("session_id", id);
-    await admin.from("safe_arrival_contacts").delete().eq("session_id", id);
-    await admin.from("safe_arrival_sessions").delete().eq("id", id);
-  }
-  madeJourneys.length = 0;
 }
 
 /** An UpFor owned by OWNER in the given status, with a pending request on it. */
@@ -80,26 +76,6 @@ async function seedSession(status: string, withPendingRequest = true) {
   return data.id as string;
 }
 
-/** A journey in the given status, already past its arrival and grace period. */
-async function seedJourney(status: string) {
-  const { data, error } = await admin
-    .from("safe_arrival_sessions")
-    .insert({
-      traveller_id: OWNER,
-      destination_type: "custom",
-      destination_label: "Test destination",
-      expected_arrival_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      grace_period_minutes: 15,
-      status,
-      started_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(`journey: ${error.message}`);
-  madeJourneys.push(data.id);
-  return data.id as string;
-}
-
 /** The exact statements `settleStrandedUpForRequests` issues. */
 async function runSettleStranded() {
   const { data: closed } = await admin
@@ -122,33 +98,6 @@ async function runSettleStranded() {
     .eq("status", "pending")
     .in("hangout_session_id", ids);
   return { attempted: (settled ?? []).length, remaining: (remaining ?? []).length };
-}
-
-/** The exact statements `closeStalledSafeArrival` issues. */
-async function runCloseStalled() {
-  const { data: sessions } = await admin
-    .from("safe_arrival_sessions")
-    .select("id, status, expected_arrival_at, grace_period_minutes")
-    .eq("traveller_id", OWNER)
-    .in("status", ["active", "grace_period", "extended"]);
-
-  const now = Date.now();
-  const stalled = (sessions ?? [])
-    .filter(
-      (r: { expected_arrival_at: string | null; grace_period_minutes: number | null }) =>
-        Boolean(r.expected_arrival_at) &&
-        Date.parse(r.expected_arrival_at!) + (r.grace_period_minutes ?? 0) * 60_000 <= now
-    )
-    .map((r: { id: string }) => r.id);
-
-  if (stalled.length === 0) return { attempted: 0 };
-
-  await admin
-    .from("safe_arrival_sessions")
-    .update({ status: "expired", expired_at: new Date().toISOString() })
-    .in("id", stalled)
-    .in("status", ["active", "grace_period", "extended"]);
-  return { attempted: stalled.length };
 }
 
 beforeAll(async () => {
@@ -237,83 +186,106 @@ describeLocal("settling requests stranded on a closed UpFor", () => {
   );
 });
 
-describeLocal("closing journeys that finished but stayed live", () => {
+describeLocal("narrowed repairs never exceed the invariant they name", () => {
+  async function clearStatuses() {
+    await admin.from("user_statuses").delete().eq("user_id", OWNER);
+  }
+
+  async function seedStatus(expiresAt: string) {
+    const { error } = await admin.from("user_statuses").insert({
+      user_id: OWNER,
+      availability_type: "free",
+      visibility_type: "all_muddies",
+      starts_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+      expires_at: expiresAt
+    });
+    if (error) throw new Error(`status: ${error.message}`);
+  }
+
+  /** The exact predicate `clearStuckStatus` applies. */
+  async function runClearStuck() {
+    const nowIso = new Date().toISOString();
+    const { data: before } = await admin.from("user_statuses").select("id, expires_at").eq("user_id", OWNER);
+    const stuckIds = (before ?? [])
+      .filter((r: { expires_at: string | null }) => Boolean(r.expires_at) && r.expires_at! <= nowIso)
+      .map((r: { id: string }) => r.id);
+    if (stuckIds.length > 0) {
+      await admin.from("user_statuses").delete().in("id", stuckIds).lte("expires_at", nowIso);
+    }
+    const { data: after } = await admin.from("user_statuses").select("id").eq("user_id", OWNER);
+    return { removed: stuckIds.length, remaining: (after ?? []).length };
+  }
+
   it(
-    "expires an active journey past its grace period",
+    "removes a status whose expiry has passed",
     async () => {
-      const id = await seedJourney("active");
+      await clearStatuses();
+      await seedStatus(new Date(Date.now() - 60 * 60 * 1000).toISOString());
 
-      const result = await runCloseStalled();
+      const result = await runClearStuck();
 
-      expect(result.attempted).toBe(1);
-      const { data } = await admin.from("safe_arrival_sessions").select("status").eq("id", id).single();
-      expect(data.status).toBe("expired");
+      expect(result.removed).toBe(1);
+      expect(result.remaining).toBe(0);
+      await clearStatuses();
     },
     DB_TIMEOUT
   );
 
   it(
-    "THE SAFETY BOUNDARY: an unconfirmed journey is left completely alone",
+    "NEVER removes a status that is still current",
     async () => {
-      /* Identical by timing to the stalled one above -- past arrival, past
-         grace. The only difference is the status, and that is exactly what
-         must protect it. */
-      const unconfirmedId = await seedJourney("unconfirmed");
-      const stalledId = await seedJourney("active");
+      /* The bug this pins: the executor used to delete every status row, so an
+         operator clicking a repair labelled "stuck" could erase a status the
+         person had deliberately set moments earlier. `user_statuses` holds one
+         row per user, so that was the ONLY row -- the whole status, gone. */
+      await clearStatuses();
+      await seedStatus(new Date(Date.now() + 60 * 60 * 1000).toISOString());
 
-      await runCloseStalled();
+      const result = await runClearStuck();
 
-      const { data: unconfirmed } = await admin
-        .from("safe_arrival_sessions")
-        .select("status")
-        .eq("id", unconfirmedId)
-        .single();
-      const { data: stalled } = await admin
-        .from("safe_arrival_sessions")
-        .select("status")
-        .eq("id", stalledId)
-        .single();
-
-      expect(unconfirmed.status).toBe("unconfirmed");
-      expect(stalled.status).toBe("expired");
+      expect(result.removed).toBe(0);
+      expect(result.remaining).toBe(1);
+      await clearStatuses();
     },
     DB_TIMEOUT
   );
 
   it(
-    "leaves a journey still inside its grace period alone",
+    "clear_rate_limits clears an ACTIVE window and leaves an expired counter alone",
     async () => {
-      const { data } = await admin
-        .from("safe_arrival_sessions")
-        .insert({
-          traveller_id: OWNER,
-          destination_type: "custom",
-          destination_label: "Not yet due",
-          expected_arrival_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          grace_period_minutes: 15,
-          status: "active",
-          started_at: new Date().toISOString()
-        })
+      await admin.from("rate_limits").delete().eq("user_id", OWNER);
+      await admin.from("rate_limits").insert([
+        {
+          user_id: OWNER,
+          action: "test.active",
+          count: 9,
+          window_start: new Date(Date.now() - 60_000).toISOString(),
+          window_end: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+        },
+        {
+          user_id: OWNER,
+          action: "test.expired",
+          count: 9,
+          window_start: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+          window_end: new Date(Date.now() - 60 * 60 * 1000).toISOString()
+        }
+      ]);
+
+      const nowIso = new Date().toISOString();
+      const { data: active } = await admin
+        .from("rate_limits")
         .select("id")
-        .single();
-      madeJourneys.push(data.id);
+        .eq("user_id", OWNER)
+        .gt("window_end", nowIso);
+      await admin
+        .from("rate_limits")
+        .delete()
+        .in("id", (active ?? []).map((r: { id: string }) => r.id));
 
-      await runCloseStalled();
+      const { data: after } = await admin.from("rate_limits").select("action").eq("user_id", OWNER);
+      expect((after ?? []).map((r: { action: string }) => r.action)).toEqual(["test.expired"]);
 
-      const { data: after } = await admin
-        .from("safe_arrival_sessions")
-        .select("status")
-        .eq("id", data.id)
-        .single();
-      expect(after.status).toBe("active");
-    },
-    DB_TIMEOUT
-  );
-
-  it(
-    "reports nothing to do when no journey is stalled",
-    async () => {
-      expect((await runCloseStalled()).attempted).toBe(0);
+      await admin.from("rate_limits").delete().eq("user_id", OWNER);
     },
     DB_TIMEOUT
   );

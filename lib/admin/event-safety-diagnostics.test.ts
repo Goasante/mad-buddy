@@ -54,12 +54,18 @@ describe("an unconfirmed arrival is a safety signal, never a stuck record", () =
   });
 });
 
-describe("a journey stalled past its grace period is real drift", () => {
-  it("finds an active journey past grace", () => {
+describe("a journey overdue for the safety sweep is escalated, never repaired", () => {
+  it("finds an active journey past grace, and marks it NOT repairable", () => {
+    /* The canonical sweep moves an overdue live journey to `unconfirmed`,
+       writes an unconfirmed_alert and notifies the watchers; only 12 further
+       hours make it `expired`. An Admin repair writing `expired` directly --
+       which this tranche briefly shipped -- would skip that alert entirely. */
     const found = findStalledSafeArrival([journey({ pastExpectedArrival: true, pastGracePeriod: true })]);
 
     expect(found).toHaveLength(1);
-    expect(found[0].repairable).toBe(true);
+    expect(found[0].repairable).toBe(false);
+    expect(found[0].explanation).toMatch(/escalate/i);
+    expect(found[0].explanation).toMatch(/alerts the watchers/i);
   });
 
   it("finds extended and grace_period journeys too", () => {
