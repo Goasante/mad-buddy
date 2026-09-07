@@ -96,9 +96,30 @@ export type ActivationState =
   | "activated";
 
 export function resolveActivationState(input: ActivationInputs): ActivationState {
-  // A plan already arranged is the most concrete thing in the person's day,
-  // so it outranks every discovery prompt below it.
-  if (input.upcomingPlanCount > 0) return "upcoming_plan";
+  /* AN UPCOMING PLAN IS NOT AN ACTIVATION STEP, AND NO LONGER SHORT-CIRCUITS.
+   *
+   * This used to be the FIRST check, so a single future Plan returned
+   * `upcoming_plan` before every question below it. On a real phone that made
+   * Card A a permanent billboard: "You've got something on / Open your plan",
+   * unchanged for days, while somebody with no Muddies, no location or Glow
+   * still off was never told any of it. The one card whose job is to guide
+   * activation had stopped guiding.
+   *
+   * It is also the weakest of four surfaces that already own Plans. Card B has
+   * plan_rsvp, plan_decision, plan_starting and plan_chat_decision -- each
+   * naming the actual Plan and the actual next step -- and Home's "Coming Up"
+   * rail lists them all. Card A added a generic link to /plans that named
+   * nothing, and outranked everything to say it.
+   *
+   * So Plans move fully to the surfaces that own them, and Card A answers the
+   * question it exists for: what is the next thing THIS person needs to do to
+   * get value from Mad Buddy? When the answer is "nothing", it resolves to
+   * `activated` and renders nothing at all. Whitespace is better than a prompt
+   * that has stopped being true.
+   *
+   * `upcoming_plan` is deliberately KEPT in the type and in the copy map. It is
+   * still reachable through the explicit relationship-focus path, and deleting
+   * it would turn a narrow ownership correction into a wider refactor. */
 
   // Nothing else is reachable without at least one Muddy: Glow has nobody to
   // show, and a Plan has nobody to invite.

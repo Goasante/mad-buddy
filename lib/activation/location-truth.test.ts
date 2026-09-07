@@ -175,9 +175,22 @@ describe("a long-standing user is not re-onboarded", () => {
     );
   });
 
-  it("still leads with a real plan over a refresh prompt", () => {
+  /**
+   * A PLAN NO LONGER MASKS A STALE FIX.
+   *
+   * This previously expected `upcoming_plan`, because an upcoming Plan
+   * short-circuited the whole resolver. That is the ordering a real phone
+   * showed to be wrong: a stale position is a truth problem Card A exists to
+   * report, and the Plan is already on Home in the surfaces that own it
+   * (Card B's plan states and the "Coming Up" rail), so hiding the stale fix
+   * behind it lost information without gaining any.
+   *
+   * The veteran is still not re-onboarded -- the states above this one are
+   * skipped exactly as before; only the Plan short-circuit is gone.
+   */
+  it("reports a stale fix rather than hiding it behind a Plan", () => {
     const planned = withState({ ...veteran, upcomingPlanCount: 1 });
-    expect(resolveActivationState(planned)).toBe("upcoming_plan");
+    expect(resolveActivationState(planned)).toBe("location_stale");
   });
 });
 
