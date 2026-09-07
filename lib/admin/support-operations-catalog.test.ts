@@ -55,6 +55,11 @@ describe("support operations coverage catalog", () => {
     expect(counts.areas).toBe(SUPPORT_OPERATIONS_AREAS.length);
     expect(counts.diagnosticLive).toBeGreaterThan(0);
     expect(counts.repairLive).toBeGreaterThan(0);
-    expect(counts.fullyLive).toBe(0);
+    /* Was 0 before the verification contract shipped. Direct messaging and
+       Plan Chat are now diagnose + repair + VERIFY, so the honest assertion is
+       that fully-live areas exist and never exceed the catalog -- not a frozen
+       number that has to be edited every time an area is completed. */
+    expect(counts.fullyLive).toBeGreaterThan(0);
+    expect(counts.fullyLive).toBeLessThanOrEqual(counts.areas);
   });
 });

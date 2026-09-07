@@ -7,8 +7,22 @@ import { recordAdminAuditEvent } from "@/lib/admin/service";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { getRepair, REPAIR_IDS } from "@/lib/admin/repairs";
+import {
+  blockedByRule,
+  fixed,
+  notApplicable,
+  type RepairVerification,
+  stillBroken
+} from "@/lib/admin/repair-verification";
 
-export type RepairActionState = { ok: boolean; message: string };
+/**
+ * `ok` reports whether the MUTATION was accepted. `verification` reports
+ * whether the user's actual problem is solved, re-read from the database after
+ * the write -- see lib/admin/repair-verification.ts for why those are not the
+ * same question. Repairs that have not yet been given a verifier omit it, and
+ * the UI says so rather than implying an unverified repair worked.
+ */
+export type RepairActionState = { ok: boolean; message: string; verification?: RepairVerification };
 
 type Admin = Awaited<ReturnType<typeof requireSafetyAdmin>>["admin"];
 
@@ -129,7 +143,9 @@ export async function runAccountRepairAction(input: unknown): Promise<RepairActi
     revalidatePath("/messages");
     revalidatePath("/dashboard");
   }
-  return { ok: true, message: result.message };
+  // The verification travels with the result: dropping it here would hand the
+  // operator a bare "success" for a repair that may have changed nothing.
+  return { ok: true, message: result.message, verification: result.verification };
 }
 
 /**
@@ -225,7 +241,33 @@ async function reconcileDirectMessaging(admin: Admin, userId: string): Promise<R
   );
   const eligibleFriendIds = new Set([...friendIds].filter((id) => !blockedIds.has(id)));
   if (eligibleFriendIds.size === 0) {
-    return { ok: true, message: "No current unblocked Muddy conversations need reconciliation." };
+    /* Two very different situations, and Support must not be told the same
+       thing for both. If every Muddy is blocked, the product is refusing on
+       purpose and no repair should ever cross that. If there are simply no
+       Muddies, there was nothing here to fix and the report is about
+       something else. */
+    /* Derived from blocks THEMSELVES, not from an intersection with live
+       friendships. Blocking ENDS the friendship (blockUserAction sets
+       ended_at), so by the time Support looks there is no live friendship left
+       to intersect -- and asking "is a blocked person still a Muddy" always
+       answered no, reporting "nothing to repair" to someone whose real
+       situation is "you blocked them". Any standing block on this account is
+       enough to say the product is refusing on purpose. */
+    const blockedAway = blockedIds.size > 0;
+    return {
+      ok: true,
+      message: "No current unblocked Muddy conversations need reconciliation.",
+      verification: blockedAway
+        ? blockedByRule(
+            "an unblocked, currently-live friendship exists for the conversation",
+            "A live block outranks friendship, in either direction",
+            "This account has a live block, and blocking ends the friendship it applies to. No conversation may be reopened while it stands."
+          )
+        : notApplicable(
+            "an unblocked, currently-live friendship exists for the conversation",
+            "This account has no current Muddy relationships, so there is no direct conversation to reconcile."
+          )
+    };
   }
 
   const conversationIds = [...new Set((memberships ?? []).map((row) => row.conversation_id))];
@@ -242,16 +284,41 @@ async function reconcileDirectMessaging(admin: Admin, userId: string): Promise<R
 
   const eligibleConversationIds: string[] = [];
   const eligibleMemberIds = new Set<string>([userId]);
+  /* Counted separately so the verification can tell Support WHY a thread is
+     still closed. Blocking ends the friendship, so a blocked pair's archived
+     conversation is skipped by the same `continue` as an ordinary ex-Muddy --
+     and reporting "nothing to repair" to someone whose real situation is a
+     live block sends the operator hunting for a bug that is not there. */
+  let blockedArchivedCount = 0;
   for (const conversation of conversations ?? []) {
     const otherId = otherUserFromDirectKey(conversation.direct_key, userId);
-    if (!otherId || !eligibleFriendIds.has(otherId)) continue;
+    if (!otherId) continue;
     if (conversation.status !== "archived") continue;
+    if (blockedIds.has(otherId)) {
+      blockedArchivedCount += 1;
+      continue;
+    }
+    if (!eligibleFriendIds.has(otherId)) continue;
     eligibleConversationIds.push(conversation.id);
     eligibleMemberIds.add(otherId);
   }
 
   if (eligibleConversationIds.length === 0) {
-    return { ok: true, message: "Direct messaging already matches current friendship and block state." };
+    return {
+      ok: true,
+      message: "Direct messaging already matches current friendship and block state.",
+      verification:
+        blockedArchivedCount > 0
+          ? blockedByRule(
+              "no archived direct conversation belongs to a live, unblocked friendship",
+              "A live block outranks friendship, in either direction",
+              `${blockedArchivedCount} conversation${blockedArchivedCount === 1 ? " is" : "s are"} closed because of a live block. That is correct, and Admin must not reopen it — the block has to be lifted by the person who made it.`
+            )
+          : notApplicable(
+              "no archived direct conversation belongs to a live, unblocked friendship",
+              "Direct messaging was already consistent, so nothing was changed."
+            )
+    };
   }
 
   const now = new Date().toISOString();
@@ -270,9 +337,50 @@ async function reconcileDirectMessaging(admin: Admin, userId: string): Promise<R
     .in("user_id", [...eligibleMemberIds]);
   if (memberUpdateError) return fail("restore direct conversation membership");
 
+  /* THE INVARIANT, RE-READ. Not "the update succeeded" -- the state the user
+     actually experiences: every conversation we just touched is active, and
+     both people are joined to it. `resolveCanSendMessage` refuses on either
+     condition, so checking one would still let a broken thread report FIXED. */
+  const [{ data: verifyConversations }, { data: verifyMembers }] = await Promise.all([
+    admin.from("conversations").select("id, status").in("id", eligibleConversationIds),
+    admin
+      .from("conversation_members")
+      .select("conversation_id, user_id, status")
+      .in("conversation_id", eligibleConversationIds)
+  ]);
+
+  const stillArchived = (verifyConversations ?? []).filter((row) => row.status !== "active");
+  const joinedByConversation = new Map<string, number>();
+  for (const row of verifyMembers ?? []) {
+    if (row.status !== "joined") continue;
+    joinedByConversation.set(row.conversation_id, (joinedByConversation.get(row.conversation_id) ?? 0) + 1);
+  }
+  const missingMembers = eligibleConversationIds.filter((id) => (joinedByConversation.get(id) ?? 0) < 2);
+
+  const count = eligibleConversationIds.length;
+  const message = `Direct messaging reconciled (${count} conversation${count === 1 ? "" : "s"} restored).`;
+  const invariant = "every repaired direct conversation is active with both people joined";
+
+  if (stillArchived.length > 0 || missingMembers.length > 0) {
+    return {
+      ok: true,
+      message,
+      verification: stillBroken(
+        invariant,
+        stillArchived.length > 0
+          ? `${stillArchived.length} conversation${stillArchived.length === 1 ? " is" : "s are"} still not active after the repair.`
+          : `${missingMembers.length} conversation${missingMembers.length === 1 ? " is" : "s are"} missing a joined member after the repair.`
+      )
+    };
+  }
+
   return {
     ok: true,
-    message: `Direct messaging reconciled (${eligibleConversationIds.length} conversation${eligibleConversationIds.length === 1 ? "" : "s"} restored).`
+    message,
+    verification: fixed(
+      invariant,
+      `${count} direct conversation${count === 1 ? " is" : "s are"} usable again, with both people joined and history intact.`
+    )
   };
 }
 
@@ -302,7 +410,16 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
   if (plansError) return fail("inspect active Plans");
 
   const planIds = (plans ?? []).map((row) => row.id);
-  if (planIds.length === 0) return { ok: true, message: "No active Plan Chat memberships need reconciliation." };
+  if (planIds.length === 0) {
+    return {
+      ok: true,
+      message: "No active Plan Chat memberships need reconciliation.",
+      verification: notApplicable(
+        "the user is a joined member of every active Plan they are going to",
+        "This account has no active Plans, so there is no Plan Chat membership to reconcile."
+      )
+    };
+  }
 
   let reconciled = 0;
   for (const planId of planIds) {
@@ -311,7 +428,64 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
     reconciled += 1;
   }
 
-  return { ok: true, message: `Plan Chats reconciled (${reconciled} active Plan${reconciled === 1 ? "" : "s"} checked).` };
+  /* THE INVARIANT, RE-READ. The reconciler returning cleanly is not the claim:
+     it runs happily and admits nobody when the person is genuinely ineligible.
+     The claim is that this user is now a joined member of each active Plan's
+     chat -- which is what they reported they could not reach.
+
+     A Plan with no conversation is not a failure here. The canonical lifecycle
+     creates one on reconcile, so its absence means the Plan legitimately has
+     none yet, not that the repair failed. */
+  const { data: planConversations } = await admin
+    .from("conversations")
+    .select("id, context_id")
+    .eq("context_type", "plan")
+    .in("context_id", planIds);
+
+  const conversationIds = (planConversations ?? []).map((row) => row.id);
+  const { data: myMemberships } = conversationIds.length
+    ? await admin
+        .from("conversation_members")
+        .select("conversation_id, status")
+        .eq("user_id", userId)
+        .in("conversation_id", conversationIds)
+    : { data: [] };
+
+  const joined = new Set(
+    (myMemberships ?? [])
+      .filter((row: { status: string }) => row.status === "joined")
+      .map((row: { conversation_id: string }) => row.conversation_id)
+  );
+  const missing = conversationIds.filter((id) => !joined.has(id));
+
+  const message = `Plan Chats reconciled (${reconciled} active Plan${reconciled === 1 ? "" : "s"} checked).`;
+  const invariant = "the user is a joined member of every active Plan Chat they are going to";
+
+  if (missing.length > 0) {
+    /* The reconciler ran and still did not admit them. That is the canonical
+       authority declining -- a removed participant, a block against the host,
+       or a closed Plan -- not account drift Admin should force past. */
+    return {
+      ok: true,
+      message,
+      verification: blockedByRule(
+        invariant,
+        "Plan Chat membership is decided by the canonical Plan lifecycle, which Admin does not override",
+        `${missing.length} Plan Chat${missing.length === 1 ? "" : "s"} still exclude${missing.length === 1 ? "s" : ""} this account. The Plan lifecycle is refusing on purpose — check for a removal, a block against the host, or a closed Plan.`
+      )
+    };
+  }
+
+  return {
+    ok: true,
+    message,
+    verification: fixed(
+      invariant,
+      conversationIds.length === 0
+        ? "No Plan Chats exist for these Plans yet, and the account's participation is consistent."
+        : `The account is a joined member of all ${conversationIds.length} active Plan Chat${conversationIds.length === 1 ? "" : "s"}.`
+    )
+  };
 }
 
 function otherUserFromDirectKey(directKey: string | null, userId: string): string | null {

@@ -115,7 +115,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     description: "Conversation status, membership, direct-key identity and inbox/send readiness.",
     diagnostic: "live",
     repair: "live",
-    verification: "partial",
+    verification: "live",
     issues: [
       "Message says Not sent despite a valid Muddy relationship",
       "Archived conversation should be active",
@@ -131,7 +131,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     description: "Canonical Plan conversation creation and membership reconciliation.",
     diagnostic: "live",
     repair: "live",
-    verification: "partial",
+    verification: "live",
     issues: [
       "Plan exists but Plan Chat is missing",
       "Going/Maybe participant cannot enter Plan Chat",
