@@ -7,18 +7,19 @@ export function SystemicHealthPanel({ signals }: { signals: readonly SystemicHea
   const assessments = sortSystemicHealth(signals);
   const systemicCount = assessments.filter((item) => item.severity === "systemic").length;
   const watchCount = assessments.filter((item) => item.severity === "watch").length;
-  const affectedAccounts = assessments.reduce((total, item) => total + item.affectedAccounts, 0);
+  const brokenAccounts = assessments.reduce((total, item) => total + item.actionableAffectedAccounts, 0);
+  const productRuleAccounts = assessments.reduce((total, item) => total + item.productRuleAccounts, 0);
 
   return (
     <AdminSection
       title="Systemic issue watch"
-      description="Repeated Account Doctor invariant failures are surfaced here so Support does not normalize a product defect into dozens of unrelated manual repairs. Counts are diagnostic signals, not permission to bulk-mutate accounts."
+      description="Repeated Account Doctor invariant failures are surfaced here so Support does not normalize a product defect into dozens of unrelated manual repairs. Product-rule refusals are shown separately and never contribute to defect thresholds."
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard icon={AlertTriangle} label="Possible systemic" value={systemicCount} hint="Signals needing engineering attention" tone={systemicCount > 0 ? "warning" : "success"} />
         <AdminMetricCard icon={Radar} label="Watch list" value={watchCount} hint="Repeated drift below systemic threshold" tone={watchCount > 0 ? "orange" : "default"} />
-        <AdminMetricCard icon={Activity} label="Affected accounts" value={affectedAccounts} hint="Across the currently measured predicates" tone="default" />
-        <AdminMetricCard icon={CheckCircle2} label="Measured predicates" value={assessments.length} hint="Known invariant checks in this snapshot" tone="success" />
+        <AdminMetricCard icon={Activity} label="Broken accounts" value={brokenAccounts} hint={`Across ${assessments.length} measured predicates`} tone="default" />
+        <AdminMetricCard icon={CheckCircle2} label="Rule-correct cases" value={productRuleAccounts} hint="Intentional refusals excluded from incident counts" tone="success" />
       </div>
 
       {assessments.length > 0 ? (
@@ -34,9 +35,15 @@ export function SystemicHealthPanel({ signals }: { signals: readonly SystemicHea
                   </div>
                   <p className="mt-2 text-xs leading-5 text-[#9c9690]">{assessment.guidance}</p>
                 </div>
-                <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-right">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#77736f]">Affected</p>
-                  <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{assessment.affectedAccounts}</p>
+                <div className="grid shrink-0 grid-cols-2 gap-2 text-right">
+                  <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.035] px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#77736f]">Broken</p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{assessment.actionableAffectedAccounts}</p>
+                  </div>
+                  <div className="rounded-[16px] border border-emerald-400/10 bg-emerald-400/[0.035] px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-300/70">Rule</p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-200">{assessment.productRuleAccounts}</p>
+                  </div>
                 </div>
               </div>
 
@@ -47,7 +54,8 @@ export function SystemicHealthPanel({ signals }: { signals: readonly SystemicHea
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <AdminStatus label={assessment.repairablePerAccount ? "Per-account repair available" : "Diagnostic / escalation only"} tone={assessment.repairablePerAccount ? "success" : "default"} />
-                {assessment.engineeringEscalation ? <AdminStatus label="Engineering escalation" tone="danger" /> : null}
+                {assessment.engineeringEscalation && assessment.actionableAffectedAccounts > 0 ? <AdminStatus label="Engineering escalation" tone="danger" /> : null}
+                {assessment.productRuleAccounts > 0 ? <AdminStatus label="Product rule cases excluded" tone="success" /> : null}
               </div>
             </Card>
           ))}
