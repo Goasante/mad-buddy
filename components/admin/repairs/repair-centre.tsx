@@ -21,8 +21,21 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import type { AccountDoctorSeverity } from "@/lib/admin/account-doctor";
+import {
+  OUTCOME_GUIDANCE,
+  OUTCOME_LABEL,
+  type RepairOutcome,
+  type RepairVerification
+} from "@/lib/admin/repair-verification";
 import { getRepair, repairRiskTone, repairsByCategory, type RepairDefinition } from "@/lib/admin/repairs";
 import { cn } from "@/lib/utils";
+
+type RepairFeedback = {
+  kind: "repair" | "signal";
+  ok: boolean;
+  text: string;
+  verification?: RepairVerification;
+};
 
 export function RepairCentre({
   allowedRepairIds,
@@ -39,7 +52,7 @@ export function RepairCentre({
   const [history, setHistory] = useState<RepairHistoryEntry[]>([]);
   const [doctor, setDoctor] = useState<AccountDoctorState | null>(null);
   const [pendingRepair, setPendingRepair] = useState<RepairDefinition | null>(null);
-  const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [feedback, setFeedback] = useState<RepairFeedback | null>(null);
   const [isSearching, startSearch] = useTransition();
   const [isDiagnosing, startDiagnosis] = useTransition();
   const [isSignalingRefresh, startRefreshSignal] = useTransition();
@@ -82,7 +95,7 @@ export function RepairCentre({
   function signalRefresh(userId: string) {
     startRefreshSignal(async () => {
       const result = await signalAccountRefreshAction({ userId });
-      setFeedback({ ok: result.ok, text: result.message });
+      setFeedback({ kind: "signal", ok: result.ok, text: result.message });
       if (result.ok) loadHistory(userId);
     });
   }
@@ -168,19 +181,7 @@ export function RepairCentre({
         )}
       </AdminSection>
 
-      {feedback ? (
-        <div
-          className={cn(
-            "rounded-xl border p-3 text-sm",
-            feedback.ok
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-              : "border-amber-500/30 bg-amber-500/10 text-amber-100"
-          )}
-          role="status"
-        >
-          {feedback.text}
-        </div>
-      ) : null}
+      {feedback ? <RepairFeedbackPanel feedback={feedback} /> : null}
 
       {selected ? (
         <AccountDoctorPanel
@@ -248,6 +249,64 @@ export function RepairCentre({
       />
     </div>
   );
+}
+
+function RepairFeedbackPanel({ feedback }: { feedback: RepairFeedback }) {
+  const verification = feedback.verification;
+  return (
+    <div
+      className={cn(
+        "rounded-xl border p-3 text-sm",
+        verification ? verificationPanelClass(verification.outcome) : feedback.ok
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-100"
+      )}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="font-medium">{feedback.text}</p>
+        {verification ? (
+          <AdminStatus label={OUTCOME_LABEL[verification.outcome]} tone={verificationStatusTone(verification.outcome)} />
+        ) : null}
+      </div>
+
+      {verification ? (
+        <div className="mt-2 space-y-1.5">
+          <p className="leading-relaxed">{verification.summary}</p>
+          <p className="text-xs opacity-85">
+            <span className="font-semibold">Verified invariant:</span> {verification.invariant}
+          </p>
+          {verification.rule ? (
+            <p className="text-xs opacity-85">
+              <span className="font-semibold">Product rule:</span> {verification.rule}
+            </p>
+          ) : null}
+          <p className="text-xs opacity-85">
+            <span className="font-semibold">Next:</span> {OUTCOME_GUIDANCE[verification.outcome]}
+          </p>
+        </div>
+      ) : feedback.kind === "repair" && feedback.ok ? (
+        <p className="mt-2 text-xs opacity-85">
+          This repair does not yet have an invariant verifier. The mutation was accepted, but the user-facing problem is not confirmed fixed.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function verificationStatusTone(outcome: RepairOutcome): "success" | "warning" | "danger" | "default" {
+  if (outcome === "fixed") return "success";
+  if (outcome === "still_broken") return "danger";
+  if (outcome === "blocked_by_product_rule") return "warning";
+  return "default";
+}
+
+function verificationPanelClass(outcome: RepairOutcome) {
+  if (outcome === "fixed") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+  if (outcome === "still_broken") return "border-red-500/30 bg-red-500/10 text-red-100";
+  if (outcome === "blocked_by_product_rule") return "border-amber-500/30 bg-amber-500/10 text-amber-100";
+  return "border-border bg-muted/30 text-foreground";
 }
 
 function AccountDoctorPanel({
@@ -383,7 +442,7 @@ function RepairConfirmDialog({
   repair: RepairDefinition | null;
   user: RepairUser | null;
   onClose: () => void;
-  onDone: (result: { ok: boolean; text: string }) => void;
+  onDone: (result: RepairFeedback) => void;
 }) {
   const [reason, setReason] = useState("");
   const [pending, start] = useTransition();
@@ -397,7 +456,7 @@ function RepairConfirmDialog({
         repairId: repair.id,
         reason: reason.trim() || undefined
       });
-      onDone({ ok: result.ok, text: result.message });
+      onDone({ kind: "repair", ok: result.ok, text: result.message, verification: result.verification });
       setReason("");
     });
   }
