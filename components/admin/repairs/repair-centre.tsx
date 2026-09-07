@@ -1,7 +1,8 @@
 "use client";
 
-import { History, Search, Wrench } from "lucide-react";
+import { History, RefreshCw, Search, Stethoscope, Wrench } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { diagnoseAccountAction, type AccountDoctorState } from "@/app/(admin)/admin/repairs/doctor-actions";
 import {
   getRecentRepairsAction,
   runAccountRepairAction,
@@ -15,7 +16,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { repairRiskTone, repairsByCategory, type RepairDefinition } from "@/lib/admin/repairs";
+import { getRepair, repairRiskTone, repairsByCategory, type RepairDefinition } from "@/lib/admin/repairs";
+import type { AccountDoctorSeverity } from "@/lib/admin/account-doctor";
 import { cn } from "@/lib/utils";
 
 export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] }) {
@@ -25,9 +27,11 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
   const [searchMessage, setSearchMessage] = useState("");
   const [selected, setSelected] = useState<RepairUser | null>(null);
   const [history, setHistory] = useState<RepairHistoryEntry[]>([]);
+  const [doctor, setDoctor] = useState<AccountDoctorState | null>(null);
   const [pendingRepair, setPendingRepair] = useState<RepairDefinition | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const [isSearching, startSearch] = useTransition();
+  const [isDiagnosing, startDiagnosis] = useTransition();
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -57,12 +61,28 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
     getRecentRepairsAction({ userId }).then((state) => setHistory(state.entries));
   }
 
+  function loadDoctor(userId: string) {
+    startDiagnosis(async () => {
+      const state = await diagnoseAccountAction({ userId });
+      setDoctor(state);
+    });
+  }
+
   function selectUser(user: RepairUser) {
     setSelected(user);
     setResults(null);
     setQuery("");
     setFeedback(null);
+    setDoctor(null);
     loadHistory(user.userId);
+    loadDoctor(user.userId);
+  }
+
+  function clearSelected() {
+    setSelected(null);
+    setHistory([]);
+    setDoctor(null);
+    setFeedback(null);
   }
 
   const groups = repairsByCategory()
@@ -71,8 +91,7 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
 
   return (
     <div className="space-y-6">
-      {/* Step 1: find an account */}
-      <AdminSection title="Find an account" description="Search by display name or username, then choose the account to repair.">
+      <AdminSection title="Find an account" description="Search by display name or username. Account Doctor will inspect safe lifecycle metadata as soon as you choose one.">
         {selected ? (
           <Card className="flex flex-wrap items-center justify-between gap-3 p-3.5">
             <div className="flex items-center gap-3">
@@ -82,7 +101,7 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
                 <p className="truncate text-xs text-muted-foreground">@{selected.username}</p>
               </div>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => { setSelected(null); setHistory([]); setFeedback(null); }}>
+            <Button type="button" variant="outline" size="sm" onClick={clearSelected}>
               Change account
             </Button>
           </Card>
@@ -114,7 +133,7 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
                   ))}
                 </ul>
               ) : (
-                <p className="px-1 text-xs text-muted-foreground">Search for the account you want to repair.</p>
+                <p className="px-1 text-xs text-muted-foreground">Search for the account you want to diagnose or repair.</p>
               )}
             </div>
           </>
@@ -133,7 +152,19 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
         </div>
       ) : null}
 
-      {/* Step 2: choose a repair */}
+      {selected ? (
+        <AccountDoctorPanel
+          state={doctor}
+          pending={isDiagnosing}
+          allowedRepairIds={allowedRepairIds}
+          onRefresh={() => loadDoctor(selected.userId)}
+          onRepair={(repairId) => {
+            const repair = getRepair(repairId);
+            if (repair && allowed.has(repair.id)) setPendingRepair(repair);
+          }}
+        />
+      ) : null}
+
       {selected ? (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
           <div className="space-y-5">
@@ -178,11 +209,99 @@ export function RepairCentre({ allowedRepairIds }: { allowedRepairIds: string[] 
         onDone={(result) => {
           setFeedback(result);
           setPendingRepair(null);
-          if (result.ok && selected) loadHistory(selected.userId);
+          if (result.ok && selected) {
+            loadHistory(selected.userId);
+            loadDoctor(selected.userId);
+          }
         }}
       />
     </div>
   );
+}
+
+function AccountDoctorPanel({
+  state,
+  pending,
+  allowedRepairIds,
+  onRefresh,
+  onRepair
+}: {
+  state: AccountDoctorState | null;
+  pending: boolean;
+  allowedRepairIds: string[];
+  onRefresh: () => void;
+  onRepair: (repairId: string) => void;
+}) {
+  const allowed = new Set(allowedRepairIds);
+
+  return (
+    <AdminSection
+      title="Account Doctor"
+      description="Checks lifecycle metadata only — never message bodies, exact location, private media, payment credentials, or Safe Arrival details."
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <span className="grid h-9 w-9 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+            <Stethoscope className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span>{pending ? "Checking account health…" : state?.message ?? "Run a health check for this account."}</span>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={pending}>
+          <RefreshCw className={cn("h-4 w-4", pending && "animate-spin")} aria-hidden="true" />
+          {state ? "Check again" : "Run check"}
+        </Button>
+      </div>
+
+      {state?.ok ? (
+        <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <AdminStatus label={`${state.summary.issue} issues`} tone={state.summary.issue > 0 ? "danger" : "success"} />
+            <AdminStatus label={`${state.summary.attention} attention`} tone={state.summary.attention > 0 ? "warning" : "default"} />
+            <AdminStatus label={`${state.summary.healthy} healthy`} tone="success" />
+            <AdminStatus label={`${state.summary.info} info`} />
+          </div>
+
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {state.findings.map((finding) => (
+              <Card key={finding.id} className="flex min-h-[116px] flex-col justify-between gap-3 p-3.5">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{finding.title}</p>
+                    <AdminStatus label={finding.area} />
+                    <AdminStatus label={doctorSeverityLabel(finding.severity)} tone={doctorTone(finding.severity)} />
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{finding.detail}</p>
+                </div>
+                {finding.repairId && allowed.has(finding.repairId) ? (
+                  <div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onRepair(finding.repairId!)}>
+                      <Wrench className="h-4 w-4" aria-hidden="true" /> Recommended repair
+                    </Button>
+                  </div>
+                ) : null}
+              </Card>
+            ))}
+          </div>
+        </>
+      ) : state && !state.ok ? (
+        <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-100" role="status">{state.message}</p>
+      ) : null}
+    </AdminSection>
+  );
+}
+
+function doctorTone(severity: AccountDoctorSeverity): "success" | "warning" | "danger" | "default" {
+  if (severity === "issue") return "danger";
+  if (severity === "attention") return "warning";
+  if (severity === "healthy") return "success";
+  return "default";
+}
+
+function doctorSeverityLabel(severity: AccountDoctorSeverity) {
+  if (severity === "issue") return "Issue";
+  if (severity === "attention") return "Needs attention";
+  if (severity === "healthy") return "Healthy";
+  return "Info";
 }
 
 function RepairHistory({ entries }: { entries: RepairHistoryEntry[] }) {
@@ -221,9 +340,6 @@ function RepairConfirmDialog({
 }) {
   const [reason, setReason] = useState("");
   const [pending, start] = useTransition();
-
-  // Low-risk repairs with no confirmation still route through here for a single
-  // consistent run path, but auto-run without a modal body when opened.
   const open = Boolean(repair && user);
 
   function run() {
@@ -235,14 +351,13 @@ function RepairConfirmDialog({
     });
   }
 
-  // Auto-run repairs that need neither confirmation nor a reason.
   useEffect(() => {
     if (open && repair && !repair.confirm && !repair.requiresReason) run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!repair || !user) return null;
-  if (!repair.confirm && !repair.requiresReason) return null; // handled by auto-run
+  if (!repair.confirm && !repair.requiresReason) return null;
 
   return (
     <Modal open={open} onOpenChange={(next) => { if (!next) { onClose(); setReason(""); } }} title={`${repair.label}?`} description={repair.effect}>
