@@ -59,6 +59,23 @@ describe("systemic health classification", () => {
     expect(isolated.severity).toBe("normal");
   });
 
+  it("does not classify a legacy-only backlog as recurrence regardless of count", () => {
+    const result = assessSystemicHealth(
+      signal({ affectedAccounts: 40, recurrenceAuthority: "legacy_only", engineeringEscalation: true })
+    );
+    expect(result.severity).toBe("normal");
+    expect(result.actionableAffectedAccounts).toBe(40);
+    expect(result.recurrenceEvidenceEligible).toBe(false);
+    expect(result.guidance).toContain("Legacy-only drift");
+    expect(result.guidance).toContain("audit the predicate/database invariant");
+  });
+
+  it("defaults ordinary predicates to recurring authority", () => {
+    const result = assessSystemicHealth(signal({ affectedAccounts: 3 }));
+    expect(result.recurrenceAuthority).toBe("recurring");
+    expect(result.recurrenceEvidenceEligible).toBe(true);
+  });
+
   it("caps impossible product-rule counts at the observed account count", () => {
     const result = assessSystemicHealth(signal({ affectedAccounts: 2, productRuleAccounts: 99 }));
     expect(result.productRuleAccounts).toBe(2);
@@ -71,12 +88,13 @@ describe("systemic health classification", () => {
     expect(result.productRuleAccounts).toBe(0);
   });
 
-  it("sorts systemic first, then watch, then isolated by broken-account count", () => {
+  it("sorts systemic first, then watch, then recurring isolated before legacy-only backlog", () => {
     const sorted = sortSystemicHealth([
+      signal({ id: "legacy", affectedAccounts: 40, recurrenceAuthority: "legacy_only" }),
       signal({ id: "normal", affectedAccounts: 20, productRuleAccounts: 19 }),
       signal({ id: "systemic", affectedAccounts: 22 }),
       signal({ id: "watch", affectedAccounts: 14, productRuleAccounts: 10 })
     ]);
-    expect(sorted.map((item) => item.id)).toEqual(["systemic", "watch", "normal"]);
+    expect(sorted.map((item) => item.id)).toEqual(["systemic", "watch", "normal", "legacy"]);
   });
 });
