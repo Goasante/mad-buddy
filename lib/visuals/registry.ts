@@ -25,14 +25,10 @@ import type { PlanCategory } from "@/lib/supabase/database.types";
  */
 
 /** Which family an asset belongs to. Mirrors the /public/visuals folders. */
-export type VisualFamily = "activity" | "safe_arrival" | "smart_card" | "home_card";
+export type VisualFamily = "activity" | "safe_arrival" | "home_card";
 
 /** What a piece of artwork is FOR, as opposed to what it depicts. */
-export type VisualRole =
-  | "plan_cover"
-  | "safe_arrival_state"
-  | "smart_card_backdrop"
-  | "home_card_background";
+export type VisualRole = "plan_cover" | "safe_arrival_state" | "home_card_background";
 
 export type VisualAsset = {
   /** Stable id, independent of the source filename. */
@@ -222,58 +218,24 @@ const SAFE_ARRIVAL_ART: Record<string, VisualAsset> = {
  * a shipped file with no consumer is an invitation to find it a job.
  */
 
-/**
- * Smart Card B neutral editorial fallback atlas.
+/* THE SMART CARD EDITORIAL ATLAS IS GONE.
  *
- * Six approved mixed social scenes are arranged in a 3x2 sprite: UpFor,
- * relationship request, birthday, Linkr/social connection, Plan/Event and
- * Safe Arrival/in-transit. The Smart Card renderer crops by PRODUCT FAMILY;
- * the illustrated people never claim to be a named Muddy or Linkr match.
- *
- * Names are not gender authority. Real viewer-authorized user/Event media wins
- * where available; any future gendered art selection requires explicit,
- * viewer-authorized presentation data rather than inference from a name.
- */
-const SMART_CARD_EDITORIAL_ATLAS: VisualAsset = {
-  id: "smart-card-editorial-atlas",
-  path: "/visuals/smart-card/editorial-atlas.webp",
-  family: "smart_card",
-  role: "smart_card_backdrop",
-  width: 1800,
-  height: 880,
-  depicts: "Six warm editorial illustrations of mixed social moments for neutral Smart Card backgrounds"
-};
+ * Six illustrated scenes in a 3x2 sprite, cropped by product family, with real
+ * user media preferred when a card had it. Both were background selection by
+ * STATE, which the fixed two-background direction replaces: Card B now wears
+ * one ground for every state it can render. Nothing consumed the atlas after
+ * that change, and a shipped file with no consumer is an invitation to find it
+ * a job -- so the entry and the file are removed together. */
 
-/**
- * HOME'S TWO FIXED CARD BACKGROUNDS.
- *
- * One image per card, for the life of the card. Card A always wears
- * `card-a-background.png`; Card B always wears `card-b-background.png`. They do
- * not rotate, do not swap, and are never chosen by state.
- *
- * WHY FIXED IS THE PRODUCT DECISION, and not a shortcut. A background that
- * changes with the card's state makes the same surface look like a different
- * one every time it updates, which is the opposite of what an adaptive card
- * needs: the person should notice the WORDS changed, not the wallpaper. Two
- * stable grounds give Home a constant identity, and let the foreground -- the
- * eyebrow, headline, subtitle, metadata and actions -- carry all the meaning.
- *
- * So the only thing that varies per state is the content layer and the scrim
- * strength needed to keep it legible. No animation, no motion, no scene art, no
- * photography, no per-state imagery.
- *
- * `depicts` is deliberately unverified prose here, unlike every other entry in
- * this file: these two files are supplied by the founder and this registry
- * records only their ROLE. Nothing infers meaning from their filenames.
- */
 const HOME_CARD_A_BACKGROUND: VisualAsset = {
   id: "home-card-a-background",
   path: "/visuals/home-cards/card-a-background.png",
   family: "home_card",
   role: "home_card_background",
-  width: 1200,
-  height: 800,
-  depicts: "Fixed Card A ground: activation and relationship authority"
+  width: 1672,
+  height: 941,
+  depicts:
+    "Warm Mediterranean terrace at golden hour: a deep maroon wall on the left, an archway onto a sunlit coast. No people."
 };
 
 const HOME_CARD_B_BACKGROUND: VisualAsset = {
@@ -281,9 +243,13 @@ const HOME_CARD_B_BACKGROUND: VisualAsset = {
   path: "/visuals/home-cards/card-b-background.png",
   family: "home_card",
   role: "home_card_background",
-  width: 1200,
-  height: 800,
-  depicts: "Fixed Card B ground: opportunity and obligation authority"
+  width: 1672,
+  height: 941,
+  /* Deliberately plain prose. The Safe Arrival guard scans `depicts` for
+     location vocabulary, so this describes the scene and lets the guard's own
+     assertion be the statement about what the artwork does not contain. */
+  depicts:
+    "Warm sunset valley at golden hour: a dark maroon ridge on the left, a lit river and distant peaks. No people."
 };
 
 // ---------------------------------------------------------------------------
@@ -354,28 +320,12 @@ export function homeCardBBackground(): VisualAsset {
   return HOME_CARD_B_BACKGROUND;
 }
 
-export function smartCardEditorialAtlas(): VisualAsset {
-  return SMART_CARD_EDITORIAL_ATLAS;
-}
-
 /** Every asset the runtime can reach. Used by tests to police the boundary. */
 export function allRegisteredAssets(): VisualAsset[] {
   return [
     ...Object.values(PLAN_ACTIVITY_ART).filter((a): a is VisualAsset => Boolean(a)),
     ...Object.values(SAFE_ARRIVAL_ART),
-    SMART_CARD_EDITORIAL_ATLAS,
-    /* HOME'S TWO FIXED GROUNDS ARE DECLARED ABOVE BUT NOT LISTED HERE YET.
-     *
-     * `allRegisteredAssets` is the manifest this repo checks BOTH ways: every
-     * registered asset must exist on disk, and every shipped file must be
-     * registered. The two PNGs have not been supplied yet, so listing them now
-     * would make that check fail and leave the tree red for a reason that is
-     * not a defect.
-     *
-     * The resolvers, the renderers and the tests are all wired and waiting.
-     * Dropping the two files into public/visuals/home-cards/ and adding
-     * HOME_CARD_A_BACKGROUND and HOME_CARD_B_BACKGROUND to this array is the
-     * whole activation -- one line, and the manifest check starts enforcing
-     * them like every other asset. */
+    HOME_CARD_A_BACKGROUND,
+    HOME_CARD_B_BACKGROUND
   ];
 }

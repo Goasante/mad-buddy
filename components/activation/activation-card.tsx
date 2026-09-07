@@ -459,7 +459,13 @@ export function ActivationCard({
           a section, not an icon trio -- the promise is short enough to simply
           say. */}
       {copy.privacyNote ? (
-        <p className="relative mt-2.5 text-xs leading-snug text-muted-foreground/80">
+        /* WHITE, NOT A MUTED TOKEN. `text-muted-foreground/80` is calibrated
+           for a plain card surface; over the fixed artwork it dropped to near
+           invisibility exactly where the promise about location privacy is
+           made -- the one line on this card that must be readable. Screenshot
+           review caught it; the DOM assertions could not. `z-[1]` lifts it
+           above the scrim like the rest of the content layer. */
+        <p className="relative z-[1] mt-2.5 text-xs leading-snug text-white/75">
           {copy.privacyNote}
         </p>
       ) : null}
