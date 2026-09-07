@@ -5,15 +5,20 @@
  * permission + confirmation + audit) and the UI (which renders the catalog and
  * mirrors the confirm/reason requirements). The actual mutations live in the
  * server action; nothing here touches the database. Every repair is narrowly
- * scoped to a single user and a single safe table, reusing existing schema — no
- * migration and no destructive account-data loss.
+ * scoped to a single user and a safe lifecycle invariant; destructive account
+ * data (profiles, auth, subscriptions, messages) is never deleted here.
  */
 
 import type { AdminPermission } from "@/lib/admin/governance";
 
 export type RepairRisk = "low" | "medium" | "high";
 
-export type RepairCategory = "Visibility & presence" | "Notifications" | "Access & limits" | "Onboarding";
+export type RepairCategory =
+  | "Messaging & coordination"
+  | "Visibility & presence"
+  | "Notifications"
+  | "Access & limits"
+  | "Onboarding";
 
 export type RepairDefinition = {
   id: string;
@@ -32,6 +37,28 @@ export type RepairDefinition = {
 };
 
 export const REPAIR_CATALOG: readonly RepairDefinition[] = [
+  {
+    id: "reconcile_direct_messaging",
+    label: "Repair direct messaging",
+    description: "Reopens only archived direct chats whose users are currently Muddies and not blocked, and restores their direct-chat membership.",
+    effect: "Eligible existing direct conversations become usable again. No friendship or new conversation is created, and any live block still wins.",
+    category: "Messaging & coordination",
+    risk: "medium",
+    permission: "admin.support.manage",
+    requiresReason: true,
+    confirm: true
+  },
+  {
+    id: "reconcile_plan_chats",
+    label: "Reconcile Plan Chats",
+    description: "Runs the canonical Plan Chat membership reconciler for this user's active Going/Maybe Plans.",
+    effect: "Plan Chat membership is rebuilt from the Plan lifecycle authority. It does not add arbitrary people or create direct-message permission.",
+    category: "Messaging & coordination",
+    risk: "medium",
+    permission: "admin.support.manage",
+    requiresReason: true,
+    confirm: true
+  },
   {
     id: "pause_visibility",
     label: "Pause visibility (Ghost Mode)",
@@ -124,6 +151,7 @@ export function repairRiskTone(risk: RepairRisk): "default" | "warning" | "dange
 }
 
 export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
+  "Messaging & coordination",
   "Visibility & presence",
   "Notifications",
   "Access & limits",
