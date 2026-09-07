@@ -296,7 +296,8 @@ describe("deterministic conflicts", () => {
           }
         ],
         ownedScheduled: [],
-        joined: []
+        joined: [],
+        opportunities: []
       }
     });
     expect(card?.id).toBe("upfor_requests");
