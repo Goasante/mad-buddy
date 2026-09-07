@@ -267,7 +267,21 @@ export function explainPrivacyOperation(operation: PrivacyOperationView): Repair
   );
 }
 
-/** Verifier for retrying a stalled export. Claims the retry, nothing else. */
+/**
+ * Verifier for retrying a stalled export. Claims the retry, nothing else.
+ *
+ * NOT CURRENTLY WIRED TO A REPAIR, deliberately. `privacy_requests` has no job
+ * runner: the only code that touches it is an admin action where a HUMAN moves
+ * the status by hand. A "retry export" button would therefore flip a status
+ * with nothing to act on it and report success -- the exact
+ * mutation-succeeded-so-it-must-be-fixed lie the verification contract exists
+ * to prevent.
+ *
+ * So stalled exports stay DIAGNOSTIC-ONLY: Admin surfaces them and the
+ * operator progresses the request through the existing privacy console. This
+ * verifier is kept ready for the day a queue exists, and the day it does, the
+ * repair is a few lines.
+ */
 export function verifyExportRetry(input: { attempted: number; stillFailed: number }): RepairVerification {
   const invariant = "no data export is left failed or past its turnaround";
 

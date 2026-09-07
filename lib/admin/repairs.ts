@@ -15,6 +15,8 @@ export type RepairRisk = "low" | "medium" | "high";
 
 export type RepairCategory =
   | "Messaging & coordination"
+  | "Plans & UpFor"
+  | "Safety"
   | "Visibility & presence"
   | "Notifications"
   | "Access & limits"
@@ -55,6 +57,34 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
     effect: "Plan Chat membership is rebuilt from the Plan lifecycle authority. It does not add arbitrary people or create direct-message permission.",
     category: "Messaging & coordination",
     risk: "medium",
+    permission: "admin.support.manage",
+    requiresReason: true,
+    confirm: true
+  },
+  {
+    id: "settle_stranded_upfor_requests",
+    label: "Settle requests on a closed UpFor",
+    description:
+      "Declines requests still pending on the account's own UpFors that have expired, been cancelled or already become a Plan.",
+    effect:
+      "People waiting on a session that is over stop waiting. Nobody is added to anything, and no live UpFor is touched.",
+    category: "Plans & UpFor",
+    risk: "low",
+    permission: "admin.support.manage",
+    requiresReason: false,
+    confirm: true
+  },
+  {
+    id: "close_stalled_safe_arrival",
+    label: "Close a finished journey",
+    description:
+      "Expires Safe Arrival journeys that are past both the expected arrival and the grace period but still marked live.",
+    /* The effect line carries the limit deliberately: an operator reading it
+       out must not be able to imply Mad Buddy knows the person is safe. */
+    effect:
+      "The record stops showing as in progress. This corrects the record only — it says nothing about whether the person arrived, and journeys that ended UNCONFIRMED are never touched.",
+    category: "Safety",
+    risk: "high",
     permission: "admin.support.manage",
     requiresReason: true,
     confirm: true
@@ -151,7 +181,9 @@ export function repairRiskTone(risk: RepairRisk): "default" | "warning" | "dange
 }
 
 export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
+  "Safety",
   "Messaging & coordination",
+  "Plans & UpFor",
   "Visibility & presence",
   "Notifications",
   "Access & limits",

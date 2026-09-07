@@ -143,6 +143,14 @@ export async function runAccountRepairAction(input: unknown): Promise<RepairActi
     revalidatePath("/messages");
     revalidatePath("/dashboard");
   }
+  if (repair.id === "settle_stranded_upfor_requests") {
+    revalidatePath("/upfor");
+    revalidatePath("/dashboard");
+  }
+  if (repair.id === "close_stalled_safe_arrival") {
+    revalidatePath("/safe-arrival");
+    revalidatePath("/dashboard");
+  }
   // The verification travels with the result: dropping it here would hand the
   // operator a bare "success" for a repair that may have changed nothing.
   return { ok: true, message: result.message, verification: result.verification };
@@ -159,6 +167,10 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
       return reconcileDirectMessaging(admin, userId);
     case "reconcile_plan_chats":
       return reconcilePlanChats(admin, userId);
+    case "settle_stranded_upfor_requests":
+      return settleStrandedUpForRequests(admin, userId);
+    case "close_stalled_safe_arrival":
+      return closeStalledSafeArrival(admin, userId);
     case "pause_visibility": {
       const { error } = await admin.from("profiles").update({ visibility_status: "ghost" }).eq("user_id", userId);
       return error ? fail("pause visibility") : { ok: true, message: "Visibility paused (Ghost Mode)." };
@@ -484,6 +496,147 @@ async function reconcilePlanChats(admin: Admin, userId: string): Promise<RepairA
       conversationIds.length === 0
         ? "No Plan Chats exist for these Plans yet, and the account's participation is consistent."
         : `The account is a joined member of all ${conversationIds.length} active Plan Chat${conversationIds.length === 1 ? "" : "s"}.`
+    )
+  };
+}
+
+/**
+ * Declines requests left pending on the account's OWN closed UpFors.
+ *
+ * Scoped to sessions this user owns, so it can only ever end a wait the user
+ * themselves created. It adds nobody to anything: a declined request grants no
+ * membership, and a live session is never touched.
+ */
+async function settleStrandedUpForRequests(admin: Admin, userId: string): Promise<RepairActionState> {
+  const { data: closedSessions, error: sessionError } = await admin
+    .from("hangout_sessions")
+    .select("id")
+    .eq("owner_id", userId)
+    .in("status", ["expired", "cancelled", "converted_to_plan"]);
+  if (sessionError) return fail("inspect this account's UpFor sessions");
+
+  const sessionIds = (closedSessions ?? []).map((row) => row.id);
+  const invariant = "no request is left pending on a closed UpFor";
+  if (sessionIds.length === 0) {
+    return {
+      ok: true,
+      message: "No closed UpFors on this account.",
+      verification: notApplicable(invariant, "This account owns no closed UpFor sessions.")
+    };
+  }
+
+  const { data: settled, error: settleError } = await admin
+    .from("hangout_requests")
+    .update({ status: "declined" })
+    .eq("status", "pending")
+    .in("hangout_session_id", sessionIds)
+    .select("id");
+  if (settleError) return fail("settle the stranded requests");
+
+  const attempted = (settled ?? []).length;
+
+  // THE INVARIANT, RE-READ.
+  const { data: remaining } = await admin
+    .from("hangout_requests")
+    .select("id")
+    .eq("status", "pending")
+    .in("hangout_session_id", sessionIds);
+
+  const message = `Stranded requests settled (${attempted}).`;
+  if (attempted === 0) {
+    return {
+      ok: true,
+      message: "No requests were stranded on closed UpFors.",
+      verification: notApplicable(invariant, "Nobody was left waiting on a closed UpFor.")
+    };
+  }
+  if ((remaining ?? []).length > 0) {
+    return {
+      ok: true,
+      message,
+      verification: stillBroken(
+        invariant,
+        `${(remaining ?? []).length} request${(remaining ?? []).length === 1 ? " is" : "s are"} still pending on a closed UpFor.`
+      )
+    };
+  }
+  return {
+    ok: true,
+    message,
+    verification: fixed(
+      invariant,
+      `${attempted} stranded request${attempted === 1 ? "" : "s"} settled. Nobody was added to anything — the requests were closed, not granted.`
+    )
+  };
+}
+
+/**
+ * Expires journeys that are past both the arrival time and the grace period.
+ *
+ * `unconfirmed` IS EXCLUDED, and that exclusion is the whole safety argument
+ * of this repair. That status means the traveller did not confirm arrival and
+ * their watchers were told; closing it would erase a signal somebody may still
+ * be acting on. The status filter below is the enforcement, not a comment.
+ */
+async function closeStalledSafeArrival(admin: Admin, userId: string): Promise<RepairActionState> {
+  const invariant = "no Safe Arrival session is marked live past its grace period";
+
+  const { data: sessions, error } = await admin
+    .from("safe_arrival_sessions")
+    .select("id, status, expected_arrival_at, grace_period_minutes")
+    .eq("traveller_id", userId)
+    .in("status", ["active", "grace_period", "extended"]);
+  if (error) return fail("inspect this account's journeys");
+
+  const now = Date.now();
+  const stalledIds = (sessions ?? [])
+    .filter(
+      (row) =>
+        Boolean(row.expected_arrival_at) &&
+        Date.parse(row.expected_arrival_at!) + (row.grace_period_minutes ?? 0) * 60_000 <= now
+    )
+    .map((row) => row.id);
+
+  if (stalledIds.length === 0) {
+    return {
+      ok: true,
+      message: "No journeys are stalled past their grace period.",
+      verification: notApplicable(invariant, "This account has no journeys stalled past their grace period.")
+    };
+  }
+
+  const { error: updateError } = await admin
+    .from("safe_arrival_sessions")
+    .update({ status: "expired", expired_at: new Date().toISOString() })
+    .in("id", stalledIds)
+    /* Restated on the write itself. If a session transitioned to `unconfirmed`
+       between the read above and this update, it must not be caught here. */
+    .in("status", ["active", "grace_period", "extended"]);
+  if (updateError) return fail("close the finished journeys");
+
+  const { data: stillLive } = await admin
+    .from("safe_arrival_sessions")
+    .select("id")
+    .in("id", stalledIds)
+    .in("status", ["active", "grace_period", "extended"]);
+
+  const message = `Finished journeys closed (${stalledIds.length}).`;
+  if ((stillLive ?? []).length > 0) {
+    return {
+      ok: true,
+      message,
+      verification: stillBroken(
+        invariant,
+        `${(stillLive ?? []).length} journey${(stillLive ?? []).length === 1 ? " is" : "s are"} still marked live after the repair.`
+      )
+    };
+  }
+  return {
+    ok: true,
+    message,
+    verification: fixed(
+      invariant,
+      `${stalledIds.length} finished journey${stalledIds.length === 1 ? "" : "s"} closed. This corrects the record only — it says nothing about whether the person arrived safely, and no watcher alert was withdrawn.`
     )
   };
 }

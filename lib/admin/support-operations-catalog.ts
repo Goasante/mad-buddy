@@ -160,7 +160,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "UpFor",
     description: "Session expiry, requests, capacity, discovery and conversion state.",
     diagnostic: "live",
-    repair: "planned",
+    repair: "live",
     verification: "live",
     issues: [
       "Expired UpFor is still active",
@@ -251,7 +251,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "Safe Arrival",
     description: "Journey lifecycle, recipient state and notification reconciliation without location exposure.",
     diagnostic: "live",
-    repair: "planned",
+    repair: "live",
     verification: "live",
     issues: [
       "Journey is stuck",
