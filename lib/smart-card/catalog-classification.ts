@@ -75,7 +75,11 @@ export const SMART_CARD_STATE_OWNERSHIP: Record<string, SmartCardClassification>
 
   // ---- Tier 2: something is happening now --------------------------------
   plan_starting: { ownership: "CARD_B_WIRED", reason: "Wired from the Home agenda." },
-  upfor_active_muddy: { ownership: "CARD_B_WIRED", reason: "Wired from the Home UpFor context." },
+  upfor_active_muddy: { ownership: "CARD_B_WIRED", reason: "The viewer asked to join and is waiting; wired from the Home UpFor context." },
+  upfor_opportunity: {
+    ownership: "CARD_B_WIRED",
+    reason: "A Muddy's live UpFor the viewer has not acted on -- the discovery half of the lifecycle, wired from a bounded Muddies-only projection."
+  },
   upfor_momentum: { ownership: "CARD_B_WIRED", reason: "Wired from the Home UpFor context." },
   upfor_accepted: { ownership: "CARD_B_WIRED", reason: "Wired from the Home UpFor context." },
   owned_upfor_starting: { ownership: "CARD_B_WIRED", reason: "Wired from the Home UpFor context." },

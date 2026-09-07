@@ -57,7 +57,8 @@ export const SMART_CARD_APPROVED_STATES = [
   { id: "notification_action_bundle", tier: 1, family: "notifications", purpose: "Several related actionable items need attention." },
 
   { id: "plan_starting", tier: 2, family: "plans", purpose: "A confirmed Plan is starting soon." },
-  { id: "upfor_active_muddy", tier: 2, family: "upfor", purpose: "A relevant Muddy is UpFor something now." },
+  { id: "upfor_active_muddy", tier: 2, family: "upfor", purpose: "A Muddy the viewer asked to join is UpFor something now." },
+  { id: "upfor_opportunity", tier: 2, family: "upfor", purpose: "A Muddy is UpFor something the viewer has not acted on yet." },
   { id: "upfor_momentum", tier: 2, family: "upfor", purpose: "An UpFor is gathering meaningful interest." },
   { id: "upfor_accepted", tier: 2, family: "upfor", purpose: "The viewer's UpFor request was accepted." },
   { id: "owned_upfor_starting", tier: 2, family: "upfor", purpose: "The viewer's scheduled UpFor is starting soon." },

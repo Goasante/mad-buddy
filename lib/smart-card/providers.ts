@@ -610,6 +610,44 @@ function upForRequestsProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
+/**
+ * Tier 2: a Muddy is UpFor something the viewer has NOT acted on yet.
+ *
+ * THE DISCOVERY HALF OF THE LIFECYCLE, which Home was missing. The catalog has
+ * always described `upfor_active_muddy` as "a relevant Muddy is UpFor something
+ * now", but the wiring only ever looked at sessions the viewer had ALREADY
+ * requested to join -- so the moment the state exists for never reached Home,
+ * and a real phone found it: somebody else put out an UpFor and Home said
+ * nothing.
+ *
+ * Grounded, never a recommendation: this is an actual live session belonging to
+ * an actual Muddy, already filtered by the reader for audience, block and
+ * lifecycle. No scoring, no ranking model, no proximity claim.
+ *
+ * It ranks BELOW the states about UpFors the viewer is already in, because
+ * something you have committed to outranks something you might join.
+ */
+function upForOpportunityProvider(input: SmartCardInput): SmartCard | null {
+  const opportunities = input.upFor?.opportunities ?? [];
+  if (opportunities.length === 0) return null;
+  const first = opportunities[0];
+
+  return {
+    id: "upfor_opportunity",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "HAPPENING NOW",
+    title: first.ownerName + " is UpFor " + first.activityLabel.toLowerCase(),
+    subtitle:
+      opportunities.length > 1
+        ? opportunities.length + " of your Muddies are UpFor something right now."
+        : "They put it out just now. You can ask to join.",
+    cta: "See UpFor",
+    destination: upForSessionDestination(first.id),
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+  };
+}
+
 /** Tier 2: the viewer asked to join a Muddy's live UpFor and is waiting. */
 function upForActiveMuddyProvider(input: SmartCardInput): SmartCard | null {
   const joined = input.upFor?.joined ?? [];
@@ -662,7 +700,19 @@ function upForMomentumProvider(input: SmartCardInput): SmartCard | null {
 
 /** Tier 2: somebody said yes to the viewer. */
 function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
-  const accepted = (input.upFor?.joined ?? []).filter((session) => session.myStatus === "accepted");
+  /* THE JOB, NOT THE STATE.
+   *
+   * `myStatus === "accepted"` stays true for the whole life of the UpFor, so
+   * selecting on it alone made Home repeat "Message Kofi" forever -- including
+   * to somebody who had just messaged Kofi. A real phone found that.
+   *
+   * The recommendation this state creates is "coordinate about THIS
+   * acceptance", and that job is finished once the viewer has actually written
+   * to the owner since they said yes. Sessions carrying that evidence drop out
+   * here, which frees Home to show the next genuinely useful thing. */
+  const accepted = (input.upFor?.joined ?? []).filter(
+    (session) => session.myStatus === "accepted" && !session.coordinatedSinceAccepted
+  );
   if (accepted.length === 0) return null;
   const first = accepted[0];
 
@@ -1070,6 +1120,7 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "plan_chat_decision", build: () => planChatDecisionProvider(input) },
     { id: "event_linkr_ready", build: () => eventLinkrReadyProvider(input) },
     { id: "upfor_active_muddy", build: () => upForActiveMuddyProvider(input) },
+    { id: "upfor_opportunity", build: () => upForOpportunityProvider(input) },
     { id: "upfor_momentum", build: () => upForMomentumProvider(input) },
     { id: "upfor_accepted", build: () => upForAcceptedProvider(input) },
     { id: "owned_upfor_starting", build: () => ownedUpForStartingProvider(input) },
