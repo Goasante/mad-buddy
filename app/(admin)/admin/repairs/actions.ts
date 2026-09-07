@@ -182,6 +182,23 @@ async function executeRepair(admin: Admin, repairId: string, userId: string): Pr
  *
  * It never creates a friendship or a conversation. Only an already-archived
  * direct conversation for a CURRENT, UNBLOCKED friendship can be reopened.
+ *
+ * NOW A BACKSTOP, NOT THE PRIMARY AUTHORITY (migration 20260907140000).
+ *
+ * The database reopens this itself: `reopen_direct_conversation_on_friendship`
+ * fires when a friendship goes live, and `reopen_direct_conversation_on_unblock`
+ * fires when the LAST block is lifted, so whichever of the two events happens
+ * second performs the restoration. No current code path can produce the drift
+ * this repair targets.
+ *
+ * It is deliberately KEPT for rows that drifted BEFORE that migration shipped
+ * (2026-09-07) -- those are real and the trigger is not retroactive. The rule
+ * it applies is deliberately identical to the trigger's: live friendship, no
+ * block in EITHER direction, only an `archived` direct conversation touched,
+ * nothing created. If the two ever disagree the database wins and this should
+ * be deleted, not "fixed" -- one lifecycle, one authority.
+ *
+ * Held by lib/admin/account-doctor-lifecycle.local.test.ts.
  */
 async function reconcileDirectMessaging(admin: Admin, userId: string): Promise<RepairActionState> {
   const [{ data: friendships, error: friendshipError }, { data: blocks, error: blockError }, { data: memberships, error: membershipError }] =
