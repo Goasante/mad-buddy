@@ -119,9 +119,15 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   },
   {
     id: "clear_push_subscriptions",
-    label: "Reset push devices",
-    description: "Removes stored push devices so the account can re-register for push.",
-    effect: "Push stops until the account re-enables notifications on a device.",
+    label: "Reset web push registrations",
+    /* Scoped in the NAME. `push_subscriptions` is web push only; native
+       delivery uses `device_push_tokens`, which this does not touch. A label
+       saying "push devices" promised both and delivered one, so an operator
+       would have reported a native-push problem as fixed. */
+    description:
+      "Removes stored WEB push registrations so the browser can re-register. Native app device tokens are not affected.",
+    effect:
+      "Web push stops until the account re-enables notifications in a browser. Push to the mobile app is unchanged.",
     category: "Notifications",
     risk: "medium",
     permission: "admin.support.manage",
@@ -130,11 +136,17 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   },
   {
     id: "clear_rate_limits",
-    label: "Clear rate-limit lockout",
-    description: "Clears this account's rate-limit counters so it isn't stuck throttled.",
-    effect: "Throttled actions become available again immediately.",
+    label: "Clear ALL active rate limits",
+    /* Named for what it actually does. `rate_limits` has no unique constraint
+       on (user_id, action), so one account can hold several live windows for
+       unrelated actions; clearing them is a broad operation, not a targeted
+       one, and the label must not imply otherwise. */
+    description:
+      "Clears EVERY active rate-limit window on this account, not just the one the user reported. Expired counters are left alone.",
+    effect:
+      "All currently throttled actions become available again, including any the user did not mention. Use it when the account is genuinely stuck, not to speed up one action.",
     category: "Access & limits",
-    risk: "medium",
+    risk: "high",
     permission: "admin.support.manage",
     requiresReason: true,
     confirm: true

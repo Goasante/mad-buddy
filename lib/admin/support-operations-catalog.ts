@@ -1,4 +1,17 @@
-export type SupportCoverageState = "live" | "partial" | "planned";
+/**
+ * What Admin can actually do in an area today.
+ *
+ * `live` means REACHABLE THROUGH THE REPAIR CENTRE NOW -- not "a module
+ * exists". An earlier version of this map graded itself on whether code had
+ * been written, which made it claim capability an operator could not use.
+ *
+ * `by_design` is not a weaker `planned`. It means there will never be a repair
+ * here and that is the correct answer: age is a legal gate, a spent DOB
+ * correction is an intentional lock, and an account deletion cannot be proven
+ * complete-or-undone from a support console. Grading those as `planned` implies
+ * a capability that is coming, which is its own kind of lie.
+ */
+export type SupportCoverageState = "live" | "partial" | "planned" | "by_design";
 
 export type SupportOperationsArea = {
   id: string;
@@ -24,9 +37,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "account-auth",
     label: "Account & auth",
     description: "Login, verification, recovery, session and account/profile linkage health.",
-    diagnostic: "planned",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "partial",
     issues: [
       "Login or recovery appears stuck",
       "Verification state is inconsistent",
@@ -39,8 +52,8 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "onboarding-activation",
     label: "Onboarding & activation",
     description: "Setup completion, activation milestones and first-value progression.",
-    diagnostic: "partial",
-    repair: "partial",
+    diagnostic: "live",
+    repair: "live",
     verification: "partial",
     issues: [
       "Onboarding keeps returning",
@@ -54,9 +67,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "profile-media",
     label: "Profile & media",
     description: "Profile projection, avatar/showcase uploads and completion state.",
-    diagnostic: "planned",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "partial",
     issues: [
       "Profile save appears stuck",
       "Old avatar/showcase media remains",
@@ -69,9 +82,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "dob-age",
     label: "DOB & age gate",
     description: "Age-gate and governed correction-state diagnosis.",
-    diagnostic: "planned",
-    repair: "planned",
-    verification: "planned",
+    diagnostic: "live",
+    repair: "by_design",
+    verification: "by_design",
     issues: [
       "DOB correction entitlement appears stuck",
       "18+ gate and stored account state disagree",
@@ -85,7 +98,7 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     description: "Friend requests, active Muddy relationships and lifecycle projection.",
     diagnostic: "partial",
     repair: "planned",
-    verification: "planned",
+    verification: "partial",
     issues: [
       "Friend request is stuck pending",
       "Accepted request is not reflected as a Muddy",
@@ -99,8 +112,8 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "Blocks & re-friend",
     description: "Block precedence, unblock state and legitimate friendship restoration.",
     diagnostic: "partial",
-    repair: "partial",
-    verification: "partial",
+    repair: "live",
+    verification: "live",
     issues: [
       "Unblocked account still behaves blocked",
       "Blocked user leaks into another surface",
@@ -144,9 +157,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "plans",
     label: "Plans",
     description: "RSVP, participant, status and UpFor-conversion lifecycle health.",
-    diagnostic: "live",
-    repair: "partial",
-    verification: "live",
+    diagnostic: "partial",
+    repair: "planned",
+    verification: "partial",
     issues: [
       "RSVP state is wrong or stuck",
       "Participant state and chat membership disagree",
@@ -175,9 +188,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "linkr",
     label: "Linkr",
     description: "Choice, mutuality, discovery eligibility and Profile-owned media projection.",
-    diagnostic: "planned",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "partial",
     issues: [
       "Mutual connection does not appear",
       "Old card returns after a choice",
@@ -205,9 +218,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "notifications",
     label: "Notifications",
     description: "Unread projection, duplicate/stale notification state and safe replay readiness.",
-    diagnostic: "partial",
-    repair: "partial",
-    verification: "planned",
+    diagnostic: "live",
+    repair: "live",
+    verification: "partial",
     issues: [
       "Unread badge is stuck",
       "Notification appears duplicated",
@@ -220,9 +233,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "push",
     label: "Push devices",
     description: "Device registration, stale subscriptions and multi-device delivery health.",
-    diagnostic: "partial",
+    diagnostic: "live",
     repair: "live",
-    verification: "planned",
+    verification: "partial",
     issues: [
       "Push suddenly stopped",
       "Stale device registrations remain",
@@ -235,9 +248,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "events",
     label: "Events",
     description: "RSVP, attendee, check-in and Event conversation lifecycle.",
-    diagnostic: "live",
+    diagnostic: "partial",
     repair: "planned",
-    verification: "live",
+    verification: "partial",
     issues: [
       "Event RSVP/attendee state is wrong",
       "Check-in cannot advance",
@@ -251,8 +264,8 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     label: "Safe Arrival",
     description: "Journey lifecycle, recipient state and notification reconciliation without location exposure.",
     diagnostic: "live",
-    repair: "live",
-    verification: "live",
+    repair: "by_design",
+    verification: "partial",
     issues: [
       "Journey is stuck",
       "Grace/expired state did not advance",
@@ -265,9 +278,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "access-billing",
     label: "Access & billing",
     description: "Payment, entitlement, Access projection and safe webhook reconciliation.",
-    diagnostic: "live",
-    repair: "partial",
-    verification: "live",
+    diagnostic: "planned",
+    repair: "planned",
+    verification: "planned",
     issues: [
       "Payment succeeded but Access is missing",
       "Entitlement/expiry projection is stale",
@@ -280,9 +293,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "features-tours",
     label: "Features, experiments & tours",
     description: "Resolved feature controls, assignment state and product education replay.",
-    diagnostic: "partial",
-    repair: "partial",
-    verification: "planned",
+    diagnostic: "live",
+    repair: "live",
+    verification: "partial",
     issues: [
       "Feature appears missing for one account",
       "Experiment assignment looks stale",
@@ -295,9 +308,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "journey",
     label: "Journey & achievements",
     description: "Progression and achievement projection rebuilt from canonical events.",
-    diagnostic: "planned",
+    diagnostic: "live",
     repair: "planned",
-    verification: "planned",
+    verification: "partial",
     issues: [
       "Progression is stale",
       "Achievement is missing despite canonical evidence",
@@ -309,9 +322,9 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
     id: "privacy-account-ops",
     label: "Privacy & account operations",
     description: "Export, deletion, moderation/restriction and governed account jobs.",
-    diagnostic: "live",
-    repair: "planned",
-    verification: "live",
+    diagnostic: "planned",
+    repair: "by_design",
+    verification: "by_design",
     issues: [
       "Export request is stuck",
       "Deletion workflow is stuck",
@@ -328,7 +341,10 @@ export function supportCoverageCounts() {
     diagnosticLive: 0,
     repairLive: 0,
     fullyLive: 0,
-    planned: 0
+    planned: 0,
+    /* Counted apart from `planned` so the map cannot imply that a deliberate
+       no-repair decision is outstanding work. */
+    repairFreeByDesign: 0
   };
 
   for (const area of SUPPORT_OPERATIONS_AREAS) {
@@ -336,6 +352,7 @@ export function supportCoverageCounts() {
     if (area.repair === "live") counts.repairLive += 1;
     if (area.diagnostic === "live" && area.repair === "live" && area.verification === "live") counts.fullyLive += 1;
     if (area.diagnostic === "planned" && area.repair === "planned" && area.verification === "planned") counts.planned += 1;
+    if (area.repair === "by_design") counts.repairFreeByDesign += 1;
   }
 
   return counts;

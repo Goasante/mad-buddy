@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { REPAIR_CATALOG } from "@/lib/admin/repairs";
 import { SUPPORT_OPERATIONS_AREAS, supportCoverageCounts } from "@/lib/admin/support-operations-catalog";
 
 describe("support operations coverage catalog", () => {
@@ -50,7 +51,10 @@ describe("support operations coverage catalog", () => {
     for (const id of ["dob-age", "privacy-account-ops"]) {
       const area = SUPPORT_OPERATIONS_AREAS.find((item) => item.id === id);
       expect(area).toBeDefined();
-      expect(area?.repair).toBe("planned");
+      /* `by_design`, not `planned`: these are settled decisions, not a backlog.
+         The stricter assertion lives in "repair-free-by-design areas are marked
+         by_design, never planned" below. */
+      expect(area?.repair).toBe("by_design");
     }
   });
 
@@ -79,5 +83,55 @@ describe("support operations coverage catalog", () => {
        number that has to be edited every time an area is completed. */
     expect(counts.fullyLive).toBeGreaterThan(0);
     expect(counts.fullyLive).toBeLessThanOrEqual(counts.areas);
+  });
+});
+
+describe("the coverage map cannot overclaim capability", () => {
+  it("every area claiming a live repair maps to a real executable repair", () => {
+    /* The map graded itself on whether a module had been WRITTEN, which made
+       it advertise capability an operator could not reach. "Live" now has to
+       mean there is a repair in the executable catalog behind it. */
+    const AREA_TO_REPAIRS: Record<string, readonly string[]> = {
+      "onboarding-activation": ["reset_onboarding"],
+      "blocks-refriend": ["reconcile_direct_messaging"],
+      "direct-messaging": ["reconcile_direct_messaging"],
+      "plan-chat": ["reconcile_plan_chats"],
+      upfor: ["settle_stranded_upfor_requests"],
+      presence: ["pause_visibility", "reset_glow_signal", "clear_stuck_status"],
+      notifications: ["clear_notification_badge"],
+      push: ["clear_push_subscriptions"],
+      "features-tours": ["clear_rate_limits"]
+    };
+    const catalogIds = new Set(REPAIR_CATALOG.map((repair) => repair.id));
+
+    for (const area of SUPPORT_OPERATIONS_AREAS) {
+      if (area.repair !== "live") continue;
+      const backing = AREA_TO_REPAIRS[area.id];
+      expect(backing, `${area.id} claims a live repair with nothing behind it`).toBeDefined();
+      for (const repairId of backing ?? []) {
+        expect(catalogIds.has(repairId), `${area.id} -> ${repairId} is not in the catalog`).toBe(true);
+      }
+    }
+  });
+
+  it("no area claims a live repair without at least a partial verification", () => {
+    for (const area of SUPPORT_OPERATIONS_AREAS) {
+      if (area.repair === "live") expect(area.verification).not.toBe("planned");
+    }
+  });
+
+  it("repair-free-by-design areas are marked by_design, never planned", () => {
+    /* `planned` implies work that is coming. For these three it never is: age
+       is a legal gate, a deletion cannot be proven complete-or-undone from a
+       console, and an overdue journey belongs to the canonical safety sweep. */
+    for (const id of ["dob-age", "privacy-account-ops", "safe-arrival"]) {
+      const area = SUPPORT_OPERATIONS_AREAS.find((item) => item.id === id);
+      expect(area?.repair, `${id} must be by_design`).toBe("by_design");
+    }
+  });
+
+  it("Safe Arrival has no executable repair at all", () => {
+    expect(REPAIR_CATALOG.find((repair) => repair.id === "close_stalled_safe_arrival")).toBeUndefined();
+    expect(REPAIR_CATALOG.some((repair) => /safe_arrival|journey/i.test(repair.id))).toBe(false);
   });
 });

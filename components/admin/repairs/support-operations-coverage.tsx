@@ -126,6 +126,12 @@ function CoverageCard({ area }: { area: SupportOperationsArea }) {
 }
 
 function CoverageStatus({ label, state }: { label: string; state: SupportCoverageState }) {
+  /* `by_design` reads as a deliberate answer rather than missing work: an
+     operator scanning this map must not see "no repair here" and conclude
+     somebody forgot to build one. */
+  if (state === "by_design") {
+    return <AdminStatus label={`${label}: none by design`} tone="default" />;
+  }
   const tone = state === "live" ? "success" : state === "partial" ? "warning" : "default";
   return <AdminStatus label={`${label}: ${state}`} tone={tone} />;
 }
