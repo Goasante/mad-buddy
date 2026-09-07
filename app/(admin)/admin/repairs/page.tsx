@@ -6,7 +6,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { allowedRepairs } from "@/lib/admin/repairs";
 
-export default async function RepairsPage() {
+type RepairsPageProps = {
+  searchParams: Promise<{ q?: string }>;
+};
+
+export default async function RepairsPage({ searchParams }: RepairsPageProps) {
   const admin = createSupabaseAdminClient();
   const context = await getSafetyAdminContext();
   if (!context.ok) redirect("/admin/login");
@@ -15,6 +19,10 @@ export default async function RepairsPage() {
 
   // Only offer repairs this actor is actually allowed to run.
   const allowedIds = allowedRepairs([...access.permissions]).map((repair) => repair.id);
+  const { q } = await searchParams;
+  // Search is still server-validated in searchRepairUsersAction; this only
+  // keeps a support-ticket deep link from carrying query syntax into the UI.
+  const initialQuery = q?.trim().replace(/[,%()]/g, "").slice(0, 80) ?? "";
 
   return (
     <div className="space-y-6">
@@ -22,7 +30,7 @@ export default async function RepairsPage() {
         title="Account Doctor & repairs"
         description="Diagnose safe account lifecycle state first, then run narrow audited repairs only when the account actually needs them."
       />
-      <RepairCentre allowedRepairIds={allowedIds} />
+      <RepairCentre allowedRepairIds={allowedIds} initialQuery={initialQuery} />
     </div>
   );
 }
