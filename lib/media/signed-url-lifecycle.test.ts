@@ -8,6 +8,8 @@ import type { ChatMessageView } from "@/lib/messaging/mobile";
 const threadStore = readFileSync("lib/messaging/thread-store.ts", "utf8");
 const attachmentImage = readFileSync("components/messaging/message-attachment-image.tsx", "utf8");
 const eventArtwork = readFileSync("components/events/event-artwork.tsx", "utf8");
+const rankedAccordion = readFileSync("components/events/ranked-events-accordion.tsx", "utf8");
+const rankedList = readFileSync("components/events/top-events-list.tsx", "utf8");
 const eventMediaAction = readFileSync("app/(app)/event-media-actions.ts", "utf8");
 
 describe("signed media URL lifecycle", () => {
@@ -51,8 +53,15 @@ describe("signed media URL lifecycle", () => {
 
   it("never leaves an expired Event cover as a browser broken-image glyph", () => {
     expect(eventArtwork).toContain("onError={() => void recoverBrokenCover(media.url)}");
-    expect(eventArtwork).toContain("setActiveCoverUrl(null)");
+    expect(eventArtwork).toContain("setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null })");
     expect(eventArtwork).toContain("refreshEventCoverUrlAction");
+  });
+
+  it("routes Home and ranked Event artwork through the resilient renderer", () => {
+    expect(rankedAccordion).toContain("<EventArtwork");
+    expect(rankedList).toContain("<EventArtwork");
+    expect(rankedAccordion).not.toContain("src={event.media.url}");
+    expect(rankedList).not.toContain("src={event.media.url}");
   });
 
   it("renews Event covers only after current-user and Event-access checks", () => {
