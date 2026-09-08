@@ -122,6 +122,33 @@ export function accessPeriodEnd(nextPaymentDate: string | null | undefined, paid
 }
 
 /**
+ * Compute the bounded period for a one-time Mobile Money payment.
+ *
+ * This is intentionally RETRY-IDEMPOTENT. Webhook processing removes its
+ * receipt marker when a downstream step fails so Paystack can retry. If the
+ * subscription row was already written before (for example, notification
+ * delivery failed afterwards), replaying the same `charge.success` must not add
+ * another 30 days. We therefore keep the later of the already-recorded manual
+ * end and `paidAt + 30 days`; we never add 30 days to an existing live end.
+ *
+ * Checkout blocks buying another paid period while one is live, so stacking
+ * overlapping manual purchases is not a supported product path. This rule
+ * favours financial idempotency over silently granting extra periods on retry.
+ */
+export function manualAccessPeriodEnd(
+  paidAt: Date,
+  existingManualPeriodEnd?: string | null
+): Date {
+  const candidate = new Date(paidAt);
+  candidate.setUTCDate(candidate.getUTCDate() + ACCESS_MANUAL_PERIOD_DAYS);
+
+  if (!existingManualPeriodEnd) return candidate;
+  const existingEndMs = Date.parse(existingManualPeriodEnd);
+  if (!Number.isFinite(existingEndMs)) return candidate;
+  return existingEndMs > candidate.getTime() ? new Date(existingEndMs) : candidate;
+}
+
+/**
  * Record one verified Access row. `non_renewing` remains live through
  * `current_period_end`, which is exactly the state a manual Mobile Money period
  * needs: paid now, no automatic next charge.
@@ -185,10 +212,9 @@ export async function recordAccessSubscription(
 /**
  * Apply a verified one-time Mobile Money purchase.
  *
- * A second legitimate payment extends from the later of NOW or the end of an
- * existing MANUAL paid period, rather than silently replacing days the customer
- * already bought. Automatic card subscriptions are not stacked here: checkout
- * blocks a second paid purchase while one is live.
+ * Replaying the same provider event is safe even when the first attempt wrote
+ * the subscription row and failed later: the period calculation never stacks
+ * another 30 days onto an already-live manual end.
  */
 export async function recordAccessManualPayment(
   admin: SupabaseClient<Database>,
@@ -217,9 +243,10 @@ export async function recordAccessManualPayment(
     Number.isFinite(existingEndMs) &&
     existingEndMs > paidAtMs;
 
-  const base = new Date(existingIsManualAccess ? existingEndMs : paidAtMs);
-  const periodEnd = new Date(base);
-  periodEnd.setUTCDate(periodEnd.getUTCDate() + ACCESS_MANUAL_PERIOD_DAYS);
+  const periodEnd = manualAccessPeriodEnd(
+    input.paidAt,
+    existingIsManualAccess ? existing?.current_period_end : null
+  );
 
   const existingStart = existing?.current_period_start ? new Date(existing.current_period_start) : null;
   const periodStart =
