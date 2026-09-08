@@ -342,7 +342,13 @@ export async function heartbeatConversationPresenceAction(input: unknown) {
 
 export async function leaveConversationPresenceAction(conversationId: string) {
   if (!configured() || !uuidSchema.safeParse(conversationId).success) return actionError("Conversation not found.");
-  const userId = await getMessagingIdentityId();
+  /* Authoritative, matching heartbeatConversationPresenceAction.
+     Deleting this row changes what OTHER members see -- the conversation state
+     loader reads every member's presence row to render who is present and
+     typing. A narrow "may only remove its own presence" exception was
+     available, since clearing presence is privacy-reducing, but one rule with
+     no exceptions is worth more than one round trip on a rare action. */
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
   await untypedAdmin()
     .from("conversation_presence")

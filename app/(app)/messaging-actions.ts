@@ -533,7 +533,15 @@ export async function updateCommunicationPreferencesAction(input: unknown): Prom
   const missing = missingEnvState();
   if (missing) return missing;
 
-  const userId = await getMessagingIdentityId();
+  /* AUTHORIZATION-AFFECTING, so authoritative -- despite writing only the
+     caller's own preferences row.
+     `messagePermission` is read by canCreateDirectConversation() when deciding
+     whether ANOTHER person may open a conversation with this account, and
+     `groupAddPermission` gates who may add them to groups. Widening either
+     changes who is allowed to reach the account, so a revoked session must not
+     be able to do it. That the row is self-owned is not what decides this;
+     what the value authorizes is. */
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const normalized = normalizeCommunicationPreferences(input);
