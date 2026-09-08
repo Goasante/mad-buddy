@@ -14,6 +14,10 @@ import "server-only";
  * can become a charge. `lib/access/paystack.ts` additionally verifies every
  * successful payment against this configuration before Access is granted.
  *
+ * The consumer price is deliberately source-locked at GHS 4.99 (499 pesewas).
+ * It is not environment-overridable, preventing stale deployment configuration
+ * from silently charging a different amount than the product advertises.
+ *
  * ── TWO PAYMENT EXPERIENCES, ONE PRODUCT ──────────────────────────────────
  *
  * Card uses Paystack's monthly plan and auto-renews until cancelled.
@@ -34,23 +38,13 @@ export type AccessProduct = {
   /** Stable identifier the client may send. Never an amount. */
   id: "mad_buddy_access";
   name: string;
-  /**
-   * Price in the currency's MINOR unit (pesewas for GHS), or null when no
-   * price has been set.
-   */
-  amountMinor: number | null;
+  /** Price in the currency's MINOR unit (pesewas for GHS). */
+  amountMinor: number;
   currency: "GHS";
   /** Paystack's recurring card-plan record. Mobile Money intentionally omits it. */
   planCode: string | null;
   interval: "monthly";
 };
-
-function parseAmount(raw: string | undefined): number | null {
-  if (!raw) return null;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value <= 0) return null;
-  return value;
-}
 
 /** GHS 4.99 in the currency's MINOR unit (pesewas). 499, not 4.99. */
 const ACCESS_AMOUNT_MINOR = 499;
@@ -61,7 +55,7 @@ const ACCESS_PLAN_CODE = "PLN_pbpn6h7vprirvlu";
 export const MAD_BUDDY_ACCESS: AccessProduct = {
   id: "mad_buddy_access",
   name: "Mad Buddy Access",
-  amountMinor: parseAmount(process.env.MAD_BUDDY_ACCESS_AMOUNT_MINOR) ?? ACCESS_AMOUNT_MINOR,
+  amountMinor: ACCESS_AMOUNT_MINOR,
   currency: "GHS",
   planCode: process.env.MAD_BUDDY_ACCESS_PLAN_CODE ?? ACCESS_PLAN_CODE,
   interval: "monthly"
@@ -69,19 +63,17 @@ export const MAD_BUDDY_ACCESS: AccessProduct = {
 
 /** Display price, derived from the authoritative minor-unit amount. */
 export function accessPriceLabel(): string {
-  const amount = MAD_BUDDY_ACCESS.amountMinor;
-  if (amount === null) return "";
-  return `${MAD_BUDDY_ACCESS.currency} ${(amount / 100).toFixed(2)}`;
+  return `${MAD_BUDDY_ACCESS.currency} ${(MAD_BUDDY_ACCESS.amountMinor / 100).toFixed(2)}`;
 }
 
-/** Recurring-card checkout requires both a real price and Paystack plan. */
+/** Recurring-card checkout requires both the source-locked price and Paystack plan. */
 export function isCheckoutConfigured(): boolean {
-  return MAD_BUDDY_ACCESS.amountMinor !== null && MAD_BUDDY_ACCESS.planCode !== null;
+  return MAD_BUDDY_ACCESS.planCode !== null;
 }
 
-/** Mobile Money is one-time and therefore needs no recurring Paystack plan. */
+/** Mobile Money is one-time and uses the source-locked price. */
 export function isMobileMoneyCheckoutConfigured(): boolean {
-  return MAD_BUDDY_ACCESS.amountMinor !== null;
+  return true;
 }
 
 export type CheckoutBlocked = {
@@ -105,7 +97,7 @@ export function checkoutUnavailable(): CheckoutBlocked {
  * path creates the provider subscription that auto-renews.
  */
 export function accessCheckoutAmount(): { amountMinor: number; currency: "GHS"; planCode: string } | null {
-  if (MAD_BUDDY_ACCESS.amountMinor === null || MAD_BUDDY_ACCESS.planCode === null) return null;
+  if (MAD_BUDDY_ACCESS.planCode === null) return null;
   return {
     amountMinor: MAD_BUDDY_ACCESS.amountMinor,
     currency: MAD_BUDDY_ACCESS.currency,
@@ -119,8 +111,7 @@ export function accessCheckoutAmount(): { amountMinor: number; currency: "GHS"; 
  * There is intentionally no `planCode`: attaching the recurring plan is what
  * makes Paystack hide Mobile Money for this product.
  */
-export function accessMobileMoneyCheckoutAmount(): { amountMinor: number; currency: "GHS" } | null {
-  if (MAD_BUDDY_ACCESS.amountMinor === null) return null;
+export function accessMobileMoneyCheckoutAmount(): { amountMinor: number; currency: "GHS" } {
   return {
     amountMinor: MAD_BUDDY_ACCESS.amountMinor,
     currency: MAD_BUDDY_ACCESS.currency
