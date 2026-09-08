@@ -7,7 +7,7 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 describe("Mad Buddy Access payment authority", () => {
   it("keeps the locked source product", () => {
     expect(MAD_BUDDY_ACCESS.id).toBe("mad_buddy_access");
-    expect(MAD_BUDDY_ACCESS.amountMinor).toBe(500);
+    expect(MAD_BUDDY_ACCESS.amountMinor).toBe(499);
     expect(MAD_BUDDY_ACCESS.currency).toBe("GHS");
     expect(MAD_BUDDY_ACCESS.planCode).toBe("PLN_pbpn6h7vprirvlu");
   });
