@@ -10,7 +10,7 @@ import {
 import { countEventPool } from "@/lib/linkr/candidate-service";
 import { loadOwnLinkrProfile } from "@/lib/linkr/profile-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { isLinkrIntent } from "@/lib/linkr/intent";
 import { AccessLocked } from "@/components/access/access-locked";
 import { checkAccess } from "@/lib/access/guard";
@@ -34,7 +34,7 @@ export default async function LinkrRoute({
 }: {
   searchParams: Promise<{ eventId?: string; intent?: string; connection?: string }>;
 }) {
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
   if (!user) redirect("/login");
 
   /* THE LOCKED STATE IS DECIDED HERE, BEFORE ANY DISCOVERY WORK.

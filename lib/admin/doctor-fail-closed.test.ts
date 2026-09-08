@@ -22,7 +22,10 @@ import { describe, expect, it } from "vitest";
  * source.
  */
 
-const SOURCE = readFileSync("app/(admin)/admin/repairs/doctor-actions.ts", "utf8");
+/* Normalised to LF for the same reason as the sibling coverage test: a CRLF
+   checkout breaks every bare-newline boundary search below and would silently
+   widen what counts as the function body. */
+const SOURCE = readFileSync("app/(admin)/admin/repairs/doctor-actions.ts", "utf8").replace(/\r\n/g, "\n");
 
 const diagnoseBody = (() => {
   const start = SOURCE.indexOf("export async function diagnoseAccountAction");

@@ -2,7 +2,7 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getAuthoritativeMessagingUserId } from "@/lib/messaging/action-auth";
 
 export type DeliveryAckResult = {
   ok: boolean;
@@ -23,18 +23,16 @@ export async function markInboxDeliveredAction(): Promise<DeliveryAckResult> {
     return { ok: false, message: "Messaging delivery acknowledgement is unavailable." };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError
-  } = await supabase.auth.getUser();
-  if (authError || !user) return { ok: false, message: "Log in first." };
+  /* A delivery receipt is visible to the SENDER, so this resolves the caller
+     authoritatively -- see lib/messaging/action-auth.ts. */
+  const userId = await getAuthoritativeMessagingUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
   const { data: memberships, error: membershipError } = await admin
     .from("conversation_members")
     .select("conversation_id")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("status", "joined");
 
   if (membershipError) return { ok: false, message: "Delivery state could not be updated." };
@@ -56,7 +54,7 @@ export async function markInboxDeliveredAction(): Promise<DeliveryAckResult> {
     .from("messages")
     .update({ status: "delivered" })
     .in("conversation_id", directIds)
-    .neq("sender_id", user.id)
+    .neq("sender_id", userId)
     .eq("status", "sent");
 
   return error

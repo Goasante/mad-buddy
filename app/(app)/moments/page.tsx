@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { isMomentsEnabled, isOpenMomentsEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { dateKeyInTimeZone, isBirthdayOnDate } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 
@@ -19,7 +19,7 @@ export default async function MomentsRoute({
 }) {
   const previewParams = await searchParams;
   const birthdayPreview = process.env.NODE_ENV !== "production" && previewParams?.birthdayPreview === "1";
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
 
   const env = getSupabaseServerEnv();
   if (!user || !env.url || !env.serviceRoleKey) {

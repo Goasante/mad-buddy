@@ -5,7 +5,7 @@ import {
 } from "@/components/friends/friends-page";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { actionableFriendRequests } from "@/lib/friends/relationship-state";
 import {
   friendIdsFrom,
@@ -50,7 +50,7 @@ export default async function FriendsPage() {
  * live in one pure service; this only gathers what that service needs.
  */
 async function loadContactReminder(): Promise<ContactReminderKind | null> {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return null;
 
   const admin = createSupabaseAdminClient();
@@ -79,7 +79,7 @@ async function loadFriendNetwork(): Promise<{
   closeFriendIds: string[];
   glowColorByFriendId: Record<string, string>;
 }> {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
 
   if (!user) {
     return { users: [], circles: [], closeFriendIds: [], glowColorByFriendId: {} };

@@ -1,7 +1,7 @@
 import { getEventsAction } from "@/app/(app)/event-actions";
 import { EventsPageContent } from "@/components/events/events-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { loadEffectivePlan } from "@/lib/billing/service";
 
 /**
@@ -30,7 +30,7 @@ export default async function EventsPage() {
    * takes over its own clock on mount and reconciles from there. */
   const [events, user, serverNowMs] = await Promise.all([
     getEventsAction(),
-    getCurrentUser(),
+    getCurrentIdentity(),
     Promise.resolve(readServerNow())
   ]);
   const currentUserPlan = user

@@ -5,8 +5,8 @@ import { z } from "zod";
 import type { MessageReactionSummaryMap } from "@/lib/messaging/reaction-summary-types";
 import { resolveConversationAccess } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { getMessagingIdentityId } from "@/lib/messaging/action-auth";
 
 const uuid = z.string().uuid();
 const ALLOWED = new Set(["heart", "laugh", "thumbs_up", "wave", "fire", "wow"] as const);
@@ -16,12 +16,12 @@ export async function getConversationReactionSummariesAction(
 ): Promise<MessageReactionSummaryMap> {
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey || !uuid.safeParse(conversationId).success) return {};
-  const supabase = await createSupabaseServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return {};
+  /* A pure read, gated by resolveConversationAccess below. */
+  const userId = await getMessagingIdentityId();
+  if (!userId) return {};
 
   const admin = createSupabaseAdminClient();
-  const access = await resolveConversationAccess(admin, user.id, conversationId);
+  const access = await resolveConversationAccess(admin, userId, conversationId);
   if (!access.canView) return {};
 
   const { data: messages } = await admin
@@ -59,7 +59,7 @@ export async function getConversationReactionSummariesAction(
     const profile = profileById.get(reaction.user_id);
     aggregate.reactors.push({
       userId: reaction.user_id,
-      displayName: reaction.user_id === user.id ? "You" : profile?.full_name?.trim() || profile?.username?.trim() || "A Muddy",
+      displayName: reaction.user_id === userId ? "You" : profile?.full_name?.trim() || profile?.username?.trim() || "A Muddy",
       username: profile?.username ?? null,
       avatarUrl: profile?.avatar_url ?? null
     });

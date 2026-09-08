@@ -36,7 +36,7 @@ import { validateLaterToday } from "@/lib/time/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { checkAccess } from "@/lib/access/guard";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { HANGOUT_ACTIVITY_LABELS, HANGOUT_ACTIVITY_TYPES } from "@/lib/social/plans";
 import { replacementEditVerdict, upForEditBlockedMessage } from "@/lib/social/upfor-lifecycle";
@@ -69,7 +69,7 @@ function missingEnvState(): HangoutActionState | null {
 }
 
 async function getAuthedUserId() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   return user?.id ?? null;
 }
 

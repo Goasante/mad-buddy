@@ -6,7 +6,7 @@ import {
 } from "@/components/hangout/hangout-mode-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { currentActiveHangout, ownedUpForSessions } from "@/lib/social/planning";
 import type { OwnedUpFor } from "@/lib/social/owned-upfors";
@@ -16,7 +16,7 @@ import { checkAccess } from "@/lib/access/guard";
 export const dynamic = "force-dynamic";
 
 export default async function HangoutModeRoute() {
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
 
   const env = getSupabaseServerEnv();
   let activeHangout: ActiveHangout | null = null;

@@ -2,19 +2,15 @@
 
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { getMessagingIdentityId } from "@/lib/messaging/action-auth";
 
-async function currentUserId() {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
-}
+
 
 export async function getInboxConversationPreferencesAction() {
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return {};
-  const userId = await currentUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return {};
   const db = createSupabaseAdminClient();
   const { data } = await db

@@ -16,7 +16,10 @@ import type { RichMediaMessageView } from "@/lib/messaging/rich-media-v4-types";
 import { canCreateDirectConversation, resolveConversationAccess } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getAuthoritativeMessagingUserId,
+  getMessagingIdentityId
+} from "@/lib/messaging/action-auth";
 
 const uuid = z.string().uuid();
 const richKind = z.enum(["video", "file"]);
@@ -39,20 +42,13 @@ function configured() {
   return Boolean(env.url && env.serviceRoleKey);
 }
 
-async function getUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
-}
+
 
 export async function createChatRichMediaUploadIntentAction(input: unknown) {
   if (!configured()) return { ok: false as const, message: "Chats are not configured." };
   const parsed = createIntentSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, message: "Check that attachment and try again." };
-  const userId = await getUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false as const, message: "Log in first." };
   return createChatV4RichUploadIntent(createSupabaseAdminClient(), userId, parsed.data);
 }
@@ -61,7 +57,7 @@ export async function finalizeChatRichMediaUploadAction(input: unknown) {
   if (!configured()) return { ok: false as const, message: "Chats are not configured." };
   const parsed = finalizeSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, message: "That upload isn't available." };
-  const userId = await getUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false as const, message: "Log in first." };
   return finalizeChatV4RichUpload(createSupabaseAdminClient(), userId, parsed.data);
 }
@@ -75,7 +71,7 @@ export async function getRichMediaMessageAction(input: unknown): Promise<RichMed
   if (!configured()) return null;
   const parsed = playbackSchema.safeParse(input);
   if (!parsed.success) return null;
-  const viewerId = await getUserId();
+  const viewerId = await getMessagingIdentityId();
   if (!viewerId) return null;
 
   const admin = createSupabaseAdminClient();

@@ -12,7 +12,10 @@ import type {
 import { resolveConversationAccess } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getAuthoritativeMessagingUserId,
+  getMessagingIdentityId
+} from "@/lib/messaging/action-auth";
 
 const uuid = z.string().uuid();
 
@@ -25,14 +28,7 @@ function db() {
   return createSupabaseAdminClient() as unknown as SupabaseClient;
 }
 
-async function authedUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
-}
+
 
 function messagePreview(row: Record<string, unknown>) {
   if (row.deleted_at) return "Message removed";
@@ -60,7 +56,7 @@ function messagePreview(row: Record<string, unknown>) {
  */
 export async function getMessageInfoAction(messageId: string): Promise<MessageInfoView | null> {
   if (!configured() || !uuid.safeParse(messageId).success) return null;
-  const userId = await authedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return null;
 
   const admin = createSupabaseAdminClient();
@@ -145,7 +141,7 @@ export async function getMessageInfoAction(messageId: string): Promise<MessageIn
 export async function getChatCollectionsAction(conversationId: string): Promise<ChatCollectionsView> {
   const empty: ChatCollectionsView = { folders: [], saved: [], pinned: [] };
   if (!configured() || !uuid.safeParse(conversationId).success) return empty;
-  const userId = await authedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return empty;
 
   const admin = createSupabaseAdminClient();
@@ -238,7 +234,7 @@ export async function createSavedMessageFolderAction(name: string) {
   if (!configured()) return { ok: false as const, message: "Chats are not configured." };
   const parsed = z.string().trim().min(1).max(60).safeParse(name);
   if (!parsed.success) return { ok: false as const, message: "Folder names can be up to 60 characters." };
-  const userId = await authedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false as const, message: "Log in first." };
 
   const untyped = db();
@@ -264,7 +260,7 @@ export async function renameSavedMessageFolderAction(folderId: string, name: str
   if (!configured() || !uuid.safeParse(folderId).success) return { ok: false as const, message: "Folder not found." };
   const parsed = z.string().trim().min(1).max(60).safeParse(name);
   if (!parsed.success) return { ok: false as const, message: "Folder names can be up to 60 characters." };
-  const userId = await authedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false as const, message: "Log in first." };
   const { error } = await db()
     .from("saved_message_folders")
@@ -278,7 +274,7 @@ export async function renameSavedMessageFolderAction(folderId: string, name: str
 
 export async function deleteSavedMessageFolderAction(folderId: string) {
   if (!configured() || !uuid.safeParse(folderId).success) return { ok: false as const, message: "Folder not found." };
-  const userId = await authedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false as const, message: "Log in first." };
   const { error } = await db()
     .from("saved_message_folders")
@@ -294,7 +290,7 @@ export async function moveSavedMessageToFolderAction(messageId: string, folderId
   if (!configured() || !uuid.safeParse(messageId).success || (folderId && !uuid.safeParse(folderId).success)) {
     return { ok: false as const, message: "Saved message not found." };
   }
-  const userId = await authedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false as const, message: "Log in first." };
   const untyped = db();
 

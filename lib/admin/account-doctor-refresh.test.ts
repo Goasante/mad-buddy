@@ -13,7 +13,12 @@ const repairsPage = source("app/(admin)/admin/repairs/page.tsx");
 
 describe("Account Doctor refresh signal", () => {
   it("is self-scoped to the authenticated user and accepts no target user parameter", () => {
-    expect(route).toContain("const user = await getCurrentUser()");
+    /* The helper split renamed this. These are PRIVILEGED paths, so the
+       assertion is strengthened rather than merely renamed: they must use
+       the AUTHORITATIVE record, which notices a global sign-out or a
+       deleted account, never the fast identity path. */
+    expect(route).toContain("const user = await getCurrentUserRecord()");
+    expect(route).not.toContain("getCurrentIdentity");
     expect(route).toContain('.eq("target_id", user.id)');
     expect(route).not.toContain("searchParams");
     expect(route).not.toContain("request.url");

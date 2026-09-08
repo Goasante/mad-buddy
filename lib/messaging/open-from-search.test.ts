@@ -158,8 +158,16 @@ describe("permissions", () => {
   });
 
   it("re-checks on the server regardless of what the client sends", () => {
-    expect(actions).toContain("const userId = await getAuthedUserId();");
-    expect(actions).toContain('if (!userId) return { ok: false, message: "Log in first." };');
+    /* Opening a conversation creates shared state the other participant sees,
+       so it resolves the caller authoritatively -- a locally verified JWT is
+       not enough here. The helper name is the security choice; see
+       lib/messaging/action-auth.ts. */
+    const open = actions.slice(
+      actions.indexOf("export async function openDirectConversationAction"),
+      actions.indexOf("export async function sendMessageAction")
+    );
+    expect(open).toContain("const userId = await getAuthoritativeMessagingUserId();");
+    expect(open).toContain('if (!userId) return { ok: false, message: "Log in first." };');
   });
 
   it("maps a refusal to safe copy rather than a raw reason", () => {

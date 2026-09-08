@@ -1,7 +1,7 @@
 import { MessagesPageV4 } from "@/components/messages/messages-page-v4";
 import { MessageDeliveryAck } from "@/components/messages/message-delivery-ack";
 import { getConversationsAction, getVoiceRecorderConfigAction } from "@/app/(app)/messaging-actions";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,13 @@ export default async function MessagesPage() {
   /* `viewerId` scopes the client-side thread cache to this account. It is
      presentation ownership, never authorization: every action below still
      resolves the caller's own identity server-side, and the cache can only
-     ever redraw what this viewer was already served. getCurrentUser() is the
+     ever redraw what this viewer was already served. getCurrentIdentity() is the
      request-cached auth lookup the layout already made, so this costs nothing
      extra. */
   const [conversations, voiceRecorderConfig, user] = await Promise.all([
     getConversationsAction(),
     getVoiceRecorderConfigAction(),
-    getCurrentUser()
+    getCurrentIdentity()
   ]);
 
   return (

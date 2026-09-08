@@ -7,8 +7,8 @@ import { EnableNotificationsPrompt } from "@/components/pwa/enable-notifications
 import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
 import { ensureMaintenanceWarm } from "@/lib/maintenance/loader";
 import { shouldBlockForMaintenance } from "@/lib/maintenance/state";
-import { getSafetyAdminContext } from "@/lib/safety/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getAdminLinkVisibility } from "@/lib/safety/admin";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -37,13 +37,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function ProtectedAppLayout({ children }: ProtectedAppLayoutProps) {
-  // getCurrentUser() is the shared per-request auth round trip; the RLS client
+  // getCurrentIdentity() is the shared per-request auth round trip; the RLS client
   // below is only for this layout's own queries. ensureMaintenanceWarm() needs
   // no user, so it starts here too instead of waiting behind everything else.
   const env = getSupabaseServerEnv();
   const [supabase, user, maintenance] = await Promise.all([
     createSupabaseServerClient(),
-    getCurrentUser(),
+    getCurrentIdentity(),
     env.url && env.serviceRoleKey ? ensureMaintenanceWarm(createSupabaseAdminClient()) : Promise.resolve(null)
   ]);
 
@@ -56,8 +56,8 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // were all affected together.
   // Access retired the subscription read; Account Hub retired the Buddy Score
   // and profile-completion reads as dead menu consumers. Neither is loaded.
-  const [adminContext, unreadResult, profileResult, shellFlagsResult] = await Promise.all([
-    getSafetyAdminContext(),
+  const [isStaff, unreadResult, profileResult, shellFlagsResult] = await Promise.all([
+    getAdminLinkVisibility(),
     user
       ? supabase
           .from("notifications")
@@ -92,7 +92,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
 
   // Global pause. Staff are exempt so someone can still reach /admin to turn
   // it back off and verify the fix before reopening the app.
-  if (maintenance && shouldBlockForMaintenance({ isActive: maintenance.isActive, isStaff: adminContext.ok })) {
+  if (maintenance && shouldBlockForMaintenance({ isActive: maintenance.isActive, isStaff })) {
     redirect("/maintenance");
   }
 
@@ -176,7 +176,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
 
   return (
     <AppShell
-      showAdminLink={adminContext.ok}
+      showAdminLink={isStaff}
       initialUnreadCount={unreadResult.count ?? 0}
       locationSyncEnabled={profileResult.data?.visibility_status !== "ghost"}
       currentUsername={profileResult.data?.username ?? null}

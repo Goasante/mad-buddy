@@ -1,5 +1,5 @@
 import { WallpaperSettings } from "@/components/settings/wallpaper-settings";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { loadWallpaperPickerData } from "@/lib/wallpapers/service";
@@ -8,7 +8,7 @@ import { BUNDLED_WALLPAPERS, buildPickerCatalog, DEFAULT_WALLPAPER_SLUG } from "
 export const dynamic = "force-dynamic";
 
 export default async function WallpaperSettingsPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
   const env = getSupabaseServerEnv();
 
   // Degrade gracefully (bundled free catalog, no persistence) if we can't reach

@@ -74,7 +74,12 @@ describe("app freeze recovery safeguards", () => {
       "app/(app)/plans/page.tsx",
       "app/(app)/safe-arrival/page.tsx"
     ]) {
-      expect(source(file)).toContain("getCurrentUser");
+      /* The point is that every page shares a request-cached helper rather
+         than calling supabase.auth.getUser() itself -- which is what made a
+         single render pay several round trips. EITHER helper satisfies that;
+         which one a page uses is the separate security decision recorded in
+         lib/supabase/auth-split.local.test.ts. */
+      expect(source(file)).toMatch(/getCurrentIdentity|getCurrentUserRecord/);
       expect(source(file)).not.toContain("supabase.auth.getUser()");
     }
   });

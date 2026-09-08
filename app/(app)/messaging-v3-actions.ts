@@ -4,18 +4,10 @@ import { z } from "zod";
 import { resolveConversationAccess } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getMessagingIdentityId } from "@/lib/messaging/action-auth";
 
 const uuidSchema = z.string().uuid();
 
-async function getAuthedUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
-}
 
 /**
  * Projects reply context for the messages already visible in one authorised
@@ -30,7 +22,7 @@ export async function getReplyContextsAction(conversationId: string) {
   if (!env.url || !env.serviceRoleKey) return {};
   if (!uuidSchema.safeParse(conversationId).success) return {};
 
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return {};
 
   const admin = createSupabaseAdminClient();

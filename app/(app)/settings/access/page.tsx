@@ -4,12 +4,12 @@ import { AccessSettingsPage, type AccessBillingSummary } from "@/components/acce
 import { hasEverHadWelcomeAccess } from "@/lib/access/guard";
 import { resolveAccessForUser } from "@/lib/access/resolver";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccessSettingsRoute() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) redirect("/login");
 
   const admin = createSupabaseAdminClient();
