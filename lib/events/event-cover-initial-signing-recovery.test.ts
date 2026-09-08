@@ -27,14 +27,14 @@ describe("ranked Event cover initial-signing recovery", () => {
   it("renews a missing initial credential only when canonical cover truth says one exists", () => {
     const artwork = read("components/events/event-artwork.tsx");
     expect(artwork).toContain("coverExpected = false");
-    expect(artwork).toContain("if (!coverExpected || activeCoverUrl) return");
-    expect(artwork).toContain("refreshCover(eventId)");
+    expect(artwork).toContain("if (!coverExpected || activeCoverUrl || inFlightRefreshRef.current) return;");
+    expect(artwork).toContain("renewCover()");
   });
 
   it("does not turn legacy no-cover Events into one request per card", () => {
     const artwork = read("components/events/event-artwork.tsx");
-    const gate = artwork.indexOf("if (!coverExpected || activeCoverUrl) return");
-    const refresh = artwork.indexOf("refreshCover(eventId)", gate);
+    const gate = artwork.indexOf("if (!coverExpected || activeCoverUrl || inFlightRefreshRef.current) return;");
+    const refresh = artwork.indexOf("renewCover()", gate);
     expect(gate).toBeGreaterThan(-1);
     expect(refresh).toBeGreaterThan(gate);
   });
