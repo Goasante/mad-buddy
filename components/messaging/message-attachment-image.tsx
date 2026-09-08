@@ -11,21 +11,6 @@ import type { ChatMessageView } from "@/lib/messaging/mobile";
 import { signedUrlNeedsRefresh } from "@/lib/media/signed-url-lifecycle";
 import { cn } from "@/lib/utils";
 
-const refreshes = new Map<string, Promise<AttachmentView | null>>();
-
-function refreshAttachment(conversationId: string, messageId: string): Promise<AttachmentView | null> {
-  const key = `${conversationId}:${messageId}`;
-  const existing = refreshes.get(key);
-  if (existing) return existing;
-
-  const request = refreshMessageAttachmentAction({ conversationId, messageId })
-    .then((result) => (result.ok ? result.attachment ?? null : null))
-    .catch(() => null)
-    .finally(() => refreshes.delete(key));
-  refreshes.set(key, request);
-  return request;
-}
-
 type MessageAttachmentImageProps = {
   conversationId: string;
   message: ChatMessageView;
@@ -34,7 +19,7 @@ type MessageAttachmentImageProps = {
   square?: boolean;
 };
 
-/** Canonical private-message image with deduplicated signed-URL refresh. */
+/** Canonical private-message image with component-local signed-URL refresh. */
 export function MessageAttachmentImage({
   conversationId,
   message,
@@ -46,6 +31,16 @@ export function MessageAttachmentImage({
   const [refreshing, setRefreshing] = useState(false);
   const attemptedUrlRef = useRef<string | null>(null);
   const proactiveRefreshKeyRef = useRef<string | null>(null);
+
+  /*
+   * Signed URLs are credentials. Keep an in-flight renewal promise inside this
+   * mounted component rather than in module scope: a module-level promise can
+   * briefly survive logout/account switching and let the next account reuse a
+   * result that was authorised for the previous one. The ref still closes the
+   * same-component double-click/onError race synchronously.
+   */
+  const inFlightRefreshRef = useRef<Promise<AttachmentView | null> | null>(null);
+
   const attachment = message.attachment;
   const src = attachment?.thumbUrl ?? attachment?.fullUrl ?? null;
   const needsFreshUrl = attachment
@@ -54,18 +49,28 @@ export function MessageAttachmentImage({
   const alt = attachment ? attachmentAltText(message.senderName, message.isMine) : "";
 
   const renew = useCallback(async () => {
-    if (refreshing) return;
+    if (inFlightRefreshRef.current) return;
+
     setRefreshing(true);
-    const next = await refreshAttachment(conversationId, message.id);
-    setRefreshing(false);
-    if (!next) {
-      setFailed(true);
-      return;
+    const request = refreshMessageAttachmentAction({ conversationId, messageId: message.id })
+      .then((result) => (result.ok ? result.attachment ?? null : null))
+      .catch(() => null);
+    inFlightRefreshRef.current = request;
+
+    try {
+      const next = await request;
+      if (!next) {
+        setFailed(true);
+        return;
+      }
+      attemptedUrlRef.current = null;
+      setFailed(false);
+      onRefreshed(next);
+    } finally {
+      if (inFlightRefreshRef.current === request) inFlightRefreshRef.current = null;
+      setRefreshing(false);
     }
-    attemptedUrlRef.current = null;
-    setFailed(false);
-    onRefreshed(next);
-  }, [conversationId, message.id, onRefreshed, refreshing]);
+  }, [conversationId, message.id, onRefreshed]);
 
   /*
    * Do not deliberately render an expired credential and wait for the browser
