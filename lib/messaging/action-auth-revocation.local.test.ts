@@ -12,9 +12,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  *
  * The policy under test, stated plainly:
  *
- *   read your own threads   ALLOWED for <=60 min after global sign-out
- *   write anything others   REFUSED immediately
- *   see anything privileged REFUSED immediately
+ *   low-risk context reads   ALLOWED for <=60 min after global sign-out
+ *   strictly private state   ALLOWED for the same window
+ *   write anything others    REFUSED immediately
+ *   authorization-affecting  REFUSED immediately
+ *   see anything privileged  REFUSED immediately
+ *
+ * "Low-risk context reads" is deliberately broader than "your own threads":
+ * it also covers messageable-friend discovery, structured-share options and
+ * reply context. Stated at its real width rather than a flattering one.
  */
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
