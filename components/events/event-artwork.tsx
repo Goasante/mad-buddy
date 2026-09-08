@@ -136,11 +136,12 @@ export function EventArtwork({
   }, [activeCoverUrl, coverExpected, coverUrl, eventId, recoveryScope, renewCover]);
 
   async function recoverBrokenCover() {
-    if (inFlightRefreshRef.current || !consumeRecoveryAttempt()) return;
-
-    // Remove the broken credential immediately so the browser never leaves a
-    // question-mark/broken-image glyph on screen while renewal is in flight.
+    // Always remove a broken credential immediately. Retry exhaustion means
+    // "stay on the branded fallback", never "leave the browser's broken-image
+    // glyph visible". The attempt cap controls minting, not presentation.
     setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null });
+
+    if (inFlightRefreshRef.current || !consumeRecoveryAttempt()) return;
     const renewed = await renewCover();
     if (renewed) {
       setRecovery({ eventId, sourceCoverUrl: coverUrl, url: renewed });
