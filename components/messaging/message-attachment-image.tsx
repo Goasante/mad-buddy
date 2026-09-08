@@ -8,10 +8,7 @@ import { MessageRetentionV4 } from "@/components/messaging/message-retention-v4"
 import { attachmentAltText } from "@/lib/messaging/attachment-labels";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
-import {
-  SIGNED_URL_REFRESH_SKEW_MS,
-  signedUrlNeedsRefresh
-} from "@/lib/media/signed-url-lifecycle";
+import { signedUrlNeedsRefresh } from "@/lib/media/signed-url-lifecycle";
 import { cn } from "@/lib/utils";
 
 type MessageAttachmentImageProps = {
@@ -68,8 +65,11 @@ export function MessageAttachmentImage({
     return request;
   }, [conversationId, message.id, refreshes]);
 
-  const renew = useCallback(async () => {
-    if (refreshingRef.current) return;
+  const renew = useCallback(async (): Promise<AttachmentView | null> => {
+    /* If a proactive/error renewal is already running, join that exact
+       component-local request rather than opening a second server action. */
+    if (refreshingRef.current) return refreshAttachment();
+
     refreshingRef.current = true;
     setRefreshing(true);
 
@@ -77,11 +77,12 @@ export function MessageAttachmentImage({
       const next = await refreshAttachment();
       if (!next) {
         setFailed(true);
-        return;
+        return null;
       }
       attemptedUrlRef.current = null;
       setFailed(false);
       onRefreshed(next);
+      return next;
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
@@ -103,26 +104,22 @@ export function MessageAttachmentImage({
   }, [attachment, failed, needsFreshUrl, renew, src]);
 
   /*
-   * `needsFreshUrl` is evaluated during render, so a conversation that stays
-   * mounted for longer than the five-minute Storage TTL needs its own wake-up.
-   * Schedule renewal just before expiry while the credential is still usable.
-   * This also keeps the full-resolution URL fresh for somebody who opens the
-   * immersive viewer after leaving the thread on screen for several minutes.
-   * The timer is component-local and cleared on unmount/account navigation.
+   * A mounted image can remain visually intact after its five-minute URL has
+   * expired because the browser already decoded it. The dangerous moment is a
+   * later full-screen open: that viewer may need the full-resolution URL again.
+   * Re-check the clock at the actual click instead of scheduling one timer per
+   * message (which would make every attachment in a long thread renew at once).
+   * Only the photo the person opens pays for a renewal.
    */
-  useEffect(() => {
-    if (!attachment || !src || failed || needsFreshUrl) return;
-
-    const expiresMs = Date.parse(attachment.expiresAt);
-    if (!Number.isFinite(expiresMs)) return;
-    const delayMs = Math.max(0, expiresMs - Date.now() - SIGNED_URL_REFRESH_SKEW_MS);
-    const timer = window.setTimeout(() => {
-      proactiveRefreshKeyRef.current = `${attachment.mediaId}:${attachment.expiresAt}:${src}`;
-      void renew();
-    }, delayMs);
-
-    return () => window.clearTimeout(timer);
-  }, [attachment, failed, needsFreshUrl, renew, src]);
+  const openMedia = useCallback(async () => {
+    if (!attachment) return;
+    const currentSrc = attachment.thumbUrl ?? attachment.fullUrl ?? null;
+    if (signedUrlNeedsRefresh(attachment.expiresAt, Boolean(currentSrc))) {
+      const next = await renew();
+      if (!next) return;
+    }
+    onOpen();
+  }, [attachment, onOpen, renew]);
 
   if (!attachment) return null;
 
@@ -153,7 +150,7 @@ export function MessageAttachmentImage({
     <div>
       <button
         type="button"
-        onClick={onOpen}
+        onClick={() => void openMedia()}
         aria-label={alt}
         className={cn(
           "focus-ring safe-motion block overflow-hidden rounded-xl",
