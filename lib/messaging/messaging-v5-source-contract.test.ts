@@ -25,7 +25,7 @@ describe("Messaging V5 product source contracts", () => {
     expect(picker).toContain('label: "Camera"');
     expect(picker).toContain('label: "Photos"');
     expect(picker).toContain('label: "Video"');
-    expect(picker).toContain('label: "Document"');
+    expect(picker).toContain('label: "Documents"');
     expect(picker).toContain('label: "Place"');
     expect(picker).toContain('label: "Plan / Event"');
     expect(shell).not.toContain("<StructuredShareV4");

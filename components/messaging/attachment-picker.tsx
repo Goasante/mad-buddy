@@ -499,7 +499,7 @@ export function AttachmentPicker({
         trigger={
           <button
             type="button"
-            aria-label={progressLabel}
+            aria-label="Add an attachment"
             title={progressLabel}
             disabled={busy}
             className={cn(

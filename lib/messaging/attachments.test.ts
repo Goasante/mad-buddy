@@ -372,7 +372,8 @@ describe("accessibility", () => {
     expect(attachmentImage).toContain("attachmentAltText(message.senderName, message.isMine)");
   });
 
-  it("respects reduced motion on the upload spinner", () => {
-    expect(picker).toContain("motion-reduce:animate-none");
+  it("uses measured progress without an animated spinner", () => {
+    expect(picker).toContain("UploadProgressGlyph");
+    expect(picker).not.toContain("animate-spin");
   });
 });
