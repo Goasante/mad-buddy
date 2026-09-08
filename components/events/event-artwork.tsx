@@ -1,9 +1,26 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+import { refreshEventCoverUrlAction } from "@/app/(app)/event-media-actions";
 import { focalObjectPosition } from "@/lib/events/cover";
 import { fallbackGradient, resolveEventMedia } from "@/lib/events/event-media";
 import { cn } from "@/lib/utils";
+
+const coverRefreshes = new Map<string, Promise<string | null>>();
+
+function refreshCover(eventId: string): Promise<string | null> {
+  const existing = coverRefreshes.get(eventId);
+  if (existing) return existing;
+
+  const request = refreshEventCoverUrlAction(eventId)
+    .then((result) => (result.ok ? result.coverUrl : null))
+    .catch(() => null)
+    .finally(() => coverRefreshes.delete(eventId));
+  coverRefreshes.set(eventId, request);
+  return request;
+}
 
 /**
  * The one place an Event's artwork is painted.
@@ -44,7 +61,30 @@ export function EventArtwork({
   className?: string;
   scrim?: "none" | "soft" | "strong";
 }) {
-  const media = resolveEventMedia(eventId, coverUrl);
+  const [activeCoverUrl, setActiveCoverUrl] = useState(coverUrl);
+  const recoveryKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setActiveCoverUrl(coverUrl);
+    recoveryKeyRef.current = null;
+  }, [coverUrl, eventId]);
+
+  const media = resolveEventMedia(eventId, activeCoverUrl);
+
+  async function recoverBrokenCover(failedUrl: string) {
+    const key = `${eventId}:${failedUrl}`;
+    if (recoveryKeyRef.current === key) return;
+    recoveryKeyRef.current = key;
+
+    // Remove the broken credential immediately so the browser never leaves a
+    // question-mark/broken-image glyph on screen while renewal is in flight.
+    setActiveCoverUrl(null);
+    const renewed = await refreshCover(eventId);
+    if (renewed) {
+      recoveryKeyRef.current = null;
+      setActiveCoverUrl(renewed);
+    }
+  }
 
   return (
     <div className={cn("relative overflow-hidden bg-secondary", className)}>
@@ -59,6 +99,7 @@ export function EventArtwork({
           style={{ objectPosition: focalObjectPosition(focalX, focalY) }}
           loading="lazy"
           decoding="async"
+          onError={() => void recoverBrokenCover(media.url)}
         />
       ) : (
         <div
