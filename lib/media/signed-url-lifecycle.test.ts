@@ -52,6 +52,13 @@ describe("signed media URL lifecycle", () => {
     expect(attachmentImage).toContain("if (!src || failed || needsFreshUrl)");
   });
 
+  it("wakes a mounted chat before its current signed URLs expire", () => {
+    expect(attachmentImage).toContain("SIGNED_URL_REFRESH_SKEW_MS");
+    expect(attachmentImage).toContain("expiresMs - Date.now() - SIGNED_URL_REFRESH_SKEW_MS");
+    expect(attachmentImage).toContain("window.setTimeout");
+    expect(attachmentImage).toContain("window.clearTimeout");
+  });
+
   it("keeps signed-credential refresh promises inside the mounted account surface", () => {
     const attachmentComponent = attachmentImage.indexOf("export function MessageAttachmentImage");
     expect(attachmentImage).toContain("const [refreshes] = useState");
