@@ -1,0 +1,14 @@
+/*
+ * The scroll owner reserves the FULL safe-area inset below its last content,
+ * but MobileNav historically capped its own inset at 0.75rem. On phones whose
+ * home-indicator/browser inset is larger (and on browsers where that inset
+ * changes as chrome expands/collapses), the two pieces of chrome therefore
+ * disagreed by a visible strip. Consume the same canonical inset inside the
+ * nav that <main> already reserves so the strip cannot grow/shrink separately.
+ */
+@media (max-width: 767px) {
+  nav[aria-label="Mobile navigation"] {
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    background-clip: padding-box;
+  }
+}
