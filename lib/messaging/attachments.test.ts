@@ -354,9 +354,11 @@ describe("privacy", () => {
 // ---------------------------------------------------------------------------
 
 describe("accessibility", () => {
-  it("labels the attachment control and the remove button", () => {
+  it("labels the attachment control and kind-specific remove actions", () => {
     expect(picker).toContain('aria-label="Add an attachment"');
-    expect(picker).toContain('aria-label="Remove photo"');
+    expect(picker).toContain('"Remove document"');
+    expect(picker).toContain('"Remove video"');
+    expect(picker).toContain('"Remove photo"');
   });
 
   it("announces upload state without spamming", () => {
