@@ -17,7 +17,7 @@ import "server-only";
  * ── TWO PAYMENT EXPERIENCES, ONE PRODUCT ──────────────────────────────────
  *
  * Card uses Paystack's monthly plan and auto-renews until cancelled.
- * Ghana Mobile Money is a one-time GHS 5.00 payment that buys 30 days of the
+ * Ghana Mobile Money is a one-time GHS 4.99 payment that buys 30 days of the
  * exact same Access. It does NOT pretend to be a recurring Paystack plan:
  * Paystack Mobile Money does not support recurring subscription billing.
  *
@@ -52,8 +52,8 @@ function parseAmount(raw: string | undefined): number | null {
   return value;
 }
 
-/** GHS 5.00 in the currency's MINOR unit (pesewas). 500, not 5. */
-const ACCESS_AMOUNT_MINOR = 500;
+/** GHS 4.99 in the currency's MINOR unit (pesewas). 499, not 4.99. */
+const ACCESS_AMOUNT_MINOR = 499;
 
 /** The owner's Paystack monthly plan for recurring card Access. */
 const ACCESS_PLAN_CODE = "PLN_pbpn6h7vprirvlu";
