@@ -65,6 +65,11 @@ type AdminNavigationItem = {
   icon: LucideIcon;
   permission?: AdminPermission;
   ownerOnly?: boolean;
+  /**
+   * Keeps a legacy/admin-only route registered so direct navigation and the
+   * page header still work, while removing it from the visible navigation.
+   */
+  hidden?: boolean;
 };
 
 type AdminNavigationGroup = { label: string; items: AdminNavigationItem[] };
@@ -86,7 +91,13 @@ const adminNavigationGroups: AdminNavigationGroup[] = [
     items: [
       { href: "/admin/billing", label: "Billing", icon: CreditCard, permission: "admin.billing.view" },
       { href: "/admin/access", label: "Mad Buddy Access", icon: KeyRound, permission: "admin.entitlements.view" },
-      { href: "/admin/entitlements", label: "Entitlements", icon: SlidersHorizontal, permission: "admin.entitlements.view" },
+      {
+        href: "/admin/entitlements",
+        label: "Entitlements",
+        icon: SlidersHorizontal,
+        permission: "admin.entitlements.view",
+        hidden: true
+      },
       { href: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined, permission: "admin.analytics.view" },
       { href: "/admin/revenue", label: "Revenue", icon: CircleDollarSign, permission: "admin.revenue.view" },
       { href: "/admin/buddy-score", label: "Buddy Score", icon: Trophy, permission: "admin.buddy_score.manage" },
@@ -125,7 +136,10 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => (!item.permission || permissions.includes(item.permission)) && (!item.ownerOnly || role === "owner")
+        (item) =>
+          !item.hidden &&
+          (!item.permission || permissions.includes(item.permission)) &&
+          (!item.ownerOnly || role === "owner")
       )
     }))
     .filter((group) => group.items.length > 0);
