@@ -71,6 +71,7 @@ export function TopEventsList({ events }: { events: RankedEvent[] }) {
             <EventArtwork
               eventId={event.id}
               coverUrl={event.media.kind === "image" ? event.media.url : null}
+              coverExpected={event.hasCover}
               focalX={event.focalPoint.x}
               focalY={event.focalPoint.y}
               className="h-16 w-16 shrink-0 rounded-xl"
