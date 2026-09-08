@@ -1,6 +1,6 @@
 "use client";
 
-import { History, RefreshCw, Search, Stethoscope, Wrench } from "lucide-react";
+import { Check, Copy, History, RefreshCw, Search, Stethoscope, Wrench } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { signalAccountRefreshAction } from "@/app/(admin)/admin/repairs/doctor-actions";
 import {
@@ -56,6 +56,7 @@ export function RepairCentre({
   const [results, setResults] = useState<RepairUser[] | null>(null);
   const [searchMessage, setSearchMessage] = useState("");
   const [selected, setSelected] = useState<RepairUser | null>(null);
+  const [copiedUserId, setCopiedUserId] = useState(false);
   const [history, setHistory] = useState<RepairHistoryEntry[]>([]);
   const [doctor, setDoctor] = useState<CombinedAccountDoctorState | null>(null);
   const [pendingRepair, setPendingRepair] = useState<RepairDefinition | null>(null);
@@ -107,8 +108,20 @@ export function RepairCentre({
     });
   }
 
+  async function copySelectedUserId() {
+    if (!selected) return;
+    try {
+      await navigator.clipboard.writeText(selected.userId);
+      setCopiedUserId(true);
+      window.setTimeout(() => setCopiedUserId(false), 1800);
+    } catch {
+      setCopiedUserId(false);
+    }
+  }
+
   function selectUser(user: RepairUser) {
     setSelected(user);
+    setCopiedUserId(false);
     setResults(null);
     setQuery("");
     setFeedback(null);
@@ -119,6 +132,7 @@ export function RepairCentre({
 
   function clearSelected() {
     setSelected(null);
+    setCopiedUserId(false);
     setHistory([]);
     setDoctor(null);
     setFeedback(null);
@@ -136,11 +150,28 @@ export function RepairCentre({
       >
         {selected ? (
           <Card className="flex flex-wrap items-center justify-between gap-3 p-3.5">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <UserAvatar src={selected.avatarUrl} name={selected.name} size="sm" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{selected.name}</p>
                 <p className="truncate text-xs text-muted-foreground">@{selected.username}</p>
+                <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">User ID</span>
+                  <code className="break-all font-mono text-[11px] text-muted-foreground" title={selected.userId}>
+                    {selected.userId}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={copySelectedUserId}
+                    aria-label={copiedUserId ? "User ID copied" : "Copy user ID"}
+                  >
+                    {copiedUserId ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {copiedUserId ? "Copied" : "Copy"}
+                  </Button>
+                </div>
               </div>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={clearSelected}>
