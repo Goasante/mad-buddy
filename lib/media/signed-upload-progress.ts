@@ -67,3 +67,6 @@ export function uploadToSignedUrlWithProgress({
     xhr.send(file);
   });
 }
+
+/** Compatibility name used by the composer while the transport stays shared. */
+export const uploadMediaToSignedUrlWithProgress = uploadToSignedUrlWithProgress;
