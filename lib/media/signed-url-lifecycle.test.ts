@@ -7,6 +7,7 @@ import type { ChatMessageView } from "@/lib/messaging/mobile";
 
 const threadStore = readFileSync("lib/messaging/thread-store.ts", "utf8");
 const attachmentImage = readFileSync("components/messaging/message-attachment-image.tsx", "utf8");
+const attachments = readFileSync("lib/messaging/attachments.ts", "utf8");
 const eventArtwork = readFileSync("components/events/event-artwork.tsx", "utf8");
 const rankedAccordion = readFileSync("components/events/ranked-events-accordion.tsx", "utf8");
 const rankedList = readFileSync("components/events/top-events-list.tsx", "utf8");
@@ -57,6 +58,15 @@ describe("signed media URL lifecycle", () => {
     expect(attachmentImage.indexOf("const refreshes = new Map")).toBeGreaterThan(attachmentComponent);
     expect(eventArtwork).toContain("inFlightRefreshRef");
     expect(eventArtwork).not.toContain("const coverRefreshes = new Map");
+  });
+
+  it("fails closed before signing another participant's attachment when block authority errors", () => {
+    const blockRead = attachments.indexOf('from("blocked_users")');
+    const blockFailure = attachments.indexOf("if (blockError) return byId", blockRead);
+    const signer = attachments.indexOf("createSignedUrls", blockRead);
+    expect(blockRead).toBeGreaterThan(-1);
+    expect(blockFailure).toBeGreaterThan(blockRead);
+    expect(signer).toBeGreaterThan(blockFailure);
   });
 
   it("never leaves an expired Event cover as a browser broken-image glyph", () => {
