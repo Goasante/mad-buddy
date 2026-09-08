@@ -354,9 +354,11 @@ describe("privacy", () => {
 // ---------------------------------------------------------------------------
 
 describe("accessibility", () => {
-  it("labels the attachment control and the remove button", () => {
+  it("labels the attachment control and kind-specific remove actions", () => {
     expect(picker).toContain('aria-label="Add an attachment"');
-    expect(picker).toContain('aria-label="Remove photo"');
+    expect(picker).toContain('"Remove document"');
+    expect(picker).toContain('"Remove video"');
+    expect(picker).toContain('"Remove photo"');
   });
 
   it("announces upload state without spamming", () => {
@@ -372,7 +374,8 @@ describe("accessibility", () => {
     expect(attachmentImage).toContain("attachmentAltText(message.senderName, message.isMine)");
   });
 
-  it("respects reduced motion on the upload spinner", () => {
-    expect(picker).toContain("motion-reduce:animate-none");
+  it("uses measured progress without an animated spinner", () => {
+    expect(picker).toContain("UploadProgressGlyph");
+    expect(picker).not.toContain("animate-spin");
   });
 });

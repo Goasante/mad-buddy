@@ -115,7 +115,7 @@ export function RichMediaMessageV4({
             <FileText className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">
-            <strong className="block truncate text-xs">{media.fileName}</strong>
+            <strong className="block truncate text-xs" title={media.fileName}>{media.fileName}</strong>
             <span className="mt-0.5 block text-xs opacity-65">{fileTypeLabel(media.contentType)}{media.sizeBytes > 0 ? ` · ${formatBytes(media.sizeBytes)}` : ""}</span>
           </span>
         </div>
@@ -123,7 +123,7 @@ export function RichMediaMessageV4({
           <a href={media.url} target="_blank" rel="noopener noreferrer" className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
             <ExternalLink className="h-3.5 w-3.5" />Open
           </a>
-          <a href={media.url} download={media.fileName} className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
+          <a href={media.downloadUrl ?? media.url} className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
             <Download className="h-3.5 w-3.5" />Save
           </a>
         </div>

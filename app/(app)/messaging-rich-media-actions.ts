@@ -42,8 +42,6 @@ function configured() {
   return Boolean(env.url && env.serviceRoleKey);
 }
 
-
-
 export async function createChatRichMediaUploadIntentAction(input: unknown) {
   if (!configured()) return { ok: false as const, message: "Chats are not configured." };
   const parsed = createIntentSchema.safeParse(input);
@@ -63,9 +61,14 @@ export async function finalizeChatRichMediaUploadAction(input: unknown) {
 }
 
 /**
- * Mints a short-lived URL only after re-checking the message, conversation,
- * relationship, block state, retention state and canonical media asset. The
- * browser never gets a storage path or a reusable public URL.
+ * Mints short-lived URLs only after re-checking the message, conversation,
+ * relationship, block state, retention state and canonical media asset.
+ *
+ * Documents get TWO signed URLs: an inline/open URL and a download URL whose
+ * Storage response carries Content-Disposition with the canonical original
+ * filename. This is required because browsers are allowed to ignore an HTML
+ * `download="name"` hint for a cross-origin signed URL; without provider-side
+ * Content-Disposition a UUID-like storage key can become the saved filename.
  */
 export async function getRichMediaMessageAction(input: unknown): Promise<RichMediaMessageView | null> {
   if (!configured()) return null;
@@ -133,18 +136,28 @@ export async function getRichMediaMessageAction(input: unknown): Promise<RichMed
     .maybeSingle();
   if (queued) return null;
 
+  const fileName = String(asset.original_file_name ?? (expectedKind === "video" ? "Video" : "Document"));
   const { data: signed, error } = await admin.storage
     .from("media")
     .createSignedUrl(String(asset.storage_key), MEDIA_SIGNED_URL_TTL_SECONDS);
   if (error || !signed?.signedUrl) return null;
+
+  let downloadUrl: string | undefined;
+  if (expectedKind === "file") {
+    const { data: downloadSigned, error: downloadError } = await admin.storage
+      .from("media")
+      .createSignedUrl(String(asset.storage_key), MEDIA_SIGNED_URL_TTL_SECONDS, { download: fileName });
+    if (!downloadError && downloadSigned?.signedUrl) downloadUrl = downloadSigned.signedUrl;
+  }
 
   return {
     messageId: String(message.id),
     mediaId: String(asset.id),
     kind: expectedKind,
     url: signed.signedUrl,
+    downloadUrl,
     contentType: String(asset.content_type),
-    fileName: String(asset.original_file_name ?? (expectedKind === "video" ? "Video" : "Document")),
+    fileName,
     sizeBytes: Number(asset.size_bytes ?? 0),
     expiresAt: mediaSignedUrlExpiresAt()
   };
