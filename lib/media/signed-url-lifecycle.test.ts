@@ -75,9 +75,14 @@ describe("signed media URL lifecycle", () => {
     expect(eventArtwork).toContain("refreshEventCoverUrlAction");
   });
 
-  it("caps Event cover recovery so a bad object cannot mint URLs forever", () => {
+  it("caps Event cover recovery without keeping the final broken image visible", () => {
     expect(eventArtwork).toContain("MAX_COVER_RECOVERY_ATTEMPTS = 2");
     expect(eventArtwork).toContain("attempts >= MAX_COVER_RECOVERY_ATTEMPTS");
+    const recovery = eventArtwork.indexOf("async function recoverBrokenCover");
+    const fallback = eventArtwork.indexOf("setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null })", recovery);
+    const retryGate = eventArtwork.indexOf("!consumeRecoveryAttempt()", recovery);
+    expect(fallback).toBeGreaterThan(recovery);
+    expect(retryGate).toBeGreaterThan(fallback);
   });
 
   it("routes Home and ranked Event artwork through the resilient renderer", () => {
