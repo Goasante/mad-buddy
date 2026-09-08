@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { MAD_BUDDY_ACCESS, accessCheckoutAmount, isCheckoutConfigured } from "@/lib/access/product";
+import {
+  MAD_BUDDY_ACCESS,
+  accessCheckoutAmount,
+  accessMobileMoneyCheckoutAmount,
+  isCheckoutConfigured,
+  isMobileMoneyCheckoutConfigured,
+  type AccessCheckoutMethod,
+  type AccessPaymentMode
+} from "@/lib/access/product";
 import { guardFeature } from "@/lib/admin/enforcement";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
 import { paystackRequest, type PaystackCustomer, type PaystackInitializeTransaction } from "@/lib/paystack/client";
@@ -15,33 +23,19 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 /**
  * Start a Mad Buddy Access checkout.
  *
- * ── THE CLIENT SENDS A PRODUCT NAME, AND NOTHING ELSE ─────────────────────
+ * The client may choose only WHICH checkout experience to use. It never sends
+ * an amount, currency, Paystack plan code or duration. Those remain server
+ * authority.
  *
- * The request body accepts exactly one field, `product`, and it must equal
- * `"mad_buddy_access"`. There is no amount, no currency, no plan code and no
- * duration in the schema, so a client posting `{ amount: 1 }` is not "ignored"
- * in the loose sense -- zod strips it and no code path could read it anyway.
- *
- * Everything chargeable comes from `accessCheckoutAmount()`, which itself takes
- * no parameters. That is the structural guarantee: there is no function
- * signature anywhere in this path through which a caller could supply money.
- *
- * ── WHY A SEPARATE ROUTE FROM /api/paystack/initialize ────────────────────
- *
- * That route's schema is `z.enum(["plus", "pro"])` and its config lookup is
- * `getPaystackPlan(PaidPlanId)` -- the retired ladder. Adding a third branch
- * would mean loosening a schema whose narrowness is the security property, and
- * teaching the legacy path about a product that is not a tier. Access gets its
- * own endpoint with its own single-product schema.
- *
- * Everything else mirrors the existing route deliberately: CSRF origin check,
- * authentication, rate limit, the payments kill switch, and a `checkout_started`
- * billing event before any provider call.
+ * - `card` creates the existing monthly Paystack subscription and auto-renews.
+ * - `mobile_money` creates a one-time GHS transaction with the Mobile Money
+ *   channel only. A verified success buys 30 days and never auto-renews.
  */
-
 const checkoutRequestSchema = z.object({
-  /* The ONLY accepted field. Not an amount, not a plan code, not a duration. */
-  product: z.literal("mad_buddy_access")
+  product: z.literal("mad_buddy_access"),
+  /* Default preserves compatibility with older web/native clients that posted
+     only the product before Ghana Mobile Money was added. */
+  paymentMethod: z.enum(["card", "mobile_money"]).default("card")
 });
 
 export async function POST(request: Request) {
@@ -58,21 +52,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid checkout request." }, { status: 400 });
   }
 
-  /* FAILS CLOSED ON MISSING CONFIGURATION. If the price or the plan code is
-     absent, or Paystack has no secret key, no checkout is created -- rather
-     than one that charges an unverifiable amount. */
-  if (!isCheckoutConfigured() || !getPaystackSecretKey()) {
+  const paymentMethod: AccessCheckoutMethod = parsed.data.paymentMethod;
+  const paymentMode: AccessPaymentMode =
+    paymentMethod === "mobile_money" ? "mobile_money_30d" : "card_subscription";
+  const cardPrice = paymentMethod === "card" ? accessCheckoutAmount() : null;
+  const mobileMoneyPrice = paymentMethod === "mobile_money" ? accessMobileMoneyCheckoutAmount() : null;
+  const price = cardPrice ?? mobileMoneyPrice;
+
+  const configured =
+    paymentMethod === "card" ? isCheckoutConfigured() : isMobileMoneyCheckoutConfigured();
+  if (!configured || !price || !getPaystackSecretKey()) {
     logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
     return NextResponse.json(
       { error: "Mad Buddy Access isn't available to buy just yet. Nothing has been charged." },
       { status: 503 }
     );
-  }
-
-  const price = accessCheckoutAmount();
-  if (!price) {
-    logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
-    return NextResponse.json({ error: "Mad Buddy Access isn't available to buy just yet." }, { status: 503 });
   }
 
   const supabase = await createSupabaseServerClient();
@@ -107,13 +101,41 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdminClient();
 
-  /* The payments kill switch. Checked before a checkout session exists, so a
-     billing incident stops new charges. Existing entitlements are untouched --
-     somebody who already has Access keeps it. */
   const guard = await guardFeature(admin, "payments");
   if (!guard.allowed) {
     logBackendEvent("warn", { requestId, route, statusCode: 503, latencyMs: Date.now() - startedAt });
     return NextResponse.json({ error: guard.message }, { status: 503 });
+  }
+
+  /* Do not sell a second paid period while a provider-backed Access period is
+     already live. This prevents accidental double-purchases and, importantly,
+     stops a direct API call from replacing an active recurring card row with a
+     manual Mobile Money row. Welcome/admin/global access may still buy Access. */
+  const { data: existing, error: existingError } = await admin
+    .from("subscriptions")
+    .select(
+      "paystack_customer_code, plan, status, current_period_end, grace_ends_at, paystack_subscription_code"
+    )
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existingError) {
+    logBackendEvent("error", {
+      requestId,
+      route,
+      statusCode: 503,
+      latencyMs: Date.now() - startedAt,
+      userId: user.id,
+      errorType: errorType(existingError)
+    });
+    return NextResponse.json({ error: "Checkout is temporarily unavailable. Try again shortly." }, { status: 503 });
+  }
+
+  if (hasLivePaidAccess(existing)) {
+    return NextResponse.json(
+      { error: "Mad Buddy Access is already active. Manage the current paid period in Settings." },
+      { status: 409 }
+    );
   }
 
   try {
@@ -138,12 +160,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Checkout is temporarily unavailable. Try again shortly." }, { status: 503 });
   }
 
-  const { data: existing } = await admin
-    .from("subscriptions")
-    .select("paystack_customer_code")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
   let customerCode = existing?.paystack_customer_code ?? null;
 
   if (!customerCode) {
@@ -158,22 +174,24 @@ export async function POST(request: Request) {
       });
       customerCode = customer.customer_code;
 
-      /* The placeholder row is `free`/`free`, NOT the Access product.
-         Nothing has been paid yet -- writing `mad_buddy_access` here would
-         make an abandoned checkout look like a sale, and the resolver reads
-         this table. The product is recorded only once a verified payment
-         arrives. */
-      const { error: upsertError } = await admin.from("subscriptions").upsert(
-        {
+      if (existing) {
+        /* Preserve an expired historical paid row. Customer creation is not a
+           payment and must not rewrite its product/status to free. */
+        const { error: updateError } = await admin
+          .from("subscriptions")
+          .update({ paystack_customer_code: customerCode, provider: "paystack" })
+          .eq("user_id", user.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await admin.from("subscriptions").insert({
           user_id: user.id,
           provider: "paystack",
           paystack_customer_code: customerCode,
           plan: "free",
           status: "free"
-        },
-        { onConflict: "user_id" }
-      );
-      if (upsertError) throw upsertError;
+        });
+        if (insertError) throw insertError;
+      }
     } catch (error) {
       logBackendEvent("error", {
         requestId,
@@ -188,23 +206,34 @@ export async function POST(request: Request) {
   }
 
   try {
+    const transactionBody: Record<string, unknown> = {
+      email: user.email,
+      amount: price.amountMinor,
+      currency: price.currency,
+      callback_url: `${getAppUrl()}/subscription-success?provider=paystack`,
+      metadata: {
+        user_id: user.id,
+        product: MAD_BUDDY_ACCESS.id,
+        access_payment_mode: paymentMode,
+        customer_code: customerCode
+      }
+    };
+
+    if (paymentMethod === "card") {
+      /* A Paystack plan is what creates recurring billing. Restricting the
+         hosted checkout to card makes the UI promise match provider reality. */
+      transactionBody.plan = cardPrice?.planCode;
+      transactionBody.channels = ["card"];
+    } else {
+      /* No plan here. Attaching one is exactly what removes Ghana Mobile Money
+         from a recurring checkout. Paystack's hosted sheet will offer the
+         eligible Ghana providers for the `mobile_money` channel. */
+      transactionBody.channels = ["mobile_money"];
+    }
+
     const transaction = await paystackRequest<PaystackInitializeTransaction>("/transaction/initialize", {
       method: "POST",
-      body: {
-        email: user.email,
-        /* SERVER-OWNED, every one of them. */
-        amount: price.amountMinor,
-        currency: price.currency,
-        plan: price.planCode,
-        callback_url: `${getAppUrl()}/subscription-success?provider=paystack`,
-        metadata: {
-          user_id: user.id,
-          /* Echoed back by Paystack so the webhook can confirm which product
-             this transaction was for, independently of the plan code. */
-          product: MAD_BUDDY_ACCESS.id,
-          customer_code: customerCode
-        }
-      }
+      body: transactionBody
     });
 
     try {
@@ -219,10 +248,9 @@ export async function POST(request: Request) {
         dedupe_key: `paystack:access_payment_attempted:${transaction.reference}`
       });
     } catch (error) {
-      /* Paystack already created the transaction. A failed ledger write must
-         not make the caller retry and create a SECOND checkout, so this is
-         logged and swallowed -- the webhook is the authority on what actually
-         happened. */
+      /* The provider already created the checkout. Do not create a second
+         transaction merely because analytics/ledger enrichment failed here;
+         the signed webhook remains payment authority. */
       logBackendEvent("warn", {
         requestId,
         route,
@@ -242,7 +270,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       authorizationUrl: transaction.authorization_url,
-      reference: transaction.reference
+      reference: transaction.reference,
+      paymentMethod
     });
   } catch (error) {
     logBackendEvent("error", {
@@ -255,4 +284,29 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ error: "Could not start Paystack checkout." }, { status: 502 });
   }
+}
+
+type ExistingSubscription = {
+  plan: string | null;
+  status: string | null;
+  current_period_end: string | null;
+  grace_ends_at: string | null;
+} | null;
+
+function hasLivePaidAccess(subscription: ExistingSubscription): boolean {
+  if (!subscription || subscription.plan !== "mad_buddy_access") return false;
+  if (!subscription.status || !["active", "trialing", "past_due", "non_renewing"].includes(subscription.status)) {
+    return false;
+  }
+
+  const effectiveEnd =
+    subscription.status === "past_due"
+      ? subscription.grace_ends_at ?? subscription.current_period_end
+      : subscription.current_period_end;
+
+  /* A live paid row without an end is treated as active, matching the resolver's
+     fail-safe behaviour rather than risking a duplicate charge. */
+  if (!effectiveEnd) return true;
+  const parsedEnd = Date.parse(effectiveEnd);
+  return Number.isNaN(parsedEnd) || parsedEnd > Date.now();
 }
