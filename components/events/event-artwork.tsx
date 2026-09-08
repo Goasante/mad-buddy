@@ -1,26 +1,19 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { refreshEventCoverUrlAction } from "@/app/(app)/event-media-actions";
 import { focalObjectPosition } from "@/lib/events/cover";
 import { fallbackGradient, resolveEventMedia } from "@/lib/events/event-media";
 import { cn } from "@/lib/utils";
 
-const coverRefreshes = new Map<string, Promise<string | null>>();
-
-function refreshCover(eventId: string): Promise<string | null> {
-  const existing = coverRefreshes.get(eventId);
-  if (existing) return existing;
-
-  const request = refreshEventCoverUrlAction(eventId)
-    .then((result) => (result.ok ? result.coverUrl : null))
-    .catch(() => null)
-    .finally(() => coverRefreshes.delete(eventId));
-  coverRefreshes.set(eventId, request);
-  return request;
-}
+/**
+ * One initial recovery plus one retry if the freshly-minted URL itself cannot
+ * be loaded. A missing object/CDN failure must never turn into an unbounded
+ * signed-URL mint loop.
+ */
+const MAX_COVER_RECOVERY_ATTEMPTS = 2;
 
 /**
  * The one place an Event's artwork is painted.
@@ -73,34 +66,66 @@ export function EventArtwork({
     sourceCoverUrl: string | null;
     url: string | null;
   } | null>(null);
-  const recoveryKeyRef = useRef<string | null>(null);
+
+  /*
+   * IMPORTANT: renewal promises are component-local, not module-global.
+   *
+   * A module-level cache keyed only by Event id can survive a client-side
+   * account transition long enough for account B to reuse a promise that was
+   * authorised for account A. Signed URLs are credentials, so even that narrow
+   * race is unacceptable. Local dedupe still prevents duplicate onError/effect
+   * requests inside this instance without crossing an auth boundary.
+   */
+  const inFlightRefreshRef = useRef<Promise<string | null> | null>(null);
+  const recoveryAttemptsRef = useRef(new Map<string, number>());
+
+  const renewCover = useCallback((): Promise<string | null> => {
+    const existing = inFlightRefreshRef.current;
+    if (existing) return existing;
+
+    const request = refreshEventCoverUrlAction(eventId)
+      .then((result) => (result.ok ? result.coverUrl : null))
+      .catch(() => null)
+      .finally(() => {
+        if (inFlightRefreshRef.current === request) inFlightRefreshRef.current = null;
+      });
+    inFlightRefreshRef.current = request;
+    return request;
+  }, [eventId]);
 
   const activeCoverUrl =
     recovery?.eventId === eventId && recovery.sourceCoverUrl === coverUrl
       ? recovery.url
       : coverUrl;
   const media = resolveEventMedia(eventId, activeCoverUrl);
+  const recoveryScope = `${eventId}:${coverUrl ?? "missing"}`;
+
+  function consumeRecoveryAttempt(): boolean {
+    const attempts = recoveryAttemptsRef.current.get(recoveryScope) ?? 0;
+    if (attempts >= MAX_COVER_RECOVERY_ATTEMPTS) return false;
+    recoveryAttemptsRef.current.set(recoveryScope, attempts + 1);
+    return true;
+  }
 
   /*
    * A ranked Event can arrive with `coverUrl === null` for two very different
    * reasons: it genuinely has no cover, or the server knew about the cover but
    * its short-lived credential could not be minted during the initial batch.
-   * `coverExpected` preserves that distinction. Only the second case gets one
+   * `coverExpected` preserves that distinction. Only the second case gets an
    * authoritative renewal attempt, so a transient signing failure heals while
    * legacy no-cover Events stay zero-network fallbacks.
    */
   useEffect(() => {
-    if (!coverExpected || activeCoverUrl) return;
+    if (!coverExpected || activeCoverUrl || inFlightRefreshRef.current) return;
 
-    const key = `${eventId}:missing:${coverUrl ?? "none"}`;
-    if (recoveryKeyRef.current === key) return;
-    recoveryKeyRef.current = key;
+    const attempts = recoveryAttemptsRef.current.get(recoveryScope) ?? 0;
+    if (attempts >= MAX_COVER_RECOVERY_ATTEMPTS) return;
+    recoveryAttemptsRef.current.set(recoveryScope, attempts + 1);
 
     let cancelled = false;
-    void refreshCover(eventId).then((renewed) => {
+    void renewCover().then((renewed) => {
       if (cancelled) return;
       if (renewed) {
-        recoveryKeyRef.current = null;
         setRecovery({ eventId, sourceCoverUrl: coverUrl, url: renewed });
       }
     });
@@ -108,19 +133,16 @@ export function EventArtwork({
     return () => {
       cancelled = true;
     };
-  }, [activeCoverUrl, coverExpected, coverUrl, eventId]);
+  }, [activeCoverUrl, coverExpected, coverUrl, eventId, recoveryScope, renewCover]);
 
-  async function recoverBrokenCover(failedUrl: string) {
-    const key = `${eventId}:${failedUrl}`;
-    if (recoveryKeyRef.current === key) return;
-    recoveryKeyRef.current = key;
+  async function recoverBrokenCover() {
+    if (inFlightRefreshRef.current || !consumeRecoveryAttempt()) return;
 
     // Remove the broken credential immediately so the browser never leaves a
     // question-mark/broken-image glyph on screen while renewal is in flight.
     setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null });
-    const renewed = await refreshCover(eventId);
+    const renewed = await renewCover();
     if (renewed) {
-      recoveryKeyRef.current = null;
       setRecovery({ eventId, sourceCoverUrl: coverUrl, url: renewed });
     }
   }
@@ -138,7 +160,7 @@ export function EventArtwork({
           style={{ objectPosition: focalObjectPosition(focalX, focalY) }}
           loading="lazy"
           decoding="async"
-          onError={() => void recoverBrokenCover(media.url)}
+          onError={() => void recoverBrokenCover()}
         />
       ) : (
         <div
