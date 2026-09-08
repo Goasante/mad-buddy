@@ -8,6 +8,7 @@ import { resolveBuildId } from "@/lib/pwa/update";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
 import "./icon-polish.css";
+import "./mobile-shell-stability.css";
 
 /**
  * iOS "Add to Home Screen" splash images (portrait only, this app is
@@ -83,11 +84,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Mad Buddy",
-    // iOS Safari's "Add to Home Screen" splash has no relation to the Web App
-    // Manifest's `icons` array; it only reads these apple-touch-startup-image
-    // link tags, matched by exact device media query. Generated from
-    // public/brand/launch-hero.png via scripts/generate-splash-assets.mjs,
-    // from the approved native/PWA splash artwork.
     startupImage: APPLE_STARTUP_IMAGES,
   },
   formatDetection: { telephone: false },
@@ -115,16 +111,6 @@ type RootLayoutProps = {
 
 const themeScript = `
 (function() {
-  // OUTSIDE the try, and first.
-  //
-  // This marks "JavaScript is running", which is what gates the landing
-  // reveal animation. Progressive enhancement in the strict sense: without
-  // it the hero renders plainly and is readable; with it the animation runs.
-  //
-  // It must not sit inside the try below -- localStorage throws in some
-  // privacy modes, and if that exception skipped this line the landing page
-  // would stay blank for exactly the privacy-conscious users this product is
-  // built for.
   document.documentElement.classList.add('js');
 
   try {
@@ -147,33 +133,11 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   const buildId = resolveBuildId(process.env);
   const gaMeasurementId =
     process.env.NODE_ENV === "production" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
-  // The CSP nonce proxy.ts minted for this request. The theme bootstrap is an
-  // inline script, so under the enforced nonce-based CSP it must carry it.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* suppressHydrationWarning is required here, and ONLY here, because of
-            CSP nonce-hiding — a browser behaviour, not an app bug.
-            The CSP spec requires a user agent to EMPTY the `nonce` content
-            attribute once the document has loaded, so a stylesheet cannot use
-            an attribute selector to exfiltrate the value. Chromium does exactly
-            that: after load `getAttribute("nonce")` is `""` while the real value
-            survives on the `.nonce` IDL property.
-            React hydrates AFTER that blanking has happened, compares its own
-            `nonce` prop against the emptied DOM attribute, and reports
-            `nonce="n2v8..."` (client) vs `nonce=""` (server). Because this
-            script lives in the ROOT layout, the warning appeared on every route
-            in the app — which is why it presented as an "app-wide hydration
-            warning confirmed on /settings" rather than as a bug in any one page.
-            Nothing is actually mismatched: proxy.ts mints the nonce, the
-            response header and the served HTML carry the SAME value (verified),
-            and the script executes under the enforced CSP. Suppressing the
-            comparison on this one element is the correct fix; removing the nonce
-            would break the CSP, and there is no way to stop the browser hiding
-            the attribute. Scoped to this element only, so genuine mismatches
-            anywhere else still surface. */}
         <script
           id="theme-script"
           nonce={nonce}
