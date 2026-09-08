@@ -52,11 +52,16 @@ describe("signed media URL lifecycle", () => {
     expect(attachmentImage).toContain("if (!src || failed || needsFreshUrl)");
   });
 
-  it("wakes a mounted chat before its current signed URLs expire", () => {
-    expect(attachmentImage).toContain("SIGNED_URL_REFRESH_SKEW_MS");
-    expect(attachmentImage).toContain("expiresMs - Date.now() - SIGNED_URL_REFRESH_SKEW_MS");
-    expect(attachmentImage).toContain("window.setTimeout");
-    expect(attachmentImage).toContain("window.clearTimeout");
+  it("rechecks freshness when an already-mounted chat photo is opened", () => {
+    const openMedia = attachmentImage.indexOf("const openMedia = useCallback");
+    const freshness = attachmentImage.indexOf("signedUrlNeedsRefresh(attachment.expiresAt", openMedia);
+    const renewal = attachmentImage.indexOf("await renew()", freshness);
+    const open = attachmentImage.indexOf("onOpen();", renewal);
+    expect(openMedia).toBeGreaterThan(-1);
+    expect(freshness).toBeGreaterThan(openMedia);
+    expect(renewal).toBeGreaterThan(freshness);
+    expect(open).toBeGreaterThan(renewal);
+    expect(attachmentImage).not.toContain("window.setTimeout");
   });
 
   it("keeps signed-credential refresh promises inside the mounted account surface", () => {
