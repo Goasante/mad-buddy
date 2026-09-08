@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * means "support changed something; refresh canonical state".
  */
 export async function GET() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) {
     return NextResponse.json({ version: null }, { status: 401, headers: noStoreHeaders() });
   }

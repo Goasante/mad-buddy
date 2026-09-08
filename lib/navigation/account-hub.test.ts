@@ -152,7 +152,7 @@ describe("account hub administration", () => {
   it("stays a visibility decision, never an authorization one", () => {
     // The flag is resolved by the authenticated layout from getAdminContext();
     // /admin re-checks server-side regardless of what this sheet drew.
-    expect(read("app/(app)/layout.tsx")).toContain("showAdminLink={adminContext.ok}");
+    expect(read("app/(app)/layout.tsx")).toContain("showAdminLink={isStaff}");
     expect(read("components/app-shell/app-shell.tsx")).toContain("showAdminLink={showAdminLink}");
   });
 });

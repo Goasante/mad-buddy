@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { recordProductEvent } from "@/lib/analytics/track";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { TOUR_REPLAY_COOKIE, TOUR_REPLAY_MAX_AGE_SECONDS } from "@/lib/tours/replay";
 
 // No type exports from a "use server" module.
@@ -26,7 +26,7 @@ export async function startTourReplayAction(input: unknown): Promise<{ ok: boole
   const parsed = startSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Could not start the walkthrough." };
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false, message: "Log in to replay the walkthrough." };
 
   const admin = createSupabaseAdminClient();
@@ -72,7 +72,7 @@ export async function endTourReplayAction(input: unknown): Promise<{ ok: boolean
 
   if (!parsed.success || !parsed.data.completed) return { ok: true };
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: true };
 
   await recordProductEvent(createSupabaseAdminClient(), {

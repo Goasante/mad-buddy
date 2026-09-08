@@ -46,7 +46,7 @@ import type { MentionCandidateView } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
 import { PROACTIVE_WARM_MESSAGE_LIMIT } from "@/lib/messaging/thread-warmup";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 
 // The read/send views + logic (and these view types) live in
 // lib/messaging/mobile.ts so the mobile /api/messages/* routes share them.
@@ -70,15 +70,30 @@ function missingEnvState(): MessagingActionState | null {
   return null;
 }
 
+/* IDENTITY, NOT A FRESH AUTH LOOKUP -- and the reason is specific, not
+ * convenience.
+ *
+ * These paths run through service-role authority, so RLS is not what protects
+ * them. What protects them is `resolveConversationAccess`, which re-reads the
+ * caller's actual `conversation_members` row on every request and refuses
+ * unless `status = 'joined'`. That is an independent authoritative check, and
+ * it does not depend on how fresh the token is.
+ *
+ * The trade being made: a globally signed-out or deleted account could keep
+ * reading its OWN existing conversations for up to 60 minutes. It cannot reach
+ * anyone else's, cannot escalate, and every privileged surface -- Admin,
+ * billing, privacy operations, account controls -- uses
+ * getCurrentUserRecord() and notices revocation immediately.
+ */
 /* The SHARED helper, not a fourth private copy.
  *
  * Each messaging action file had its own `getAuthedUserId` calling
  * `supabase.auth.getUser()` -- a network round trip to the auth server. Server
  * actions are separate requests, so opening one conversation fired seven
- * actions and paid seven round trips before doing any work. `getCurrentUser`
+ * actions and paid seven round trips before doing any work. `getCurrentIdentity`
  * verifies the JWT locally against the project's JWKS instead. */
 async function getAuthedUserId() {
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
   return user?.id ?? null;
 }
 

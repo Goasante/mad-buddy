@@ -174,7 +174,7 @@ describe("owner admin access", () => {
   it("uses the same server-resolved flag as the sidebar", () => {
     // getAdminContext() runs in the authenticated layout; the sheet never
     // decides staff status for itself.
-    expect(stripComments(read("app/(app)/layout.tsx"))).toContain("showAdminLink={adminContext.ok}");
+    expect(stripComments(read("app/(app)/layout.tsx"))).toContain("showAdminLink={isStaff}");
     expect(appShell).toContain("showAdminLink={showAdminLink}");
   });
 

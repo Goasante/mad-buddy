@@ -376,7 +376,12 @@ describe("phone and discovery are separate decisions", () => {
   });
 
   it("takes the user from the session, never from the client", () => {
-    expect(actions).toContain("const user = await getCurrentUser()");
+    /* The helper split renamed this. These are PRIVILEGED paths, so the
+       assertion is strengthened rather than merely renamed: they must use
+       the AUTHORITATIVE record, which notices a global sign-out or a
+       deleted account, never the fast identity path. */
+    expect(actions).toContain("const user = await getCurrentUserRecord()");
+    expect(actions).not.toContain("getCurrentIdentity");
     expect(actions).not.toContain("input.userId");
   });
 

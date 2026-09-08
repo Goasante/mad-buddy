@@ -311,7 +311,7 @@ describe("layout identity queries", () => {
   const layout = read("app/(app)/layout.tsx");
 
   it("runs the identity load in the existing parallel batch", () => {
-    const start = layout.indexOf("const [adminContext");
+    const start = layout.indexOf("const [isStaff");
     const batch = layout.slice(start, layout.indexOf("]);", start));
     expect(batch).toContain("await Promise.all([");
     // The shell's identity comes from that one batch, adding no serial

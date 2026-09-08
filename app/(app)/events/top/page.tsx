@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { TopEventsList } from "@/components/events/top-events-list";
 import { getRankedUpcomingEvents } from "@/lib/events/ranked-events";
 import { MAX_RANKED_EVENTS } from "@/lib/events/ranking";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 
 /**
  * The ranked Events destination (Ranked Events Discovery).
@@ -13,7 +13,7 @@ import { getCurrentUser } from "@/lib/supabase/auth";
  * hundred is the system's cap, not a promise about how many exist.
  */
 export default async function TopEventsPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
   const events = user ? await getRankedUpcomingEvents(user.id, { limit: MAX_RANKED_EVENTS }) : [];
 
   return (

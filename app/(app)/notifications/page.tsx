@@ -1,6 +1,6 @@
 import { NotificationsPageContent } from "@/components/notifications/notifications-page";
 import { toNotificationResponse } from "@/lib/notifications/server";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { birthdayTitle } from "@/lib/profile/birthday-experience";
 import { CONVERSATION_NOTIFICATION_TYPE_PATTERNS } from "@/lib/notifications/conversation-boundary";
@@ -12,7 +12,7 @@ export default async function NotificationsPage({
 }) {
   const params = await searchParams;
   const birthdayPreview = process.env.NODE_ENV !== "production" && params?.birthdayPreview === "1";
-  const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
+  const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentIdentity()]);
   /* The subscription lookup that used to run here is gone. It existed only to
      decide `canSendCustomMessages`, which is now free -- so Notifications no
      longer touches the billing system at all, and one page load stopped doing a
@@ -36,7 +36,7 @@ export default async function NotificationsPage({
     initialNotifications.unshift({
       id: "birthday-preview",
       type: `birthday:${user.id}`,
-      title: birthdayTitle(user.user_metadata?.full_name ?? "Kofi"),
+      title: birthdayTitle(user.userMetadata?.full_name as string | undefined ?? "Kofi"),
       message: "Send a birthday wish. Preview only.",
       is_read: false,
       created_at: new Date().toISOString(),

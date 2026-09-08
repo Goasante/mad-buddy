@@ -7,7 +7,7 @@ import { loadClickedPeople } from "@/lib/linkr/collections-service";
 import { loadHomeUpForContext } from "@/lib/social/home-upfor-context";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMomentsEnabled, isSocializeEnabled } from "@/lib/features/feature-flags";
 import { countIncomingRequests } from "@/lib/friends/service";
@@ -37,7 +37,7 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 }
 
 export default async function DashboardPage() {
-  const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUser()]);
+  const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUserRecord()]);
   const admin = createSupabaseAdminClient();
   const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext, linkrMutuals] = user
     ? await Promise.all([

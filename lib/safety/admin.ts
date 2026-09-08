@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity, getCurrentUserRecord } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type SafetyAdminContext =
@@ -62,9 +62,28 @@ export async function getAdminEmailAccess(email: string) {
   }
 }
 
+/**
+ * Whether to SHOW the Admin link, decided from verified identity.
+ *
+ * Presentation only. It grants nothing: every Admin route calls
+ * `getSafetyAdminContext()` itself, so a stale answer here can at worst show
+ * or hide a link to a page that will still refuse the caller on its own terms.
+ *
+ * It exists because the app layout renders on every page, and using the
+ * authoritative context there imposed a network round trip app-wide for a
+ * decision that only affects a menu item. Access is still authoritative
+ * wherever it is actually granted.
+ */
+export async function getAdminLinkVisibility(): Promise<boolean> {
+  const identity = await getCurrentIdentity();
+  if (!identity?.email) return false;
+  const access = await getAdminEmailAccess(identity.email.toLowerCase());
+  return access.ok;
+}
+
 export async function getSafetyAdminContext(): Promise<SafetyAdminContext> {
   // Shares the per-request cached getUser() round trip with the layout and page.
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
 
   if (!user?.email) {
     return { ok: false, reason: "signed_out" };

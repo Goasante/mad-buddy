@@ -8,7 +8,7 @@ import {
 } from "@/lib/safety/safe-arrival-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default async function SafeArrivalRoute({
 }: {
   searchParams: Promise<{ session?: string }>;
 }) {
-  const [user, params] = await Promise.all([getCurrentUser(), searchParams]);
+  const [user, params] = await Promise.all([getCurrentUserRecord(), searchParams]);
 
   const env = getSupabaseServerEnv();
   let travelling: SafeArrivalJourney[] = [];

@@ -6,7 +6,7 @@ import {
 } from "@/components/plans/plans-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ async function loadPlans(): Promise<{
   invitees: PlanInvitee[];
   currentUserId: string | null;
 }> {
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
   const env = getSupabaseServerEnv();
   if (!user || !env.url || !env.serviceRoleKey) {
     return { plans: [], invitees: [], currentUserId: user?.id ?? null };

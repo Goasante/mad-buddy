@@ -1,10 +1,10 @@
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { WalkthroughReplay } from "@/components/tours/walkthrough-replay";
 import { getReplayableTours } from "@/lib/tours/service";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentIdentity } from "@/lib/supabase/auth";
 
 export default async function WalkthroughPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentIdentity();
   const tours = user ? await getReplayableTours(user.id) : [];
 
   return (

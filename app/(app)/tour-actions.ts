@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { recordTourProgress, recordTourStepEvent } from "@/lib/tours/service";
 
 // NOTE: this module exports no types. A "use server" file that re-exports a
@@ -32,7 +32,7 @@ export async function recordTourProgressAction(input: unknown): Promise<{ ok: bo
   const parsed = progressSchema.safeParse(input);
   if (!parsed.success) return { ok: false };
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false };
 
   // Bounded so a stuck client cannot spam progress writes. Reuses the existing
@@ -55,7 +55,7 @@ export async function recordTourStepEventAction(input: unknown): Promise<{ ok: b
   const parsed = stepEventSchema.safeParse(input);
   if (!parsed.success) return { ok: false };
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false };
 
   const ok = await recordTourStepEvent({

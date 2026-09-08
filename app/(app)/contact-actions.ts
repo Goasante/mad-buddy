@@ -17,7 +17,7 @@ import {
 } from "@/lib/contacts/reminder-store";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 
 /**
  * Phone identity and contact-discovery settings.
@@ -38,7 +38,7 @@ export async function savePhoneNumberAction(input: {
   region?: string;
 }): Promise<ContactActionState> {
   const requestId = createRequestId();
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false, message: "Log in to add your number." };
 
   // Bounded before any parsing work: a phone field has no legitimate reason
@@ -70,7 +70,7 @@ export async function savePhoneNumberAction(input: {
 
 export async function removePhoneNumberAction(): Promise<ContactActionState> {
   const requestId = createRequestId();
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false, message: "Log in to change your number." };
 
   const admin = createSupabaseAdminClient();
@@ -88,7 +88,7 @@ export async function removePhoneNumberAction(): Promise<ContactActionState> {
 
 export async function setContactDiscoveryAction(enabled: boolean): Promise<ContactActionState> {
   const requestId = createRequestId();
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false, message: "Log in to change this setting." };
 
   const admin = createSupabaseAdminClient();
@@ -116,7 +116,7 @@ export async function getPhoneIdentityAction(): Promise<{
   hint: string;
   discoveryEnabled: boolean;
 }> {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { hasPhone: false, hint: "", discoveryEnabled: false };
 
   const admin = createSupabaseAdminClient();
@@ -140,7 +140,7 @@ export async function getPhoneIdentityAction(): Promise<{
  */
 export async function dismissContactReminderAction(): Promise<ContactActionState> {
   const requestId = createRequestId();
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false, message: "" };
 
   const admin = createSupabaseAdminClient();
@@ -167,7 +167,7 @@ export async function dismissContactReminderAction(): Promise<ContactActionState
  */
 export async function stopContactRemindersAction(): Promise<ContactActionState> {
   const requestId = createRequestId();
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false, message: "" };
 
   const admin = createSupabaseAdminClient();
@@ -191,7 +191,7 @@ export async function stopContactRemindersAction(): Promise<ContactActionState> 
  * steps and the second prompt exists for the gap between them.
  */
 export async function completeContactSetupAction(): Promise<ContactActionState> {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserRecord();
   if (!user) return { ok: false, message: "" };
 
   const admin = createSupabaseAdminClient();
