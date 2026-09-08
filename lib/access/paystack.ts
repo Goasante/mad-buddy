@@ -2,40 +2,27 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { MAD_BUDDY_ACCESS } from "@/lib/access/product";
+import {
+  ACCESS_MANUAL_PERIOD_DAYS,
+  MAD_BUDDY_ACCESS,
+  type AccessPaymentMode
+} from "@/lib/access/product";
 import { deliverNotification } from "@/lib/notifications/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
  * PAYSTACK VERIFICATION FOR MAD BUDDY ACCESS.
  *
- * Its own module rather than an extra branch in `lib/paystack/sync.ts`, because
- * the two products verify differently and merging them would corrupt both.
- * The legacy path resolves a Paystack plan code onto a `SubscriptionPlan`
- * (`buddy_plus` / `buddy_pro`) and validates against `paystackPlans`. Access is
- * not a tier: it is one product, one price, one plan code. Forcing it through
- * `appPlanFromPaystack` would mean either inventing a fake tier for it or
- * loosening the legacy checks, and the legacy checks are the only thing
- * standing between a forged webhook and a free subscription.
+ * There are now two legitimate payment shapes for the SAME product:
  *
- * ── WHAT IS VERIFIED, AND WHY EACH MATTERS ────────────────────────────────
+ * 1. recurring card subscription — tied to our Paystack plan code;
+ * 2. Ghana Mobile Money — a one-time GHS 5.00 charge that buys 30 days.
  *
- * Everything is compared against SERVER CONFIGURATION. Nothing here trusts a
- * number that arrived in the payload:
- *
- *   plan code   the event must name OUR plan. An event for a different plan --
- *               someone else's, or a plan created by an attacker in their own
- *               Paystack account -- is not our subscription.
- *   amount      must equal the configured minor-unit price exactly. This is
- *               what stops a tampered checkout for GHS 0.01 activating access.
- *   currency    must be GHS. A GHS 5.00 price paid in a weaker currency is a
- *               different (smaller) payment.
- *
- * A single mismatched field rejects the whole event. There is no "close
- * enough": every one of these differing means the event is not the purchase we
- * think it is.
+ * The second path deliberately has no plan code, so it must prove itself using
+ * stronger one-time-payment facts: our exact product metadata, exact payment
+ * mode, exact amount, exact GHS currency, and Paystack's `mobile_money` channel.
+ * The webhook signature is checked before this module is called.
  */
-
 export type AccessPaystackEvent = {
   /** Minor units, as Paystack sends it. */
   amount?: number | null;
@@ -43,68 +30,79 @@ export type AccessPaystackEvent = {
   planCode?: string | null;
   /** `metadata.product` from checkout initialization, when present. */
   product?: string | null;
+  /** Server-authored metadata from `/api/access/checkout`. */
+  paymentMode?: AccessPaymentMode | string | null;
+  /** Paystack's successful transaction channel, e.g. `card`, `mobile_money`. */
+  channel?: string | null;
 };
 
-export type AccessVerification =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type AccessVerification = { ok: true } | { ok: false; reason: string };
 
-/**
- * Does this event belong to the Mad Buddy Access product at all?
- *
- * Deliberately NOT a validation -- it answers routing, not trust. An event for
- * a legacy `buddy_plus` subscription must continue to flow through the old
- * path, so this only claims events that name our plan code or carry our product
- * identifier in metadata.
- */
 export function isAccessEvent(event: AccessPaystackEvent): boolean {
   if (MAD_BUDDY_ACCESS.planCode && event.planCode === MAD_BUDDY_ACCESS.planCode) return true;
   return event.product === MAD_BUDDY_ACCESS.id;
 }
 
+export function isManualMobileMoneyAccessEvent(event: AccessPaystackEvent): boolean {
+  return event.paymentMode === "mobile_money_30d";
+}
+
 /**
- * Verify a Paystack event against the server's product configuration.
+ * Verify a Paystack event against server-owned product configuration.
  *
- * Returns a reason rather than throwing, so a caller can log precisely why an
- * event was refused. Refusal reasons never reach a user -- an attacker probing
- * with malformed events should learn nothing from response differences.
+ * Recurring lifecycle events may legitimately omit amount/currency/metadata,
+ * but they MUST carry our plan code. Mobile Money has no plan, so its successful
+ * charge MUST carry all of the one-time-payment facts listed above.
  */
 export function verifyAccessEvent(event: AccessPaystackEvent): AccessVerification {
   const expectedAmount = MAD_BUDDY_ACCESS.amountMinor;
   const expectedPlan = MAD_BUDDY_ACCESS.planCode;
 
-  /* Fails closed on an unconfigured product. If the price or plan is somehow
-     missing, nothing can be verified, so nothing is accepted -- rather than
-     letting an unverifiable event through. */
-  if (expectedAmount === null || expectedPlan === null) {
-    return { ok: false, reason: "Mad Buddy Access is not configured for payment." };
+  if (expectedAmount === null) {
+    return { ok: false, reason: "Mad Buddy Access has no configured price." };
   }
 
-  /* THE PLAN CODE IS REQUIRED, not optional-if-the-amount-matches.
-     An amount alone is forgeable and non-specific: GHS 5.00 is an unremarkable
-     sum that could arrive from any transaction. The plan code is what ties a
-     payment to THIS recurring product. */
+  if (event.paymentMode === "mobile_money_30d") {
+    if (event.product !== MAD_BUDDY_ACCESS.id) {
+      return { ok: false, reason: "Mobile Money metadata does not name Mad Buddy Access." };
+    }
+    if (event.planCode) {
+      return { ok: false, reason: "Mobile Money Access must not carry a recurring plan code." };
+    }
+    if (event.amount !== expectedAmount) {
+      return { ok: false, reason: "Mobile Money amount does not match the configured price." };
+    }
+    if (!event.currency || event.currency.toUpperCase() !== MAD_BUDDY_ACCESS.currency) {
+      return { ok: false, reason: "Mobile Money currency is not the configured GHS price." };
+    }
+    if (event.channel !== "mobile_money") {
+      return { ok: false, reason: "Mobile Money Access was not paid through the Mobile Money channel." };
+    }
+    return { ok: true };
+  }
+
+  /* A metadata value we do not understand is a contradiction, not something to
+     silently reinterpret as recurring card. */
+  if (event.paymentMode && event.paymentMode !== "card_subscription") {
+    return { ok: false, reason: "Paystack metadata names an unknown Access payment mode." };
+  }
+
+  if (expectedPlan === null) {
+    return { ok: false, reason: "Mad Buddy Access recurring plan is not configured." };
+  }
   if (!event.planCode) {
-    return { ok: false, reason: "Paystack event carries no plan code." };
+    return { ok: false, reason: "Paystack recurring event carries no plan code." };
   }
   if (event.planCode !== expectedPlan) {
     return { ok: false, reason: "Paystack plan code does not match Mad Buddy Access." };
   }
 
-  /* The amount is checked when present. Some subscription lifecycle events
-     (`subscription.disable`) legitimately carry no amount, and demanding one
-     would reject valid cancellations. When it IS present it must be exact. */
   if (event.amount != null && event.amount !== expectedAmount) {
     return { ok: false, reason: "Paystack amount does not match the configured price." };
   }
-
   if (event.currency && event.currency.toUpperCase() !== MAD_BUDDY_ACCESS.currency) {
     return { ok: false, reason: "Paystack currency does not match the configured price." };
   }
-
-  /* Metadata is checked only when present, and only for CONTRADICTION.
-     Its absence is normal (Paystack does not echo metadata on every event
-     type); a value naming a different product is not. */
   if (event.product && event.product !== MAD_BUDDY_ACCESS.id) {
     return { ok: false, reason: "Paystack metadata names a different product." };
   }
@@ -112,43 +110,53 @@ export function verifyAccessEvent(event: AccessPaystackEvent): AccessVerificatio
   return { ok: true };
 }
 
-/**
- * The subscription window a verified Access payment buys.
- *
- * Prefers Paystack's own `next_payment_date`, because the provider is the
- * authority on when it will next charge. The 30-day fallback exists only for
- * events that omit it, and is deliberately generous by a rounding rather than
- * short: ending access a day early for a paying customer is a worse failure
- * than a day of grace.
- */
+/** The provider-backed recurring period. */
 export function accessPeriodEnd(nextPaymentDate: string | null | undefined, paidAt: Date): Date {
   if (nextPaymentDate) {
     const parsed = new Date(nextPaymentDate);
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
   const fallback = new Date(paidAt);
-  fallback.setDate(fallback.getDate() + 30);
+  fallback.setDate(fallback.getDate() + ACCESS_MANUAL_PERIOD_DAYS);
   return fallback;
 }
 
+/**
+ * Compute the bounded period for a one-time Mobile Money payment.
+ *
+ * This is intentionally RETRY-IDEMPOTENT. Webhook processing removes its
+ * receipt marker when a downstream step fails so Paystack can retry. If the
+ * subscription row was already written before (for example, notification
+ * delivery failed afterwards), replaying the same `charge.success` must not add
+ * another 30 days. We therefore keep the later of the already-recorded manual
+ * end and `paidAt + 30 days`; we never add 30 days to an existing live end.
+ *
+ * Checkout blocks buying another paid period while one is live, so stacking
+ * overlapping manual purchases is not a supported product path. This rule
+ * favours financial idempotency over silently granting extra periods on retry.
+ */
+export function manualAccessPeriodEnd(
+  paidAt: Date,
+  existingManualPeriodEnd?: string | null
+): Date {
+  const candidate = new Date(paidAt);
+  candidate.setUTCDate(candidate.getUTCDate() + ACCESS_MANUAL_PERIOD_DAYS);
+
+  if (!existingManualPeriodEnd) return candidate;
+  const existingEndMs = Date.parse(existingManualPeriodEnd);
+  if (!Number.isFinite(existingEndMs)) return candidate;
+  return existingEndMs > candidate.getTime() ? new Date(existingEndMs) : candidate;
+}
 
 /**
- * Record a verified Access subscription.
- *
- * WRITES `plan = "mad_buddy_access"`, never a legacy tier. The resolver only
- * asks whether a subscription is live, so a tier label would have "worked" --
- * and quietly attributed this product's revenue to one nobody can buy.
- *
- * The row is upserted on `user_id`, matching the existing subscription
- * lifecycle: one person has one subscription, and a renewal updates it rather
- * than stacking a second.
+ * Record one verified Access row. `non_renewing` remains live through
+ * `current_period_end`, which is exactly the state a manual Mobile Money period
+ * needs: paid now, no automatic next charge.
  */
 export async function recordAccessSubscription(
   admin: SupabaseClient<Database>,
   input: {
     userId: string;
-    /* `non_renewing` is the existing status for "cancelled, but paid through
-       the end of the period" -- exactly what a cancellation means here. */
     status: "active" | "trialing" | "past_due" | "non_renewing";
     periodStart: Date;
     periodEnd: Date;
@@ -156,17 +164,15 @@ export async function recordAccessSubscription(
     subscriptionCode?: string | null;
     emailToken?: string | null;
     authorizationCode?: string | null;
-    /** Set when a cancellation should let the paid period run out. */
     cancelAtPeriodEnd?: boolean;
+    /** Changes notification copy only; entitlement authority is still the row. */
+    manualRenewal?: boolean;
   }
 ): Promise<void> {
   const { error } = await admin.from("subscriptions").upsert(
     {
       user_id: input.userId,
       provider: "paystack",
-      /* The PRODUCT, not a ladder tier. `subscriptions.plan` is typed
-         `SubscriptionProduct` precisely so this row can say what actually
-         sold. */
       plan: "mad_buddy_access",
       status: input.status,
       paystack_customer_code: input.customerCode ?? null,
@@ -175,8 +181,6 @@ export async function recordAccessSubscription(
       paystack_authorization_code: input.authorizationCode ?? null,
       current_period_start: input.periodStart.toISOString(),
       current_period_end: input.periodEnd.toISOString(),
-      /* A successful payment ends any grace window: the renewal went through.
-         Cancellation sets this separately. */
       grace_ends_at: null,
       cancel_at_period_end: input.cancelAtPeriodEnd ?? false
     },
@@ -185,27 +189,88 @@ export async function recordAccessSubscription(
 
   if (error) throw new Error(`Could not record Access subscription: ${error.message}`);
 
+  const manualEnd = input.periodEnd.toLocaleDateString("en-GH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC"
+  });
+
   await deliverNotification(admin, {
     userId: input.userId,
     priority: "high",
     type: "subscription_update",
     title: "Mad Buddy Access",
-    message:
-      input.status === "active"
+    message: input.manualRenewal
+      ? `Your Mobile Money payment is confirmed. Mad Buddy Access is active through ${manualEnd}; pay again when you want another period.`
+      : input.status === "active"
         ? "Your Mad Buddy Access is active. Linkr and UpFor are unlocked."
         : `Your Mad Buddy Access subscription is ${input.status}.`
   });
 }
 
 /**
- * Cancel at period end.
+ * Apply a verified one-time Mobile Money purchase.
  *
- * NEVER REVOKES IMMEDIATELY. Somebody who cancels has paid through the end of
- * their period and keeps what they bought until then -- the resolver already
- * honours `current_period_end`, so simply flagging the row is enough. Ending
- * access the moment somebody cancels would be taking back a paid period, and it
- * is also the behaviour that makes people hesitate to subscribe at all.
+ * Replaying the same provider event is safe even when the first attempt wrote
+ * the subscription row and failed later: the period calculation never stacks
+ * another 30 days onto an already-live manual end.
  */
+export async function recordAccessManualPayment(
+  admin: SupabaseClient<Database>,
+  input: {
+    userId: string;
+    paidAt: Date;
+    customerCode?: string | null;
+  }
+): Promise<{ periodStart: Date; periodEnd: Date }> {
+  const { data: existing, error: existingError } = await admin
+    .from("subscriptions")
+    .select(
+      "plan, status, current_period_start, current_period_end, paystack_customer_code, paystack_subscription_code"
+    )
+    .eq("user_id", input.userId)
+    .maybeSingle();
+
+  if (existingError) throw new Error(`Could not load existing Access period: ${existingError.message}`);
+
+  const paidAtMs = input.paidAt.getTime();
+  const existingEndMs = existing?.current_period_end ? Date.parse(existing.current_period_end) : Number.NaN;
+  const existingIsManualAccess =
+    existing?.plan === "mad_buddy_access" &&
+    !existing.paystack_subscription_code &&
+    ["active", "trialing", "past_due", "non_renewing"].includes(existing.status ?? "") &&
+    Number.isFinite(existingEndMs) &&
+    existingEndMs > paidAtMs;
+
+  const periodEnd = manualAccessPeriodEnd(
+    input.paidAt,
+    existingIsManualAccess ? existing?.current_period_end : null
+  );
+
+  const existingStart = existing?.current_period_start ? new Date(existing.current_period_start) : null;
+  const periodStart =
+    existingIsManualAccess && existingStart && !Number.isNaN(existingStart.getTime())
+      ? existingStart
+      : input.paidAt;
+
+  await recordAccessSubscription(admin, {
+    userId: input.userId,
+    status: "non_renewing",
+    periodStart,
+    periodEnd,
+    customerCode: input.customerCode ?? existing?.paystack_customer_code ?? null,
+    subscriptionCode: null,
+    emailToken: null,
+    authorizationCode: null,
+    cancelAtPeriodEnd: true,
+    manualRenewal: true
+  });
+
+  return { periodStart, periodEnd };
+}
+
+/** Cancel an automatic card subscription at period end, never immediately. */
 export async function cancelAccessSubscription(
   admin: SupabaseClient<Database>,
   subscriptionCode: string | null | undefined
