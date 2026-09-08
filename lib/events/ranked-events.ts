@@ -39,6 +39,13 @@ export type RankedEvent = {
   endsAt: string;
   status: string;
   media: EventMedia;
+  /**
+   * Canonical storage truth, separate from whether initial URL signing worked.
+   * A transient signing failure must not become indistinguishable from a legacy
+   * Event that genuinely has no cover, otherwise the client cannot know which
+   * fallback should attempt secure renewal.
+   */
+  hasCover: boolean;
   /** Where the subject sits, so every crop keeps it in frame. */
   focalPoint: { x: number; y: number };
   goingCount: number;
@@ -181,6 +188,7 @@ export async function getRankedUpcomingEvents(
     startsAt: event.starts_at,
     endsAt: event.ends_at,
     isHost: event.host_id === userId,
+    hasCover: Boolean(event.cover_media_id),
     coverUrl: event.cover_media_id ? coverUrlById.get(event.cover_media_id) ?? null : null,
     focalX: event.cover_focal_x,
     focalY: event.cover_focal_y
@@ -195,10 +203,10 @@ export async function getRankedUpcomingEvents(
     endsAt: event.endsAt,
     status: event.status,
     // The canonical cover when the event has one, the deterministic generated
-    // fallback when it does not (legacy events, and drafts). One resolver, so
-    // the accordion, the Top 100 and the detail surface cannot disagree about
-    // what an event looks like.
+    // fallback when it does not (legacy events, drafts, or a transient initial
+    // signing miss). `hasCover` below preserves which fallback is recoverable.
     media: resolveEventMedia(event.id, event.coverUrl),
+    hasCover: event.hasCover,
     focalPoint: { x: event.focalX, y: event.focalY },
     goingCount: event.goingCount,
     interestedCount: event.interestedCount,

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crown, MapPin } from "lucide-react";
-import { fallbackGradient } from "@/lib/events/event-media";
-import { focalObjectPosition } from "@/lib/events/cover";
+
+import { EventArtwork } from "@/components/events/event-artwork";
 import { arrangeForAccordion, activeIndexForAccordion } from "@/lib/events/ranking";
 import type { RankedEvent } from "@/lib/events/ranked-events";
 import { FINE_POINTER_QUERY, useMediaQuery } from "@/hooks/use-media-query";
@@ -196,33 +196,14 @@ export function RankedEventsAccordion({
               reducedMotion && "transition-none"
             )}
           >
-            <span
-              aria-hidden="true"
-              className="absolute inset-0 -z-10"
-              style={
-                event.media.kind === "fallback"
-                  ? { backgroundImage: fallbackGradient(event.media.treatment) }
-                  : undefined
-              }
-            >
-              {event.media.kind === "image" ? (
-                /* Event artwork is a remote user upload with no known
-                   dimensions; next/image would need a configured loader per
-                   host. Lazy + async so a collapsed rail costs nothing. */
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={event.media.url}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  // The creator's focal point, so the tall panel crop keeps
-                  // the subject in frame instead of centre-cropping a face
-                  // out of the picture.
-                  style={{ objectPosition: focalObjectPosition(event.focalPoint.x, event.focalPoint.y) }}
-                  className="h-full w-full object-cover"
-                />
-              ) : null}
-            </span>
+            <EventArtwork
+              eventId={event.id}
+              coverUrl={event.media.kind === "image" ? event.media.url : null}
+              coverExpected={event.hasCover}
+              focalX={event.focalPoint.x}
+              focalY={event.focalPoint.y}
+              className="absolute inset-0 -z-10 h-full w-full rounded-2xl"
+            />
 
             {/* Legibility scrim. Always present so text contrast does not
                 depend on which artwork happened to load. */}
@@ -303,14 +284,13 @@ export function RankedEventsAccordion({
           aria-label={`Number ${event.rank}, ${event.name}. Press to expand.`}
           className="focus-ring relative min-h-[10.5rem] w-3 shrink-0 overflow-hidden rounded-l-lg text-left"
         >
-          <span
-            aria-hidden="true"
-            className="absolute inset-0"
-            style={
-              event.media.kind === "fallback"
-                ? { backgroundImage: fallbackGradient(event.media.treatment) }
-                : undefined
-            }
+          <EventArtwork
+            eventId={event.id}
+            coverUrl={event.media.kind === "image" ? event.media.url : null}
+            coverExpected={event.hasCover}
+            focalX={event.focalPoint.x}
+            focalY={event.focalPoint.y}
+            className="absolute inset-0 h-full w-full rounded-l-lg"
           />
           <span className="absolute inset-0 bg-black/35" aria-hidden="true" />
           <span className="absolute inset-x-0 top-2 text-center text-[0.625rem] font-bold tabular-nums text-white">

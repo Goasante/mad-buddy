@@ -134,10 +134,20 @@ export async function signAttachmentsForMessages(
     )
   ];
   if (senderIds.length > 0) {
-    const { data: blocks } = await admin
+    /*
+     * Minting a new private-media credential must fail closed on block
+     * authority. The shared social helper historically treats a query failure
+     * like "no block"; that is tolerable for a presentation fallback, but not
+     * here. If blocked_users cannot be read, do not mint another participant's
+     * attachment URL. The viewer's own attachment needs no cross-user block
+     * decision, so the query is skipped when senderIds is empty.
+     */
+    const { data: blocks, error: blockError } = await admin
       .from("blocked_users")
       .select("blocker_id, blocked_id")
       .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`);
+    if (blockError) return byId;
+
     const blockedSenderIds = new Set(
       (blocks ?? []).flatMap((block) => {
         if (block.blocker_id === viewerId && senderIds.includes(block.blocked_id)) return [block.blocked_id];

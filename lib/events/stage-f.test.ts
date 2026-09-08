@@ -482,12 +482,18 @@ describe("every ranked surface resolves one canonical cover", () => {
     expect(projection).toContain("coverIds.map");
   });
 
-  it("gives the accordion and the list the same focal point", () => {
+  it("gives every ranked surface the same focal point", () => {
+    const artwork = stripComments(read("components/events/event-artwork.tsx"));
+    expect(artwork).toContain("focalObjectPosition(focalX, focalY)");
+
     for (const path of [
       "components/events/ranked-events-accordion.tsx",
       "components/events/top-events-list.tsx"
     ]) {
-      expect(stripComments(read(path)), path).toContain("focalObjectPosition(event.focalPoint.x");
+      const surface = stripComments(read(path));
+      expect(surface, path).toContain("<EventArtwork");
+      expect(surface, path).toContain("focalX={event.focalPoint.x}");
+      expect(surface, path).toContain("focalY={event.focalPoint.y}");
     }
   });
 });

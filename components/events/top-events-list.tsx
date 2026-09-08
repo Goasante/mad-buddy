@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { Crown, MapPin } from "lucide-react";
-import { fallbackGradient } from "@/lib/events/event-media";
-import { focalObjectPosition } from "@/lib/events/cover";
-import type { RankedEvent } from "@/lib/events/ranked-events";
+import { CalendarPlus, Crown, MapPin } from "lucide-react";
+
+import { EventArtwork } from "@/components/events/event-artwork";
 import { EmptyState } from "@/components/ui/empty-state";
-import { CalendarPlus } from "lucide-react";
+import type { RankedEvent } from "@/lib/events/ranked-events";
 import { cn } from "@/lib/utils";
 
 /**
@@ -69,30 +68,14 @@ export function TopEventsList({ events }: { events: RankedEvent[] }) {
               </span>
             </span>
 
-            <span
-              aria-hidden="true"
-              className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl"
-              style={
-                event.media.kind === "fallback"
-                  ? { backgroundImage: fallbackGradient(event.media.treatment) }
-                  : undefined
-              }
-            >
-              {event.media.kind === "image" ? (
-                /* Remote user upload; see ranked-events-accordion for the
-                   same note about next/image loaders. */
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={event.media.url}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  // Same focal point as the accordion: one image, many crops.
-                  style={{ objectPosition: focalObjectPosition(event.focalPoint.x, event.focalPoint.y) }}
-                  className="h-full w-full object-cover"
-                />
-              ) : null}
-            </span>
+            <EventArtwork
+              eventId={event.id}
+              coverUrl={event.media.kind === "image" ? event.media.url : null}
+              coverExpected={event.hasCover}
+              focalX={event.focalPoint.x}
+              focalY={event.focalPoint.y}
+              className="h-16 w-16 shrink-0 rounded-xl"
+            />
 
             <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 py-0.5 pr-1">
               <span className="truncate text-sm font-semibold leading-tight">{event.name}</span>
