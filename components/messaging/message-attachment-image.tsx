@@ -8,7 +8,10 @@ import { MessageRetentionV4 } from "@/components/messaging/message-retention-v4"
 import { attachmentAltText } from "@/lib/messaging/attachment-labels";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
-import { signedUrlNeedsRefresh } from "@/lib/media/signed-url-lifecycle";
+import {
+  SIGNED_URL_REFRESH_SKEW_MS,
+  signedUrlNeedsRefresh
+} from "@/lib/media/signed-url-lifecycle";
 import { cn } from "@/lib/utils";
 
 type MessageAttachmentImageProps = {
@@ -97,6 +100,28 @@ export function MessageAttachmentImage({
     if (proactiveRefreshKeyRef.current === refreshKey) return;
     proactiveRefreshKeyRef.current = refreshKey;
     void renew();
+  }, [attachment, failed, needsFreshUrl, renew, src]);
+
+  /*
+   * `needsFreshUrl` is evaluated during render, so a conversation that stays
+   * mounted for longer than the five-minute Storage TTL needs its own wake-up.
+   * Schedule renewal just before expiry while the credential is still usable.
+   * This also keeps the full-resolution URL fresh for somebody who opens the
+   * immersive viewer after leaving the thread on screen for several minutes.
+   * The timer is component-local and cleared on unmount/account navigation.
+   */
+  useEffect(() => {
+    if (!attachment || !src || failed || needsFreshUrl) return;
+
+    const expiresMs = Date.parse(attachment.expiresAt);
+    if (!Number.isFinite(expiresMs)) return;
+    const delayMs = Math.max(0, expiresMs - Date.now() - SIGNED_URL_REFRESH_SKEW_MS);
+    const timer = window.setTimeout(() => {
+      proactiveRefreshKeyRef.current = `${attachment.mediaId}:${attachment.expiresAt}:${src}`;
+      void renew();
+    }, delayMs);
+
+    return () => window.clearTimeout(timer);
   }, [attachment, failed, needsFreshUrl, renew, src]);
 
   if (!attachment) return null;
