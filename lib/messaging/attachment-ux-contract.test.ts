@@ -50,6 +50,13 @@ describe("visible upload progress", () => {
     expect(picker).toContain("progress.percent");
     expect(picker).toContain("percent`");
   });
+
+  it("keeps remove actions specific to the attachment kind", () => {
+    const picker = read("components/messaging/attachment-picker.tsx");
+    expect(picker).toContain('"Remove document"');
+    expect(picker).toContain('"Remove video"');
+    expect(picker).toContain('"Remove photo"');
+  });
 });
 
 describe("mobile bottom safe-area convergence", () => {
