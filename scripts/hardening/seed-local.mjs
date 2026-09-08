@@ -38,19 +38,98 @@ for (const person of PEOPLE) {
     email_confirm: true,
     user_metadata: { full_name: person.full_name, username: person.username }
   });
-  if (error) { console.log(`user ${person.email}: ${error.message}`); continue; }
-  ids[person.username] = data.user.id;
+  /* An existing user is the NORMAL case on a stack that has been seeded
+     before, not a failure. Falling through with `continue` left `ids` empty,
+     so the admin assignment below then threw "requires qatester" on every run
+     after the first -- i.e. the seed only worked on a virgin database, which
+     is the one situation where it is least needed. */
+  let userId = data?.user?.id ?? null;
+  if (error) {
+    const { data: existing } = await admin
+      .from("profiles")
+      .select("user_id")
+      .eq("username", person.username)
+      .maybeSingle();
+    userId = existing?.user_id ?? null;
+    if (!userId) { console.log(`user ${person.email}: ${error.message}`); continue; }
+    console.log(`user ${person.email} already exists -> ${userId}`);
+  }
+  ids[person.username] = userId;
 
   // A trigger may already have inserted the profile row; upsert either way.
   const { error: pErr } = await admin.from("profiles").upsert({
-    user_id: data.user.id,
+    user_id: userId,
     username: person.username,
     full_name: person.full_name,
     bio: person.bio || null,
     mood_status: person.mood_status || null
   }, { onConflict: "user_id" });
-  console.log(`user ${person.email} -> ${data.user.id}${pErr ? ` (profile: ${pErr.message})` : ""}`);
+  if (!error) console.log(`user ${person.email} -> ${userId}${pErr ? ` (profile: ${pErr.message})` : ""}`);
 }
+
+/**
+ * Runtime Admin proof needs a REAL governed operator, not a test-only bypass.
+ *
+ * The migrations create the Admin roles/permission graph before this seed runs,
+ * but the migration that promotes the founder can only do so if that auth user
+ * already existed DURING migration. After a fresh db reset our fixture users are
+ * created later, so without this step `/admin/repairs` has nobody who can hold
+ * `admin.support.manage` even though every database test is green.
+ *
+ * `qa@local.test` is intentionally granted the real super_administrator role in
+ * LOCAL SUPABASE ONLY. The script is hard-pinned to 127.0.0.1 and the public
+ * local demo service key above; this creates no production/staging assignment.
+ */
+async function seedLocalAdmin() {
+  const userId = ids.qatester;
+  if (!userId) throw new Error("local admin fixture requires qatester");
+
+  const { data: role, error: roleError } = await admin
+    .from("admin_roles")
+    .select("id, name")
+    .eq("name", "super_administrator")
+    .maybeSingle();
+  if (roleError || !role) {
+    throw new Error(`local admin role unavailable: ${roleError?.message ?? "missing super_administrator"}`);
+  }
+
+  const { data: permission, error: permissionError } = await admin
+    .from("admin_role_permissions")
+    .select("permission_key")
+    .eq("role_id", role.id)
+    .eq("permission_key", "admin.support.manage")
+    .maybeSingle();
+  if (permissionError || !permission) {
+    throw new Error(`local support permission unavailable: ${permissionError?.message ?? "admin.support.manage missing"}`);
+  }
+
+  const { error: adminUserError } = await admin.from("admin_users").upsert(
+    {
+      email: "qa@local.test",
+      auth_user_id: userId,
+      role: "owner",
+      disabled_at: null
+    },
+    { onConflict: "email" }
+  );
+  if (adminUserError) throw new Error(`local admin_users fixture: ${adminUserError.message}`);
+
+  const { error: assignmentError } = await admin.from("admin_assignments").upsert(
+    {
+      user_id: userId,
+      role_id: role.id,
+      status: "active",
+      starts_at: new Date().toISOString(),
+      expires_at: null
+    },
+    { onConflict: "user_id,role_id" }
+  );
+  if (assignmentError) throw new Error(`local admin assignment fixture: ${assignmentError.message}`);
+
+  console.log("admin qa@local.test -> super_administrator (admin.support.manage)");
+}
+
+await seedLocalAdmin();
 
 /** Friendships are stored one row per pair with user_one_id < user_two_id. */
 async function befriend(a, b) {
@@ -67,3 +146,4 @@ await befriend("qatester", "kofim");
 await befriend("qatester", "amab");
 
 console.log("\nsigned-in account: qa@local.test / " + PASSWORD);
+console.log("admin runtime proof: qa@local.test has real admin.support.manage via super_administrator");

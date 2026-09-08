@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Stethoscope } from "lucide-react";
 import { IssueDetailPanel, type IssueDetailData } from "@/components/admin/support/issue-detail-panel";
 import { getAdminAccess } from "@/lib/admin/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -162,14 +162,32 @@ export default async function SupportIssueDetailPage({ params }: DetailPageProps
     canSendPasswordReset: access.permissions.has("admin.users.recovery_link")
   };
 
+  /* The ticket ID travels, not its contents. Account Doctor resolves the
+     allowlisted category server-side from this id, so the ordering cannot be
+     steered by a crafted link and no ticket text reaches the prioritiser --
+     see lib/admin/support-ticket-context.ts. */
+  const accountDoctorHref = userSummary?.username
+    ? (`/admin/repairs?q=${encodeURIComponent(userSummary.username)}&ticket=${encodeURIComponent(issueId)}` as Route)
+    : null;
+
   return (
     <div className="space-y-5">
-      <Link
-        href={"/admin/support" as Route}
-        className="focus-ring inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to issues
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href={"/admin/support" as Route}
+          className="focus-ring inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to issues
+        </Link>
+        {accountDoctorHref ? (
+          <Link
+            href={accountDoctorHref}
+            className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#E88C2B]/20 bg-[#E88C2B]/10 px-3 text-sm font-semibold text-[#f1a35c] hover:bg-[#E88C2B]/15"
+          >
+            <Stethoscope className="h-4 w-4" aria-hidden="true" /> Diagnose account
+          </Link>
+        ) : null}
+      </div>
       <IssueDetailPanel data={data} />
     </div>
   );

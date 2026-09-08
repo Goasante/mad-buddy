@@ -5,15 +5,18 @@
  * permission + confirmation + audit) and the UI (which renders the catalog and
  * mirrors the confirm/reason requirements). The actual mutations live in the
  * server action; nothing here touches the database. Every repair is narrowly
- * scoped to a single user and a single safe table, reusing existing schema — no
- * migration and no destructive account-data loss.
+ * scoped to a single user and a safe lifecycle invariant; destructive account
+ * data (profiles, auth, subscriptions, messages) is never deleted here.
  */
 
 import type { AdminPermission } from "@/lib/admin/governance";
 
 export type RepairRisk = "low" | "medium" | "high";
 
-export type RepairCategory = "Visibility & presence" | "Notifications" | "Access & limits" | "Onboarding";
+export type RepairCategory =
+  | "Messaging & coordination"
+  | "Plans & UpFor"
+  | "Visibility & presence";
 
 export type RepairDefinition = {
   id: string;
@@ -31,82 +34,90 @@ export type RepairDefinition = {
   confirm: boolean;
 };
 
+/* WHAT BELONGS ON THIS SHELF.
+ *
+ * A repair needs a DEFECT PREDICATE, not just a verifier. Post-write
+ * verification proves the mutation did what it said; it says nothing about
+ * whether the mutation should have been offered at all. Three entries were
+ * removed for failing that test, and none were unsafe -- they simply were not
+ * repairs, because no diagnostic could ever say the state was wrong:
+ *
+ *   clear_notification_badge -- unread notifications are not a defect. Marking
+ *     somebody's real unread mail as read because an operator clicked a button
+ *     destroys information they had not seen.
+ *   pause_visibility -- Ghost Mode is the USER's privacy choice. Admin setting
+ *     it is a moderation action against an account, not a repair of drift, and
+ *     it must not sit behind support.manage on an always-visible shelf.
+ *   reset_onboarding -- nothing diagnoses onboarding state as WRONG, so the
+ *     button could only ever act on a healthy account.
+ *
+ * Three more went in a second pass, for the subtler version of the same fault:
+ * they were named by a finding, but the finding could never fire.
+ *
+ *   reset_glow_signal -- the presence loader projects a usable signal as
+ *     `fresh` and everything else as `missing`; it never emits `stale`, because
+ *     an expired location row is not drift (the proximity engine already treats
+ *     it as absent). The "signal is stale" branch is dead code.
+ *   clear_push_subscriptions -- `stalePushDevices` is hard-coded 0, because no
+ *     canonical stale-token rule exists. Its finding can never fire either.
+ *   clear_rate_limits -- this one CAN fire, but "an active rate limit exists"
+ *     is throttling working, not drift. Clearing it is an abuse-control
+ *     decision, and support.manage must not be able to lift a legitimate
+ *     protection because a button was on screen.
+ *
+ * Inventing a stale threshold for the first two would have manufactured the
+ * defect needed to justify the repair. The honest move is fewer repairs.
+ *
+ * Every entry below is reachable from a finding the LIVE loader can actually
+ * produce. If a governed administrative action is wanted for any of these
+ * later, it belongs in a separate surface with its own semantics -- not here,
+ * where "repair" implies something was broken.
+ */
 export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   {
-    id: "pause_visibility",
-    label: "Pause visibility (Ghost Mode)",
-    description: "Switches the account to Ghost Mode so it stops appearing in proximity.",
-    effect: "The account is hidden from nearby glow until they turn visibility back on.",
-    category: "Visibility & presence",
-    risk: "low",
+    id: "reconcile_direct_messaging",
+    label: "Repair direct messaging",
+    description: "Reopens only archived direct chats whose users are currently Muddies and not blocked, and restores their direct-chat membership.",
+    effect: "Eligible existing direct conversations become usable again. No friendship or new conversation is created, and any live block still wins.",
+    category: "Messaging & coordination",
+    risk: "medium",
     permission: "admin.support.manage",
-    requiresReason: false,
-    confirm: false
+    requiresReason: true,
+    confirm: true
   },
   {
-    id: "reset_glow_signal",
-    label: "Reset glow signal",
-    description: "Removes the current device location signal so it can refresh cleanly.",
-    effect: "The last known glow signal is cleared; it refreshes on the next update.",
-    category: "Visibility & presence",
+    id: "reconcile_plan_chats",
+    label: "Reconcile Plan Chats",
+    description: "Runs the canonical Plan Chat membership reconciler for this user's active Going/Maybe Plans.",
+    effect: "Plan Chat membership is rebuilt from the Plan lifecycle authority. It does not add arbitrary people or create direct-message permission.",
+    category: "Messaging & coordination",
+    risk: "medium",
+    permission: "admin.support.manage",
+    requiresReason: true,
+    confirm: true
+  },
+  {
+    id: "settle_stranded_upfor_requests",
+    label: "Settle requests on a closed UpFor",
+    description:
+      "Declines requests still pending on the account's own UpFors that have expired, been cancelled or already become a Plan.",
+    effect:
+      "People waiting on a session that is over stop waiting. Nobody is added to anything, and no live UpFor is touched.",
+    category: "Plans & UpFor",
     risk: "low",
     permission: "admin.support.manage",
     requiresReason: false,
-    confirm: false
+    confirm: true
   },
   {
     id: "clear_stuck_status",
     label: "Clear stuck status",
-    description: "Removes a status that failed to expire (availability / activity).",
-    effect: "The current status is cleared; the account shows no active status.",
+    description: "Removes a status whose expiry has already passed. A status that is still current is never touched.",
+    effect: "Only expired statuses are removed. A current status the person set deliberately is left exactly as it is.",
     category: "Visibility & presence",
     risk: "medium",
     permission: "admin.support.manage",
     requiresReason: false,
-    confirm: true
-  },
-  {
-    id: "clear_notification_badge",
-    label: "Clear notification badge",
-    description: "Marks all current notifications as read to clear a stuck badge count.",
-    effect: "The unread badge resets to zero. No notifications are deleted.",
-    category: "Notifications",
-    risk: "low",
-    permission: "admin.support.manage",
-    requiresReason: false,
-    confirm: false
-  },
-  {
-    id: "clear_push_subscriptions",
-    label: "Reset push devices",
-    description: "Removes stored push devices so the account can re-register for push.",
-    effect: "Push stops until the account re-enables notifications on a device.",
-    category: "Notifications",
-    risk: "medium",
-    permission: "admin.support.manage",
-    requiresReason: false,
-    confirm: true
-  },
-  {
-    id: "clear_rate_limits",
-    label: "Clear rate-limit lockout",
-    description: "Clears this account's rate-limit counters so it isn't stuck throttled.",
-    effect: "Throttled actions become available again immediately.",
-    category: "Access & limits",
-    risk: "medium",
-    permission: "admin.support.manage",
-    requiresReason: true,
-    confirm: true
-  },
-  {
-    id: "reset_onboarding",
-    label: "Re-trigger onboarding",
-    description: "Marks onboarding incomplete so the account restarts the setup flow.",
-    effect: "The account is sent back through onboarding on next open. No data is deleted.",
-    category: "Onboarding",
-    risk: "high",
-    permission: "admin.users.suspend",
-    requiresReason: true,
     confirm: true
   }
 ];
@@ -124,10 +135,9 @@ export function repairRiskTone(risk: RepairRisk): "default" | "warning" | "dange
 }
 
 export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
-  "Visibility & presence",
-  "Notifications",
-  "Access & limits",
-  "Onboarding"
+  "Messaging & coordination",
+  "Plans & UpFor",
+  "Visibility & presence"
 ];
 
 /** Catalog grouped by category, in display order — for the UI. */

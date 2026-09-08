@@ -43,7 +43,7 @@ describe("repair catalog integrity", () => {
 
 describe("repair lookups & tone", () => {
   it("finds a known repair and misses an unknown one", () => {
-    expect(getRepair("pause_visibility")?.label).toContain("Ghost");
+    expect(getRepair("clear_stuck_status")?.label).toContain("stuck status");
     expect(getRepair("___nope___")).toBeUndefined();
   });
 
@@ -64,9 +64,12 @@ describe("permission-scoped availability", () => {
   it("only surfaces repairs whose permission the actor holds", () => {
     const supportOnly: AdminPermission[] = ["admin.support.manage"];
     const allowed = allowedRepairs(supportOnly).map((r: RepairDefinition) => r.id);
-    expect(allowed).toContain("pause_visibility");
-    // reset_onboarding needs admin.users.suspend — not held here.
-    expect(allowed).not.toContain("reset_onboarding");
+    expect(allowed).toContain("clear_stuck_status");
+    /* Every surviving repair is support.manage, so the meaningful assertion is
+       that a permission the actor does NOT hold surfaces nothing. The old case
+       used reset_onboarding (admin.users.suspend), which was removed for
+       having no defect predicate. */
+    expect(allowedRepairs([]).map((r: RepairDefinition) => r.id)).toEqual([]);
   });
 
   it("an owner (all permissions) can run everything", () => {
