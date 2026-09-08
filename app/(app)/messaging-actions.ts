@@ -46,7 +46,10 @@ import type { MentionCandidateView } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
 import { PROACTIVE_WARM_MESSAGE_LIMIT } from "@/lib/messaging/thread-warmup";
-import { getCurrentIdentity } from "@/lib/supabase/auth";
+import {
+  getAuthoritativeMessagingUserId,
+  getMessagingIdentityId
+} from "@/lib/messaging/action-auth";
 
 // The read/send views + logic (and these view types) live in
 // lib/messaging/mobile.ts so the mobile /api/messages/* routes share them.
@@ -70,39 +73,13 @@ function missingEnvState(): MessagingActionState | null {
   return null;
 }
 
-/* IDENTITY, NOT A FRESH AUTH LOOKUP -- and the reason is specific, not
- * convenience.
- *
- * These paths run through service-role authority, so RLS is not what protects
- * them. What protects them is `resolveConversationAccess`, which re-reads the
- * caller's actual `conversation_members` row on every request and refuses
- * unless `status = 'joined'`. That is an independent authoritative check, and
- * it does not depend on how fresh the token is.
- *
- * The trade being made: a globally signed-out or deleted account could keep
- * reading its OWN existing conversations for up to 60 minutes. It cannot reach
- * anyone else's, cannot escalate, and every privileged surface -- Admin,
- * billing, privacy operations, account controls -- uses
- * getCurrentUserRecord() and notices revocation immediately.
- */
-/* The SHARED helper, not a fourth private copy.
- *
- * Each messaging action file had its own `getAuthedUserId` calling
- * `supabase.auth.getUser()` -- a network round trip to the auth server. Server
- * actions are separate requests, so opening one conversation fired seven
- * actions and paid seven round trips before doing any work. `getCurrentIdentity`
- * verifies the JWT locally against the project's JWKS instead. */
-async function getAuthedUserId() {
-  const user = await getCurrentIdentity();
-  return user?.id ?? null;
-}
 
 // ---------------------------------------------------------------------------
 // Open a conversation (spec §4), no manual "create chat" step.
 // ---------------------------------------------------------------------------
 
 export async function openDirectConversationAction(recipientId: string): Promise<MessagingActionState> {
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   return openDirectConversation(userId, recipientId);
@@ -113,7 +90,7 @@ export async function openDirectConversationAction(recipientId: string): Promise
 // ---------------------------------------------------------------------------
 
 export async function sendMessageAction(input: unknown): Promise<MessagingActionState> {
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const result = await sendMessage(userId, input);
@@ -144,7 +121,7 @@ export async function sendMessageAction(input: unknown): Promise<MessagingAction
 }
 
 export async function getMessageableFriendsAction(): Promise<MessageableFriend[]> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return [];
 
   return listMessageableFriends(userId);
@@ -155,14 +132,14 @@ export async function getMessageableFriendsAction(): Promise<MessageableFriend[]
 // ---------------------------------------------------------------------------
 
 export async function getConversationsAction(): Promise<ConversationView[]> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return [];
 
   return listConversations(userId);
 }
 
 export async function getMessagesAction(conversationId: string): Promise<ChatMessageView[]> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return [];
 
   return listMessages(userId, conversationId);
@@ -176,7 +153,7 @@ export async function getMessagesAction(conversationId: string): Promise<ChatMes
  * performs the canonical reconciliation above.
  */
 export async function getRecentMessagesAction(conversationId: string): Promise<ChatMessageView[]> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return [];
 
   return listMessages(userId, conversationId, { limit: PROACTIVE_WARM_MESSAGE_LIMIT });
@@ -187,7 +164,7 @@ export async function getMessageAction(
   conversationId: string,
   messageId: string
 ): Promise<ChatMessageView | null> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return null;
 
   return (await listMessages(userId, conversationId, { messageId }))[0] ?? null;
@@ -202,7 +179,7 @@ export async function getMessageByClientMessageIdAction(
   conversationId: string,
   clientMessageId: string
 ): Promise<ChatMessageView | null> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return null;
   return (await listMessages(userId, conversationId, { clientMessageId }))[0] ?? null;
 }
@@ -215,14 +192,14 @@ export async function getMessageByClientMessageIdAction(
  * failure, and an error would tell a prober that the conversation exists.
  */
 export async function getMentionCandidatesAction(conversationId: string): Promise<MentionCandidateView[]> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return [];
 
   return listMentionCandidates(userId, conversationId);
 }
 
 export async function markConversationReadAction(conversationId: string): Promise<MessagingActionState> {
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   return markConversationRead(userId, conversationId);
@@ -236,16 +213,25 @@ export async function muteConversationAction(
   if (missing) return missing;
   if (!uuidSchema.safeParse(conversationId).success) return { ok: false, message: "Not found." };
 
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
+  /* Confirm membership before writing. The write is scoped to the caller's own
+     row, so this was not exploitable -- but it reported "Conversation muted."
+     for a conversation the caller is not in, having updated zero rows, and
+     that is a lie the UI then displays. resolveConversationAccess is what the
+     rest of this file relies on; this action simply was not calling it. */
+  const access = await resolveConversationAccess(admin, userId, conversationId);
+  if (!access.canView) return { ok: false, message: "Conversation not found." };
+
   const mutedUntil = hours > 0 ? new Date(Date.now() + hours * 60 * 60 * 1000).toISOString() : null;
-  await admin
+  const { error } = await admin
     .from("conversation_members")
     .update({ muted_until: mutedUntil, updated_at: new Date().toISOString() })
     .eq("conversation_id", conversationId)
     .eq("user_id", userId);
+  if (error) return { ok: false, message: "Couldn't update that conversation." };
 
   return { ok: true, message: mutedUntil ? "Conversation muted." : "Conversation unmuted." };
 }
@@ -258,7 +244,7 @@ export async function setConversationPinnedAction(
   if (missing) return missing;
   if (!uuidSchema.safeParse(conversationId).success) return { ok: false, message: "Not found." };
 
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   return setConversationPinned(userId, conversationId, pinned);
@@ -279,7 +265,7 @@ export async function setConversationHiddenAction(
   if (missing) return missing;
   if (!uuidSchema.safeParse(conversationId).success) return { ok: false, message: "Not found." };
 
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   return setConversationHidden(userId, conversationId, hidden);
@@ -310,16 +296,25 @@ export async function editMessageAction(
   const textError = validateMessageText(text);
   if (textError) return { ok: false, message: textError };
 
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
   const { data: message } = await admin
     .from("messages")
-    .select("id, sender_id, message_type, created_at, deleted_at")
+    .select("id, sender_id, message_type, created_at, deleted_at, conversation_id")
     .eq("id", messageId)
     .maybeSingle();
   if (!message) return { ok: false, message: "Message not found." };
+
+  /* Being the sender is not sufficient. Editing rewrites text that is already
+     on other people's screens, so it also requires CURRENT access to the
+     conversation -- otherwise somebody removed from a group could still edit
+     their old messages inside it, indefinitely, from a chat they can no longer
+     open. Sender and time rules are checked as well, below; this is an
+     additional condition, not a replacement for them. */
+  const access = await resolveConversationAccess(admin, userId, message.conversation_id);
+  if (!access.canView) return { ok: false, message: "Message not found." };
 
   if (
     !canEditMessage({
@@ -356,16 +351,10 @@ export async function editMessageAction(
    * current joined membership, so an edit cannot mention somebody a send could
    * not, and cannot smuggle in a member who has left since the message was
    * written. Its composite PK makes re-adding an unchanged mention a no-op. */
-  const { data: current } = await admin
-    .from("messages")
-    .select("conversation_id")
-    .eq("id", messageId)
-    .maybeSingle();
-
-  if (current?.conversation_id) {
+  if (message.conversation_id) {
     const kept = await persistMentions(
       admin,
-      current.conversation_id,
+      message.conversation_id,
       messageId,
       userId,
       mentionUserIds
@@ -403,7 +392,7 @@ export async function deleteMessageAction(
   if (missing) return missing;
   if (!uuidSchema.safeParse(messageId).success) return { ok: false, message: "Message not found." };
 
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
@@ -422,10 +411,19 @@ export async function deleteMessageAction(
 
   const { data: message } = await admin
     .from("messages")
-    .select("id, sender_id, created_at")
+    .select("id, sender_id, created_at, conversation_id")
     .eq("id", messageId)
     .maybeSingle();
   if (!message) return { ok: false, message: "Message not found." };
+
+  /* Delete-for-everyone removes a message from other people's screens, so it
+     requires current access to the conversation as well as the sender and
+     time rules -- the same reason as editing. "Delete for me" above is
+     deliberately NOT gated this way: hiding your own copy of a message from a
+     conversation you have left is reasonable, and it changes nothing anyone
+     else can see. */
+  const access = await resolveConversationAccess(admin, userId, message.conversation_id);
+  if (!access.canView) return { ok: false, message: "Message not found." };
 
   if (
     !canDeleteForEveryone({
@@ -457,7 +455,7 @@ export async function reactToMessageAction(
   const parsed = z.enum(["heart", "laugh", "thumbs_up", "wave", "fire", "wow"]).safeParse(reaction);
   if (!parsed.success) return { ok: false, message: "Choose a valid reaction." };
 
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
@@ -483,11 +481,35 @@ export async function reactToMessageAction(
 export async function removeMessageReactionAction(messageId: string): Promise<MessagingActionState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  /* Validated like every sibling action. Its absence here meant an unparseable
+     id reached PostgREST as a malformed-uuid error that was then discarded,
+     and the caller was told the reaction had been removed. */
+  if (!uuidSchema.safeParse(messageId).success) return { ok: false, message: "Message not found." };
+
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
-  await admin.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", userId);
+  /* Adding a reaction checks conversation access; removing one did not. The
+     delete is scoped to the caller's own row so it could not touch anyone
+     else's, but the pair should be symmetric, and the unchecked error made a
+     no-op indistinguishable from success. */
+  const { data: message } = await admin
+    .from("messages")
+    .select("conversation_id")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (!message) return { ok: false, message: "Message not found." };
+
+  const access = await resolveConversationAccess(admin, userId, message.conversation_id);
+  if (!access.canView) return { ok: false, message: "Message not found." };
+
+  const { error } = await admin
+    .from("message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId);
+  if (error) return { ok: false, message: "Couldn't remove that reaction." };
   return { ok: true, message: "Reaction removed." };
 }
 
@@ -497,7 +519,7 @@ export async function removeMessageReactionAction(messageId: string): Promise<Me
 
 export async function getCommunicationPreferencesAction(): Promise<CommunicationPreferences> {
   const env = getSupabaseServerEnv();
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!env.url || !env.serviceRoleKey || !userId) return normalizeCommunicationPreferences(null);
   const admin = createSupabaseAdminClient();
   return loadCommunicationPreferences(admin, userId);
@@ -507,7 +529,7 @@ export async function updateCommunicationPreferencesAction(input: unknown): Prom
   const missing = missingEnvState();
   if (missing) return missing;
 
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   const normalized = normalizeCommunicationPreferences(input);
@@ -550,7 +572,7 @@ export async function createMessageAttachmentUploadIntentAction(
 ): Promise<AttachmentUploadIntentState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in before uploading." };
   const parsed = attachmentIntentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check that photo and try again." };
@@ -582,7 +604,7 @@ export async function createMessageAttachmentUploadIntentAction(
  */
 export async function getVoiceRecorderConfigAction(): Promise<VoiceRecorderConfig> {
   const env = getSupabaseServerEnv();
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId || !env.url || !env.serviceRoleKey) {
     return { enabled: false, maxDurationSeconds: 0 };
   }
@@ -615,7 +637,7 @@ const voiceIntentSchema = z.object({
 export async function createVoiceMessageUploadIntentAction(input: unknown): Promise<AttachmentUploadIntentState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in before uploading." };
   const parsed = voiceIntentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "That voice recording isn't supported." };
@@ -648,7 +670,7 @@ export type VoiceFinalizeState = AttachmentUploadState & { durationMs?: number }
 export async function finalizeVoiceMessageUploadAction(input: unknown): Promise<VoiceFinalizeState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in before uploading." };
   const parsed = z.object({
     conversationId: z.string().uuid(),
@@ -681,7 +703,7 @@ export type PreparedVoicePlaybackState = MessagingActionState & {
 export async function getPreparedVoicePlaybackAction(input: unknown): Promise<PreparedVoicePlaybackState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in before playing this voice message." };
   const parsed = z.object({ conversationId: z.string().uuid(), mediaId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "That voice message isn't available." };
@@ -698,7 +720,7 @@ export async function getPreparedVoicePlaybackAction(input: unknown): Promise<Pr
 export async function getMessageVoicePlaybackAction(input: unknown): Promise<PreparedVoicePlaybackState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in before playing this voice message." };
   const parsed = z.object({ conversationId: z.string().uuid(), messageId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "That voice message isn't available." };
@@ -714,7 +736,7 @@ export async function getMessageVoicePlaybackAction(input: unknown): Promise<Pre
 export async function finalizeMessageAttachmentUploadAction(input: unknown): Promise<AttachmentUploadState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in before uploading." };
   const parsed = z.object({ conversationId: z.string().uuid(), mediaId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "That upload isn't available." };
@@ -736,7 +758,7 @@ export async function refreshMessageAttachmentAction(input: unknown): Promise<{
 }> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return { ok: false, message: "Log in first." };
   const parsed = z.object({ conversationId: z.string().uuid(), messageId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "That attachment isn't available." };
@@ -775,7 +797,7 @@ export async function uploadMessageAttachmentAction(formData: FormData): Promise
   const missing = missingEnvState();
   if (missing) return missing;
 
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in before uploading." };
 
   const conversationId = formData.get("conversationId");
@@ -929,7 +951,7 @@ export async function uploadMessageAttachmentAction(formData: FormData): Promise
 export async function discardMessageAttachmentAction(mediaId: string): Promise<AttachmentUploadState> {
   const missing = missingEnvState();
   if (missing) return missing;
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId || !uuidSchema.safeParse(mediaId).success) return { ok: false, message: "Nothing to discard." };
 
   const admin = createSupabaseAdminClient();

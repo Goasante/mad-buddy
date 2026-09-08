@@ -21,7 +21,10 @@ import {
 } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { getCurrentIdentity } from "@/lib/supabase/auth";
+import {
+  getAuthoritativeMessagingUserId,
+  getMessagingIdentityId
+} from "@/lib/messaging/action-auth";
 
 const uuidSchema = z.string().uuid();
 const capabilitySchema = z.enum(["all_members", "admins", "owner", "disabled"]);
@@ -36,32 +39,6 @@ function untypedAdmin() {
   return createSupabaseAdminClient() as unknown as SupabaseClient;
 }
 
-/* IDENTITY, NOT A FRESH AUTH LOOKUP -- and the reason is specific, not
- * convenience.
- *
- * These paths run through service-role authority, so RLS is not what protects
- * them. What protects them is `resolveConversationAccess`, which re-reads the
- * caller's actual `conversation_members` row on every request and refuses
- * unless `status = 'joined'`. That is an independent authoritative check, and
- * it does not depend on how fresh the token is.
- *
- * The trade being made: a globally signed-out or deleted account could keep
- * reading its OWN existing conversations for up to 60 minutes. It cannot reach
- * anyone else's, cannot escalate, and every privileged surface -- Admin,
- * billing, privacy operations, account controls -- uses
- * getCurrentUserRecord() and notices revocation immediately.
- */
-/* The SHARED helper, not a fourth private copy.
- *
- * Each messaging action file had its own `getAuthedUserId` calling
- * `supabase.auth.getUser()` -- a network round trip to the auth server. Server
- * actions are separate requests, so opening one conversation fired seven
- * actions and paid seven round trips before doing any work. `getCurrentIdentity`
- * verifies the JWT locally against the project's JWKS instead. */
-async function getAuthedUserId() {
-  const user = await getCurrentIdentity();
-  return user?.id ?? null;
-}
 
 function configured() {
   const env = getSupabaseServerEnv();
@@ -134,7 +111,7 @@ export async function getUltimateConversationStateAction(
   conversationId: string
 ): Promise<UltimateConversationState | null> {
   if (!configured() || !uuidSchema.safeParse(conversationId).success) return null;
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return null;
 
   const admin = createSupabaseAdminClient();
@@ -329,7 +306,7 @@ export async function heartbeatConversationPresenceAction(input: unknown) {
     .safeParse(input);
   if (!parsed.success) return actionError("Conversation not found.");
 
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
   const admin = createSupabaseAdminClient();
   const access = await resolveConversationAccess(admin, userId, parsed.data.conversationId);
@@ -365,7 +342,7 @@ export async function heartbeatConversationPresenceAction(input: unknown) {
 
 export async function leaveConversationPresenceAction(conversationId: string) {
   if (!configured() || !uuidSchema.safeParse(conversationId).success) return actionError("Conversation not found.");
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return actionError("Log in first.");
   await untypedAdmin()
     .from("conversation_presence")
@@ -381,7 +358,7 @@ export async function setSavedMessageAction(input: unknown) {
     .object({ messageId: uuidSchema, saved: z.boolean(), folderId: uuidSchema.nullish() })
     .safeParse(input);
   if (!parsed.success) return actionError("Message not found.");
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return actionError("Log in first.");
 
   const admin = createSupabaseAdminClient();
@@ -430,7 +407,7 @@ export async function setPinnedMessageAction(input: unknown) {
   if (!configured()) return actionError("Chats are not configured.");
   const parsed = z.object({ messageId: uuidSchema, pinned: z.boolean() }).safeParse(input);
   if (!parsed.success) return actionError("Message not found.");
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
 
   const admin = createSupabaseAdminClient();
@@ -497,7 +474,7 @@ export async function updateConversationUserPreferencesAction(input: unknown) {
   if (!configured()) return actionError("Chats are not configured.");
   const parsed = preferencePatchSchema.safeParse(input);
   if (!parsed.success) return actionError("Those chat settings are not valid.");
-  const userId = await getAuthedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return actionError("Log in first.");
 
   const admin = createSupabaseAdminClient();
@@ -549,7 +526,7 @@ export async function updateConversationChatSettingsAction(input: unknown) {
   if (!configured()) return actionError("Chats are not configured.");
   const parsed = chatSettingsSchema.safeParse(input);
   if (!parsed.success) return actionError("Those chat settings are not valid.");
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
 
   const admin = createSupabaseAdminClient();
@@ -594,7 +571,7 @@ export async function createChatPollAction(input: unknown) {
   const uniqueOptions = [...new Set(parsed.data.options.map((option) => option.trim()))];
   if (uniqueOptions.length < 2) return actionError("Poll options must be different.");
 
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
   const admin = createSupabaseAdminClient();
   const send = await canSendMessage(admin, userId, parsed.data.conversationId);
@@ -668,7 +645,7 @@ export async function voteChatPollAction(input: unknown) {
     .object({ pollMessageId: uuidSchema, optionIds: z.array(uuidSchema).max(12) })
     .safeParse(input);
   if (!parsed.success) return actionError("Poll not found.");
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
 
   const db = untypedAdmin();
@@ -712,7 +689,7 @@ export async function voteChatPollAction(input: unknown) {
 
 export async function closeChatPollAction(pollMessageId: string) {
   if (!configured() || !uuidSchema.safeParse(pollMessageId).success) return actionError("Poll not found.");
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
   const db = untypedAdmin();
   const { data: poll } = await db
@@ -738,7 +715,7 @@ export async function closeChatPollAction(pollMessageId: string) {
 
 export async function keepMessageInChatAction(messageId: string, kept: boolean) {
   if (!configured() || !uuidSchema.safeParse(messageId).success) return actionError("Message not found.");
-  const userId = await getAuthedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return actionError("Log in first.");
   const admin = createSupabaseAdminClient();
   const { data: message } = await admin
