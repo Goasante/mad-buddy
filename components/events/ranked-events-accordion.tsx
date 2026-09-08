@@ -199,6 +199,7 @@ export function RankedEventsAccordion({
             <EventArtwork
               eventId={event.id}
               coverUrl={event.media.kind === "image" ? event.media.url : null}
+              coverExpected={event.hasCover}
               focalX={event.focalPoint.x}
               focalY={event.focalPoint.y}
               className="absolute inset-0 -z-10 h-full w-full rounded-2xl"
@@ -286,6 +287,7 @@ export function RankedEventsAccordion({
           <EventArtwork
             eventId={event.id}
             coverUrl={event.media.kind === "image" ? event.media.url : null}
+            coverExpected={event.hasCover}
             focalX={event.focalPoint.x}
             focalY={event.focalPoint.y}
             className="absolute inset-0 h-full w-full rounded-l-lg"
