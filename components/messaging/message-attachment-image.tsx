@@ -1,13 +1,14 @@
 "use client";
 
 import { ImageOff, RotateCcw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { refreshMessageAttachmentAction } from "@/app/(app)/messaging-actions";
 import { MessageRetentionV4 } from "@/components/messaging/message-retention-v4";
 import { attachmentAltText } from "@/lib/messaging/attachment-labels";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
+import { signedUrlNeedsRefresh } from "@/lib/media/signed-url-lifecycle";
 import { cn } from "@/lib/utils";
 
 const refreshes = new Map<string, Promise<AttachmentView | null>>();
@@ -44,13 +45,15 @@ export function MessageAttachmentImage({
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const attemptedUrlRef = useRef<string | null>(null);
+  const proactiveRefreshKeyRef = useRef<string | null>(null);
   const attachment = message.attachment;
-  if (!attachment) return null;
+  const src = attachment?.thumbUrl ?? attachment?.fullUrl ?? null;
+  const needsFreshUrl = attachment
+    ? signedUrlNeedsRefresh(attachment.expiresAt, Boolean(src))
+    : false;
+  const alt = attachment ? attachmentAltText(message.senderName, message.isMine) : "";
 
-  const src = attachment.thumbUrl ?? attachment.fullUrl;
-  const alt = attachmentAltText(message.senderName, message.isMine);
-
-  async function renew() {
+  const renew = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
     const next = await refreshAttachment(conversationId, message.id);
@@ -62,9 +65,25 @@ export function MessageAttachmentImage({
     attemptedUrlRef.current = null;
     setFailed(false);
     onRefreshed(next);
-  }
+  }, [conversationId, message.id, onRefreshed, refreshing]);
 
-  if (!src || failed) {
+  /*
+   * Do not deliberately render an expired credential and wait for the browser
+   * to show a broken-image glyph. Durable thread storage now removes signed
+   * URLs entirely, and an in-memory URL can simply age past its five-minute
+   * lifetime. In both cases renew from the canonical media id first.
+   */
+  useEffect(() => {
+    if (!attachment || !needsFreshUrl || failed) return;
+    const refreshKey = `${attachment.mediaId}:${attachment.expiresAt}:${src ?? "missing"}`;
+    if (proactiveRefreshKeyRef.current === refreshKey) return;
+    proactiveRefreshKeyRef.current = refreshKey;
+    void renew();
+  }, [attachment, failed, needsFreshUrl, renew, src]);
+
+  if (!attachment) return null;
+
+  if (!src || failed || needsFreshUrl) {
     return (
       <div>
         <button
@@ -76,7 +95,11 @@ export function MessageAttachmentImage({
           )}
           aria-label="Retry loading photo"
         >
-          {refreshing ? <RotateCcw className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ImageOff className="h-5 w-5" aria-hidden="true" />}
+          {refreshing || (needsFreshUrl && !failed) ? (
+            <RotateCcw className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          ) : (
+            <ImageOff className="h-5 w-5" aria-hidden="true" />
+          )}
         </button>
         {!square ? <MessageRetentionV4 conversationId={conversationId} messageId={message.id} mine={message.isMine} /> : null}
       </div>
