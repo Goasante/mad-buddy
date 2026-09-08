@@ -18,15 +18,18 @@ function signedUploadUrl(path: string, token: string) {
 
 /**
  * Upload a server-authorized private media object while exposing the browser's
- * real byte progress. Supabase's uploadToSignedUrl hides the XHR upload event;
- * this transport keeps the same signed-storage boundary while reporting bytes
- * actually transferred.
+ * real byte progress.
+ *
+ * This intentionally mirrors Supabase Storage's browser File path: PUT to the
+ * signed-upload endpoint with a multipart body containing cacheControl and the
+ * File itself. XMLHttpRequest is used only because its upload progress event
+ * exposes transferred bytes; authorization and object authority still come
+ * from the server-minted signed upload token.
  */
 export function uploadToSignedUrlWithProgress({
   path,
   token,
   file,
-  contentType,
   upsert,
   onProgress
 }: {
@@ -44,8 +47,13 @@ export function uploadToSignedUrlWithProgress({
     xhr.open("PUT", signedUploadUrl(path, token));
     xhr.setRequestHeader("apikey", anonKey);
     xhr.setRequestHeader("Authorization", `Bearer ${anonKey}`);
-    xhr.setRequestHeader("Content-Type", contentType || "application/octet-stream");
     xhr.setRequestHeader("x-upsert", String(upsert));
+
+    // Do not set Content-Type manually: the browser must add the multipart
+    // boundary. This is the same body shape Storage JS uses for File/Blob.
+    const body = new FormData();
+    body.append("cacheControl", "3600");
+    body.append("", file);
 
     xhr.upload.addEventListener("progress", (event) => {
       const total = event.lengthComputable && event.total > 0 ? event.total : file.size;
@@ -64,7 +72,7 @@ export function uploadToSignedUrlWithProgress({
     });
     xhr.addEventListener("error", () => reject(new Error("Signed upload failed.")));
     xhr.addEventListener("abort", () => reject(new Error("Signed upload was cancelled.")));
-    xhr.send(file);
+    xhr.send(body);
   });
 }
 
