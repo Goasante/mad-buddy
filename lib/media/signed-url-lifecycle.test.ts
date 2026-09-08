@@ -51,10 +51,22 @@ describe("signed media URL lifecycle", () => {
     expect(attachmentImage).toContain("if (!src || failed || needsFreshUrl)");
   });
 
+  it("keeps signed-credential refresh promises inside the mounted account surface", () => {
+    expect(attachmentImage).toContain("inFlightRefreshRef");
+    expect(eventArtwork).toContain("inFlightRefreshRef");
+    expect(attachmentImage).not.toContain("const refreshes = new Map");
+    expect(eventArtwork).not.toContain("const coverRefreshes = new Map");
+  });
+
   it("never leaves an expired Event cover as a browser broken-image glyph", () => {
-    expect(eventArtwork).toContain("onError={() => void recoverBrokenCover(media.url)}");
+    expect(eventArtwork).toContain("onError={() => void recoverBrokenCover()}");
     expect(eventArtwork).toContain("setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null })");
     expect(eventArtwork).toContain("refreshEventCoverUrlAction");
+  });
+
+  it("caps Event cover recovery so a bad object cannot mint URLs forever", () => {
+    expect(eventArtwork).toContain("MAX_COVER_RECOVERY_ATTEMPTS = 2");
+    expect(eventArtwork).toContain("attempts >= MAX_COVER_RECOVERY_ATTEMPTS");
   });
 
   it("routes Home and ranked Event artwork through the resilient renderer", () => {
