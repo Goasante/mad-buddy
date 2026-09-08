@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -20,11 +20,25 @@ import { describe, expect, it } from "vitest";
  * per-file classification survived review in the first place.
  */
 
+/* EVERY messaging action file, not the four that were obvious.
+   The first pass of this audit covered four and measured "zero auth round
+   trips on conversation open" from them. Instrumenting the real page showed
+   fifteen: eight further messaging files each kept their own private
+   getUser() helper, several shared across actions of different risk. The list
+   is asserted complete below rather than maintained by hand. */
 const FILES = [
   "app/(app)/messaging-actions.ts",
   "app/(app)/messaging-v3-actions.ts",
   "app/(app)/messaging-role-action.ts",
-  "app/(app)/messaging-ultimate-actions.ts"
+  "app/(app)/messaging-ultimate-actions.ts",
+  "app/(app)/messaging-delivery-actions.ts",
+  "app/(app)/messaging-forward-actions.ts",
+  "app/(app)/messaging-inbox-v4-actions.ts",
+  "app/(app)/messaging-reaction-summary-action.ts",
+  "app/(app)/messaging-retention-v4-actions.ts",
+  "app/(app)/messaging-rich-media-actions.ts",
+  "app/(app)/messaging-structured-share-actions.ts",
+  "app/(app)/messaging-v4-insights-actions.ts"
 ];
 
 /* Observable by somebody other than the caller: sends, edits, deletions,
@@ -49,7 +63,16 @@ const AUTHORITATIVE = new Set([
   "createChatPollAction",
   "voteChatPollAction",
   "closeChatPollAction",
-  "keepMessageInChatAction"
+  "keepMessageInChatAction",
+  "markInboxDeliveredAction",
+  "forwardMessageAction",
+  "createChatRichMediaUploadIntentAction",
+  "finalizeChatRichMediaUploadAction",
+  "sendStructuredChatMessageAction",
+  "createSavedMessageFolderAction",
+  "renameSavedMessageFolderAction",
+  "deleteSavedMessageFolderAction",
+  "moveSavedMessageToFolderAction"
 ]);
 
 type Action = { name: string; body: string; file: string };
@@ -75,7 +98,18 @@ const ALL = FILES.flatMap(actionsIn);
 describe("messaging actions are classified per action, not per file", () => {
   it("finds the exported actions", () => {
     // Guards against a broken matcher silently asserting nothing.
-    expect(ALL.length).toBeGreaterThan(35);
+    expect(ALL.length).toBeGreaterThan(50);
+  });
+
+  it("covers every messaging action file in the app", () => {
+    /* The gap that made the first measurement wrong: eight messaging files
+       were never audited, so their private getUser() helpers survived and the
+       round-trip count was taken from the four that had been changed. Any new
+       messaging-*-actions file must be classified here too. */
+    const found = readdirSync("app/(app)")
+      .filter((name) => /^messaging-.*\.ts$/.test(name) && !name.includes(".test."))
+      .map((name) => `app/(app)/${name}`);
+    expect(new Set(FILES)).toEqual(new Set(found));
   });
 
   it("no action resolves its user any way other than the two named helpers", () => {

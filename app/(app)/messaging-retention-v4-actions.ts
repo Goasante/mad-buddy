@@ -5,7 +5,10 @@ import { z } from "zod";
 import { resolveConversationAccess } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getAuthoritativeMessagingUserId,
+  getMessagingIdentityId
+} from "@/lib/messaging/action-auth";
 
 const uuid = z.string().uuid();
 const inputSchema = z.object({ conversationId: uuid, messageId: uuid });
@@ -23,20 +26,13 @@ function configured() {
   return Boolean(env.url && env.serviceRoleKey);
 }
 
-async function userId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
-}
+
 
 export async function getMessageRetentionAction(input: unknown): Promise<MessageRetentionView | null> {
   if (!configured()) return null;
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return null;
-  const viewerId = await userId();
+  const viewerId = await getMessagingIdentityId();
   if (!viewerId) return null;
   const admin = createSupabaseAdminClient();
   const access = await resolveConversationAccess(admin, viewerId, parsed.data.conversationId);
@@ -75,7 +71,7 @@ export async function keepMessageInChatAction(input: unknown) {
   if (!configured()) return { ok: false as const, message: "Chats are not configured." };
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, message: "Message not found." };
-  const viewerId = await userId();
+  const viewerId = await getAuthoritativeMessagingUserId();
   if (!viewerId) return { ok: false as const, message: "Log in first." };
   const admin = createSupabaseAdminClient();
   const access = await resolveConversationAccess(admin, viewerId, parsed.data.conversationId);

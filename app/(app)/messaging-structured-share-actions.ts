@@ -19,7 +19,10 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getAuthoritativeMessagingUserId,
+  getMessagingIdentityId
+} from "@/lib/messaging/action-auth";
 
 const uuid = z.string().uuid();
 const common = z.object({
@@ -46,14 +49,7 @@ function configured() {
   return Boolean(env.url && env.serviceRoleKey);
 }
 
-async function authedUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
-}
+
 
 function fail(message: string) {
   return { ok: false as const, message };
@@ -82,7 +78,7 @@ function optionFromAgenda(item: Awaited<ReturnType<typeof loadUpcomingAgenda>>["
 
 export async function getStructuredShareOptionsAction(conversationId: string): Promise<StructuredShareOption[]> {
   if (!configured() || !uuid.safeParse(conversationId).success) return [];
-  const userId = await authedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return [];
   const admin = createSupabaseAdminClient();
   const permission = await canSendMessage(admin, userId, conversationId);
@@ -159,7 +155,7 @@ export async function sendStructuredChatMessageAction(input: unknown) {
   if (!configured()) return fail("Chats are not configured.");
   const parsed = sendSchema.safeParse(input);
   if (!parsed.success) return fail("Check what you are sharing and try again.");
-  const userId = await authedUserId();
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return fail("Log in first.");
 
   const rateLimit = await consumeRateLimit({ action: "messages.send", userId });
@@ -267,7 +263,7 @@ export async function getStructuredMessagePayloadAction(input: unknown): Promise
   if (!configured()) return null;
   const parsed = payloadSchema.safeParse(input);
   if (!parsed.success) return null;
-  const userId = await authedUserId();
+  const userId = await getMessagingIdentityId();
   if (!userId) return null;
   const admin = createSupabaseAdminClient();
   const access = await resolveConversationAccess(admin, userId, parsed.data.conversationId);

@@ -5,23 +5,19 @@ import { z } from "zod";
 
 import { canSendMessage, resolveConversationAccess } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { getAuthoritativeMessagingUserId } from "@/lib/messaging/action-auth";
 
 const uuid = z.string().uuid();
 
-async function userId() {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
-}
+
 
 export async function forwardMessageAction(input: unknown) {
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return { ok: false as const, message: "Chats are not configured." };
   const parsed = z.object({ sourceMessageId: uuid, targetConversationIds: z.array(uuid).min(1).max(10) }).safeParse(input);
   if (!parsed.success) return { ok: false as const, message: "Choose a chat to forward to." };
-  const me = await userId();
+  const me = await getAuthoritativeMessagingUserId();
   if (!me) return { ok: false as const, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
