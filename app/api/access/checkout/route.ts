@@ -38,6 +38,13 @@ const checkoutRequestSchema = z.object({
   paymentMethod: z.enum(["card", "mobile_money"]).default("card")
 });
 
+type PaystackPlanDefinition = {
+  plan_code: string;
+  amount: number;
+  currency: string;
+  interval: string;
+};
+
 export async function POST(request: Request) {
   const originError = invalidMutationOriginResponse(request);
   if (originError) return originError;
@@ -136,6 +143,55 @@ export async function POST(request: Request) {
       { error: "Mad Buddy Access is already active. Manage the current paid period in Settings." },
       { status: 409 }
     );
+  }
+
+  /* Paystack ignores the transaction amount when a recurring plan is attached
+     and charges the amount stored on that plan instead. Before we advertise or
+     start a card checkout, confirm the provider plan matches Mad Buddy's exact
+     server-owned price. This prevents a stale GHS 5.00 plan from charging more
+     than the current GHS 4.99 price. Mobile Money has no recurring plan and is
+     therefore unaffected by this check. */
+  if (paymentMethod === "card" && cardPrice) {
+    try {
+      const providerPlan = await paystackRequest<PaystackPlanDefinition>(
+        `/plan/${encodeURIComponent(cardPrice.planCode)}`
+      );
+      const providerMatches =
+        providerPlan.plan_code === cardPrice.planCode &&
+        providerPlan.amount === cardPrice.amountMinor &&
+        providerPlan.currency?.toUpperCase() === cardPrice.currency &&
+        providerPlan.interval === "monthly";
+
+      if (!providerMatches) {
+        logBackendEvent("warn", {
+          requestId,
+          route,
+          statusCode: 503,
+          latencyMs: Date.now() - startedAt,
+          userId: user.id
+        });
+        return NextResponse.json(
+          {
+            error:
+              "Card checkout is temporarily unavailable while the GHS 4.99 recurring price is being updated. You can use Mobile Money instead."
+          },
+          { status: 503 }
+        );
+      }
+    } catch (error) {
+      logBackendEvent("error", {
+        requestId,
+        route,
+        statusCode: 502,
+        latencyMs: Date.now() - startedAt,
+        userId: user.id,
+        errorType: errorType(error)
+      });
+      return NextResponse.json(
+        { error: "Could not verify the current card price with Paystack. You can use Mobile Money instead." },
+        { status: 502 }
+      );
+    }
   }
 
   try {
