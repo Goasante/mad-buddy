@@ -29,6 +29,7 @@
 
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import type { OptimisticMessage } from "@/lib/messaging/optimistic-messages";
+import { stripEphemeralSignedMediaUrls } from "@/lib/messaging/persisted-thread-media";
 import type {
   CachedConversationControls,
   CachedThread,
@@ -153,7 +154,9 @@ export async function loadPersistedThread(
   );
   if (!stored || stored.ownerId !== ownerId) return null;
   return {
-    messages: stored.messages ?? [],
+    // Existing records may contain URLs written before the lifecycle repair.
+    // Strip them on read so the client renews from canonical media identity.
+    messages: stripEphemeralSignedMediaUrls(stored.messages ?? []),
     replyContexts: stored.replyContexts ?? {},
     optimistic: stored.optimistic ?? [],
     controls: stored.controls,
@@ -172,8 +175,8 @@ export async function savePersistedThread(
     key: storageKey(ownerId, conversationId),
     ownerId,
     conversationId,
-    // Only the tail. The reader is at the bottom of a thread when they open it.
-    messages: thread.messages.slice(-PERSISTED_WINDOW),
+    // URLs are five-minute credentials, not durable attachment identity.
+    messages: stripEphemeralSignedMediaUrls(thread.messages.slice(-PERSISTED_WINDOW)),
     replyContexts: thread.replyContexts,
     /* Outgoing rows are persisted too, so a send that was still in flight when
        the app was closed is still visible -- and still retryable -- when it is
