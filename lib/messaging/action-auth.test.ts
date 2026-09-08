@@ -72,7 +72,10 @@ const AUTHORITATIVE = new Set([
   "createSavedMessageFolderAction",
   "renameSavedMessageFolderAction",
   "deleteSavedMessageFolderAction",
-  "moveSavedMessageToFolderAction"
+  "moveSavedMessageToFolderAction",
+  /* Not purely self-scoped: with read receipts on, this flips the sender's
+     messages to "read", which the sender can see. */
+  "markConversationReadAction"
 ]);
 
 type Action = { name: string; body: string; file: string };

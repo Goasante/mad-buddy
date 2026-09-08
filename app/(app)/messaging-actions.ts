@@ -199,7 +199,11 @@ export async function getMentionCandidatesAction(conversationId: string): Promis
 }
 
 export async function markConversationReadAction(conversationId: string): Promise<MessagingActionState> {
-  const userId = await getMessagingIdentityId();
+  /* Authoritative, because this is not purely self-scoped: when the caller has
+     read receipts enabled, markConversationRead also flips the SENDER's
+     messages to status "read", which the sender sees. Anything another account
+     can observe resolves the caller authoritatively. */
+  const userId = await getAuthoritativeMessagingUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
   return markConversationRead(userId, conversationId);
