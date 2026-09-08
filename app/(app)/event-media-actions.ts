@@ -32,6 +32,28 @@ export async function refreshEventCoverUrlAction(eventId: string): Promise<Refre
   if (!access.ok) return { ok: false, coverUrl: null };
 
   const admin = createSupabaseAdminClient();
+
+  /*
+   * Credential minting gets one additional fail-closed block read.
+   *
+   * getEventForViewer is the canonical Event-access authority, but its shared
+   * block helper currently returns a boolean and cannot distinguish "no block"
+   * from "the block table could not be read". That is acceptable for ordinary
+   * presentation fallback, but not for minting a fresh signed Storage URL: if
+   * the block authority is temporarily unavailable, the safe result is no new
+   * credential. This rare renewal path can afford the extra read.
+   */
+  if (!access.isHost) {
+    const { data: blocks, error: blockError } = await admin
+      .from("blocked_users")
+      .select("blocker_id")
+      .or(
+        `and(blocker_id.eq.${user.id},blocked_id.eq.${access.event.host_id}),and(blocker_id.eq.${access.event.host_id},blocked_id.eq.${user.id})`
+      )
+      .limit(1);
+    if (blockError || blocks?.length) return { ok: false, coverUrl: null };
+  }
+
   const { data: event, error } = await admin
     .from("events")
     .select("cover_media_id")
