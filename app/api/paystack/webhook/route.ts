@@ -13,6 +13,8 @@ import {
   accessPeriodEnd,
   cancelAccessSubscription,
   isAccessEvent,
+  isManualMobileMoneyAccessEvent,
+  recordAccessManualPayment,
   recordAccessSubscription,
   verifyAccessEvent,
   type AccessPaystackEvent
@@ -31,13 +33,13 @@ type PaystackWebhookEvent = {
     amount?: number;
     fees?: number | null;
     currency?: string;
+    channel?: string;
     metadata?: {
       user_id?: string;
       plan?: "plus" | "pro";
       app_plan?: "buddy_plus" | "buddy_pro";
-      /* Set by /api/access/checkout so the webhook can confirm which product a
-         transaction was for, independently of the plan code. */
       product?: string;
+      access_payment_mode?: string;
     };
     customer?: {
       customer_code?: string;
@@ -143,8 +145,6 @@ export async function POST(request: Request) {
   try {
     await handlePaystackEvent(event, eventId);
   } catch (error) {
-    // A failed attempt must not poison the idempotency ledger. Paystack can
-    // safely retry and the next verified delivery will be processed again.
     await admin.from("paystack_webhook_events").delete().eq("id", eventId);
     logBackendEvent("error", {
       requestId,
@@ -171,22 +171,16 @@ async function handlePaystackEvent(event: PaystackWebhookEvent, eventId: string)
   const data = event.data;
   const userId = data.metadata?.user_id;
 
-  /* MAD BUDDY ACCESS IS ROUTED FIRST, AND SEPARATELY.
-   *
-   * Access events must not reach `validatePaystackSyncInput`, which resolves a
-   * plan code onto the retired ladder and throws "Unrecognized Paystack plan"
-   * for anything that is not buddy_plus/buddy_pro. Routing on the plan code (or
-   * the `product` metadata we set at checkout) keeps both products verified by
-   * the rules that actually apply to them.
-   *
-   * The signature has already been checked and the event de-duplicated by the
-   * caller, so this is trusted-as-delivered but NOT trusted-as-described:
-   * every field below is still verified against server configuration. */
-  const accessEvent = {
+  const accessEvent: AccessPaystackEvent = {
     amount: data.amount ?? null,
     currency: data.currency ?? null,
     planCode: typeof data.plan === "string" ? data.plan : data.plan?.plan_code ?? null,
-    product: typeof data.metadata?.product === "string" ? data.metadata.product : null
+    product: typeof data.metadata?.product === "string" ? data.metadata.product : null,
+    paymentMode:
+      typeof data.metadata?.access_payment_mode === "string"
+        ? data.metadata.access_payment_mode
+        : null,
+    channel: data.channel ?? null
   };
 
   if (isAccessEvent(accessEvent)) {
@@ -257,7 +251,6 @@ async function handlePaystackEvent(event: PaystackWebhookEvent, eventId: string)
       return;
     }
     case "subscription.not_renew": {
-      // Cancelled-but-paid-through: access continues to period end (§59).
       await markPaystackSubscriptionStatus(
         admin,
         data.subscription_code ?? data.subscription?.subscription_code,
@@ -278,8 +271,6 @@ async function handlePaystackEvent(event: PaystackWebhookEvent, eventId: string)
       return;
     }
     case "invoice.payment_failed": {
-      // Failed renewal starts the grace window (§61): paid features survive
-      // until grace_ends_at, then effectivePlan falls back to free (§62).
       const subscriptionCode = data.subscription_code ?? data.subscription?.subscription_code;
       const subscription = await findSubscriptionByCode(admin, subscriptionCode);
       await markPaystackSubscriptionStatus(
@@ -346,8 +337,6 @@ async function recordLifecycleEvent(
     subscription_id: subscription.id,
     subscription_plan: subscription.plan,
     provider_event_id: eventId,
-    // A non-renewing notice and a later disablement are separate lifecycle
-    // facts. Retries of either provider event still share the same event ID.
     dedupe_key: `paystack:${eventType}:${eventId}`
   });
 }
@@ -373,13 +362,6 @@ function buildEventId(event: PaystackWebhookEvent, rawBody: string) {
   return stableId || `${event.event}:${createHash("sha256").update(rawBody).digest("hex")}`;
 }
 
-/**
- * Mad Buddy Access webhook events.
- *
- * Every branch verifies against server configuration before writing anything.
- * A refused event is logged and DROPPED -- never retried into a different code
- * path, and never partially applied.
- */
 async function handleAccessEvent(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   eventName: string,
@@ -388,13 +370,6 @@ async function handleAccessEvent(
   userId: string | undefined,
   eventId: string
 ): Promise<void> {
-  /* CANCELLATION IS VERIFIED DIFFERENTLY, and deliberately earlier.
-   *
-   * `subscription.not_renew` and `subscription.disable` carry no amount and
-   * often no user metadata -- they are keyed on the subscription code. Running
-   * them through the full amount check would reject legitimate cancellations,
-   * so they are matched on the subscription code we already stored, which is
-   * itself proof the subscription is ours. */
   if (eventName === "subscription.not_renew" || eventName === "subscription.disable") {
     const subscriptionCode = data.subscription_code ?? data.subscription?.subscription_code ?? null;
     await cancelAccessSubscription(admin, subscriptionCode);
@@ -403,9 +378,6 @@ async function handleAccessEvent(
 
   const verification = verifyAccessEvent(accessEvent);
   if (!verification.ok) {
-    /* Refused. Logged with the reason so a real misconfiguration is
-       diagnosable, and dropped so a forged or mismatched event cannot
-       activate access. */
     logBackendEvent("warn", {
       requestId: eventId,
       route: "/api/paystack/webhook",
@@ -418,13 +390,42 @@ async function handleAccessEvent(
 
   if (!userId) return;
 
+  /* Ghana Mobile Money is a verified one-time purchase, never a subscription.
+     Only `charge.success` is capable of granting its 30-day paid period. */
+  if (isManualMobileMoneyAccessEvent(accessEvent)) {
+    if (eventName !== "charge.success" || !data.reference) return;
+
+    const paidAtCandidate = data.paid_at ? new Date(data.paid_at) : new Date();
+    const paidAt = Number.isNaN(paidAtCandidate.getTime()) ? new Date() : paidAtCandidate;
+    await recordAccessManualPayment(admin, {
+      userId,
+      paidAt,
+      customerCode: data.customer?.customer_code ?? null
+    });
+
+    await recordBillingEvent(admin, {
+      event_type: "payment_succeeded",
+      source: "paystack_webhook",
+      user_id: userId,
+      subscription_plan: "mad_buddy_access",
+      amount_minor: data.amount ?? MAD_BUDDY_ACCESS.amountMinor,
+      provider_fee_minor: data.fees ?? null,
+      currency: data.currency ?? MAD_BUDDY_ACCESS.currency,
+      transaction_reference: data.reference,
+      provider_event_id: eventId,
+      dedupe_key: `paystack:access_payment_succeeded:${data.reference}`
+    });
+    return;
+  }
+
   if (
     eventName === "charge.success" ||
     eventName === "subscription.create" ||
     eventName === "subscription.enable" ||
     eventName === "invoice.update"
   ) {
-    const paidAt = data.paid_at ? new Date(data.paid_at) : new Date();
+    const paidAtCandidate = data.paid_at ? new Date(data.paid_at) : new Date();
+    const paidAt = Number.isNaN(paidAtCandidate.getTime()) ? new Date() : paidAtCandidate;
     const periodEnd = accessPeriodEnd(
       data.next_payment_date ?? data.subscription?.next_payment_date ?? null,
       paidAt
@@ -458,11 +459,6 @@ async function handleAccessEvent(
   }
 
   if (eventName === "invoice.payment_failed") {
-    /* A failed renewal does NOT revoke access immediately. The resolver
-       honours `grace_ends_at`, and the existing lifecycle already manages the
-       grace window; marking past_due here would duplicate that and risk
-       shortening it. The subscription simply stops renewing, and the period
-       end does the rest. */
     await recordBillingEvent(admin, {
       event_type: "payment_failed",
       source: "paystack_webhook",
