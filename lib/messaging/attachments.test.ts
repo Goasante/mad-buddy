@@ -294,7 +294,7 @@ describe("rendering", () => {
 
   it("passes the larger variant to the viewer and the thumb to the thread", () => {
     expect(viewer).toContain("message.attachment.fullUrl");
-    expect(attachmentImage).toContain("attachment.thumbUrl ?? attachment.fullUrl");
+    expect(attachmentImage).toContain("attachment?.thumbUrl ?? attachment?.fullUrl");
     expect(attachmentImage).toContain("refreshMessageAttachmentAction({ conversationId, messageId })");
   });
 
