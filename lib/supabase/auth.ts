@@ -25,6 +25,55 @@ export const getCurrentUser = cache(async () => {
   const supabase = await createSupabaseServerClient();
 
   try {
+    /* LOCAL VERIFICATION FIRST.
+     *
+     * `getClaims()` cryptographically verifies the JWT against the project's
+     * published JWKS instead of asking the auth server who the token belongs
+     * to. It is the same guarantee -- a forged or tampered token fails
+     * signature verification, and an expired one fails the exp check -- but it
+     * costs microseconds rather than a network round trip.
+     *
+     * `cache()` above only dedupes within ONE render. Server actions are
+     * separate requests, so a screen that fires several of them paid a full
+     * round trip per action: opening one conversation ran seven actions and
+     * therefore seven auth round trips, which is what pushed messaging past
+     * the client's 15s timeout and produced "took too long" for a single user
+     * against 237 messages.
+     *
+     * It falls back to `getUser()` by itself when the project signs with a
+     * symmetric key or WebCrypto is unavailable, so this is safe regardless of
+     * how a given environment is configured. */
+    /* Guarded because `getClaims` is a newer method: an older SDK, or a test
+       double that only implements what it needs, would otherwise throw here
+       and take down every authenticated path. Missing method simply means
+       fall through to the authoritative check below. */
+    const claimsResult =
+      typeof supabase.auth.getClaims === "function"
+        ? await withTimeout(supabase.auth.getClaims(), {
+            operation: "getCurrentUser.claims",
+            timeoutMs: 5_000
+          })
+        : null;
+
+    if (claimsResult && !claimsResult.error && claimsResult.data?.claims?.sub) {
+      const claims = claimsResult.data;
+      /* Shaped like the `getUser()` result the callers already expect. `sub`
+         is the user id; the rest of the claim set carries the same identity
+         fields the session was issued with. */
+      const payload = claims.claims as Record<string, unknown>;
+      return {
+        id: payload.sub as string,
+        email: (payload.email as string | undefined) ?? undefined,
+        phone: (payload.phone as string | undefined) ?? undefined,
+        app_metadata: (payload.app_metadata as Record<string, unknown> | undefined) ?? {},
+        user_metadata: (payload.user_metadata as Record<string, unknown> | undefined) ?? {},
+        aud: (payload.aud as string | undefined) ?? "authenticated",
+        created_at: ""
+      } as Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"];
+    }
+
+    /* Anything getClaims could not settle falls through to the authoritative
+       check rather than being treated as signed out. */
     const {
       data: { user },
       error

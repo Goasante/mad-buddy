@@ -16,7 +16,13 @@ import { REPAIR_CATALOG } from "@/lib/admin/repairs";
  * rather than trusting each author to remember.
  */
 
-const SOURCE = readFileSync("app/(admin)/admin/repairs/actions.ts", "utf8");
+/* Normalised to LF. Git may check this file out with CRLF depending on the
+   worktree's autocrlf setting, and every boundary search below looks for a
+   bare newline -- on a CRLF checkout those find nothing, the extracted
+   function body silently becomes the whole file, and the test reports a false
+   unchecked read. Reading the source must not depend on how it landed on
+   disk. */
+const SOURCE = readFileSync("app/(admin)/admin/repairs/actions.ts", "utf8").replace(/\r\n/g, "\n");
 
 const switchBody = (() => {
   const start = SOURCE.indexOf("async function executeRepair");

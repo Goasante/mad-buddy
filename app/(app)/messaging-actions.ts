@@ -23,7 +23,6 @@ import { signMediaForAsset } from "@/lib/content/service";
 import { sniffImageKind, storageKeyFor, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
 import type { MediaContentType } from "@/lib/supabase/database.types";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { MessageReactionType } from "@/lib/supabase/database.types";
 import {
   listConversations,
@@ -47,6 +46,7 @@ import type { MentionCandidateView } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
 import { PROACTIVE_WARM_MESSAGE_LIMIT } from "@/lib/messaging/thread-warmup";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 // The read/send views + logic (and these view types) live in
 // lib/messaging/mobile.ts so the mobile /api/messages/* routes share them.
@@ -70,13 +70,16 @@ function missingEnvState(): MessagingActionState | null {
   return null;
 }
 
+/* The SHARED helper, not a fourth private copy.
+ *
+ * Each messaging action file had its own `getAuthedUserId` calling
+ * `supabase.auth.getUser()` -- a network round trip to the auth server. Server
+ * actions are separate requests, so opening one conversation fired seven
+ * actions and paid seven round trips before doing any work. `getCurrentUser`
+ * verifies the JWT locally against the project's JWKS instead. */
 async function getAuthedUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
+  const user = await getCurrentUser();
+  return user?.id ?? null;
 }
 
 // ---------------------------------------------------------------------------

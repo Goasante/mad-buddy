@@ -21,7 +21,7 @@ import {
 } from "@/lib/messaging/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/auth";
 
 const uuidSchema = z.string().uuid();
 const capabilitySchema = z.enum(["all_members", "admins", "owner", "disabled"]);
@@ -36,13 +36,16 @@ function untypedAdmin() {
   return createSupabaseAdminClient() as unknown as SupabaseClient;
 }
 
+/* The SHARED helper, not a fourth private copy.
+ *
+ * Each messaging action file had its own `getAuthedUserId` calling
+ * `supabase.auth.getUser()` -- a network round trip to the auth server. Server
+ * actions are separate requests, so opening one conversation fired seven
+ * actions and paid seven round trips before doing any work. `getCurrentUser`
+ * verifies the JWT locally against the project's JWKS instead. */
 async function getAuthedUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser();
-  return error || !user ? null : user.id;
+  const user = await getCurrentUser();
+  return user?.id ?? null;
 }
 
 function configured() {
