@@ -23,7 +23,7 @@ export function SubscriptionScreen() {
             </span>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-primary">Mad Buddy Access</p>
-              <h2 className="mt-1 text-2xl font-semibold">GHS 5.00 <span className="text-sm font-medium text-muted-foreground">/ month</span></h2>
+              <h2 className="mt-1 text-2xl font-semibold">GHS 4.99 <span className="text-sm font-medium text-muted-foreground">/ month</span></h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 One paid product for expanding your social world through Linkr and UpFor.
               </p>

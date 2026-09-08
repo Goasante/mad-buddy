@@ -26,10 +26,10 @@ const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/
 const PLAN = "PLN_pbpn6h7vprirvlu";
 
 describe("the configured product", () => {
-  it("is GHS 5.00 in minor units", () => {
-    expect(MAD_BUDDY_ACCESS.amountMinor).toBe(500);
+  it("is GHS 4.99 in minor units", () => {
+    expect(MAD_BUDDY_ACCESS.amountMinor).toBe(499);
     expect(MAD_BUDDY_ACCESS.currency).toBe("GHS");
-    expect(accessPriceLabel()).toBe("GHS 5.00");
+    expect(accessPriceLabel()).toBe("GHS 4.99");
   });
 
   it("keeps the recurring card plan and a 30-day manual period", () => {
@@ -41,8 +41,8 @@ describe("the configured product", () => {
   it("configures card and Mobile Money independently", () => {
     expect(isCheckoutConfigured()).toBe(true);
     expect(isMobileMoneyCheckoutConfigured()).toBe(true);
-    expect(accessCheckoutAmount()).toEqual({ amountMinor: 500, currency: "GHS", planCode: PLAN });
-    expect(accessMobileMoneyCheckoutAmount()).toEqual({ amountMinor: 500, currency: "GHS" });
+    expect(accessCheckoutAmount()).toEqual({ amountMinor: 499, currency: "GHS", planCode: PLAN });
+    expect(accessMobileMoneyCheckoutAmount()).toEqual({ amountMinor: 499, currency: "GHS" });
   });
 
   it("exposes no way for a caller to supply an amount", () => {
@@ -74,7 +74,7 @@ describe("event routing", () => {
 describe("recurring card webhook verification", () => {
   const valid = {
     planCode: PLAN,
-    amount: 500,
+    amount: 499,
     currency: "GHS",
     product: "mad_buddy_access",
     paymentMode: "card_subscription"
@@ -90,7 +90,7 @@ describe("recurring card webhook verification", () => {
   });
 
   it("requires the recurring plan code", () => {
-    expect(verifyAccessEvent({ amount: 500, currency: "GHS" }).ok).toBe(false);
+    expect(verifyAccessEvent({ amount: 499, currency: "GHS" }).ok).toBe(false);
     expect(verifyAccessEvent({ ...valid, planCode: "PLN_someone_elses" }).ok).toBe(false);
   });
 
@@ -109,7 +109,7 @@ describe("Ghana Mobile Money webhook verification", () => {
     product: "mad_buddy_access",
     paymentMode: "mobile_money_30d",
     planCode: null,
-    amount: 500,
+    amount: 499,
     currency: "GHS",
     channel: "mobile_money"
   };
@@ -204,6 +204,12 @@ describe("checkout accepts no money from the client", () => {
   it("attaches a recurring plan only to card", () => {
     expect(route).toContain('if (paymentMethod === "card")');
     expect(route).toContain("transactionBody.plan = cardPrice?.planCode");
+  });
+
+  it("verifies the provider card plan matches the server-owned price before checkout", () => {
+    expect(route).toContain("/plan/${encodeURIComponent(cardPrice.planCode)}");
+    expect(route).toContain("providerPlan.amount === cardPrice.amountMinor");
+    expect(route).toContain("providerPlan.currency?.toUpperCase() === cardPrice.currency");
   });
 
   it("does not mark a new customer paid before payment", () => {

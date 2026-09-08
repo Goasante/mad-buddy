@@ -24,7 +24,7 @@ const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: fals
 /* Must match PAYSTACK_WEBHOOK_SECRET / PAYSTACK_SECRET_KEY in .env.local. */
 const WEBHOOK_SECRET = process.env.PAYSTACK_WEBHOOK_SECRET || process.env.PAYSTACK_SECRET_KEY || "";
 
-const EXPECTED_AMOUNT = 500;          // GHS 5.00 in pesewas
+const EXPECTED_AMOUNT = 499;          // GHS 4.99 in pesewas
 const EXPECTED_PLAN = "PLN_pbpn6h7vprirvlu";
 const DAY = 86400000;
 
@@ -111,7 +111,7 @@ try {
   if (!WEBHOOK_SECRET) throw new Error("PAYSTACK_WEBHOOK_SECRET / PAYSTACK_SECRET_KEY is not set locally");
 
   // ---- 1. SERVER PRICE -------------------------------------------------
-  check("server price is GHS 5.00 (500 pesewas)", EXPECTED_AMOUNT === 500, "minor units, not cedis");
+  check("server price is GHS 4.99 (499 pesewas)", EXPECTED_AMOUNT === 499, "minor units, not cedis");
 
   // ---- 2. CLIENT AMOUNT AUTHORITY --------------------------------------
   /* The checkout route is unauthenticated here, so it stops at 401 -- which is
@@ -171,7 +171,7 @@ try {
   const dave = await person("payd");
   await postWebhook(chargeSuccess(dave, `ref_cur_${Date.now()}`, { currency: "NGN" }));
   check("a charge in the WRONG CURRENCY activates nothing",
-    !(await subscriptionRow(dave)), "GHS 5.00 paid in another currency is a different payment");
+    !(await subscriptionRow(dave)), "GHS 4.99 paid in another currency is a different payment");
 
   // ---- 8. DUPLICATE / REPLAY -------------------------------------------
   const before = await subscriptionRow(alice);

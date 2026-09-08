@@ -100,7 +100,7 @@ export function CheckoutButton({ plan, label, variant = "primary", className }: 
           </span>
           <span className="mt-3 block text-sm font-semibold">Mobile Money</span>
           <span className="mt-1 block text-xs leading-5 text-muted-foreground">MTN MoMo · AT Money · Telecel</span>
-          <span className="mt-1 block text-xs font-medium text-foreground">GHS 5.00 · 30 days · no auto-renew</span>
+          <span className="mt-1 block text-xs font-medium text-foreground">GHS 4.99 · 30 days · no auto-renew</span>
         </button>
 
         <button
@@ -118,7 +118,7 @@ export function CheckoutButton({ plan, label, variant = "primary", className }: 
           </span>
           <span className="mt-3 block text-sm font-semibold">Card</span>
           <span className="mt-1 block text-xs leading-5 text-muted-foreground">Visa or Mastercard</span>
-          <span className="mt-1 block text-xs font-medium text-foreground">GHS 5.00 / month · auto-renews</span>
+          <span className="mt-1 block text-xs font-medium text-foreground">GHS 4.99 / month · auto-renews</span>
         </button>
       </div>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">

@@ -59,7 +59,7 @@ export function PricingPageContent() {
                 <div>
                   <p className="text-sm font-medium text-white/70">Mad Buddy Access</p>
                   <h2 className="mt-1 text-3xl font-semibold">
-                    GHS 5.00 <span className="text-base font-medium text-white/65">/ month</span>
+                    GHS 4.99 <span className="text-base font-medium text-white/65">/ month</span>
                   </h2>
                 </div>
                 <ShieldCheck className="h-7 w-7 text-[#E88C2B]" aria-hidden="true" />
@@ -114,7 +114,7 @@ export function PricingPageContent() {
             ["Do I need a card for Welcome Access?", "No."],
             ["Will I be charged after 14 days?", "No. There is no automatic renewal."],
             ["Do existing connections expire?", "No. Existing relationships and conversations stay free."],
-            ["Can I get Access later?", "Yes. Access is GHS 5.00 per month when you want to expand again."]
+            ["Can I get Access later?", "Yes. Access is GHS 4.99 per month when you want to expand again."]
           ].map(([question, answer]) => (
             <article key={question} className="rounded-2xl border border-[#4E0401]/10 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.04]">
               <h3 className="text-sm font-semibold text-[#4E0401] dark:text-[#FFF8F1]">{question}</h3>
