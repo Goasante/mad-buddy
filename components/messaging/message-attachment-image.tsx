@@ -37,14 +37,13 @@ export function MessageAttachmentImage({
    * Signed URLs are credentials. Keep the in-flight renewal map inside this
    * mounted component rather than in module scope: a module-level promise can
    * briefly survive logout/account switching and let the next account reuse a
-   * result that was authorised for the previous one. The ref preserves local
-   * dedupe across renders without crossing an auth boundary.
+   * result that was authorised for the previous one. Lazy state initialization
+   * creates the Map once without reading or writing a ref during render.
    */
-  const refreshesRef = useRef<Map<string, Promise<AttachmentView | null>> | null>(null);
-  if (!refreshesRef.current) {
+  const [refreshes] = useState(() => {
     const refreshes = new Map<string, Promise<AttachmentView | null>>();
-    refreshesRef.current = refreshes;
-  }
+    return refreshes;
+  });
 
   const attachment = message.attachment;
   const src = attachment?.thumbUrl ?? attachment?.fullUrl ?? null;
@@ -54,7 +53,6 @@ export function MessageAttachmentImage({
   const alt = attachment ? attachmentAltText(message.senderName, message.isMine) : "";
 
   const refreshAttachment = useCallback((): Promise<AttachmentView | null> => {
-    const refreshes = refreshesRef.current!;
     const key = `${conversationId}:${message.id}`;
     const existing = refreshes.get(key);
     if (existing) return existing;
@@ -65,7 +63,7 @@ export function MessageAttachmentImage({
       .finally(() => refreshes.delete(key));
     refreshes.set(key, request);
     return request;
-  }, [conversationId, message.id]);
+  }, [conversationId, message.id, refreshes]);
 
   const renew = useCallback(async () => {
     if (refreshingRef.current) return;
