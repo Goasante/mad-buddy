@@ -24,6 +24,13 @@ export default async function AccessSettingsRoute() {
   ]);
 
   const row = subscriptionResult.data;
+  const isManualRenewal = Boolean(
+    row &&
+      row.provider === "paystack" &&
+      row.plan === "mad_buddy_access" &&
+      row.status === "non_renewing" &&
+      !row.paystack_subscription_code
+  );
   const billing: AccessBillingSummary | null = row
     ? {
         provider: row.provider ?? null,
@@ -31,7 +38,8 @@ export default async function AccessSettingsRoute() {
         status: row.status ?? null,
         currentPeriodEnd: row.current_period_end ?? null,
         cancelAtPeriodEnd: Boolean(row.cancel_at_period_end),
-        canCancelHere: row.provider === "paystack" && Boolean(row.paystack_subscription_code)
+        canCancelHere: row.provider === "paystack" && Boolean(row.paystack_subscription_code),
+        isManualRenewal
       }
     : null;
 
