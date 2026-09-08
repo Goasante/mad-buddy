@@ -112,13 +112,36 @@ export async function proxy(request: NextRequest) {
   // so this never grants access to anything the backend wouldn't already
   // allow — it only stops the middleware itself from being a single point of
   // app-wide slowness.
+  /* LOCAL VERIFICATION FIRST, for the same reason as lib/supabase/auth.ts.
+   *
+   * This runs on essentially every request, and it is a SECOND auth round trip
+   * on top of the layout's -- middleware runs in its own context, so the
+   * per-request `cache()` that dedupes the app's own calls cannot reach here.
+   * Every page load therefore paid two.
+   *
+   * `getClaims()` verifies the JWT against the project's published JWKS rather
+   * than asking the auth server who it belongs to. Same guarantee, no network
+   * hop. It is only used to answer "is there a valid session", which is all
+   * this redirect decision needs. */
   let user: { id: string } | null = null;
   try {
-    const result = await withTimeout(supabase.auth.getUser(), {
-      operation: "proxy.getUser",
-      timeoutMs: 5_000
-    });
-    user = result.data.user;
+    const claims =
+      typeof supabase.auth.getClaims === "function"
+        ? await withTimeout(supabase.auth.getClaims(), {
+            operation: "proxy.getClaims",
+            timeoutMs: 5_000
+          })
+        : null;
+
+    if (claims && !claims.error && claims.data?.claims?.sub) {
+      user = { id: claims.data.claims.sub as string };
+    } else {
+      const result = await withTimeout(supabase.auth.getUser(), {
+        operation: "proxy.getUser",
+        timeoutMs: 5_000
+      });
+      user = result.data.user;
+    }
   } catch (error) {
     if (!isRequestTimeoutError(error)) throw error;
     return response;
