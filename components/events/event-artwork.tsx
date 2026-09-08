@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { refreshEventCoverUrlAction } from "@/app/(app)/event-media-actions";
 import { focalObjectPosition } from "@/lib/events/cover";
@@ -45,6 +45,7 @@ function refreshCover(eventId: string): Promise<string | null> {
 export function EventArtwork({
   eventId,
   coverUrl,
+  coverExpected = false,
   focalX = 0.5,
   focalY = 0.5,
   alt,
@@ -55,6 +56,12 @@ export function EventArtwork({
 }: {
   eventId: string;
   coverUrl: string | null;
+  /**
+   * True when the server knows this Event has a canonical cover asset even if
+   * its initial signed URL could not be produced. This lets the client recover
+   * a transient signing failure without probing every legacy no-cover Event.
+   */
+  coverExpected?: boolean;
   focalX?: number;
   focalY?: number;
   alt?: string;
@@ -73,6 +80,35 @@ export function EventArtwork({
       ? recovery.url
       : coverUrl;
   const media = resolveEventMedia(eventId, activeCoverUrl);
+
+  /*
+   * A ranked Event can arrive with `coverUrl === null` for two very different
+   * reasons: it genuinely has no cover, or the server knew about the cover but
+   * its short-lived credential could not be minted during the initial batch.
+   * `coverExpected` preserves that distinction. Only the second case gets one
+   * authoritative renewal attempt, so a transient signing failure heals while
+   * legacy no-cover Events stay zero-network fallbacks.
+   */
+  useEffect(() => {
+    if (!coverExpected || activeCoverUrl) return;
+
+    const key = `${eventId}:missing:${coverUrl ?? "none"}`;
+    if (recoveryKeyRef.current === key) return;
+    recoveryKeyRef.current = key;
+
+    let cancelled = false;
+    void refreshCover(eventId).then((renewed) => {
+      if (cancelled) return;
+      if (renewed) {
+        recoveryKeyRef.current = null;
+        setRecovery({ eventId, sourceCoverUrl: coverUrl, url: renewed });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCoverUrl, coverExpected, coverUrl, eventId]);
 
   async function recoverBrokenCover(failedUrl: string) {
     const key = `${eventId}:${failedUrl}`;
