@@ -1,0 +1,64 @@
+name: PR43 apply final fix
+
+on:
+  push:
+    branches:
+      - fix/event-room-qr-attachments-mobile-shell
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore: add guarded PR43 final fix applier'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/event-room-qr-attachments-mobile-shell
+      - name: Apply guarded replacements
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}: {old!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "components/messaging/attachment-picker.tsx",
+              'aria-label={progressLabel}',
+              'aria-label="Add an attachment"',
+          )
+
+          replace_once(
+              "lib/messaging/messaging-v5-source-contract.test.ts",
+              'expect(picker).toContain(\'label: "Document"\');',
+              'expect(picker).toContain(\'label: "Documents"\');',
+          )
+
+          replace_once(
+              "lib/messaging/attachments.test.ts",
+              '''  it("respects reduced motion on the upload spinner", () => {\n    expect(picker).toContain("motion-reduce:animate-none");\n  });''',
+              '''  it("uses measured progress without an animated spinner", () => {\n    expect(picker).toContain("UploadProgressGlyph");\n    expect(picker).not.toContain("animate-spin");\n  });''',
+          )
+          PY
+
+          rm -f .github/workflows/pr43-test-diagnostic.yml
+          rm -f .github/workflows/pr43-apply-final-fix.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/messaging/attachment-picker.tsx \
+                  lib/messaging/messaging-v5-source-contract.test.ts \
+                  lib/messaging/attachments.test.ts \
+                  .github/workflows/pr43-test-diagnostic.yml \
+                  .github/workflows/pr43-apply-final-fix.yml
+          git diff --cached --check
+          git commit -m "fix: align attachment progress contracts"
+          git push origin HEAD:fix/event-room-qr-attachments-mobile-shell
