@@ -47,36 +47,62 @@ export async function loadSubscriptionSnapshot(admin: Admin, userId: string): Pr
 /**
  * Append a canonical billing fact. Duplicate delivery is success: the unique
  * dedupe key is the protection boundary shared by webhook and return-URL sync.
+ *
+ * Paystack may supply a fee directly on `charge.success`. Callers are allowed
+ * to pass that provider fee without hand-building the two companion fields:
+ * this boundary normalizes all three together so the database's fee-consistency
+ * constraint can never receive a half-written financial fact.
  */
 export async function recordBillingEvent(admin: Admin, event: BillingInsert): Promise<boolean> {
-  const { error } = await admin.from("billing_events").insert(event);
+  const normalized = normalizePaymentFeeFields(event);
+  const { error } = await admin.from("billing_events").insert(normalized);
   if (!error) return true;
   if (error.code === "23505") {
     // A webhook and the verified return page may race. The first delivery owns
     // the immutable financial fact; a later verified response may only enrich
     // a previously unavailable Paystack fee for that same dedupe key.
     if (
-      event.event_type === "payment_succeeded" &&
-      event.fee_status === "verified" &&
-      event.provider_fee_minor !== null &&
-      event.provider_fee_minor !== undefined &&
-      event.net_amount_minor !== null &&
-      event.net_amount_minor !== undefined
+      normalized.event_type === "payment_succeeded" &&
+      normalized.fee_status === "verified" &&
+      normalized.provider_fee_minor !== null &&
+      normalized.provider_fee_minor !== undefined &&
+      normalized.net_amount_minor !== null &&
+      normalized.net_amount_minor !== undefined
     ) {
       const { error: enrichmentError } = await admin
         .from("billing_events")
         .update({
-          provider_fee_minor: event.provider_fee_minor,
-          net_amount_minor: event.net_amount_minor,
+          provider_fee_minor: normalized.provider_fee_minor,
+          net_amount_minor: normalized.net_amount_minor,
           fee_status: "verified"
         })
-        .eq("dedupe_key", event.dedupe_key)
+        .eq("dedupe_key", normalized.dedupe_key)
         .eq("fee_status", "unavailable");
       if (enrichmentError) throw new Error(enrichmentError.message);
     }
     return true;
   }
   throw new Error(error.message);
+}
+
+function normalizePaymentFeeFields(event: BillingInsert): BillingInsert {
+  if (
+    event.event_type !== "payment_succeeded" ||
+    event.amount_minor === null ||
+    event.amount_minor === undefined ||
+    event.provider_fee_minor === null ||
+    event.provider_fee_minor === undefined
+  ) {
+    return event;
+  }
+
+  const verified = verifiedPaymentAmounts(event.amount_minor, event.provider_fee_minor);
+  return {
+    ...event,
+    provider_fee_minor: verified.providerFeeMinor,
+    net_amount_minor: verified.netAmountMinor,
+    fee_status: verified.feeStatus
+  };
 }
 
 export async function recordSuccessfulPayment(
