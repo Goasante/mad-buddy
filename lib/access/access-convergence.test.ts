@@ -7,7 +7,7 @@ describe("Mad Buddy Access convergence source contract",()=>{
   it("public pricing has one paid product and the Welcome promises",()=>{
     const p=read("components/premium/pricing-page.tsx");
     expect(p).toContain("Mad Buddy Access");
-    expect(p).toContain("GHS 5.00");
+    expect(p).toContain("GHS 4.99");
     expect(p).toContain("No card is required");
     expect(p).not.toMatch(/Buddy Plus|Buddy Pro|Upgrade to Pro|Choose the plan that fits/i);
   });
