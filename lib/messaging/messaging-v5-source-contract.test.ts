@@ -25,6 +25,7 @@ describe("Messaging V5 product source contracts", () => {
     expect(picker).toContain('label: "Camera"');
     expect(picker).toContain('label: "Photos"');
     expect(picker).toContain('label: "Video"');
+    // Plural by design: this entry accepts a bounded multi-document selection.
     expect(picker).toContain('label: "Documents"');
     expect(picker).toContain('label: "Place"');
     expect(picker).toContain('label: "Plan / Event"');
