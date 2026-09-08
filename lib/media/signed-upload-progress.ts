@@ -22,7 +22,7 @@ function signedUploadUrl(path: string, token: string) {
  * this transport keeps the same signed-storage boundary while reporting bytes
  * actually transferred.
  */
-export function uploadMediaToSignedUrlWithProgress({
+export function uploadToSignedUrlWithProgress({
   path,
   token,
   file,
