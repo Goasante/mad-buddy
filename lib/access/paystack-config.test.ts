@@ -15,6 +15,7 @@ import {
   accessPeriodEnd,
   isAccessEvent,
   isManualMobileMoneyAccessEvent,
+  manualAccessPeriodEnd,
   verifyAccessEvent
 } from "@/lib/access/paystack";
 
@@ -148,6 +149,21 @@ describe("the paid period", () => {
   it("falls back to 30 days", () => {
     const paidAt = new Date("2026-01-01T00:00:00Z");
     expect(accessPeriodEnd(null, paidAt).toISOString()).toBe("2026-01-31T00:00:00.000Z");
+  });
+
+  it("does not extend a manual period again when the same webhook is retried", () => {
+    const paidAt = new Date("2026-01-01T00:00:00Z");
+    const firstEnd = manualAccessPeriodEnd(paidAt);
+    const retryEnd = manualAccessPeriodEnd(paidAt, firstEnd.toISOString());
+    expect(firstEnd.toISOString()).toBe("2026-01-31T00:00:00.000Z");
+    expect(retryEnd.toISOString()).toBe(firstEnd.toISOString());
+  });
+
+  it("never shortens an already-later manual period on a retry", () => {
+    const paidAt = new Date("2026-01-01T00:00:00Z");
+    expect(manualAccessPeriodEnd(paidAt, "2026-02-10T00:00:00.000Z").toISOString()).toBe(
+      "2026-02-10T00:00:00.000Z"
+    );
   });
 });
 
