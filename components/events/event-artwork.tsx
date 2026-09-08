@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { refreshEventCoverUrlAction } from "@/app/(app)/event-media-actions";
 import { focalObjectPosition } from "@/lib/events/cover";
@@ -61,14 +61,17 @@ export function EventArtwork({
   className?: string;
   scrim?: "none" | "soft" | "strong";
 }) {
-  const [activeCoverUrl, setActiveCoverUrl] = useState(coverUrl);
+  const [recovery, setRecovery] = useState<{
+    eventId: string;
+    sourceCoverUrl: string | null;
+    url: string | null;
+  } | null>(null);
   const recoveryKeyRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    setActiveCoverUrl(coverUrl);
-    recoveryKeyRef.current = null;
-  }, [coverUrl, eventId]);
-
+  const activeCoverUrl =
+    recovery?.eventId === eventId && recovery.sourceCoverUrl === coverUrl
+      ? recovery.url
+      : coverUrl;
   const media = resolveEventMedia(eventId, activeCoverUrl);
 
   async function recoverBrokenCover(failedUrl: string) {
@@ -78,11 +81,11 @@ export function EventArtwork({
 
     // Remove the broken credential immediately so the browser never leaves a
     // question-mark/broken-image glyph on screen while renewal is in flight.
-    setActiveCoverUrl(null);
+    setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null });
     const renewed = await refreshCover(eventId);
     if (renewed) {
       recoveryKeyRef.current = null;
-      setActiveCoverUrl(renewed);
+      setRecovery({ eventId, sourceCoverUrl: coverUrl, url: renewed });
     }
   }
 
