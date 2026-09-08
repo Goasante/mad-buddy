@@ -52,9 +52,10 @@ describe("signed media URL lifecycle", () => {
   });
 
   it("keeps signed-credential refresh promises inside the mounted account surface", () => {
-    expect(attachmentImage).toContain("inFlightRefreshRef");
+    const attachmentComponent = attachmentImage.indexOf("export function MessageAttachmentImage");
+    expect(attachmentImage).toContain("refreshesRef");
+    expect(attachmentImage.indexOf("const refreshes = new Map")).toBeGreaterThan(attachmentComponent);
     expect(eventArtwork).toContain("inFlightRefreshRef");
-    expect(attachmentImage).not.toContain("const refreshes = new Map");
     expect(eventArtwork).not.toContain("const coverRefreshes = new Map");
   });
 
