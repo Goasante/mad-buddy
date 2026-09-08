@@ -61,7 +61,7 @@ export function AccessSettingsPage({ access, hadWelcomeAccess, billing = null }:
     <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
       <Link href="/settings" className="focus-ring inline-flex items-center gap-2 rounded-lg text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Settings</Link>
       <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">Mad Buddy Access</h1>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">One product. GHS 5.00. Pay with Ghana Mobile Money for 30 days, or use a card to auto-renew monthly.</p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">One product. GHS 4.99. Pay with Ghana Mobile Money for 30 days, or use a card to auto-renew monthly.</p>
 
       <section className={`mt-5 rounded-[1.35rem] border p-5 ${access.hasAccess ? "border-emerald-500/25 bg-emerald-500/[0.06]" : "border-border bg-card/60"}`} aria-labelledby="access-state-title">
         <div className="flex items-center gap-3"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${access.hasAccess ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-secondary text-muted-foreground"}`}><ShieldCheck className="h-4 w-4" aria-hidden="true" /></span><h2 id="access-state-title" className="text-base font-semibold">{access.hasAccess ? "Access is active" : "No access right now"}</h2></div>
@@ -73,7 +73,7 @@ export function AccessSettingsPage({ access, hadWelcomeAccess, billing = null }:
         <section className="mt-5 rounded-2xl border border-border bg-card/50 p-4" aria-labelledby="billing-state-title">
           <h2 id="billing-state-title" className="text-sm font-semibold">Billing</h2>
           <dl className="mt-3 grid gap-2 text-sm">
-            <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Price</dt><dd className="font-medium">GHS 5.00</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Price</dt><dd className="font-medium">GHS 4.99</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Payment</dt><dd className="text-right font-medium">{billing.isManualRenewal ? "Mobile Money · 30-day period" : "Card · monthly"}</dd></div>
             {periodEnd ? <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Current period</dt><dd className="text-right font-medium">through {periodEnd}</dd></div> : null}
             <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Renewal</dt><dd className="max-w-[65%] text-right font-medium">{renewalLabel}</dd></div>
