@@ -121,7 +121,7 @@ export function UpForFeed({
     <section className="upfor-feed" aria-label="UpFor">
       <div className={styles.hero}>
         <Image
-          src="/visuals/upfor/good-people-great-plans.jpg"
+          src="/illustrations/upfor/good-people-great-plans.jpg"
           alt="Good people. Great plans. Discover hangouts, meetups and chill sessions on Mad Buddy."
           width={1200}
           height={675}
