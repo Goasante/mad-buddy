@@ -13,7 +13,7 @@ import {
   Star,
   UsersRound
 } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 
 import {
   getMessageableFriendsAction,
@@ -32,13 +32,12 @@ import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { cn } from "@/lib/utils";
 
 /**
- * The 2026 Messages presentation shell.
+ * Presentation shell for the 2026 Messages refresh.
  *
- * Chats V4 remains the authority for threads, drafts, presence, replies,
- * reactions, polls, rich media and delivery. This shell adds the stronger
- * inbox hierarchy the product review asked for without creating a second
- * messaging system: notification/profile access, the favorites people strip,
- * and a clearer New Chat entry all sit around the existing V4 surface.
+ * Chats V4 remains the single authority for threads, drafts, presence,
+ * reactions, polls, media, replies and delivery. This component only adds the
+ * reviewed inbox hierarchy around it: Notifications, Profile, Favorites and a
+ * clearer New Chat entry, plus the warmer composer treatment.
  */
 export function MessagesExperienceV5({
   initialConversations = [],
@@ -56,7 +55,7 @@ export function MessagesExperienceV5({
   const router = useRouter();
   const { unreadCount, refresh: refreshNotifications } = useUnreadNotificationCount();
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
-    () => new Set(initialConversations.filter((conversation) => conversation.pinned).map((conversation) => conversation.id))
+    () => new Set(initialConversations.filter((row) => row.pinned).map((row) => row.id))
   );
   const [favoriteManagerOpen, setFavoriteManagerOpen] = useState(false);
   const [favoriteListOpen, setFavoriteListOpen] = useState(false);
@@ -65,17 +64,13 @@ export function MessagesExperienceV5({
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setFavoriteIds(new Set(initialConversations.filter((conversation) => conversation.pinned).map((conversation) => conversation.id)));
-  }, [initialConversations]);
-
-  useEffect(() => {
     void refreshNotifications();
   }, [refreshNotifications]);
 
   const favoriteConversations = useMemo(
     () => initialConversations
-      .filter((conversation) => favoriteIds.has(conversation.id))
-      .sort((a, b) => Date.parse(b.lastMessageAt ?? "") - Date.parse(a.lastMessageAt ?? "")),
+      .filter((row) => favoriteIds.has(row.id))
+      .sort((a, b) => (Date.parse(b.lastMessageAt ?? "") || 0) - (Date.parse(a.lastMessageAt ?? "") || 0)),
     [favoriteIds, initialConversations]
   );
 
@@ -85,17 +80,15 @@ export function MessagesExperienceV5({
 
   function toggleFavorite(conversation: ConversationView) {
     const next = !favoriteIds.has(conversation.id);
-    setFavoriteIds((current) => {
-      const copy = new Set(current);
-      if (next) copy.add(conversation.id);
-      else copy.delete(conversation.id);
-      return copy;
-    });
+    setFavoriteIds((current) => toggleSetValue(current, conversation.id, next));
     setFeedback("");
 
     startTransition(async () => {
       const [legacy, preference] = await Promise.all([
-        setConversationPinnedAction(conversation.id, next).catch(() => ({ ok: false, message: "Favorite could not be updated." })),
+        setConversationPinnedAction(conversation.id, next).catch(() => ({
+          ok: false,
+          message: "Favorite could not be updated."
+        })),
         updateConversationUserPreferencesAction({
           conversationId: conversation.id,
           favoriteRank: next ? 0 : null
@@ -103,65 +96,17 @@ export function MessagesExperienceV5({
       ]);
 
       if (!legacy.ok || !preference.ok) {
-        setFavoriteIds((current) => {
-          const copy = new Set(current);
-          if (next) copy.delete(conversation.id);
-          else copy.add(conversation.id);
-          return copy;
-        });
+        setFavoriteIds((current) => toggleSetValue(current, conversation.id, !next));
         setFeedback(!legacy.ok ? legacy.message : preference.message);
         return;
       }
-
       router.refresh();
     });
   }
 
   return (
     <div className="messages-experience-v5 flex h-full min-h-0 flex-col">
-      {/*
-        V4 already owns Search + filters. On phones we replace only its first
-        title/compose row with the richer identity header below; desktop keeps
-        the proven two-pane V4 chrome. The selector is anchored to semantics
-        (the first row of the sticky inbox header), not generated class names.
-      */}
-      <style>{`
-        @media (max-width: 1023px) {
-          .messages-experience-v5 [data-v4-host] aside > div:first-child > div:first-child {
-            display: none;
-          }
-          .messages-experience-v5 [data-v4-host] aside > div:first-child {
-            padding-top: .3rem;
-          }
-        }
-        .messages-experience-v5 .composer-row {
-          gap: .55rem;
-          padding: .55rem .7rem .5rem;
-        }
-        .messages-experience-v5 .composer-bubble {
-          min-height: 48px;
-          border: 1px solid hsl(var(--border) / .62);
-          border-radius: 9999px;
-          background: hsl(var(--secondary) / .58);
-          box-shadow: 0 4px 18px hsl(var(--shadow) / .06);
-        }
-        .messages-experience-v5 .composer-bubble:focus-within {
-          border-color: hsl(var(--primary) / .34);
-          background: hsl(var(--background) / .96);
-          box-shadow: 0 0 0 3px hsl(var(--primary) / .07), 0 6px 20px hsl(var(--shadow) / .08);
-        }
-        .messages-experience-v5 .composer-action {
-          width: 48px;
-          height: 48px;
-          border-radius: 9999px;
-          background: #E88C2B;
-          color: #FEFBF3;
-          box-shadow: 0 8px 22px rgba(78, 4, 1, .14);
-        }
-        .messages-experience-v5 .composer-action:hover {
-          background: #D97F20;
-        }
-      `}</style>
+      <MessagesV5Styles />
 
       <section
         aria-label="Messages shortcuts"
@@ -177,11 +122,7 @@ export function MessagesExperienceV5({
             className="focus-ring relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/55 bg-card/75 text-foreground shadow-sm transition-transform active:scale-95"
           >
             <Bell className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
-            {unreadCount > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-background bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            ) : null}
+            {unreadCount > 0 ? <CountBadge count={unreadCount} /> : null}
           </Link>
 
           <Link
@@ -216,7 +157,6 @@ export function MessagesExperienceV5({
             onClick={() => setFavoriteManagerOpen(true)}
             icon={<Plus className="h-5 w-5" aria-hidden="true" />}
           />
-
           {favoriteConversations.slice(0, 5).map((conversation) => (
             <FavoritePerson
               key={conversation.id}
@@ -224,7 +164,6 @@ export function MessagesExperienceV5({
               onClick={() => openConversation(conversation.id)}
             />
           ))}
-
           <FavoriteShortcut
             label="More"
             onClick={() => setFavoriteListOpen(true)}
@@ -256,7 +195,6 @@ export function MessagesExperienceV5({
         pending={isPending}
         onToggle={toggleFavorite}
       />
-
       <FavoriteListModal
         open={favoriteListOpen}
         onOpenChange={setFavoriteListOpen}
@@ -270,7 +208,6 @@ export function MessagesExperienceV5({
           setFavoriteManagerOpen(true);
         }}
       />
-
       <NewChatModal
         open={newChatOpen}
         onOpenChange={setNewChatOpen}
@@ -296,6 +233,47 @@ export function MessagesExperienceV5({
         }}
       />
     </div>
+  );
+}
+
+function MessagesV5Styles() {
+  return (
+    <style>{`
+      @media (max-width: 1023px) {
+        .messages-experience-v5 [data-v4-host] aside > div:first-child > div:first-child { display: none; }
+        .messages-experience-v5 [data-v4-host] aside > div:first-child { padding-top: .3rem; }
+      }
+      .messages-experience-v5 .composer-row { gap: .55rem; padding: .55rem .7rem .5rem; }
+      .messages-experience-v5 .composer-bubble {
+        min-height: 48px;
+        border: 1px solid hsl(var(--border) / .62);
+        border-radius: 9999px;
+        background: hsl(var(--secondary) / .58);
+        box-shadow: 0 4px 18px hsl(var(--shadow) / .06);
+      }
+      .messages-experience-v5 .composer-bubble:focus-within {
+        border-color: hsl(var(--primary) / .34);
+        background: hsl(var(--background) / .96);
+        box-shadow: 0 0 0 3px hsl(var(--primary) / .07), 0 6px 20px hsl(var(--shadow) / .08);
+      }
+      .messages-experience-v5 .composer-action {
+        width: 48px;
+        height: 48px;
+        border-radius: 9999px;
+        background: #E88C2B;
+        color: #FEFBF3;
+        box-shadow: 0 8px 22px rgba(78, 4, 1, .14);
+      }
+      .messages-experience-v5 .composer-action:hover { background: #D97F20; }
+    `}</style>
+  );
+}
+
+function CountBadge({ count }: { count: number }) {
+  return (
+    <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-background bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 
@@ -325,7 +303,6 @@ function ConversationShortcutAvatar({ conversation }: { conversation: Conversati
       />
     );
   }
-
   return (
     <span className="relative grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3] shadow-[0_5px_16px_hsl(var(--shadow)/0.13)]">
       <UsersRound className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -344,7 +321,7 @@ function FavoriteShortcut({
 }: {
   label: string;
   onClick: () => void;
-  icon: React.ReactNode;
+  icon: ReactNode;
   badge?: number;
 }) {
   return (
@@ -356,11 +333,7 @@ function FavoriteShortcut({
     >
       <span className="relative grid h-10 w-10 place-items-center rounded-full bg-secondary/75 text-muted-foreground ring-1 ring-border/45">
         {icon}
-        {badge ? (
-          <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[8px] font-bold text-primary-foreground">
-            {badge > 9 ? "9+" : badge}
-          </span>
-        ) : null}
+        {badge ? <CountBadge count={Math.min(badge, 99)} /> : null}
       </span>
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
     </button>
@@ -384,19 +357,16 @@ function ManageFavoritesModal({
 }) {
   const [query, setQuery] = useState("");
   const visible = useMemo(() => {
+    const direct = conversations.filter((row) => row.kind === "direct");
     const term = query.trim().toLowerCase();
-    const rows = conversations.filter((conversation) => conversation.kind === "direct");
-    return term ? rows.filter((conversation) => conversation.title.toLowerCase().includes(term)) : rows;
+    return term ? direct.filter((row) => row.title.toLowerCase().includes(term)) : direct;
   }, [conversations, query]);
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Favorites" variant="sheet">
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">Keep the people you message most one tap away.</p>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a Muddy" className="h-11 rounded-2xl pl-10" />
-        </div>
+        <SearchField value={query} onChange={setQuery} placeholder="Find a Muddy" />
         <ul className="max-h-[56vh] space-y-1 overflow-y-auto">
           {visible.map((conversation) => {
             const favorite = favoriteIds.has(conversation.id);
@@ -500,10 +470,7 @@ function NewChatModal({
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="New chat" variant="sheet">
       <div className="space-y-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Muddies or usernames" autoFocus className="h-11 rounded-2xl pl-10" />
-        </div>
+        <SearchField value={query} onChange={setQuery} placeholder="Search Muddies or usernames" autoFocus />
         <button
           type="button"
           onClick={onGroups}
@@ -536,4 +503,36 @@ function NewChatModal({
       </div>
     </Modal>
   );
+}
+
+function SearchField({
+  value,
+  onChange,
+  placeholder,
+  autoFocus = false
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        className="h-11 rounded-2xl pl-10"
+      />
+    </div>
+  );
+}
+
+function toggleSetValue(current: ReadonlySet<string>, id: string, enabled: boolean) {
+  const copy = new Set(current);
+  if (enabled) copy.add(id);
+  else copy.delete(id);
+  return copy;
 }
