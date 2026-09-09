@@ -33,6 +33,13 @@ describe("document identity and downloads", () => {
     expect(view).toContain("media.downloadUrl ?? media.url");
     expect(view).toContain("{media.fileName}");
   });
+
+  it("keeps long document names inside a bounded chat card", () => {
+    const view = read("components/messaging/rich-media-message-v4.tsx");
+    expect(view).toContain("w-[min(78vw,360px)]");
+    expect(view).toContain('className="block max-w-full truncate text-xs"');
+    expect(view).toContain("title={media.fileName}");
+  });
 });
 
 describe("visible upload progress", () => {
@@ -60,11 +67,15 @@ describe("visible upload progress", () => {
 });
 
 describe("mobile bottom safe-area convergence", () => {
-  it("makes the nav consume the same full device inset the scroll owner reserves", () => {
+  it("absorbs the safe-area allowance inside one fixed navigation footprint", () => {
     const css = read("app/mobile-shell-stability.css");
     const layout = read("app/layout.tsx");
     expect(layout).toContain('import "./mobile-shell-stability.css"');
     expect(css).toContain('nav[aria-label="Mobile navigation"]');
-    expect(css).toContain("padding-bottom: env(safe-area-inset-bottom, 0px) !important");
+    expect(css).toContain("height: var(--mobile-nav-height)");
+    expect(css).toContain("--mobile-nav-safe-bottom: min(env(safe-area-inset-bottom, 0px), 0.75rem)");
+    expect(css).toContain("padding-bottom: var(--mobile-nav-safe-bottom) !important");
+    expect(css).toContain("padding-top: max(0.25rem, calc(1rem - var(--mobile-nav-safe-bottom))) !important");
+    expect(css).not.toContain("padding-bottom: env(safe-area-inset-bottom, 0px) !important");
   });
 });
