@@ -1,48 +1,49 @@
-import { MessagesPageV4 } from "@/components/messages/messages-page-v4";
+import { MessagesExperienceV5 } from "@/components/messages/messages-experience-v5";
 import { MessageDeliveryAck } from "@/components/messages/message-delivery-ack";
 import { getConversationsAction, getVoiceRecorderConfigAction } from "@/app/(app)/messaging-actions";
 import { getCurrentIdentity } from "@/lib/supabase/auth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Live Messages, now the Chats V4 presentation.
+ * Live Messages, with the V5 inbox shell around the canonical Chats V4 thread.
  *
- * ONLY THE PRESENTATION CHANGED. The loaders are the same two canonical
- * actions this route has always used, so the conversation authority, session
- * handling and eligibility rules are untouched -- V4 renders the same
- * ConversationView projection V3 did.
- *
- * MessagesPageV3 is deliberately left in the tree rather than deleted. It is
- * the rollback: reverting this file to import it restores the previous
- * presentation without touching anything else. /chats-lab also stays as the
- * admin-gated comparison surface.
- *
- * Profile's Message action needs no change: it already routes through
- * openDirectConversationAction to /messages?conversation=<id>, so after this
- * cutover the same href opens the V4 conversation.
+ * The underlying messaging authority is unchanged: conversations, messages,
+ * drafts, presence, polls, reactions, media and delivery still come from the
+ * same V4 actions/services. V5 is the presentation layer requested in the
+ * product review — quick profile/notifications, favorites and a stronger
+ * composer treatment — so it can evolve without forking message logic.
  */
 export default async function MessagesPage() {
-  /* `viewerId` scopes the client-side thread cache to this account. It is
-     presentation ownership, never authorization: every action below still
-     resolves the caller's own identity server-side, and the cache can only
-     ever redraw what this viewer was already served. getCurrentIdentity() is the
-     request-cached auth lookup the layout already made, so this costs nothing
-     extra. */
-  const [conversations, voiceRecorderConfig, user] = await Promise.all([
+  /* getCurrentIdentity is request-cached by the authed layout. The profile
+     read is deliberately narrow: only the two identity fields shown in the
+     Messages shortcut header. No private profile data is projected client-side. */
+  const user = await getCurrentIdentity();
+  const supabase = await createSupabaseServerClient();
+
+  const [conversations, voiceRecorderConfig, profileResult] = await Promise.all([
     getConversationsAction(),
     getVoiceRecorderConfigAction(),
-    getCurrentIdentity()
+    user
+      ? supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null })
   ]);
 
   return (
-    <div className="-mt-[var(--mobile-header-height)] md:mt-0">
+    <div className="-mt-[var(--mobile-header-height)] h-[calc(100dvh-var(--mobile-bottom-nav-height,0px))] min-h-0 md:mt-0 md:h-auto">
       <MessageDeliveryAck />
-      <MessagesPageV4
+      <MessagesExperienceV5
         key={user?.id ?? "signed-out"}
         initialConversations={conversations}
         voiceRecorderConfig={voiceRecorderConfig}
         viewerId={user?.id ?? null}
+        viewerDisplayName={profileResult.data?.full_name?.split(/\s+/)[0] || "You"}
+        viewerAvatarUrl={profileResult.data?.avatar_url ?? null}
       />
     </div>
   );
