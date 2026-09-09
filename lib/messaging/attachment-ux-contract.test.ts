@@ -19,6 +19,21 @@ describe("event QR handoff", () => {
   });
 });
 
+describe("chat attachment menu", () => {
+  it("does not offer structured place sharing", () => {
+    const picker = read("components/messaging/attachment-picker.tsx");
+    expect(picker).not.toContain('id: "place"');
+    expect(picker).not.toContain('setStructuredShareMode("place"');
+    expect(picker).not.toContain("MapPin");
+  });
+
+  it("keeps Plan / Event structured sharing available", () => {
+    const picker = read("components/messaging/attachment-picker.tsx");
+    expect(picker).toContain('id: "agenda"');
+    expect(picker).toContain('label: "Plan / Event"');
+  });
+});
+
 describe("document identity and downloads", () => {
   it("persists and returns the original document name", () => {
     const service = read("lib/media/chat-v4-rich-upload-service.ts");
@@ -45,6 +60,28 @@ describe("document identity and downloads", () => {
     const composer = read("components/messaging/message-composer-v3.tsx");
     expect(composer).toContain('{item.kind === "file" ? "DOC" : item.kind === "video" ? "Video" : "Photo"}');
     expect(composer).toContain('item.kind === "file" ? "document" : item.kind === "video" ? "video" : "photo"');
+  });
+});
+
+describe("video attachment presentation", () => {
+  it("keeps videos compact instead of stretching across the chat canvas", () => {
+    const view = read("components/messaging/rich-media-message-v4.tsx");
+    expect(view).toContain("w-[min(68vw,300px)]");
+    expect(view).toContain("max-h-[320px]");
+    expect(view).not.toContain("max-w-[440px]");
+  });
+
+  it("does not surface unreliable device filenames as the video title", () => {
+    const view = read("components/messaging/rich-media-message-v4.tsx");
+    const videoBlock = view.slice(view.indexOf('if (media.kind === "video")'), view.indexOf("return (\n    <div className=\"mb-2 min-w-0 max-w-full overflow-hidden\">"));
+    expect(videoBlock).toContain('aria-label="Video attachment"');
+    expect(videoBlock).toContain('>Video</span>');
+    expect(videoBlock).not.toContain("{media.fileName}");
+  });
+
+  it("uses a neutral Video label while the upload is waiting in the composer", () => {
+    const picker = read("components/messaging/attachment-picker.tsx");
+    expect(picker).toContain('const displayName = kind === "video" ? "Video" : attachment?.fileName;');
   });
 });
 
