@@ -467,20 +467,21 @@ export async function convertHangoutToPlan(
     p_title: planTitle,
     p_description: session.message,
     p_plan_type: "quick",
-    /* A SCHEDULED UpFor keeps the start it was created for.
+    /* THE UPFOR WINDOW IS THE PLAN WINDOW.
 
-       Converting an 18:30 UpFor at 16:00 must produce a Plan that starts at
-       18:30, not at the moment somebody pressed the button. The value comes
-       from the session row this function already read server-side -- never
-       from the caller -- so a client cannot post a start of its choosing
-       through the conversion path.
+       A scheduled UpFor keeps the future time it was created for, while an
+       UpFor that is already running keeps the start time it actually began at.
+       That past start is not stale data: together with ends_at it is exactly
+       what lets planPhase() call the converted Plan "active" until the UpFor
+       window ends. Dropping starts_at to null turned a live, same-day UpFor
+       into an undated Plan and sent it to "No date yet".
 
-       An UpFor that has ALREADY STARTED keeps the previous behaviour and
-       passes null: its start is in the past, and a Plan dated in the past
-       would be worse than one with no date at all. Existing semantics for a
-       running UpFor are deliberately unchanged. */
-    p_start_at: Date.parse(session.starts_at) > Date.now() ? session.starts_at : null,
-    p_end_at: Date.parse(session.starts_at) > Date.now() ? session.ends_at : null,
+       Both timestamps are read from the source session server-side. We do not
+       substitute the conversion moment and we do not accept timing from the
+       caller, so the converted Plan remains the same real-world commitment the
+       UpFor already represented. */
+    p_start_at: session.starts_at,
+    p_end_at: session.ends_at,
     p_timezone: session.timezone || "UTC",
     p_rsvp_deadline: null,
     p_place_type: "decide_in_chat",
