@@ -1,14 +1,25 @@
 /*
- * The scroll owner reserves the FULL safe-area inset below its last content,
- * but MobileNav historically capped its own inset at 0.75rem. On phones whose
- * home-indicator/browser inset is larger (and on browsers where that inset
- * changes as chrome expands/collapses), the two pieces of chrome therefore
- * disagreed by a visible strip. Consume the same canonical inset inside the
- * nav that <main> already reserves so the strip cannot grow/shrink separately.
+ * The mobile bar must fit INSIDE the visual viewport, not grow below the
+ * controls when a browser/device reports a bottom safe-area inset.
+ *
+ * `--mobile-nav-height` is the complete on-screen footprint. The safe-area
+ * allowance is therefore absorbed inside that height (and capped at the same
+ * 0.75rem the component historically used) instead of being appended to it.
+ * We give back the same amount from the row's top padding so the controls keep
+ * their touch target without making the bar taller. This keeps the bar flush
+ * with the viewport edge while still keeping its controls clear of the bottom
+ * gesture area.
  */
 @media (max-width: 767px) {
   nav[aria-label="Mobile navigation"] {
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-    background-clip: padding-box;
+    --mobile-nav-safe-bottom: min(env(safe-area-inset-bottom, 0px), 0.75rem);
+    box-sizing: border-box;
+    height: var(--mobile-nav-height);
+    padding-bottom: var(--mobile-nav-safe-bottom) !important;
+    background-clip: border-box;
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li {
+    padding-top: max(0.25rem, calc(1rem - var(--mobile-nav-safe-bottom))) !important;
   }
 }
