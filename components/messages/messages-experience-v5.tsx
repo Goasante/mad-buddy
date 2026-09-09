@@ -35,9 +35,8 @@ import { cn } from "@/lib/utils";
  * Presentation shell for the 2026 Messages refresh.
  *
  * Chats V4 remains the single authority for threads, drafts, presence,
- * reactions, polls, media, replies and delivery. This component only adds the
- * reviewed inbox hierarchy around it: Notifications, Profile, Favorites and a
- * clearer New Chat entry, plus the warmer composer treatment.
+ * reactions, polls, media, replies and delivery. This shell only changes the
+ * inbox presentation and entry controls around that authority.
  */
 export function MessagesExperienceV5({
   initialConversations = [],
@@ -139,16 +138,6 @@ export function MessagesExperienceV5({
               className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_6px_18px_hsl(var(--shadow)/0.14)]"
             />
           </Link>
-
-          <button
-            type="button"
-            onClick={() => setNewChatOpen(true)}
-            className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_22px_rgba(78,4,1,.14)] transition-transform active:scale-90"
-            aria-label="New chat"
-            title="New chat"
-          >
-            <PenSquare className="h-[18px] w-[18px]" aria-hidden="true" />
-          </button>
         </div>
 
         <div className="mt-2.5 flex items-end gap-2.5 overflow-x-auto pb-1 no-scrollbar" aria-label="Favorite chats">
@@ -179,7 +168,23 @@ export function MessagesExperienceV5({
         </p>
       ) : null}
 
-      <div data-v4-host className="min-h-0 flex-1">
+      {/*
+        The V4 search/filter block remains canonical. New Chat is absolutely
+        anchored to THIS host, not to the viewport, so it can sit in the same
+        row as V4 Search without duplicating or forking V4's query state.
+      */}
+      <div data-v4-host className="relative min-h-0 flex-1">
+        <button
+          type="button"
+          data-v5-new-chat-trigger
+          onClick={() => setNewChatOpen(true)}
+          className="focus-ring absolute z-20 grid h-11 w-11 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_22px_rgba(78,4,1,.14)] transition-transform active:scale-90 lg:hidden"
+          aria-label="New chat"
+          title="New chat"
+        >
+          <PenSquare className="h-[18px] w-[18px]" aria-hidden="true" />
+        </button>
+
         <MessagesPageV4
           initialConversations={initialConversations}
           voiceRecorderConfig={voiceRecorderConfig}
@@ -240,10 +245,29 @@ function MessagesV5Styles() {
   return (
     <style>{`
       @media (max-width: 1023px) {
-        .messages-experience-v5 [data-v4-host] aside > div:first-child > div:first-child { display: none; }
-        .messages-experience-v5 [data-v4-host] aside > div:first-child { padding-top: .3rem; }
+        /* V5 owns the mobile title. Keep V4's desktop title/compose row. */
+        .messages-experience-v5 [data-v4-host] aside > div:first-child > div:first-child {
+          display: none;
+        }
+
+        /* V4's search row is still the real search. Reserve exactly one 44px
+           action slot beside it for the V5 New Chat trigger. */
+        .messages-experience-v5 [data-v4-host] aside > div:first-child {
+          padding-top: .3rem;
+        }
+        .messages-experience-v5 [data-v4-host] aside > div:first-child > div:nth-child(2) {
+          margin-right: 3.25rem;
+        }
+        .messages-experience-v5 [data-v5-new-chat-trigger] {
+          right: .75rem;
+          top: 1.05rem;
+        }
       }
-      .messages-experience-v5 .composer-row { gap: .55rem; padding: .55rem .7rem .5rem; }
+
+      .messages-experience-v5 .composer-row {
+        gap: .55rem;
+        padding: .55rem .7rem .5rem;
+      }
       .messages-experience-v5 .composer-bubble {
         min-height: 48px;
         border: 1px solid hsl(var(--border) / .62);
@@ -264,7 +288,26 @@ function MessagesV5Styles() {
         color: #FEFBF3;
         box-shadow: 0 8px 22px rgba(78, 4, 1, .14);
       }
-      .messages-experience-v5 .composer-action:hover { background: #D97F20; }
+      .messages-experience-v5 .composer-action:hover {
+        background: #D97F20;
+      }
+
+      /*
+        The software keyboard shortens the visual viewport. The shared Modal
+        retains its safe-area sheet defaults; this one sheet gets an additional
+        dynamic-viewport cap so focusing Search cannot push its title/close
+        affordance under the notch. The second declaration wins on browsers
+        with dvh support; svh remains the fallback.
+      */
+      @media (max-width: 639px) {
+        [data-modal-owner="messages-new-chat"] {
+          max-height: calc(100svh - env(safe-area-inset-top, 0px) - .5rem);
+          max-height: calc(100dvh - env(safe-area-inset-top, 0px) - .5rem);
+        }
+        [data-modal-owner="messages-new-chat"]:focus-within [data-new-chat-results] {
+          max-height: min(9.5rem, 30dvh);
+        }
+      }
     `}</style>
   );
 }
@@ -303,6 +346,7 @@ function ConversationShortcutAvatar({ conversation }: { conversation: Conversati
       />
     );
   }
+
   return (
     <span className="relative grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3] shadow-[0_5px_16px_hsl(var(--shadow)/0.13)]">
       <UsersRound className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -420,7 +464,7 @@ function FavoriteListModal({
                 <button
                   type="button"
                   onClick={() => onOpenConversation(conversation.id)}
-                  className="focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl px-2.5 py-2 text-left hover:bg-secondary/65"
+                  className="focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/65"
                 >
                   <ConversationShortcutAvatar conversation={conversation} />
                   <span className="min-w-0 flex-1">
@@ -468,23 +512,37 @@ function NewChatModal({
   }, [friends, query]);
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="New chat" variant="sheet">
+    <Modal
+      open={open}
+      onOpenChange={onOpenChange}
+      title="New chat"
+      variant="sheet"
+      owner="messages-new-chat"
+    >
       <div className="space-y-3">
-        <SearchField value={query} onChange={setQuery} placeholder="Search Muddies or usernames" autoFocus />
+        {/* Do not summon the software keyboard just because the sheet opened.
+            The member list is useful before search, and avoiding autoFocus also
+            prevents the keyboard opening during the sheet's entrance geometry. */}
+        <SearchField value={query} onChange={setQuery} placeholder="Search Muddies or usernames" />
         <button
           type="button"
           onClick={onGroups}
           className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-primary/15 bg-primary/[.07] p-3 text-left"
         >
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3]"><UsersRound className="h-4 w-4" /></span>
-          <span className="min-w-0 flex-1"><strong className="block text-sm">Groups</strong><span className="text-xs text-muted-foreground">Open or create a group</span></span>
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3]">
+            <UsersRound className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-sm">Groups</strong>
+            <span className="text-xs text-muted-foreground">Open or create a group</span>
+          </span>
         </button>
         {friends === null ? (
           <div className="grid place-items-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
         ) : visible.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">No Muddies match your search.</p>
         ) : (
-          <ul className="max-h-[55vh] space-y-1 overflow-y-auto">
+          <ul data-new-chat-results className="max-h-[min(55svh,22rem)] space-y-1 overflow-y-auto overscroll-contain">
             {visible.map((friend) => (
               <li key={friend.friendId}>
                 <button
@@ -494,7 +552,10 @@ function NewChatModal({
                   className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition hover:bg-secondary/70 disabled:opacity-60"
                 >
                   <UserAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" decorative />
-                  <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{friend.displayName}</strong><span className="block truncate text-xs text-muted-foreground">@{friend.username}</span></span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-sm">{friend.displayName}</strong>
+                    <span className="block truncate text-xs text-muted-foreground">@{friend.username}</span>
+                  </span>
                 </button>
               </li>
             ))}
@@ -508,13 +569,11 @@ function NewChatModal({
 function SearchField({
   value,
   onChange,
-  placeholder,
-  autoFocus = false
+  placeholder
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
-  autoFocus?: boolean;
 }) {
   return (
     <div className="relative">
@@ -523,7 +582,6 @@ function SearchField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        autoFocus={autoFocus}
         className="h-11 rounded-2xl pl-10"
       />
     </div>
