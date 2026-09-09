@@ -23,6 +23,13 @@ function fileTypeLabel(contentType: string) {
   return "Document";
 }
 
+function videoTypeLabel(contentType: string) {
+  if (contentType === "video/mp4") return "MP4";
+  if (contentType === "video/webm") return "WebM";
+  if (contentType === "video/quicktime") return "MOV";
+  return "Video";
+}
+
 export function RichMediaMessageV4({
   conversationId,
   messageId,
@@ -63,7 +70,7 @@ export function RichMediaMessageV4({
 
   if (media === undefined) {
     return (
-      <div className="mb-2 grid min-h-28 min-w-[220px] place-items-center rounded-2xl bg-black/[0.035] dark:bg-white/[0.05]" role="status" aria-label={`Loading ${kind}`}>
+      <div className="mb-2 grid min-h-24 w-[min(68vw,300px)] max-w-full place-items-center rounded-[18px] bg-black/[0.035] dark:bg-white/[0.05]" role="status" aria-label={`Loading ${kind}`}>
         <Loader2 className="h-5 w-5 animate-spin text-primary motion-reduce:animate-none" />
       </div>
     );
@@ -71,8 +78,8 @@ export function RichMediaMessageV4({
 
   if (!media) {
     return (
-      <div className="mb-2 min-w-[220px]">
-        <div className="flex min-h-20 items-center gap-3 rounded-2xl border border-current/10 px-3 py-3 text-xs opacity-70">
+      <div className="mb-2 w-[min(68vw,300px)] max-w-full">
+        <div className="flex min-h-20 items-center gap-3 rounded-[18px] border border-current/10 px-3 py-3 text-xs opacity-70">
           {kind === "video" ? <PlaySquare className="h-5 w-5 shrink-0" /> : <FileText className="h-5 w-5 shrink-0" />}
           <span>This attachment is no longer available.</span>
         </div>
@@ -82,24 +89,30 @@ export function RichMediaMessageV4({
   }
 
   if (media.kind === "video") {
+    const videoMeta = [videoTypeLabel(media.contentType), media.sizeBytes > 0 ? formatBytes(media.sizeBytes) : null]
+      .filter(Boolean)
+      .join(" · ");
+
     return (
-      <div className="mb-2">
-        <div className="overflow-hidden rounded-2xl bg-black shadow-sm">
+      <div className="mb-2 w-fit max-w-full">
+        <div className="w-[min(68vw,300px)] max-w-full overflow-hidden rounded-[18px] border border-white/10 bg-black shadow-[0_8px_24px_rgba(78,4,1,0.16)]">
           <video
             controls
             playsInline
             preload="metadata"
             src={media.url}
-            className="block max-h-[420px] min-h-[150px] w-full min-w-[230px] max-w-[440px] bg-black object-contain"
-            aria-label={`Video attachment ${media.fileName}`}
+            className="block max-h-[320px] min-h-[132px] w-full bg-black object-contain"
+            aria-label="Video attachment"
             onError={() => {
               if (Date.parse(media.expiresAt) <= Date.now() + 30_000) void refresh();
             }}
           />
-          <div className="flex items-center gap-2 bg-black/85 px-3 py-2 text-xs text-white/75">
-            <PlaySquare className="h-3.5 w-3.5" />
-            <span className="min-w-0 flex-1 truncate">{media.fileName}</span>
-            {media.sizeBytes > 0 ? <span>{formatBytes(media.sizeBytes)}</span> : null}
+          <div className="flex items-center gap-2 border-t border-white/10 bg-[linear-gradient(90deg,rgba(78,4,1,.88),rgba(34,10,7,.94))] px-3 py-2 text-xs text-white/80">
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#E88C2B] text-white shadow-[0_3px_8px_rgba(232,140,43,.25)]" aria-hidden="true">
+              <PlaySquare className="h-3.5 w-3.5" />
+            </span>
+            <span className="min-w-0 flex-1 font-semibold text-white/90">Video</span>
+            {videoMeta ? <span className="shrink-0 text-[11px] text-white/55">{videoMeta}</span> : null}
           </div>
         </div>
         <MessageRetentionV4 conversationId={conversationId} messageId={messageId} mine={mine} />
