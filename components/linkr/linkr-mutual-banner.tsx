@@ -1,6 +1,7 @@
 "use client";
 
-import { Hand, X } from "lucide-react";
+import Image from "next/image";
+import { X } from "lucide-react";
 
 import { LINKR_COPY } from "@/lib/linkr/rules";
 
@@ -29,8 +30,17 @@ export function LinkrMutualBanner({
 }) {
   return (
     <div className="linkr-mutual-banner" role="status" aria-live="polite">
-      <span className="linkr-mutual-banner__wave" aria-hidden>
-        <Hand />
+      <span
+        className="relative h-11 w-14 shrink-0 overflow-hidden rounded-xl border border-white/20 bg-white/10 shadow-sm"
+        aria-hidden="true"
+      >
+        <Image
+          src="/illustrations/linkr/meetup_in_the_city_park.webp"
+          alt=""
+          fill
+          sizes="56px"
+          className="object-cover object-[50%_42%] saturate-[0.92] brightness-[0.96]"
+        />
       </span>
 
       <button type="button" className="linkr-mutual-banner__body" onClick={onOpen}>
