@@ -1,0 +1,315 @@
+.hero {
+  position: relative;
+  margin-bottom: 0.9rem;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border) / 0.55);
+  border-radius: 1.35rem;
+  background: hsl(var(--card));
+  box-shadow: 0 16px 44px hsl(var(--foreground) / 0.07);
+}
+
+.heroImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1.15rem 0 0.65rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 1.05rem;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+}
+
+.sectionMeta {
+  flex: none;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.popular {
+  margin-top: 0.35rem;
+}
+
+.popularRail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(9.75rem, 44%);
+  gap: 0.7rem;
+  overflow-x: auto;
+  padding: 0.05rem 0 0.2rem;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.popularRail::-webkit-scrollbar {
+  display: none;
+}
+
+.popularCard {
+  position: relative;
+  min-height: 8.3rem;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 1rem;
+  background: hsl(var(--card));
+  box-shadow: 0 8px 22px hsl(var(--foreground) / 0.06);
+  color: white;
+  text-align: left;
+  scroll-snap-align: start;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.popularCard:not(:disabled):active {
+  transform: scale(0.985);
+}
+
+.popularCard:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+.popularCard:disabled {
+  cursor: default;
+}
+
+.popularImage {
+  object-fit: cover;
+  transition: transform 220ms ease;
+}
+
+.popularCard:not(:disabled):hover .popularImage {
+  transform: scale(1.025);
+}
+
+.popularScrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 34%, rgba(20, 4, 1, 0.8) 100%);
+}
+
+.popularContent {
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.65rem;
+  left: 0.7rem;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.popularTitle {
+  overflow: hidden;
+  font-size: 0.88rem;
+  font-weight: 760;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popularProof {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.7rem;
+  font-weight: 580;
+}
+
+.popularProof svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+/* CSS Modules require a local selector in every rule. The local `.hero`
+   inside :has() is also our opt-in marker, so none of these sibling/parent
+   adjustments can leak onto another page that happens to reuse a class name. */
+
+/* The reference direction is discovery-first. The old temporary explainer is
+   redundant once the hero establishes the promise, so it is removed from the
+   live composition without touching any lifecycle behaviour. */
+:global(.upfor-page):has(.hero) > :global(.upfor-banner) {
+  display: none;
+}
+
+/* Plans have their own product surface. UpFor may still convert into a Plan,
+   but the Plans preview no longer appears inside UpFor. */
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="upfor-plans-heading"]) {
+  display: none;
+}
+
+/* The current header is intentionally preserved, but the lightning decoration
+   is not part of the refreshed visual language. */
+:global(.upfor-page):has(.hero) :global(.upfor-subtitle > span[aria-hidden="true"]) {
+  display: none;
+}
+
+/* Put discovery immediately beneath the existing header. Existing owner tools
+   remain on the page, just below the high-frequency discovery/quick-start
+   surfaces instead of preceding them. */
+:global(.upfor-page):has(.hero) > :global(.upfor-header) {
+  order: -30;
+}
+
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="upfor-feed-heading"]) {
+  order: -20;
+}
+
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="upfor-ideas-heading"]) {
+  order: -19;
+}
+
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="owned-upfors-heading"]) {
+  order: -18;
+}
+
+:global(.upfor-page):has(.hero) > :global(.upfor-safety) {
+  order: -17;
+}
+
+/* Quick Ideas keeps the existing one-tap behaviour and supported activity
+   types, but replaces emoji tiles with image-led cards. */
+:global(.upfor-page):has(.hero) :global(.upfor-ideas-head) {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+:global(.upfor-page):has(.hero) :global(#upfor-ideas-heading) {
+  font-size: 1.05rem;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+}
+
+:global(.upfor-page):has(.hero) :global(#upfor-ideas-heading > span[aria-hidden="true"]),
+:global(.upfor-page):has(.hero) :global(.upfor-ideas-sub) {
+  display: none;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas) {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 5.85rem;
+  gap: 0.65rem;
+  overflow-x: auto;
+  margin: 0.65rem 0 0;
+  padding: 0.05rem 0 0.2rem;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas::-webkit-scrollbar) {
+  display: none;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li) {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-idea) {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 6.8rem;
+  align-items: flex-end;
+  justify-content: flex-start;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border) / 0.55);
+  border-radius: 0.95rem;
+  padding: 0.6rem;
+  background-position: center !important;
+  background-size: cover !important;
+  box-shadow: 0 7px 18px hsl(var(--foreground) / 0.06);
+  color: white;
+  text-align: left;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-idea::before) {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  background: linear-gradient(180deg, transparent 35%, rgba(25, 5, 2, 0.78) 100%);
+  pointer-events: none;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-idea::after) {
+  display: none;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(1) .upfor-idea) {
+  background-image: url("/visuals/activities/dinner.jpg") !important;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(2) .upfor-idea) {
+  background-image: url("/visuals/activities/coffee.jpg") !important;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(3) .upfor-idea) {
+  background-image: url("/visuals/activities/picnic.jpg") !important;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(4) .upfor-idea) {
+  background-image: url("/visuals/activities/football.jpg") !important;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(5) .upfor-idea) {
+  background-image: url("/visuals/activities/movie.jpg") !important;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(6) .upfor-idea) {
+  background-image: url("/visuals/activities/beach.jpg") !important;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-idea-emoji) {
+  display: none;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-idea-label) {
+  position: relative;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
+  white-space: nowrap;
+}
+
+@media (min-width: 520px) {
+  .popularRail {
+    grid-auto-columns: minmax(10.5rem, 31.5%);
+  }
+
+  :global(.upfor-page):has(.hero) :global(.upfor-ideas) {
+    grid-auto-columns: 6.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popularCard,
+  .popularImage {
+    transition: none;
+  }
+}
