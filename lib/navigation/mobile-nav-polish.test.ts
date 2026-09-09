@@ -9,12 +9,11 @@ const shell = read("components/app-shell/app-shell.tsx");
 
 const mobileTabs = shell.slice(shell.indexOf("const MOBILE_TABS"), shell.indexOf("function MobileNav("));
 
-describe("polished mobile navigation", () => {
-  it("loads after the safe-area geometry layer without owning geometry itself", () => {
+describe("Dribbble-inspired mobile navigation", () => {
+  it("loads after the safe-area geometry layer without redefining the canonical footprint", () => {
     expect(layout).toContain('import "./mobile-shell-stability.css";\nimport "./mobile-nav-polish.css";');
     expect(css).toContain('nav[aria-label="Mobile navigation"]');
-    expect(css).toContain("do NOT add bottom offsets or change --mobile-nav-height");
-    expect(css).not.toMatch(/bottom:\s*[1-9]/);
+    expect(css).toContain("keeps --mobile-nav-height untouched");
     expect(css).not.toContain("--mobile-nav-height:");
   });
 
@@ -27,29 +26,41 @@ describe("polished mobile navigation", () => {
     expect(mobileTabs).toContain('brandIcon: "upfor"');
   });
 
-  it("turns every destination into a labelled button instead of showing only the active label", () => {
-    expect(css).toContain('content: attr(aria-label)');
-    expect(css).toContain('nav[aria-label="Mobile navigation"] > ul > li > a::after');
-    expect(css).toContain("min-height: 58px");
-    expect(css).toContain("border-radius: 1rem");
+  it("makes the outer safe-area frame transparent and click-through so content can flow behind it", () => {
+    expect(css).toContain("background: transparent !important");
+    expect(css).toContain("pointer-events: none");
+    expect(css).toContain("pointer-events: auto");
+    expect(css).toContain("backdrop-filter: none !important");
   });
 
-  it("gives the active destination a restrained Mad Buddy button treatment", () => {
+  it("renders the visible control as a compact floating glass dock", () => {
+    expect(css).toContain("width: min(29rem, 100%)");
+    expect(css).toContain("height: 4rem");
+    expect(css).toContain("border-radius: 1.55rem");
+    expect(css).toContain("background: rgba(254, 251, 243, 0.82)");
+    expect(css).toContain("backdrop-filter: blur(24px) saturate(1.18)");
+    expect(css).toContain('.dark nav[aria-label="Mobile navigation"] > ul');
+  });
+
+  it("keeps inactive destinations icon-only and expands the active destination", () => {
+    expect(css).toContain('li:has(> a[aria-current="page"])');
+    expect(css).toContain("flex: 1.72 1 0");
+    expect(css).toContain("content: attr(aria-label)");
+    expect(css).toContain("max-width: 0");
+    expect(css).toContain('a[aria-current="page"]::after');
+    expect(css).toContain("max-width: 6.5rem");
+    expect(css).toContain("opacity: 1");
+  });
+
+  it("uses Mad Buddy orange and maroon for the selected pill without replacing nav icons", () => {
     expect(css).toContain('a[aria-current="page"]');
-    expect(css).toContain("#4e0401");
-    expect(css).toContain("#fefbf3");
-    expect(css).toContain("rgba(232, 140, 43, 0.34)");
     expect(css).toContain("background: #e88c2b");
+    expect(css).toContain("color: #4e0401");
+    expect(css).toContain("Keep every Mad Buddy icon exactly as supplied");
   });
 
-  it("keeps the dock contained and theme-aware", () => {
-    expect(css).toContain("width: min(30rem, calc(100% - 0.75rem))");
-    expect(css).toContain("border-radius: 1.45rem");
-    expect(css).toContain('.dark nav[aria-label="Mobile navigation"]');
-    expect(css).toContain("backdrop-filter: blur(22px)");
-  });
-
-  it("honours reduced motion", () => {
+  it("uses spring-like expansion timing but honours reduced-motion users", () => {
+    expect(css).toContain("cubic-bezier(0.22, 1, 0.36, 1)");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toContain("transition: none !important");
   });
