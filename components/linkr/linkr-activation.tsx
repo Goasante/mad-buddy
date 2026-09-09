@@ -178,9 +178,9 @@ export function LinkrOffScreen({
       <p className="linkr-off__privacy">{LINKR_COPY.offPrivacy}</p>
 
       <LinkrStateArtwork
-        variant="loading"
+        variant="opened"
         priority
-        className="my-2 w-full max-w-[20rem] sm:max-w-[22rem]"
+        className="my-3 w-full max-w-[20rem] sm:max-w-[22rem]"
       />
 
       <button type="button" className="linkr-primary" onClick={() => setStage("consent")}>

@@ -10,21 +10,24 @@ type LinkrStateArtworkProps = {
 
 const ARTWORK = {
   loading: {
-    src: "/illustrations/linkr/linkr-loading.png",
-    alt: "Three people connected through Linkr"
+    src: "/illustrations/linkr/friendly_city_square_meetup.webp",
+    alt: "New people meeting in a city square",
+    imageClassName: "object-[50%_39%]"
   },
   opened: {
-    src: "/illustrations/linkr/linkr-opened.png",
-    alt: "Two people connected through Linkr"
+    src: "/illustrations/linkr/new_connections_in_the_city.webp",
+    alt: "Friends connecting in the city",
+    imageClassName: "object-[50%_43%]"
   }
 } as const;
 
 /**
- * The approved Linkr state artwork.
+ * Product-owned Linkr artwork for intro, empty, and discovery-loading states.
  *
- * The supplied PNGs keep transparent outer edges. The artwork is intentionally
- * softened here so it belongs to the Linkr surface instead of reading like a
- * bright sticker sitting above Warm Paper or the near-black dark canvas.
+ * The supplied illustrations are tall editorial scenes. Linkr presents them as
+ * a shallow, content-aware vignette so the art supports the state without
+ * pushing the primary action below the first phone viewport. User/profile
+ * photos remain completely separate from this component.
  */
 export function LinkrStateArtwork({
   variant,
@@ -35,41 +38,30 @@ export function LinkrStateArtwork({
 
   return (
     <div
-      className={cn("relative isolate", className)}
+      className={cn(
+        "relative isolate aspect-[16/11] overflow-hidden rounded-[1.75rem] border border-primary/10 bg-card/50 shadow-lg shadow-primary/10 dark:border-white/10 dark:bg-[#111112]/60 dark:shadow-black/30",
+        className
+      )}
       data-linkr-state-artwork={variant}
     >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-[18%] z-0 rounded-full bg-primary/[0.055] blur-[2.25rem] dark:bg-primary/[0.07]"
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-[26%] z-0 rounded-full bg-card/[0.38] blur-[1.75rem] dark:bg-[#111112]/[0.34]"
-      />
       <Image
         src={artwork.src}
         alt={artwork.alt}
-        width={1254}
-        height={1254}
+        fill
         priority={priority}
-        sizes="(max-width: 480px) 88vw, 430px"
-        className="relative z-[1] h-auto w-full object-contain opacity-[0.76] saturate-[0.8] brightness-[0.94] contrast-[0.9] drop-shadow-sm dark:opacity-[0.72] dark:saturate-[0.74] dark:brightness-[0.82] dark:contrast-[0.88] dark:drop-shadow-md"
+        sizes="(max-width: 480px) calc(100vw - 2.5rem), 352px"
+        className={cn(
+          "object-cover saturate-[0.96] brightness-[0.98] contrast-[0.98] dark:saturate-[0.82] dark:brightness-[0.78] dark:contrast-[0.92]",
+          artwork.imageClassName
+        )}
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute -inset-px z-[2] dark:hidden"
-        style={{
-          background:
-            "linear-gradient(to bottom, hsl(var(--background) / 0.08) 0%, transparent 34%, hsl(var(--background) / 0.56) 100%), radial-gradient(circle at 50% 48%, transparent 44%, hsl(var(--background) / 0.64) 100%)"
-        }}
+        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/35 via-transparent to-background/[0.04] dark:from-[#111112]/45 dark:via-transparent dark:to-[#111112]/10"
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute -inset-px z-[2] hidden dark:block"
-        style={{
-          background:
-            "linear-gradient(to bottom, rgb(17 17 18 / 0.1) 0%, transparent 32%, rgb(17 17 18 / 0.62) 100%), radial-gradient(circle at 50% 48%, transparent 40%, rgb(17 17 18 / 0.72) 100%)"
-        }}
+        className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/35 dark:ring-white/10"
       />
     </div>
   );

@@ -13,7 +13,7 @@ export default function LinkrLoading() {
           priority
           className="w-full max-w-[22rem] sm:max-w-[25rem]"
         />
-        <strong className="mt-1 text-balance text-2xl font-bold tracking-tight sm:text-[1.75rem]">
+        <strong className="mt-4 text-balance text-2xl font-bold tracking-tight sm:text-[1.75rem]">
           Refreshing your Linkr…
         </strong>
         <small className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">

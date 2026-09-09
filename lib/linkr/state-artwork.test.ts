@@ -5,72 +5,69 @@ import { describe, expect, it } from "vitest";
 const ROOT = join(__dirname, "..", "..");
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 const readBinary = (path: string) => readFileSync(join(ROOT, path));
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const RIFF_SIGNATURE = Buffer.from("RIFF");
+const WEBP_SIGNATURE = Buffer.from("WEBP");
 
 const artwork = read("components/linkr/linkr-state-artwork.tsx");
 const loading = read("app/(app)/linkr/loading.tsx");
 const moments = read("components/linkr/linkr-moments.tsx");
 const activation = read("components/linkr/linkr-activation.tsx");
+const mutualBanner = read("components/linkr/linkr-mutual-banner.tsx");
 
-describe("Linkr illustrated loading and opened states", () => {
-  it("uses the three-person artwork for the Linkr loading screen", () => {
+describe("Linkr product-owned illustration states", () => {
+  it("uses the city-square artwork while the discovery surface refreshes", () => {
     expect(loading).toContain('variant="loading"');
     expect(loading).toContain("Refreshing your Linkr…");
-    expect(artwork).toContain('src: "/illustrations/linkr/linkr-loading.png"');
+    expect(artwork).toContain(
+      'src: "/illustrations/linkr/friendly_city_square_meetup.webp"'
+    );
   });
 
-  it("uses the three-person artwork when Linkr is off", () => {
-    expect(activation).toContain('variant="loading"');
+  it("uses the new-connections artwork for the primary Linkr intro and empty deck", () => {
+    expect(activation).toContain('variant="opened"');
     expect(activation).not.toContain('<LinkrOrb variant="off" />');
     expect(activation).toContain("LINKR_COPY.turnOn");
-  });
 
-  it("uses the two-person artwork for the opened empty deck", () => {
     expect(moments).toContain('variant="opened"');
     expect(moments).not.toContain('<LinkrOrb variant="empty" />');
-    expect(artwork).toContain('src: "/illustrations/linkr/linkr-opened.png"');
+    expect(artwork).toContain(
+      'src: "/illustrations/linkr/new_connections_in_the_city.webp"'
+    );
   });
 
-  it("keeps the illustration transparent and theme-owned instead of painting a hard card behind it", () => {
-    /* THE CONTRACT IS "THEME-OWNED AND SOFT", NOT FOUR EXACT OPACITIES.
-     *
-     * This pinned `bg-primary/10`, `dark:bg-primary/15`, `bg-card/80` and
-     * `dark:bg-white/[0.04]` verbatim. `7470786` ("soften state artwork")
-     * deliberately retuned those values -- primary/[0.055], card/[0.38] and a
-     * dark surface -- and the artwork became MORE theme-owned, not less: the
-     * light scrim now interpolates `hsl(var(--background))` rather than a
-     * fixed white.
-     *
-     * Pinning the numbers meant any future tuning of the same, correct design
-     * broke the build, while a genuine regression -- swapping the tokens for a
-     * solid card, or letting the image fill rather than fit -- could slip past
-     * as long as those four strings survived. So the assertions are now about
-     * the properties that actually carry the contract. */
-
-    // Tinted from the theme's own tokens, never a hardcoded card colour.
-    expect(artwork).toMatch(/bg-primary\/\[?[\d.]+\]?/);
-    expect(artwork).toMatch(/bg-card\/\[?[\d.]+\]?/);
-    // Dark mode is handled explicitly rather than inheriting the light values.
-    expect(artwork).toMatch(/dark:bg-/);
-    // The scrims read the background token instead of assuming a page colour.
-    expect(artwork).toContain("hsl(var(--background)");
-
-    /* Soft, not a hard card: the layers behind the art are blurred and
-       translucent, so no opaque plate appears behind the illustration. */
-    expect(artwork).toMatch(/blur-\[/);
-    expect(artwork).not.toMatch(/\bbg-(white|black)\b(?!\/)/);
-
-    // The PNG keeps its aspect ratio rather than being cropped to fill.
-    expect(artwork).toContain("object-contain");
+  it("uses the city-park artwork in the mutual-connection banner", () => {
+    expect(mutualBanner).toContain(
+      'src="/illustrations/linkr/meetup_in_the_city_park.webp"'
+    );
+    expect(mutualBanner).toContain("linkr-mutual-banner");
+    expect(mutualBanner).toContain('alt=""');
   });
 
-  it("commits real PNG files so production cannot render a broken image placeholder", () => {
+  it("uses a shallow mobile-first crop so artwork supports rather than pushes out the CTA", () => {
+    expect(artwork).toContain("aspect-[16/11]");
+    expect(artwork).toContain("overflow-hidden");
+    expect(artwork).toContain("rounded-[1.75rem]");
+    expect(artwork).toContain("object-cover");
+    expect(artwork).toContain("object-[50%_43%]");
+    expect(artwork).toContain("object-[50%_39%]");
+    expect(artwork).toContain("from-background/35");
+    expect(artwork).toContain("dark:brightness-[0.78]");
+  });
+
+  it("removes the retired built-in Linkr artwork references", () => {
+    expect(artwork).not.toContain("/illustrations/linkr/linkr-loading.png");
+    expect(artwork).not.toContain("/illustrations/linkr/linkr-opened.png");
+  });
+
+  it("commits all three optimized replacement WebP files so production cannot render a broken placeholder", () => {
     for (const path of [
-      "public/illustrations/linkr/linkr-loading.png",
-      "public/illustrations/linkr/linkr-opened.png"
+      "public/illustrations/linkr/new_connections_in_the_city.webp",
+      "public/illustrations/linkr/friendly_city_square_meetup.webp",
+      "public/illustrations/linkr/meetup_in_the_city_park.webp"
     ]) {
       const bytes = readBinary(path);
-      expect(bytes.subarray(0, PNG_SIGNATURE.length)).toEqual(PNG_SIGNATURE);
+      expect(bytes.subarray(0, RIFF_SIGNATURE.length)).toEqual(RIFF_SIGNATURE);
+      expect(bytes.subarray(8, 12)).toEqual(WEBP_SIGNATURE);
       expect(bytes.byteLength).toBeGreaterThan(8000);
     }
   });
