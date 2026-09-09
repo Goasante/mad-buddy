@@ -12,24 +12,25 @@ describe("quick actions reference treatment", () => {
     expect(component).toContain('import "@/app/quick-actions-replica.css"');
   });
 
-  it("uses one large circular orange launcher with an open-state X", () => {
-    expect(css).toContain("--quick-actions-size: 4.25rem");
-    expect(css).toContain("background: #e88c2b");
+  it("uses a smaller circular branded launcher with an open-state X", () => {
+    expect(css).toContain("--quick-actions-size: 3.5rem");
+    expect(css).toContain("linear-gradient(145deg, #f2a043 0%, #e88c2b 58%, #d87418 100%)");
     expect(css).toContain("border-radius: 999px");
-    expect(css).toContain("0 0 0 7px rgba(232, 140, 43, 0.12)");
+    expect(css).toContain("0 0 0 5px rgba(232, 140, 43, 0.09)");
+    expect(css).toContain(".quick-actions-trigger::before");
     expect(component).toContain("<X");
   });
 
-  it("renders warm-paper pill actions with the icon disc visually on the left", () => {
-    expect(css).toContain("background: rgba(254, 251, 243, 0.98)");
+  it("renders compact warm-paper pill actions with the icon disc visually on the left", () => {
+    expect(css).toContain("linear-gradient(135deg, rgba(254, 251, 243, 0.99), rgba(255, 247, 234, 0.97))");
     expect(css).toContain("flex-direction: row-reverse");
-    expect(css).toContain("min-height: 3.45rem");
-    expect(css).toContain("width: min(12rem, calc(100vw - 2rem))");
+    expect(css).toContain("min-height: 2.95rem");
+    expect(css).toContain("width: min(10.75rem, calc(100vw - 1.7rem))");
   });
 
   it("alternates the icon discs between Mad Buddy orange and deep maroon", () => {
     expect(css).toContain(".quick-actions-item:nth-child(even) .quick-actions-glyph");
-    expect(css).toContain("background: #4e0401");
+    expect(css).toContain("linear-gradient(145deg, #6a0b07, #4e0401 62%, #350201)");
     expect(css).toContain("color: #fff");
   });
 
