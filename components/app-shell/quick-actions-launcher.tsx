@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+import "@/app/quick-actions-replica.css";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { haptic } from "@/lib/device/haptics";
@@ -14,18 +15,10 @@ import { cn } from "@/lib/utils";
 /**
  * The Quick Actions launcher.
  *
- * A compact secondary way into the five features that have no permanent
- * bottom-nav slot. It is NOT navigation: the bottom bar remains the way around
- * the app, and this is a shortcut for things that would otherwise need the
- * menu sheet.
- *
- * THE COLLAPSED STATE IS THE WHOLE DESIGN PROBLEM. A launcher that sits over
- * content all day is worse than no launcher, so collapsed it is a 44x60 pill
- * that recedes: translucent, thin-bordered, no glow, and deliberately quiet
- * against the page. It only becomes expressive once the user asks for it.
- *
- * Mounted ONCE, in AppShell. Route visibility comes from showsQuickActions,
- * so there is exactly one instance and one rule deciding where it appears.
+ * Mounted ONCE in AppShell and visually styled as the approved floating action
+ * system: a circular orange launcher with a vertical stack of pill actions.
+ * Route destinations, visibility rules, dismissal behaviour, haptics and
+ * accessibility remain independent of the visual treatment.
  */
 export function QuickActionsLauncher() {
   const pathname = usePathname();
@@ -125,7 +118,7 @@ export function QuickActionsLauncher() {
               key={action.id}
               className={cn("quick-actions-item", action.toneClass)}
               // Sequential reveal upward. Nearest the trigger moves first, so
-              // the column reads as growing out of the pill rather than as a
+              // the column reads as growing out of the button rather than as a
               // separate panel arriving.
               style={{ "--qa-index": QUICK_ACTIONS.length - 1 - index } as React.CSSProperties}
             >
@@ -159,17 +152,6 @@ export function QuickActionsLauncher() {
           aria-label={open ? "Close quick actions" : "Open quick actions"}
           className="quick-actions-trigger focus-ring"
         >
-          {/* THE REDUNDANT PLUS IS GONE.
-              The collapsed trigger carried a Plus AND a ChevronUp -- two
-              glyphs saying the same "there is more here", and Plus in
-              particular reads as "create something", which this control does
-              not do: it opens a menu. The chevron alone carries the affordance,
-              and it points up because the panel rises from the bar.
-
-              X is kept for the open state: "dismiss" is a different meaning
-              from "there is more", and a rotated chevron communicates it less
-              clearly at this size. The control keeps its position, its shape
-              and its accessible name, so its identity is unchanged. */}
           <span className="quick-actions-trigger-icon" aria-hidden="true">
             {open ? (
               <X className="h-[18px] w-[18px]" />
