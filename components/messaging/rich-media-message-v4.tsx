@@ -108,23 +108,23 @@ export function RichMediaMessageV4({
   }
 
   return (
-    <div className="mb-2">
-      <div className={`min-w-[230px] rounded-2xl border p-3 ${mine ? "border-white/15 bg-white/[0.08]" : "border-black/[0.06] bg-black/[0.025] dark:border-white/[0.08] dark:bg-white/[0.04]"}`}>
-        <div className="flex items-center gap-3">
+    <div className="mb-2 min-w-0 max-w-full overflow-hidden">
+      <div className={`w-[min(78vw,360px)] min-w-0 max-w-full overflow-hidden rounded-2xl border p-3 ${mine ? "border-white/15 bg-white/[0.08]" : "border-black/[0.06] bg-black/[0.025] dark:border-white/[0.08] dark:bg-white/[0.04]"}`}>
+        <div className="flex min-w-0 items-center gap-3">
           <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${mine ? "bg-white/10" : "bg-primary/10 text-primary"}`}>
             <FileText className="h-5 w-5" />
           </span>
-          <span className="min-w-0 flex-1">
-            <strong className="block truncate text-xs" title={media.fileName}>{media.fileName}</strong>
-            <span className="mt-0.5 block text-xs opacity-65">{fileTypeLabel(media.contentType)}{media.sizeBytes > 0 ? ` · ${formatBytes(media.sizeBytes)}` : ""}</span>
+          <span className="min-w-0 flex-1 overflow-hidden">
+            <strong className="block max-w-full truncate text-xs" title={media.fileName}>{media.fileName}</strong>
+            <span className="mt-0.5 block truncate text-xs opacity-65">{fileTypeLabel(media.contentType)}{media.sizeBytes > 0 ? ` · ${formatBytes(media.sizeBytes)}` : ""}</span>
           </span>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <a href={media.url} target="_blank" rel="noopener noreferrer" className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
-            <ExternalLink className="h-3.5 w-3.5" />Open
+        <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
+          <a href={media.url} target="_blank" rel="noopener noreferrer" className="focus-ring inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
+            <ExternalLink className="h-3.5 w-3.5 shrink-0" />Open
           </a>
-          <a href={media.downloadUrl ?? media.url} className="focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
-            <Download className="h-3.5 w-3.5" />Save
+          <a href={media.downloadUrl ?? media.url} className="focus-ring inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-current/15 px-2 text-xs font-semibold transition active:scale-95">
+            <Download className="h-3.5 w-3.5 shrink-0" />Save
           </a>
         </div>
       </div>
