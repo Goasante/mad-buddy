@@ -1,7 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
+import { Users } from "lucide-react";
 import { filterForMode, type UpForMode } from "@/lib/social/upfor-feed";
+import { upForGoingLabel, upForTitle } from "@/lib/social/upfor";
+import type { HangoutActivityType } from "@/lib/supabase/database.types";
 import { UpForCard, type UpForCardModel } from "@/components/hangout/upfor-card";
 import {
   UpForEmptyState,
@@ -9,25 +13,22 @@ import {
   UpForSkeleton,
   UpForTabs
 } from "@/components/hangout/upfor-feed-parts";
+import styles from "@/components/hangout/upfor-revamp.module.css";
 
 /**
- * The UpFor feed: four discovery modes over one eligible list.
+ * UpFor is an activity-discovery surface, not a second Plans page.
  *
- * WHY ONE LIST. Every row here already cleared canViewHangout on the server,
- * so a mode narrows what the viewer is currently looking at rather than
- * deciding what they may see. Refetching per tab would make four round trips
- * to answer a question the first one already answered, and would tempt the
- * client into looking like the access control -- which it must never be.
- *
- * RULES LIVE IN lib/social/upfor-feed.ts. No sorting, ranking or eligibility
- * logic is written here; this component chooses a mode and renders what the
- * tested rules return.
+ * The server still owns visibility and eligibility. This component only
+ * presents the already-eligible list through three browsing lenses and two
+ * useful views of the same live inventory: what is coming up and what has the
+ * most social momentum right now.
  */
 
 export type UpForFeedItem = UpForCardModel & {
   /** Server-derived. The client never infers a friendship from ids. */
   isMuddy: boolean;
-  /** Server-derived. True only for a public Group the viewer has joined. */
+  /** Server-derived. A group relationship may still affect ranking, even
+   * though Groups is no longer a standalone UpFor tab. */
   viaGroup: boolean;
 };
 
@@ -46,6 +47,23 @@ export type UpForFeedProps = {
   onStart?: () => void;
 };
 
+/** Curated Mad Buddy artwork for UpFor categories. User-uploaded media can
+ * replace this later; these are deterministic, local fallbacks today. */
+const ACTIVITY_ART: Partial<Record<HangoutActivityType, string>> = {
+  anything: "/visuals/activities/party.jpg",
+  food: "/visuals/activities/dinner.jpg",
+  study: "/visuals/activities/coffee.jpg",
+  sports: "/visuals/activities/football.jpg",
+  gym: "/visuals/activities/football.jpg",
+  walk: "/visuals/activities/picnic.jpg",
+  gaming: "/visuals/activities/movie.jpg",
+  chill: "/visuals/activities/beach.jpg"
+};
+
+function activityArtwork(activity: HangoutActivityType): string {
+  return ACTIVITY_ART[activity] ?? "/visuals/activities/party.jpg";
+}
+
 export function UpForFeed({
   items,
   viewerId,
@@ -61,15 +79,7 @@ export function UpForFeed({
   onStart
 }: UpForFeedProps) {
   const [mode, setMode] = useState<UpForMode>("for_you");
-  /**
-   * Which card has a write in flight.
-   *
-   * Per-card rather than a single page flag, so joining one UpFor does not
-   * freeze every other card's controls -- and so a second tap on the SAME card
-   * is refused while the first is still running. That is the duplicate-tap
-   * guard: the request table's unique (session, requester) constraint is the
-   * real backstop, but there is no reason to send the second request at all.
-   */
+  /** Per-card rather than page-wide: one response must not freeze every card. */
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const visible = useMemo(() => filterForMode(items, mode, nowMs), [items, mode, nowMs]);
@@ -83,17 +93,25 @@ export function UpForFeed({
     [items, nowMs]
   );
 
-  /**
-   * Run one response action.
-   *
-   * NOT inside startTransition. A transition is interruptible by design, and
-   * React really does abandon it -- which would kill the write mid-flight and
-   * leave the card showing a state the server never agreed to. Plain async
-   * work with its own flag, cleared on every path.
-   */
+  /** "Popular" is intentionally transparent: real accepted attendance, then
+   * nearest end-time as a deterministic tie-breaker. No invented popularity
+   * score and no fake favourite count. */
+  const popular = useMemo(
+    () =>
+      [...visible]
+        .sort((a, b) => {
+          const attendance = b.goingCount - a.goingCount;
+          if (attendance !== 0) return attendance;
+          const endDiff = Date.parse(a.endsAt) - Date.parse(b.endsAt);
+          return endDiff !== 0 ? endDiff : a.id.localeCompare(b.id);
+        })
+        .slice(0, 6),
+    [visible]
+  );
+
   const run = useCallback(
     (id: string, action: (id: string) => Promise<void> | void) => {
-      if (pendingId) return; // a write is already in flight
+      if (pendingId) return;
       setPendingId(id);
       void (async () => {
         try {
@@ -108,6 +126,18 @@ export function UpForFeed({
 
   return (
     <section className="upfor-feed" aria-label="UpFor">
+      <div className={styles.hero}>
+        <Image
+          src="/visuals/upfor/good-people-great-plans.jpg"
+          alt="Good people. Great plans. Discover hangouts, meetups and chill sessions on Mad Buddy."
+          width={1200}
+          height={675}
+          priority
+          sizes="(max-width: 640px) 100vw, 560px"
+          className={styles.heroImage}
+        />
+      </div>
+
       <UpForTabs active={mode} onChange={setMode} counts={counts} />
 
       <div
@@ -116,8 +146,6 @@ export function UpForFeed({
         aria-labelledby={`upfor-tab-${mode}`}
         className="upfor-feed__panel"
       >
-        {/* Order matters: an error replaces the list, loading replaces an
-            empty state, and only a settled empty list shows the empty copy. */}
         {error ? (
           <UpForError message={error} onRetry={onRetry} />
         ) : loading ? (
@@ -125,22 +153,71 @@ export function UpForFeed({
         ) : visible.length === 0 ? (
           <UpForEmptyState mode={mode} onStart={onStart} />
         ) : (
-          <div className="upfor-feed__list">
-            {visible.map((item) => (
-              <UpForCard
-                key={item.id}
-                upfor={item}
-                viewerId={viewerId}
-                nowMs={nowMs}
-                responseState={pendingId === item.id ? "pending" : "idle"}
-                onJoin={(id) => run(id, onJoin)}
-                onWithdraw={(id) => run(id, onWithdraw)}
-                onOpenChat={onOpenChat}
-                onOpen={onOpen}
-                onCreatePlan={onCreatePlan ? (id) => run(id, onCreatePlan) : undefined}
-              />
-            ))}
-          </div>
+          <>
+            <div className={styles.sectionHeading}>
+              <h3 className={styles.sectionTitle}>Coming Up</h3>
+              <span className={styles.sectionMeta}>
+                {visible.length} {visible.length === 1 ? "UpFor" : "UpFors"}
+              </span>
+            </div>
+
+            <div className="upfor-feed__list">
+              {visible.map((item) => (
+                <UpForCard
+                  key={item.id}
+                  upfor={item}
+                  viewerId={viewerId}
+                  nowMs={nowMs}
+                  responseState={pendingId === item.id ? "pending" : "idle"}
+                  onJoin={(id) => run(id, onJoin)}
+                  onWithdraw={(id) => run(id, onWithdraw)}
+                  onOpenChat={onOpenChat}
+                  onOpen={onOpen}
+                  onCreatePlan={onCreatePlan ? (id) => run(id, onCreatePlan) : undefined}
+                />
+              ))}
+            </div>
+
+            <section className={styles.popular} aria-labelledby="upfor-popular-heading">
+              <div className={styles.sectionHeading}>
+                <h3 id="upfor-popular-heading" className={styles.sectionTitle}>
+                  Popular right now
+                </h3>
+              </div>
+
+              <div className={styles.popularRail}>
+                {popular.map((item) => {
+                  const going = upForGoingLabel(item.goingCount);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={styles.popularCard}
+                      onClick={() => onOpen?.(item.id)}
+                      disabled={!onOpen}
+                      aria-label={`View ${upForTitle(item.activityType)} from ${item.ownerName}`}
+                    >
+                      <Image
+                        src={activityArtwork(item.activityType)}
+                        alt=""
+                        fill
+                        sizes="168px"
+                        className={styles.popularImage}
+                      />
+                      <span className={styles.popularScrim} aria-hidden="true" />
+                      <span className={styles.popularContent}>
+                        <span className={styles.popularTitle}>{upForTitle(item.activityType)}</span>
+                        <span className={styles.popularProof}>
+                          <Users aria-hidden="true" />
+                          {going ?? "New UpFor"}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          </>
         )}
       </div>
     </section>
