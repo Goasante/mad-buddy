@@ -40,6 +40,12 @@ describe("document identity and downloads", () => {
     expect(view).toContain('className="block max-w-full truncate text-xs"');
     expect(view).toContain("title={media.fileName}");
   });
+
+  it("labels document tiles as DOC instead of the photo fallback", () => {
+    const composer = read("components/messaging/message-composer-v3.tsx");
+    expect(composer).toContain('{item.kind === "file" ? "DOC" : item.kind === "video" ? "Video" : "Photo"}');
+    expect(composer).toContain('item.kind === "file" ? "document" : item.kind === "video" ? "video" : "photo"');
+  });
 });
 
 describe("visible upload progress", () => {

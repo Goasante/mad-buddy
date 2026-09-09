@@ -806,7 +806,7 @@ export function MessageComposerV3({
                 />
               ) : (
                 <span className="grid h-16 w-16 place-items-center rounded-[10px] bg-secondary text-[11px] text-muted-foreground">
-                  Photo
+                  {item.kind === "file" ? "DOC" : item.kind === "video" ? "Video" : "Photo"}
                 </span>
               )}
               <button
@@ -816,7 +816,7 @@ export function MessageComposerV3({
                   setAttachments((current) => current.filter((entry) => entry.mediaId !== item.mediaId));
                 }}
                 className="focus-ring absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-foreground/80 text-[11px] text-background"
-                aria-label={`Remove photo ${index + 1}`}
+                aria-label={`Remove ${item.kind === "file" ? "document" : item.kind === "video" ? "video" : "photo"} ${index + 1}`}
               >
                 ×
               </button>
