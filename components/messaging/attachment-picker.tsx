@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Camera, FileText, Image as ImageIcon, ImagePlus, MapPin, Plus, RotateCcw, Video, X } from "lucide-react";
+import { CalendarDays, Camera, FileText, Image as ImageIcon, ImagePlus, Plus, RotateCcw, Video, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   createMessageAttachmentUploadIntentAction,
@@ -477,21 +477,13 @@ export function AttachmentPicker({
           ...(onFeedback && onStructuredSent
             ? [
                 {
-                  id: "place",
-                  label: "Place",
-                  description: "Share a venue or general area — never live GPS",
-                  icon: <MapPin className="h-4.5 w-4.5" />,
-                  onSelect: () => setStructuredShareMode("place" as const),
-                  disabled: busy,
-                  separatorBefore: true
-                },
-                {
                   id: "agenda",
                   label: "Plan / Event",
                   description: "Share something from your upcoming agenda",
                   icon: <CalendarDays className="h-4.5 w-4.5" />,
                   onSelect: () => setStructuredShareMode("agenda" as const),
-                  disabled: busy
+                  disabled: busy,
+                  separatorBefore: true
                 }
               ]
             : [])
@@ -558,6 +550,7 @@ export function AttachmentPreview({
 
   const kind = attachment?.kind ?? "image";
   const label = kind === "video" ? "Video ready. Add a caption or send." : kind === "file" ? "Document ready. Add a message or send." : "Photo ready. Add a caption or send.";
+  const displayName = kind === "video" ? "Video" : attachment?.fileName;
 
   return (
     <div className="flex items-center gap-3 border-t border-border/70 px-3 py-2" aria-live="polite">
@@ -577,7 +570,7 @@ export function AttachmentPreview({
             </button>
           </div>
           <div className="min-w-0 flex-1">
-            {attachment.fileName ? <strong className="block truncate text-xs">{attachment.fileName}</strong> : null}
+            {displayName ? <strong className="block truncate text-xs">{displayName}</strong> : null}
             <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
           </div>
         </>
