@@ -9,6 +9,7 @@ import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
 import "./icon-polish.css";
 import "./mobile-shell-stability.css";
+import "./mobile-nav-polish.css";
 
 /**
  * iOS "Add to Home Screen" splash images (portrait only, this app is
