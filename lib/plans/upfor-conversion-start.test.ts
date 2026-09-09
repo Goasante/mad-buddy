@@ -3,22 +3,25 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const service = readFileSync(join(process.cwd(), "lib/plans/service.ts"), "utf8");
+const plans = readFileSync(join(process.cwd(), "lib/social/plans.ts"), "utf8");
 
 /**
- * Converting a scheduled UpFor must keep the start it was created for.
+ * Converting an UpFor must preserve the real window the UpFor already owns.
  *
- * The runtime behaviour is proven against the database (an UpFor scheduled for
- * 15:29, converted at 12:59, produced a Plan starting 15:29). These assertions
- * pin the reasons, so the payload cannot quietly go back to null.
+ * This covers BOTH cases:
+ *  - scheduled: the Plan keeps the future start chosen for the UpFor;
+ *  - already running: the Plan keeps today's start/end instead of becoming
+ *    undated just because starts_at is a few minutes or hours in the past.
  */
-describe("UpFor to Plan preserves the intended start", () => {
-  it("passes the session's own start, not the conversion moment", () => {
-    // `p_start_at: null` was the previous behaviour: an 18:30 UpFor converted
-    // at 16:00 produced a Plan with no date at all.
-    expect(service).toContain("p_start_at: Date.parse(session.starts_at) > Date.now() ? session.starts_at : null");
+describe("UpFor to Plan preserves the source timing window", () => {
+  it("passes the session's own start and end without replacing them with null", () => {
+    expect(service).toContain("p_start_at: session.starts_at");
+    expect(service).toContain("p_end_at: session.ends_at");
+    expect(service).not.toContain("Date.parse(session.starts_at) > Date.now() ? session.starts_at : null");
+    expect(service).not.toContain("Date.parse(session.starts_at) > Date.now() ? session.ends_at : null");
   });
 
-  it("reads the start SERVER-SIDE from the session row", () => {
+  it("reads timing SERVER-SIDE from the UpFor row", () => {
     // Never from the caller: a client must not be able to post a start of its
     // choosing through the conversion path.
     expect(service).toContain('.select("activity_type, message, starts_at, ends_at, timezone, status")');
@@ -28,10 +31,12 @@ describe("UpFor to Plan preserves the intended start", () => {
     expect(service).toContain('p_timezone: session.timezone || "UTC"');
   });
 
-  it("leaves an already-running UpFor with the previous semantics", () => {
-    // Its start is in the past; a Plan dated in the past is worse than one
-    // with no date, so that case still passes null.
-    expect(service).toContain("Date.parse(session.starts_at) > Date.now() ? session.ends_at : null");
+  it("lets a converted running UpFor remain an active Plan until its real end", () => {
+    // The canonical phase helper already knows the correct lifecycle for
+    // start <= now < end. Preserving both timestamps lets that existing rule
+    // do its job instead of routing the Plan through the undated path.
+    expect(plans).toContain('if (nowMs >= endMs) return "past"');
+    expect(plans).toContain('if (nowMs >= startMs) return "active"');
   });
 
   it("still uses the canonical lifecycle, with no second conversion path", () => {
