@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
 import { Users } from "lucide-react";
-import { filterForMode, type UpForMode } from "@/lib/social/upfor-feed";
+import { filterForMode, rankForYou, type UpForMode } from "@/lib/social/upfor-feed";
 import { upForGoingLabel, upForTitle } from "@/lib/social/upfor";
 import type { HangoutActivityType } from "@/lib/supabase/database.types";
 import { UpForCard, type UpForCardModel } from "@/components/hangout/upfor-card";
@@ -93,21 +93,14 @@ export function UpForFeed({
     [items, nowMs]
   );
 
-  /** "Popular" is intentionally transparent: real accepted attendance, then
-   * nearest end-time as a deterministic tie-breaker. No invented popularity
-   * score and no fake favourite count. */
-  const popular = useMemo(
-    () =>
-      [...visible]
-        .sort((a, b) => {
-          const attendance = b.goingCount - a.goingCount;
-          if (attendance !== 0) return attendance;
-          const endDiff = Date.parse(a.endsAt) - Date.parse(b.endsAt);
-          return endDiff !== 0 ? endDiff : a.id.localeCompare(b.id);
-        })
-        .slice(0, 6),
-    [visible]
-  );
+  /**
+   * Keep ordering authority in the shared UpFor ranking module rather than
+   * introducing a second client-side sort. That ranking already gives real
+   * participation meaningful weight alongside friendship, proximity and
+   * freshness, so this rail reflects social momentum without inventing a
+   * favourite count or another opaque score.
+   */
+  const popular = useMemo(() => rankForYou(visible, nowMs).slice(0, 6), [visible, nowMs]);
 
   const run = useCallback(
     (id: string, action: (id: string) => Promise<void> | void) => {
