@@ -1,0 +1,164 @@
+/*
+ * Mad Buddy mobile navigation polish.
+ *
+ * This layer changes presentation only. The canonical five destinations,
+ * route matching, unread badges, guided-tour IDs, immersive hiding and safe-
+ * area geometry remain owned by AppShell / mobile-shell-stability.css.
+ *
+ * Important: do NOT add bottom offsets or change --mobile-nav-height here.
+ * The bar must remain attached to the viewport; this file only makes the five
+ * existing controls read as deliberate buttons inside that fixed footprint.
+ */
+@media (max-width: 767px) {
+  nav[aria-label="Mobile navigation"] {
+    border-top-color: transparent;
+    background: rgba(254, 251, 243, 0.96);
+    box-shadow: 0 -10px 28px rgba(78, 4, 1, 0.08);
+    -webkit-backdrop-filter: blur(22px) saturate(1.1);
+    backdrop-filter: blur(22px) saturate(1.1);
+  }
+
+  nav[aria-label="Mobile navigation"] > ul {
+    box-sizing: border-box;
+    height: 100%;
+    width: min(30rem, calc(100% - 0.75rem));
+    padding: 0.3rem 0.32rem 0.26rem;
+    border: 1px solid rgba(78, 4, 1, 0.1);
+    border-radius: 1.45rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(254, 251, 243, 0.56));
+    box-shadow:
+      0 8px 24px rgba(78, 4, 1, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li {
+    display: flex;
+    min-width: 0;
+    align-items: stretch;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li > a {
+    position: relative;
+    display: flex;
+    min-height: 58px;
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.16rem;
+    border: 1px solid transparent;
+    border-radius: 1rem;
+    color: rgba(78, 4, 1, 0.56);
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      transform 160ms ease,
+      color 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  /* The component already renders the active label. The visual system uses a
+   * single aria-label-backed label for every destination so inactive controls
+   * are just as legible as Home, without changing their accessible names. */
+  nav[aria-label="Mobile navigation"] > ul > li > a > span + span {
+    display: none;
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li > a::after {
+    content: attr(aria-label);
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    padding-inline: 0.12rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.012em;
+    color: currentColor;
+  }
+
+  /* Keep the current Linkr/UpFor artwork and every existing nav glyph. This
+   * only refines the small icon surface around them. */
+  nav[aria-label="Mobile navigation"] > ul > li > a > span:first-child {
+    border-radius: 0.78rem !important;
+    background: transparent !important;
+    color: inherit !important;
+    box-shadow: none !important;
+    transition:
+      transform 180ms ease,
+      background-color 180ms ease,
+      color 180ms ease !important;
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] {
+    border-color: rgba(232, 140, 43, 0.34);
+    background: linear-gradient(180deg, #650b06 0%, #4e0401 100%);
+    color: #fefbf3;
+    box-shadow:
+      0 7px 18px rgba(78, 4, 1, 0.2),
+      0 0 0 1px rgba(232, 140, 43, 0.08),
+      inset 0 1px 0 rgba(254, 251, 243, 0.14);
+    transform: translateY(-1px);
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] > span:first-child {
+    background: rgba(254, 251, 243, 0.07) !important;
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0.16rem;
+    width: 0.24rem;
+    height: 0.24rem;
+    border-radius: 999px;
+    background: #e88c2b;
+    box-shadow: 0 0 8px rgba(232, 140, 43, 0.58);
+    transform: translateX(-50%);
+  }
+
+  nav[aria-label="Mobile navigation"] > ul > li > a:not([aria-current="page"]):active {
+    border-color: rgba(232, 140, 43, 0.18);
+    background: rgba(232, 140, 43, 0.08);
+    color: #4e0401;
+    transform: scale(0.96);
+  }
+
+  .dark nav[aria-label="Mobile navigation"] {
+    background: rgba(17, 17, 18, 0.97);
+    box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.34);
+  }
+
+  .dark nav[aria-label="Mobile navigation"] > ul {
+    border-color: rgba(232, 140, 43, 0.22);
+    background: linear-gradient(180deg, rgba(30, 22, 19, 0.94), rgba(20, 16, 15, 0.96));
+    box-shadow:
+      0 10px 30px rgba(0, 0, 0, 0.2),
+      0 0 24px rgba(232, 140, 43, 0.035),
+      inset 0 1px 0 rgba(254, 251, 243, 0.06);
+  }
+
+  .dark nav[aria-label="Mobile navigation"] > ul > li > a {
+    color: rgba(254, 251, 243, 0.66);
+  }
+
+  .dark nav[aria-label="Mobile navigation"] > ul > li > a:not([aria-current="page"]):active {
+    border-color: rgba(232, 140, 43, 0.24);
+    background: rgba(232, 140, 43, 0.09);
+    color: #fefbf3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  nav[aria-label="Mobile navigation"] > ul > li > a,
+  nav[aria-label="Mobile navigation"] > ul > li > a > span:first-child {
+    transition: none !important;
+  }
+}
