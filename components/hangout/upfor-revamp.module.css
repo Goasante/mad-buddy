@@ -134,51 +134,55 @@
   height: 0.78rem;
 }
 
+/* CSS Modules require a local selector in every rule. The local `.hero`
+   inside :has() is also our opt-in marker, so none of these sibling/parent
+   adjustments can leak onto another page that happens to reuse a class name. */
+
 /* The reference direction is discovery-first. The old temporary explainer is
    redundant once the hero establishes the promise, so it is removed from the
    live composition without touching any lifecycle behaviour. */
-:global(.upfor-page > .upfor-banner) {
+:global(.upfor-page):has(.hero) > :global(.upfor-banner) {
   display: none;
 }
 
 /* Plans have their own product surface. UpFor may still convert into a Plan,
    but the Plans preview no longer appears inside UpFor. */
-:global(.upfor-page > section[aria-labelledby="upfor-plans-heading"]) {
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="upfor-plans-heading"]) {
   display: none;
 }
 
 /* The current header is intentionally preserved, but the lightning decoration
    is not part of the refreshed visual language. */
-:global(.upfor-page .upfor-subtitle > span[aria-hidden="true"]) {
+:global(.upfor-page):has(.hero) :global(.upfor-subtitle > span[aria-hidden="true"]) {
   display: none;
 }
 
 /* Put discovery immediately beneath the existing header. Existing owner tools
    remain on the page, just below the high-frequency discovery/quick-start
    surfaces instead of preceding them. */
-:global(.upfor-page > .upfor-header) {
+:global(.upfor-page):has(.hero) > :global(.upfor-header) {
   order: -30;
 }
 
-:global(.upfor-page > section[aria-labelledby="upfor-feed-heading"]) {
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="upfor-feed-heading"]) {
   order: -20;
 }
 
-:global(.upfor-page > section[aria-labelledby="upfor-ideas-heading"]) {
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="upfor-ideas-heading"]) {
   order: -19;
 }
 
-:global(.upfor-page > section[aria-labelledby="owned-upfors-heading"]) {
+:global(.upfor-page):has(.hero) > :global(section[aria-labelledby="owned-upfors-heading"]) {
   order: -18;
 }
 
-:global(.upfor-page > .upfor-safety) {
+:global(.upfor-page):has(.hero) > :global(.upfor-safety) {
   order: -17;
 }
 
 /* Quick Ideas keeps the existing one-tap behaviour and supported activity
    types, but replaces emoji tiles with image-led cards. */
-:global(.upfor-page .upfor-ideas-head) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas-head) {
   display: flex;
   flex-direction: row;
   align-items: baseline;
@@ -186,18 +190,18 @@
   gap: 0.75rem;
 }
 
-:global(.upfor-page #upfor-ideas-heading) {
+:global(.upfor-page):has(.hero) :global(#upfor-ideas-heading) {
   font-size: 1.05rem;
   font-weight: 760;
   letter-spacing: -0.025em;
 }
 
-:global(.upfor-page #upfor-ideas-heading > span[aria-hidden="true"]),
-:global(.upfor-page .upfor-ideas-sub) {
+:global(.upfor-page):has(.hero) :global(#upfor-ideas-heading > span[aria-hidden="true"]),
+:global(.upfor-page):has(.hero) :global(.upfor-ideas-sub) {
   display: none;
 }
 
-:global(.upfor-page .upfor-ideas) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas) {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 5.85rem;
@@ -210,16 +214,16 @@
   scrollbar-width: none;
 }
 
-:global(.upfor-page .upfor-ideas::-webkit-scrollbar) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas::-webkit-scrollbar) {
   display: none;
 }
 
-:global(.upfor-page .upfor-ideas > li) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li) {
   min-width: 0;
   scroll-snap-align: start;
 }
 
-:global(.upfor-page .upfor-idea) {
+:global(.upfor-page):has(.hero) :global(.upfor-idea) {
   position: relative;
   display: flex;
   width: 100%;
@@ -237,7 +241,7 @@
   text-align: left;
 }
 
-:global(.upfor-page .upfor-idea::before) {
+:global(.upfor-page):has(.hero) :global(.upfor-idea::before) {
   content: "";
   position: absolute;
   inset: 0;
@@ -247,39 +251,39 @@
   pointer-events: none;
 }
 
-:global(.upfor-page .upfor-idea::after) {
+:global(.upfor-page):has(.hero) :global(.upfor-idea::after) {
   display: none;
 }
 
-:global(.upfor-page .upfor-ideas > li:nth-child(1) .upfor-idea) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(1) .upfor-idea) {
   background-image: url("/visuals/activities/dinner.jpg") !important;
 }
 
-:global(.upfor-page .upfor-ideas > li:nth-child(2) .upfor-idea) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(2) .upfor-idea) {
   background-image: url("/visuals/activities/coffee.jpg") !important;
 }
 
-:global(.upfor-page .upfor-ideas > li:nth-child(3) .upfor-idea) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(3) .upfor-idea) {
   background-image: url("/visuals/activities/picnic.jpg") !important;
 }
 
-:global(.upfor-page .upfor-ideas > li:nth-child(4) .upfor-idea) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(4) .upfor-idea) {
   background-image: url("/visuals/activities/football.jpg") !important;
 }
 
-:global(.upfor-page .upfor-ideas > li:nth-child(5) .upfor-idea) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(5) .upfor-idea) {
   background-image: url("/visuals/activities/movie.jpg") !important;
 }
 
-:global(.upfor-page .upfor-ideas > li:nth-child(6) .upfor-idea) {
+:global(.upfor-page):has(.hero) :global(.upfor-ideas > li:nth-child(6) .upfor-idea) {
   background-image: url("/visuals/activities/beach.jpg") !important;
 }
 
-:global(.upfor-page .upfor-idea-emoji) {
+:global(.upfor-page):has(.hero) :global(.upfor-idea-emoji) {
   display: none;
 }
 
-:global(.upfor-page .upfor-idea-label) {
+:global(.upfor-page):has(.hero) :global(.upfor-idea-label) {
   position: relative;
   z-index: 1;
   display: block;
@@ -298,7 +302,7 @@
     grid-auto-columns: minmax(10.5rem, 31.5%);
   }
 
-  :global(.upfor-page .upfor-ideas) {
+  :global(.upfor-page):has(.hero) :global(.upfor-ideas) {
     grid-auto-columns: 6.35rem;
   }
 }
