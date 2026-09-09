@@ -19,7 +19,7 @@ describe("Messaging V5 product source contracts", () => {
     expect(reader).toContain('payload.kind === "contact"');
   });
 
-  it("uses one composer + menu for media, Place and Plan/Event", () => {
+  it("uses one composer + menu for media and Plan/Event, without a Place write action", () => {
     const picker = source("components/messaging/attachment-picker.tsx");
     const shell = source("components/messaging/message-composer-v4-shell.tsx");
     expect(picker).toContain('label: "Camera"');
@@ -27,7 +27,8 @@ describe("Messaging V5 product source contracts", () => {
     expect(picker).toContain('label: "Video"');
     // Plural by design: this entry accepts a bounded multi-document selection.
     expect(picker).toContain('label: "Documents"');
-    expect(picker).toContain('label: "Place"');
+    expect(picker).not.toContain('label: "Place"');
+    expect(picker).not.toContain('setStructuredShareMode("place"');
     expect(picker).toContain('label: "Plan / Event"');
     expect(shell).not.toContain("<StructuredShareV4");
   });
