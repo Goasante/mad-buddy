@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, Mail, Star, Archive, X } from "lucide-react";
+import { BellOff, Mail, Star, Archive, X, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -165,30 +165,13 @@ export function ConversationRowV4({
         )}
         style={{ transform: `translate3d(${offset}px,0,0)` }}
       >
-        <div className="relative shrink-0">
-          {/* An inbox row carries no proximity, so it renders a plain avatar
-              rather than instantiating a dormant Glow system. Conversation
-              membership is not a proximity fact. */}
-          <UserAvatar
-            name={conversation.title}
-            src={conversation.avatarUrl}
-            size="sm"
-            decorative
-            className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
-          />
-        </div>
+        <ConversationRowAvatar conversation={conversation} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <strong className={cn("truncate text-sm", conversation.unreadCount > 0 ? "font-semibold" : "font-medium")}>{conversation.title}</strong>
-            {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-primary" /> : null}
+            {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-primary" aria-label="Favorite" /> : null}
+            {conversation.muted ? <BellOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Muted" /> : null}
           </div>
-          {/* WHAT KIND OF CHAT THIS IS.
-              Without this line an Event Room, a Plan Chat and a Group are
-              indistinguishable in the inbox -- the projection already carries
-              contextBadge ("Event Room" / "Plan" / "Event" / "Safe Arrival")
-              and the Room's parent Event name, and nothing was reading them.
-              A Room is temporary and belongs to one Event, so the inbox has to
-              say which; it is deliberately NOT presented as a Group. */}
           {conversation.contextBadge ? (
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {conversation.roomEventName
@@ -200,7 +183,7 @@ export function ConversationRowV4({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 pl-1">
           <span className={cn("text-xs", conversation.unreadCount > 0 ? "font-semibold text-primary" : "text-muted-foreground")}>{conversation.lastMessageAt ? formatRelativeTime(conversation.lastMessageAt) : ""}</span>
-          {conversation.unreadCount > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground transition-transform animate-in zoom-in-75">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span> : conversation.muted ? <BellOff className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+          {conversation.unreadCount > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground transition-transform animate-in zoom-in-75">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span> : null}
         </div>
       </div>
 
@@ -213,6 +196,45 @@ export function ConversationRowV4({
           <button type="button" onClick={() => setActionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground" aria-label="Close actions"><X className="h-4 w-4" /></button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ConversationRowAvatar({ conversation }: { conversation: ConversationView }) {
+  if (conversation.kind === "direct") {
+    return (
+      <div className="relative shrink-0">
+        <UserAvatar
+          name={conversation.title}
+          src={conversation.avatarUrl}
+          size="sm"
+          decorative
+          className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
+        />
+      </div>
+    );
+  }
+
+  /*
+   * Multi-person chats need to read differently from a DM before the title is
+   * read. The projection does not expose arbitrary member photos to the inbox,
+   * so we do not fabricate a fake stack; instead the canonical conversation
+   * avatar is paired with a real group badge. If participant previews are
+   * added to the projection later, this component is the one place to render
+   * the true stacked faces.
+   */
+  return (
+    <div className="relative h-11 w-11 shrink-0">
+      <UserAvatar
+        name={conversation.title}
+        src={conversation.avatarUrl}
+        size="sm"
+        decorative
+        className="absolute left-0 top-0 border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]"
+      />
+      <span className="absolute -bottom-0.5 -right-0.5 grid h-6 w-6 place-items-center rounded-full border-2 border-background bg-[#4E0401] text-[#FEFBF3] shadow-sm">
+        <UsersRound className="h-3.5 w-3.5" aria-hidden="true" />
+      </span>
     </div>
   );
 }
