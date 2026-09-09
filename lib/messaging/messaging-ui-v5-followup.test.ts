@@ -36,7 +36,8 @@ describe("Messages V5 follow-up polish", () => {
     );
 
     expect(modal).toContain('owner="messages-new-chat"');
-    expect(modal).not.toContain("autoFocus");
+    expect(modal).toContain('<SearchField value={query} onChange={setQuery} placeholder="Search Muddies or usernames" />');
+    expect(modal).not.toContain('placeholder="Search Muddies or usernames" autoFocus');
     expect(modal).toContain("data-new-chat-results");
     expect(experience).toContain('[data-modal-owner="messages-new-chat"]');
     expect(experience).toContain("100dvh");
