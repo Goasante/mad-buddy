@@ -39,8 +39,8 @@ export type UpForCardModel = {
 export type UpForResponseState = "idle" | "pending";
 
 /**
- * A compact activity card: identity and activity at the top, lightweight
- * context in the middle, and clear status/actions in one stable bottom row.
+ * A compact activity card: host portrait on the left, activity and context
+ * in the middle, and time/actions in one stable right-hand rail.
  * Eligibility, expiry, proximity, and participant values remain canonical
  * projected inputs; this component only changes their presentation.
  */
@@ -143,79 +143,82 @@ export const UpForCard = memo(function UpForCard({
               </span>
             ) : null}
           </div>
-        </div>
+          {isOwner ? null : expired ? (
+            <span className="upfor-card__state">Closed</span>
+          ) : declined ? (
+            /* A declined answer is an outcome, not silence. Without this the card
+               fell back to "I'm in", inviting the person to ask again and be
+               declined again. */
+            <span className="upfor-card__state">Not this time</span>
+          ) : accepted ? (
+            <span className="upfor-card__status upfor-card__status--going">
+              <span className="upfor-card__status-dot" aria-hidden /> Going
+            </span>
+          ) : requested ? (
+            /* THE WAITING STATE, NAMED.
+               "Interested" is the action; Pending is what the person is in
+               afterwards -- distinct from no answer at all, or the card looks
+               identical whether a request went through or was never sent. */
+            <span className="upfor-card__status upfor-card__status--requested">Pending</span>
+          ) : upfor.myRequestStatus === "maybe" ? (
+            <span className="upfor-card__status upfor-card__status--requested">Pending</span>
+          ) : null}
+          </div>
+      </div>
 
-        {/* The timer is a compact warm badge in the top-right, matching the
-            supplied card reference while remaining driven by canonical time. */}
+      <div className="upfor-card__rail">
         <p className={cn("upfor-card__timer", !timeLabel && "is-ended")}>
           <Timer aria-hidden /> {timeLabel ?? "Ended"}
         </p>
+        <div className="upfor-card__actions">
+          {!isOwner && !expired && !declined && !joined ? (
+
+            <button
+              type="button"
+              className="upfor-card__action upfor-card__action--join"
+              onClick={() => onJoin(upfor.id)}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+              I&apos;m in
+            </button>
+          ) : null}
+
+          {isOwner || expired ? null : (
+            <button
+              type="button"
+              className={cn("upfor-card__view", joined && "upfor-card__view--next")}
+              onClick={() => onOpen?.(upfor.id)}
+              disabled={!onOpen}
+              aria-label={`View ${upForTitle(upfor.activityType)} from ${upfor.ownerName}`}
+            >
+              View
+            </button>
+          )}
+
+          {/* Withdrawing lives behind the overflow menu once there is a status
+              pill to protect: checking your own attendance should never
+              accidentally cancel it. */}
+          {!isOwner && !expired && joined ? (
+            <AppMenu
+              label={accepted ? "Going options" : "Request options"}
+              trigger={
+                <button
+                  type="button"
+                  className="upfor-card__more"
+                  aria-label={accepted ? "More options for this UpFor" : "More options for this request"}
+                  disabled={busy}
+                >
+                  <MoreHorizontal aria-hidden />
+                </button>
+              }
+              items={withdrawMenuItems}
+            />
+          ) : null}
+        </div>
       </div>
 
       {upfor.message ? <p className="upfor-card__message">{upfor.message}</p> : null}
-
-      <div className="upfor-card__actions">
-        {isOwner ? null : expired ? (
-          <span className="upfor-card__state">Closed</span>
-        ) : declined ? (
-          /* A declined answer is an outcome, not silence. Without this the card
-             fell back to "I'm in", inviting the person to ask again and be
-             declined again. */
-          <span className="upfor-card__state">Not this time</span>
-        ) : accepted ? (
-          <span className="upfor-card__status upfor-card__status--going">
-            <span className="upfor-card__status-dot" aria-hidden /> Going
-          </span>
-        ) : requested ? (
-          /* THE WAITING STATE, NAMED.
-             "Interested" is the action; Pending is what the person is in
-             afterwards -- distinct from no answer at all, or the card looks
-             identical whether a request went through or was never sent. */
-          <span className="upfor-card__status upfor-card__status--requested">Pending</span>
-        ) : (
-          <button
-            type="button"
-            className="upfor-card__action upfor-card__action--join"
-            onClick={() => onJoin(upfor.id)}
-            disabled={busy}
-          >
-            {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-            I&apos;m in
-          </button>
-        )}
-
-        {isOwner || expired ? null : (
-          <button
-            type="button"
-            className="upfor-card__view"
-            onClick={() => onOpen?.(upfor.id)}
-            disabled={!onOpen}
-            aria-label={`View ${upForTitle(upfor.activityType)} from ${upfor.ownerName}`}
-          >
-            View
-          </button>
-        )}
-
-        {/* Withdrawing lives behind the overflow menu once there is a status
-            pill to protect: checking your own attendance should never
-            accidentally cancel it. */}
-        {!isOwner && !expired && joined ? (
-          <AppMenu
-            label={accepted ? "Going options" : "Request options"}
-            trigger={
-              <button
-                type="button"
-                className="upfor-card__more"
-                aria-label={accepted ? "More options for this UpFor" : "More options for this request"}
-                disabled={busy}
-              >
-                <MoreHorizontal aria-hidden />
-              </button>
-            }
-            items={withdrawMenuItems}
-          />
-        ) : null}
-      </div>
 
       {offerPlan && onCreatePlan ? (
         <div className="upfor-card__momentum" role="note">

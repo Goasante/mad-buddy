@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { QuickActionsLauncher } from "@/components/app-shell/quick-actions-launcher";
+import { UpForCard } from "@/components/hangout/upfor-card";
 import { ArrowLeft, Hand, MessageCircle, Plus, Users } from "lucide-react";
 import { UpForFeed, type UpForFeedItem } from "@/components/hangout/upfor-feed";
 
@@ -64,31 +67,46 @@ const ITEMS: UpForFeedItem[] = [
   }
 ];
 
+// Synthetic fixtures only; the route is unavailable in production.
+const REVIEW_ITEMS: UpForFeedItem[] = [
+  { ...ITEMS[0], id: "fresh-food", ownerId: "ama", activityType: "food", message: null, participants: [], endsAt: endsIn(0.5) },
+  { ...ITEMS[0], id: "fresh-sports", ownerId: "ama", activityType: "sports", message: null, participants: [], endsAt: endsIn(183) },
+  { ...ITEMS[1], id: "going", message: null, participants: [] },
+  { ...ITEMS[5], id: "pending", message: null },
+  { ...ITEMS[0], id: "legacy-joined", myRequestStatus: "maybe", message: null, participants: [] },
+  { ...ITEMS[3], id: "scheduled", startsAt: endsIn(123), endsAt: endsIn(183), status: "scheduled", message: null },
+  { ...ITEMS[0], id: "long-name", ownerName: "Alexandria Akosua Mensah Asante", activityType: "anything", ownerAvatarUrl: null, message: null, participants: [] },
+  { ...ITEMS[4], id: "owner", message: null },
+  { ...ITEMS[0], id: "image-error", ownerId: "other", ownerName: "Kojo Mensah", ownerAvatarUrl: "/missing-profile-review.jpg", message: "A longer optional invitation remains readable without colliding with the action rail.", participants: [] },
+];
+
 export function UpForVisualHarness() {
+  const [items, setItems] = useState(REVIEW_ITEMS);
+  const [opened, setOpened] = useState<string | null>(null);
+  const respond = (id: string, status: string | null) => setItems(rows => rows.map(row => row.id === id ? { ...row, myRequestStatus: status } : row));
   return (
-    <main className="upfor-review-screen">
-      <header className="upfor-review-header">
-        <button type="button" aria-label="Back"><ArrowLeft aria-hidden /></button>
-        <div><h1>UpFor</h1><p>See what people are up for right now.</p></div>
-        <button type="button" className="upfor-review-create" aria-label="Create an UpFor"><Plus aria-hidden /></button>
-      </header>
-      <section className="upfor-review-body">
-        <UpForFeed
-          items={ITEMS}
-          viewerId="viewer"
-          nowMs={NOW}
-          onJoin={() => undefined}
-          onWithdraw={() => undefined}
-          onOpen={() => undefined}
-          onCreatePlan={() => undefined}
-        />
-      </section>
-      <nav className="upfor-review-nav" aria-label="Preview navigation">
-        <span><MessageCircle aria-hidden />Messages</span>
-        <span><Users aria-hidden />Muddies</span>
-        <strong>MB</strong>
-        <span><Hand aria-hidden />Linkr</span>
-        <span className="is-active"><Hand aria-hidden />UpFor</span>
+    <main className="upfor-review-screen" style={{ paddingBottom: "calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
+      <div className="upfor-page" style={{ paddingInline: "1rem" }}>
+        <header className="upfor-header">
+          <button type="button" className="upfor-back" aria-label="Back"><ArrowLeft aria-hidden /></button>
+          <div className="min-w-0 flex-1"><h1 className="upfor-title">UpFor</h1><p className="upfor-subtitle">See what people are up for</p></div>
+          <div className="upfor-header-actions"><button type="button" className="upfor-create-button" aria-label="Create an UpFor"><Plus aria-hidden /></button></div>
+        </header>
+        <UpForFeed items={items} viewerId="viewer" nowMs={NOW}
+          onJoin={id => respond(id, "pending")} onWithdraw={id => respond(id, null)}
+          onOpen={setOpened} onCreatePlan={setOpened} />
+        <UpForCard upfor={ITEMS[7]} viewerId="viewer" nowMs={NOW} responseState="idle" onJoin={() => undefined} onWithdraw={() => undefined} />
+        {opened ? <p role="status">Opened {opened}</p> : null}
+      </div>
+      <QuickActionsLauncher />
+      <nav className="fixed inset-x-0 bottom-0 z-50" aria-label="Mobile navigation">
+        <ul>
+          <li><a href="#" aria-label="Messages"><MessageCircle /></a></li>
+          <li><a href="#" aria-label="Muddies"><Users /></a></li>
+          <li><a href="#" aria-label="Home"><strong>MB</strong></a></li>
+          <li><a href="#" aria-label="Linkr"><Hand /></a></li>
+          <li><a href="#" aria-label="UpFor" aria-current="page"><Hand /></a></li>
+        </ul>
       </nav>
     </main>
   );
