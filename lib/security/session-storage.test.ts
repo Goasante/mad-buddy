@@ -65,7 +65,10 @@ describe("client-side storage never holds credentials", () => {
     // UpFor's "Live & temporary" first-use explainer dismissal (per-account,
     // hashed scope — see lib/hangout/education.ts). Same non-sensitive
     // one-time-dismiss shape as the notification-onboarding keys above.
-    "upforEducationStorageKey(viewerId)"
+    "upforEducationStorageKey(viewerId)",
+    // The Quick Actions launcher's remembered edge/vertical position -- never
+    // a raw coordinate, never user-identifying.
+    "STORAGE_KEY"
   ];
 
   it("writes only approved non-sensitive keys to localStorage/sessionStorage", () => {
