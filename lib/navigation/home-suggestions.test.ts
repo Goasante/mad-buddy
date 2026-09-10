@@ -110,11 +110,20 @@ describe("Suggestion card style", () => {
     }
   });
 
-  it("keeps the pastels unsaturated in both themes", () => {
+  it("keeps category colour to the icon chip and rim, never the full card surface", () => {
+    // Each tone used to also wash the WHOLE card surface in its own hue
+    // (bg-violet-500/[0.09] etc.), which at small-card size reads as a large
+    // colour block rather than an accent -- putting lavender/blue tiles in
+    // competition with the brand's orange/maroon/warm-paper identity as a
+    // quiet secondary palette. Every card now shares one warm-neutral
+    // surface (SUGGESTION_CARD_SURFACE); only the icon chip and the thin
+    // rotating rim still carry the per-category colour.
     const tones = home.slice(home.indexOf("const SUGGESTION_TONE"), home.indexOf("const quickActions"));
-    // Low-alpha washes, never solid fills.
-    expect(tones).toMatch(/bg-\w+-500\/\[0\.09\]/);
-    expect(tones).toMatch(/dark:bg-\w+-400\/\[0\.12\]/);
+    expect(home).toContain("const SUGGESTION_CARD_SURFACE");
+    expect(tones).not.toMatch(/surface:\s*"bg-\w+-500/);
+    // Icon chip washes, never solid fills.
+    expect(tones).toMatch(/bg-\w+-500\/15/);
+    expect(tones).toMatch(/dark:bg-\w+-400\/20/);
     // No heavy gradients.
     expect(tones).not.toContain("bg-gradient");
   });
