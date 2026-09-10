@@ -1,8 +1,7 @@
-import type { PlanCategory } from "@/lib/supabase/database.types";
+import type { HangoutActivityType, PlanCategory } from "@/lib/supabase/database.types";
 import type { SmartCard, SmartCardMedia } from "@/lib/smart-card/smart-card";
 import { planActivityArt } from "@/lib/visuals/registry";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
-import type { HangoutActivityType } from "@/lib/supabase/database.types";
 
 /**
  * The visual-volume contract for Home's Smart Card.
