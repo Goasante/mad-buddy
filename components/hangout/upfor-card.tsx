@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { CheckCircle2, Clock3, Loader2, MapPin, MoreHorizontal, Users } from "lucide-react";
+import { Loader2, MapPin, MoreHorizontal, Timer, Users } from "lucide-react";
 import { UpForActivityIcon } from "@/components/hangout/upfor-activity-icon";
 import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -16,6 +16,7 @@ import { upForPlaceLabel, upForTitle } from "@/lib/social/upfor";
 import { upForCountdownLabel } from "@/lib/social/upfor-countdown";
 import type { SocializeAreaTier } from "@/lib/social/socialize";
 import type { HangoutActivityType } from "@/lib/supabase/database.types";
+import styles from "./upfor-card-reference.module.css";
 
 export type UpForCardModel = {
   id: string;
@@ -38,9 +39,10 @@ export type UpForCardModel = {
 export type UpForResponseState = "idle" | "pending";
 
 /**
- * A compact activity row: face on the left, invitation in the middle, and
- * urgency plus actions in one stable right column. Eligibility, expiry,
- * proximity, and participant values remain canonical projected inputs.
+ * A compact activity card: identity and activity at the top, lightweight
+ * context in the middle, and clear status/actions in one stable bottom row.
+ * Eligibility, expiry, proximity, and participant values remain canonical
+ * projected inputs; this component only changes their presentation.
  */
 export const UpForCard = memo(function UpForCard({
   upfor,
@@ -96,8 +98,8 @@ export const UpForCard = memo(function UpForCard({
 
   // The overflow menu only ever holds one destructive item: whichever of
   // "Leave" or "Cancel request" matches the viewer's actual response. It
-  // exists so the Accepted/Pending pill can stay a plain status readout
-  // instead of doubling as the withdraw control.
+  // exists so the status pill can stay a plain readout instead of doubling
+  // as the withdraw control.
   const withdrawMenuItems: AppMenuItem[] = joined
     ? [
         {
@@ -112,7 +114,7 @@ export const UpForCard = memo(function UpForCard({
 
   return (
     <article
-      className={cn("upfor-card", `upfor-card--${momentum}`)}
+      className={cn("upfor-card", `upfor-card--${momentum}`, styles.referenceCard)}
       id={`hangout-${upfor.id}`}
       data-upfor-id={upfor.id}
       data-momentum={momentum}
@@ -125,17 +127,17 @@ export const UpForCard = memo(function UpForCard({
         </div>
 
         <div className="upfor-card__content">
-          <p className="upfor-card__owner">{isOwner ? "Your UpFor" : upfor.ownerName}</p>
           <h3 className="upfor-card__activity">
             <UpForActivityIcon activity={upfor.activityType} className="upfor-card__activity-icon" />
             <span>{upForTitle(upfor.activityType)}</span>
           </h3>
+          <p className="upfor-card__owner">{isOwner ? "your UpFor" : `with ${upfor.ownerName}`}</p>
         </div>
 
-        {/* The timer is a corner badge on the card as a whole, not a rail
-            item -- it is a fact about the UpFor, not an action on it. */}
+        {/* The timer is a compact warm badge in the top-right, matching the
+            supplied card reference while remaining driven by canonical time. */}
         <p className={cn("upfor-card__timer", !timeLabel && "is-ended")}>
-          <Clock3 aria-hidden /> {timeLabel ?? "Ended"}
+          <Timer aria-hidden /> {timeLabel ?? "Ended"}
         </p>
       </div>
 
@@ -164,7 +166,7 @@ export const UpForCard = memo(function UpForCard({
           <span className="upfor-card__state">Not this time</span>
         ) : accepted ? (
           <span className="upfor-card__status upfor-card__status--going">
-            <CheckCircle2 aria-hidden /> Accepted
+            <span className="upfor-card__status-dot" aria-hidden /> Going
           </span>
         ) : requested ? (
           /* THE WAITING STATE, NAMED.
@@ -197,12 +199,11 @@ export const UpForCard = memo(function UpForCard({
         )}
 
         {/* Withdrawing lives behind the overflow menu once there is a status
-            pill to protect: a status readout that is ALSO the leave button
-            reads as "tap your own attendance to cancel it", which is the
-            wrong affordance for the common case of just checking in. */}
+            pill to protect: checking your own attendance should never
+            accidentally cancel it. */}
         {!isOwner && !expired && joined ? (
           <AppMenu
-            label={accepted ? "Accepted options" : "Request options"}
+            label={accepted ? "Going options" : "Request options"}
             trigger={
               <button
                 type="button"
