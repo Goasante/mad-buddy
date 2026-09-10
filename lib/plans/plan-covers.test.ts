@@ -106,7 +106,7 @@ describe("plan cover registry", () => {
     /* The constraint has been widened once since it was first created, so the
      * current rule lives in the LATEST migration that touches it, not the
      * original -- reading only 20260806120000 would miss `walk`. */
-    const migration = read("supabase/migrations/20260910080000_plan_category_walk.sql");
+    const migration = read("supabase/migrations/20260910084202_plan_category_walk.sql");
     for (const category of PLAN_CATEGORIES) {
       expect(migration, `${category} missing from the check constraint`).toContain(`'${category}'`);
     }
