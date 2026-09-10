@@ -10,8 +10,6 @@ def replace_once(path: str, old: str, new: str, label: str) -> None:
     file.write_text(text.replace(old, new, 1))
 
 
-# The new history action is a pure authorised read. The exhaustive auth contract
-# intentionally requires every new messaging action to be classified.
 auth_test = "lib/messaging/action-auth.test.ts"
 replace_once(
     auth_test,
@@ -20,8 +18,6 @@ replace_once(
     "classify older-message action",
 )
 
-# The mention invariant is semantic, not a requirement to serialize mention
-# persistence before the independent conversation metadata writes.
 mentions_test = "lib/messaging/mentions.test.ts"
 replace_once(
     mentions_test,
@@ -30,19 +26,14 @@ replace_once(
     "parallel mention invariant",
 )
 
-# Promise.allSettled must not turn post-response failures into silence. The
-# milestone helper already logs its own failure; notification rejection is
-# logged here without message content, recipient ids, or conversation ids.
 mobile = "lib/messaging/mobile.ts"
 replace_once(
     mobile,
     '''  await scheduleAfterMessageAcknowledgement(async () => {\n    await Promise.allSettled([\n      notifyOtherMembers(\n        admin,\n        parsed.data.conversationId,\n        userId,\n        messagePreviewText(messageType, parsed.data.text) ?? "",\n        mentionedUserIds\n      ),\n      recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId)\n    ]);\n  });\n''',
-    '''  await scheduleAfterMessageAcknowledgement(async () => {\n    const [notificationResult, milestoneResult] = await Promise.allSettled([\n      notifyOtherMembers(\n        admin,\n        parsed.data.conversationId,\n        userId,\n        messagePreviewText(messageType, parsed.data.text) ?? "",\n        mentionedUserIds\n      ),\n      recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId)\n    ]);\n    if (notificationResult.status === "rejected") {\n      console.warn("[messaging] post-send notification failed", {\n        reason: notificationResult.reason instanceof Error\n          ? notificationResult.reason.message\n          : String(notificationResult.reason)\n      });\n    }\n    if (milestoneResult.status === "rejected") {\n      // Defensive: the milestone helper currently catches/logs its own errors.\n      console.warn("[messaging] post-send activation task failed", {\n        reason: milestoneResult.reason instanceof Error\n          ? milestoneResult.reason.message\n          : String(milestoneResult.reason)\n      });\n    }\n  });\n''',
+    '''  await scheduleAfterMessageAcknowledgement(async () => {\n    const [notificationResult, milestoneResult] = await Promise.allSettled([\n      notifyOtherMembers(\n        admin,\n        parsed.data.conversationId,\n        userId,\n        messagePreviewText(messageType, parsed.data.text) ?? "",\n        mentionedUserIds\n      ),\n      recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId)\n    ]);\n    if (notificationResult.status === "rejected") {\n      console.warn("[messaging] post-send notification failed", {\n        reason: notificationResult.reason instanceof Error\n          ? notificationResult.reason.message\n          : String(notificationResult.reason)\n      });\n    }\n    if (milestoneResult.status === "rejected") {\n      console.warn("[messaging] post-send activation task failed", {\n        reason: milestoneResult.reason instanceof Error\n          ? milestoneResult.reason.message\n          : String(milestoneResult.reason)\n      });\n    }\n  });\n''',
     "observable post-response failures",
 )
 
-# Add explicit race and lifecycle regression coverage. These are source/pure
-# state contracts so they run without credentials and cover both event orders.
 race_test = Path("lib/messaging/messaging-race-closeout.test.ts")
 race_test.write_text(r'''import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -100,12 +91,9 @@ describe("optimistic acknowledgement races converge to one message", () => {
   it("Realtime first, action acknowledgement second", () => {
     let pending = [optimistic("client-1")];
     let rows: ChatMessageView[] = [];
-
     rows = mergeThreadMessage(rows, canonical("server-1", "client-1"));
     pending = pruneConfirmed(pending, rows);
-    // A later HTTP acknowledgement cannot recreate a row already reconciled.
     pending = markRetrying(pending, "client-1");
-
     expect(rows).toHaveLength(1);
     expect(pending).toHaveLength(0);
     expect(mergeForDisplay(rows, pending)).toHaveLength(1);
@@ -114,10 +102,8 @@ describe("optimistic acknowledgement races converge to one message", () => {
   it("action acknowledgement first, Realtime second", () => {
     let pending = markRetrying([optimistic("client-2")], "client-2");
     let rows: ChatMessageView[] = [];
-
     rows = mergeThreadMessage(rows, canonical("server-2", "client-2"));
     pending = pruneConfirmed(pending, rows);
-
     expect(rows).toHaveLength(1);
     expect(pending).toHaveLength(0);
     expect(mergeForDisplay(rows, pending)).toHaveLength(1);
@@ -126,9 +112,9 @@ describe("optimistic acknowledgement races converge to one message", () => {
   it("a repeated Realtime delivery replaces by canonical id instead of appending", () => {
     const row = canonical("server-3", "client-3");
     const once = mergeThreadMessage([], row);
-    const twice = mergeThreadMessage(once, { ...row, state: "read" });
+    const twice = mergeThreadMessage(once, { ...row, state: "delivered" });
     expect(twice).toHaveLength(1);
-    expect(twice[0].state).toBe("read");
+    expect(twice[0].state).toBe("delivered");
   });
 
   it("a timeout keeps the same idempotency key for retry and later confirmation", () => {
@@ -174,7 +160,6 @@ describe("V4 timeout and Realtime lifecycle contracts", () => {
 });
 ''')
 
-# Add pagination contract coverage for tie timestamps and overlapping requests.
 pagination_test = Path("lib/messaging/messaging-pagination-closeout.test.ts")
 pagination_test.write_text(r'''import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
