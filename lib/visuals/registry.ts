@@ -47,21 +47,24 @@ export type VisualAsset = {
 /**
  * Plan categories that have approved photography.
  *
- * PARTIAL BY DESIGN. Six of the fifteen categories have no entry, because
+ * PARTIAL BY DESIGN. Four of the sixteen categories have no entry, because
  * their candidate images failed review rather than because they were
  * forgotten:
  *
- *   study     -- library scene, but an Apple logo is visible
  *   workout   -- gym scene, but Nike marks on socks and shoes
- *   gaming    -- not reviewed as approved for this pass
  *   birthday  -- no candidate in the library
  *   travel    -- candidate depicts a solo summit, closer to hiking
  *   hiking    -- no approved candidate
- *   road_trip -- not reviewed as approved for this pass
  *
- * Those resolve to the canonical CSS cover, which is a complete answer rather
- * than a gap. Forcing every category to carry a photograph is how a trademark
- * ends up shipped in a product surface.
+ * `study` and `gaming` were previously in this list too -- their original
+ * candidates carried a visible Apple logo and were never reviewed,
+ * respectively. Both were replaced with new photography (2026-09-10) that
+ * passed review. `walk` is a new category added alongside its art, so it no
+ * longer has to borrow beach's photo in the UpFor artwork resolver.
+ *
+ * The remaining gaps resolve to the canonical CSS cover, which is a complete
+ * answer rather than a placeholder. Forcing every category to carry a
+ * photograph is how a trademark ends up shipped in a product surface.
  */
 const PLAN_ACTIVITY_ART: Partial<Record<PlanCategory, VisualAsset>> = {
   coffee: {
@@ -135,6 +138,33 @@ const PLAN_ACTIVITY_ART: Partial<Record<PlanCategory, VisualAsset>> = {
     width: 724,
     height: 543,
     depicts: "A crowd facing a lit stage at a concert"
+  },
+  study: {
+    id: "activity-study",
+    path: "/visuals/activities/study.jpg",
+    family: "activity",
+    role: "plan_cover",
+    width: 768,
+    height: 495,
+    depicts: "Two friends studying together at a table with notebooks and laptops"
+  },
+  gaming: {
+    id: "activity-gaming",
+    path: "/visuals/activities/gaming.jpg",
+    family: "activity",
+    role: "plan_cover",
+    width: 768,
+    height: 495,
+    depicts: "Two friends playing video games together on a couch"
+  },
+  walk: {
+    id: "activity-walk",
+    path: "/visuals/activities/walk.jpg",
+    family: "activity",
+    role: "plan_cover",
+    width: 768,
+    height: 495,
+    depicts: "A group of friends walking together at sunset"
   }
 };
 

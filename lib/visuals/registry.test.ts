@@ -60,8 +60,9 @@ describe("only approved artwork reaches the runtime", () => {
       "empty-upfor",
       "empty-groups",
       "media-fallback-general",
-      // Trademarks visible in the photograph.
-      "activity-study",
+      // Trademarks visible in the photograph. (The original `activity-study`
+      // candidate was rejected here; its replacement, registered under the
+      // same id with new photography, is approved and ships.)
       "activity-gym-fitness",
       "group-sports",
       "event-sports",
@@ -117,10 +118,12 @@ describe("Plan covers layer artwork in front of the CSS system", () => {
   });
 
   it("a category whose art was REJECTED keeps its canonical CSS cover", () => {
-    /* study and workout both had candidates, and both were refused for visible
-     * trademarks. The CSS cover is the finished answer for them -- not a gap
-     * waiting to be filled. */
-    for (const category of ["study", "workout"] as const) {
+    /* workout's candidate was refused for visible Nike trademarks and has no
+     * replacement yet. The CSS cover is the finished answer for it -- not a
+     * gap waiting to be filled. (study's original candidate was rejected for
+     * the same reason; it now has approved replacement photography, covered
+     * separately below.) */
+    for (const category of ["workout"] as const) {
       const cover = resolvePlanCover({ category, coverImageUrl: null });
       expect(cover.source, category).toBe("canonical");
       expect(cover.art, category).not.toBeNull();
@@ -147,7 +150,23 @@ describe("Plan covers layer artwork in front of the CSS system", () => {
      * through to its CSS cover. There is deliberately no general master to
      * borrow: it had no consumer and was removed. */
     expect(planActivityArt("workout")).toBeNull();
-    expect(planActivityArt("study")).toBeNull();
+  });
+
+  it("resolves approved photography for study, gaming and walk", () => {
+    /* Added 2026-09-10: study's and gaming's original candidates were rejected
+     * (an Apple logo, and never reviewed, respectively) and walk had never had
+     * a candidate at all. All three now have approved replacement photography. */
+    for (const [category, file] of [
+      ["study", "study.jpg"],
+      ["gaming", "gaming.jpg"],
+      ["walk", "walk.jpg"]
+    ] as const) {
+      const cover = resolvePlanCover({ category, coverImageUrl: null });
+      expect(cover.source, category).toBe("artwork");
+      if (cover.source === "artwork") {
+        expect(cover.imageUrl).toBe(`/visuals/activities/${file}`);
+      }
+    }
   });
 });
 

@@ -49,7 +49,8 @@ export type PlanCoverMotif =
   | "basket"
   | "peaks"
   | "route"
-  | "mark";
+  | "mark"
+  | "footprints";
 
 export type ResolvedPlanCover =
   | { source: "upload"; imageUrl: string; art: null; label: string }
@@ -83,7 +84,8 @@ export const PLAN_COVERS: Record<PlanCategory, PlanCoverArt> = {
   party: { from: "#c2255c", to: "#831843", motif: "sparkle" },
   picnic: { from: "#65a30d", to: "#3f6212", motif: "basket" },
   hiking: { from: "#059669", to: "#134e4a", motif: "peaks" },
-  road_trip: { from: "#f59e0b", to: "#b45309", motif: "route" }
+  road_trip: { from: "#f59e0b", to: "#b45309", motif: "route" },
+  walk: { from: "#f97316", to: "#9a3412", motif: "footprints" }
 };
 
 /**
@@ -113,7 +115,8 @@ const CATEGORY_LABEL: Record<PlanCategory, string> = {
   party: "Party",
   picnic: "Picnic",
   hiking: "Hiking",
-  road_trip: "Road trip"
+  road_trip: "Road trip",
+  walk: "Walk"
 };
 
 export function planCategoryLabel(category: PlanCategory): string {

@@ -16,7 +16,7 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const EXPECTED: PlanCategory[] = [
   "beach", "dinner", "coffee", "study", "movie", "football", "gaming",
   "concert", "birthday", "travel", "workout", "party", "picnic",
-  "hiking", "road_trip"
+  "hiking", "road_trip", "walk"
 ];
 
 // ---------------------------------------------------------------------------
@@ -31,9 +31,10 @@ describe("resolvePlanCover priority", () => {
   });
 
   it("falls to the canonical illustration when there is no upload", () => {
-    const cover = resolvePlanCover({ category: "gaming", coverImageUrl: null });
+    // `birthday` has no approved photography, so it stays on the CSS cover.
+    const cover = resolvePlanCover({ category: "birthday", coverImageUrl: null });
     expect(cover.source).toBe("canonical");
-    expect(cover.art).toEqual(PLAN_COVERS.gaming);
+    expect(cover.art).toEqual(PLAN_COVERS.birthday);
   });
 
   it("falls to the branded fallback when there is neither", () => {
@@ -102,7 +103,10 @@ describe("plan cover registry", () => {
   });
 
   it("keeps the registry in sync with the database constraint", () => {
-    const migration = read("supabase/migrations/20260806120000_plan_covers.sql");
+    /* The constraint has been widened once since it was first created, so the
+     * current rule lives in the LATEST migration that touches it, not the
+     * original -- reading only 20260806120000 would miss `walk`. */
+    const migration = read("supabase/migrations/20260910080000_plan_category_walk.sql");
     for (const category of PLAN_CATEGORIES) {
       expect(migration, `${category} missing from the check constraint`).toContain(`'${category}'`);
     }
