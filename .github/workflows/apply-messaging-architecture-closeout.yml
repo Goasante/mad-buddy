@@ -22,23 +22,27 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Apply targeted messaging fixes
-        run: python3 scripts/apply-messaging-architecture-closeout.py
+      - name: Apply candidate messaging fixes
+        run: |
+          python3 scripts/apply-messaging-architecture-closeout.py
+          python3 scripts/apply-messaging-closeout-followup.py
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prove prior full-suite failures pass on untouched baseline
+        shell: bash
+        run: |
+          git worktree add --detach /tmp/mad-buddy-baseline 90a7631c0579c1045b3c6f21f2d9d1fba335b304
+          ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/mad-buddy-baseline/node_modules
+          cd /tmp/mad-buddy-baseline
+          npx vitest run lib/messaging/action-auth.test.ts lib/messaging/mentions.test.ts
 
       - name: Diff check
         run: git diff --check
 
       - name: Messaging closeout tests
-        run: npx vitest run lib/messaging/messaging-architecture-closeout.test.ts lib/messaging/optimistic-messages.test.ts lib/messaging/thread-cache.test.ts lib/messaging/thread-store.test.ts lib/messaging/warm-thread-open.test.ts
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Type check
-        run: npm run typecheck
+        run: npx vitest run lib/messaging/messaging-architecture-closeout.test.ts lib/messaging/messaging-race-closeout.test.ts lib/messaging/messaging-pagination-closeout.test.ts lib/messaging/optimistic-messages.test.ts lib/messaging/thread-cache.test.ts lib/messaging/thread-store.test.ts lib/messaging/warm-thread-open.test.ts lib/messaging/action-auth.test.ts lib/messaging/mentions.test.ts
 
       - name: Full tests
         shell: bash
@@ -50,20 +54,44 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-test-log
+          name: full-test-log-final-gate
           path: full-test.log
           if-no-files-found: warn
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
 
       - name: Production build
         run: npm run build
         env:
           NEXT_PUBLIC_APP_URL: http://localhost:3000
 
-      - name: Commit verified changes
+      - name: Start local Supabase for integration tests
         shell: bash
         run: |
-          git rm .github/workflows/apply-messaging-architecture-closeout.yml scripts/apply-messaging-architecture-closeout.py
-          git add lib/messaging/mobile.ts app/'(app)'/messaging-actions.ts components/messages/messages-page-v4.tsx components/messaging/message-composer-v3.tsx lib/messaging/messaging-architecture-closeout.test.ts
+          npx supabase start
+          npx supabase status -o env > /tmp/supabase.env
+          source /tmp/supabase.env
+          cat > .env.local <<EOF
+          NEXT_PUBLIC_SUPABASE_URL=${API_URL}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
+          SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+          EOF
+
+      - name: Seed local integration fixtures
+        run: npm run seed:local-tests
+
+      - name: DB-backed integration tests
+        run: npm run test:local
+
+      - name: Commit verified source changes
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-messaging-architecture-closeout.yml scripts/apply-messaging-architecture-closeout.py scripts/apply-messaging-closeout-followup.py
+          git add lib/messaging/mobile.ts app/'(app)'/messaging-actions.ts components/messages/messages-page-v4.tsx components/messaging/message-composer-v3.tsx lib/messaging/messaging-architecture-closeout.test.ts lib/messaging/messaging-race-closeout.test.ts lib/messaging/messaging-pagination-closeout.test.ts lib/messaging/action-auth.test.ts lib/messaging/mentions.test.ts
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix: make messaging acknowledgement resilient and fast"
