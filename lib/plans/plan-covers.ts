@@ -85,7 +85,7 @@ export const PLAN_COVERS: Record<PlanCategory, PlanCoverArt> = {
   picnic: { from: "#65a30d", to: "#3f6212", motif: "basket" },
   hiking: { from: "#059669", to: "#134e4a", motif: "peaks" },
   road_trip: { from: "#f59e0b", to: "#b45309", motif: "route" },
-  walk: { from: "#f97316", to: "#9a3412", motif: "footprints" }
+  walk: { from: "#d97706", to: "#7c2d12", motif: "footprints" }
 };
 
 /**
