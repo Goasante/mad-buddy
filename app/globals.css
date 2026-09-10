@@ -9828,16 +9828,18 @@ html.dark .proximity-glow {
 .upfor-card__momentum-cta:disabled { opacity: 0.6; }
 
 /* Activity-card recovery: the reference's avatar/content/action columns are
-   restored while every label and action still comes from current UpFor data. */
+   restored while every label and action still comes from current UpFor data.
+   Restructured (2026-09-10) from a fixed 3-column grid to a flex column: the
+   timer moved from a rail item to a corner fact about the card as a whole,
+   and Accepted/Pending/View/overflow became one full-width action row so a
+   status pill has room to sit beside real buttons instead of stacking above
+   the button that would withdraw it. */
 .upfor-feed__list { gap: 0.625rem; }
 
 .upfor-card {
-  display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr) 5.75rem;
-  align-items: center;
-  column-gap: 0.75rem;
-  row-gap: 0.55rem;
-  min-height: 7.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   padding: 0.75rem;
   border-radius: 1rem;
   border: 1px solid hsl(var(--border) / 0.7);
@@ -9846,9 +9848,15 @@ html.dark .proximity-glow {
 }
 .upfor-card--strong { box-shadow: 0 7px 22px hsl(var(--primary) / 0.11); }
 
+.upfor-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .upfor-card__portrait {
   position: relative;
-  align-self: center;
+  flex: 0 0 auto;
 }
 .upfor-card__presence {
   position: absolute;
@@ -9861,7 +9869,7 @@ html.dark .proximity-glow {
   background: #4fca72;
 }
 
-.upfor-card__content { min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+.upfor-card__content { min-width: 0; flex: 1; }
 .upfor-card__owner {
   overflow: hidden;
   color: hsl(var(--muted-foreground));
@@ -9886,7 +9894,6 @@ html.dark .proximity-glow {
 .upfor-card__activity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upfor-card__activity-icon { width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--color-brand-orange); }
 .upfor-card__message {
-  margin-top: 0.3rem;
   color: hsl(var(--foreground) / 0.82);
   font-size: 0.78rem;
   line-height: 1.34;
@@ -9901,7 +9908,6 @@ html.dark .proximity-glow {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.22rem 0.65rem;
-  margin-top: 0.38rem;
   color: hsl(var(--muted-foreground));
   font-size: 0.68rem;
   font-weight: 600;
@@ -9917,95 +9923,114 @@ html.dark .proximity-glow {
 .upfor-card__proximity { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upfor-card__meta svg { width: 0.75rem; height: 0.75rem; flex: 0 0 auto; color: var(--color-brand-orange); }
 
-.upfor-card__rail {
-  display: flex;
-  align-self: stretch;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.38rem;
-}
+/* Corner badge, not a rail item: a fact about the card, positioned at the
+   top-right of the head row rather than stacked with the actions below. */
 .upfor-card__timer {
   display: flex;
-  min-height: 1.25rem;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  min-height: 1.5rem;
   align-items: center;
-  justify-content: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.1);
   color: var(--color-brand-orange);
-  font-size: 0.66rem;
+  font-size: 0.68rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .upfor-card__timer svg { width: 0.78rem; height: 0.78rem; }
-.upfor-card__timer.is-ended { color: hsl(var(--muted-foreground)); }
-.upfor-card__rail .upfor-card__action,
+.upfor-card__timer.is-ended { background: hsl(var(--secondary) / 0.6); color: hsl(var(--muted-foreground)); }
+
+/* One full-width row: a status readout or the join button, an optional View,
+   and an optional overflow trigger -- in that order, left to right. */
+.upfor-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.upfor-card__action,
 .upfor-card__view,
-.upfor-card__state {
+.upfor-card__state,
+.upfor-card__status {
   display: inline-flex;
-  width: 100%;
-  min-height: 2rem;
+  min-height: 2.1rem;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  padding: 0.28rem 0.4rem;
-  border-radius: 0.55rem;
-  font-size: 0.72rem;
+  gap: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
   font-weight: 750;
   line-height: 1;
   text-align: center;
+  white-space: nowrap;
 }
-.upfor-card__rail .upfor-card__action svg { width: 0.8rem; height: 0.8rem; }
+.upfor-card__action svg,
+.upfor-card__status svg { width: 0.85rem; height: 0.85rem; }
 .upfor-card__action--join {
-  border-color: var(--color-brand-orange);
+  border: 1px solid var(--color-brand-orange);
   color: #fff;
   background: var(--color-brand-orange);
   box-shadow: 0 4px 11px rgb(232 140 43 / 0.22);
 }
-.upfor-card__action--joined {
-  border: 1px solid hsl(var(--border));
-  color: hsl(var(--foreground));
-  background: hsl(var(--secondary));
-}
 .upfor-card__view {
-  border: 1px solid hsl(var(--border) / 0.6);
-  color: hsl(var(--foreground) / 0.8);
-  background: hsl(var(--secondary) / 0.72);
+  flex: 1;
+  border: none;
+  color: #fff;
+  background: var(--color-brand-orange);
+  box-shadow: 0 4px 11px rgb(232 140 43 / 0.22);
 }
 .upfor-card__view:disabled { opacity: 0.55; }
-.upfor-card__state { color: hsl(var(--muted-foreground)); background: hsl(var(--secondary) / 0.5); }
-
-/* The waiting/accepted pair stacked above the withdraw control, so the rail
-   still reads as one column. Pending is deliberately quiet and Accepted carries
-   the brand: the difference between "asked" and "you're in" should be legible
-   at a glance without reading the button underneath. */
-.upfor-card__decision {
-  display: grid;
-  gap: 0.3rem;
-  width: 100%;
-}
-
-.upfor-card__state[data-request-state="pending"] {
+.upfor-card__state {
+  border: 1px solid hsl(var(--border));
   color: hsl(var(--muted-foreground));
-  background: hsl(var(--secondary) / 0.6);
+  background: hsl(var(--secondary) / 0.5);
 }
 
-.upfor-card__state[data-request-state="accepted"] {
+/* Status pills: a read-only fact about the viewer's own response, never a
+   button -- withdrawing lives one tap further, behind the overflow menu. */
+.upfor-card__status {
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+}
+.upfor-card__status--going {
   color: #a65a17;
   background: rgb(232 140 43 / 0.14);
+  border-color: rgb(232 140 43 / 0.28);
 }
-
-:root[data-theme="dark"] .upfor-card__state[data-request-state="accepted"],
-:root:not([data-theme="light"]) .upfor-card__state[data-request-state="accepted"] {
+:root[data-theme="dark"] .upfor-card__status--going,
+:root:not([data-theme="light"]) .upfor-card__status--going {
   color: rgb(253 213 173);
 }
+.upfor-card__status--requested {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--secondary) / 0.7);
+  border-color: hsl(var(--border));
+}
+
+.upfor-card__more {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 2.1rem;
+  height: 2.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--secondary) / 0.5);
+}
+.upfor-card__more svg { width: 1rem; height: 1rem; }
+.upfor-card__more:disabled { opacity: 0.55; }
 
 .upfor-card__momentum {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.65rem;
-  margin-top: 0;
   padding: 0.55rem 0.65rem;
 }
 .upfor-card__momentum-title { font-size: 0.78rem; }
@@ -10013,18 +10038,14 @@ html.dark .proximity-glow {
 .upfor-card__momentum-cta { flex: 0 0 auto; min-height: 2rem; margin-top: 0; padding: 0.35rem 0.65rem; font-size: 0.72rem; }
 
 @media (max-width: 370px) {
-  .upfor-card {
-    grid-template-columns: 3.25rem minmax(0, 1fr) 5.2rem;
-    column-gap: 0.6rem;
-    min-height: 7.25rem;
-    padding: 0.65rem;
-  }
+  .upfor-card { padding: 0.65rem; }
   .upfor-card__portrait > span { width: 3.25rem; height: 3.25rem; }
   .upfor-card__activity { font-size: 0.92rem; }
   .upfor-card__message { font-size: 0.73rem; }
-  .upfor-card__rail .upfor-card__action,
+  .upfor-card__action,
   .upfor-card__view,
-  .upfor-card__state { font-size: 0.68rem; }
+  .upfor-card__state,
+  .upfor-card__status { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
 }
 
 .upfor-review-screen { min-height: 100dvh; padding-bottom: 5.5rem; background: hsl(var(--background)); }
