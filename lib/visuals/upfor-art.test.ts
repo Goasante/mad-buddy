@@ -5,16 +5,21 @@ describe("UpFor activity artwork", () => {
   it("maps only activities that existing photography honestly depicts", () => {
     expect(resolveUpForActivityArtwork("food")?.asset.path).toBe("/visuals/activities/dinner.jpg");
     expect(resolveUpForActivityArtwork("sports")?.asset.path).toBe("/visuals/activities/football.jpg");
-    expect(resolveUpForActivityArtwork("walk")?.asset.path).toBe("/visuals/activities/beach.jpg");
+    // walk gained its own approved photograph on 2026-09-10 and no longer
+    // borrows beach's as a placeholder.
+    expect(resolveUpForActivityArtwork("walk")?.asset.path).toBe("/visuals/activities/walk.jpg");
     expect(resolveUpForActivityArtwork("chill")?.asset.path).toBe("/visuals/activities/beach.jpg");
     expect(resolveUpForActivityArtwork("coffee")?.asset.path).toBe("/visuals/activities/coffee.jpg");
     expect(resolveUpForActivityArtwork("football")?.asset.path).toBe("/visuals/activities/football.jpg");
     expect(resolveUpForActivityArtwork("movie")?.asset.path).toBe("/visuals/activities/movie.jpg");
     expect(resolveUpForActivityArtwork("party")?.asset.path).toBe("/visuals/activities/party.jpg");
+    // study and gaming gained approved replacement photography on 2026-09-10.
+    expect(resolveUpForActivityArtwork("study")?.asset.path).toBe("/visuals/activities/study.jpg");
+    expect(resolveUpForActivityArtwork("gaming")?.asset.path).toBe("/visuals/activities/gaming.jpg");
   });
 
   it("never substitutes misleading photography for missing activity art", () => {
-    for (const activity of ["study", "gym", "gaming", "drinks", "drive", "anything"] as const) {
+    for (const activity of ["gym", "drinks", "drive", "anything"] as const) {
       expect(resolveUpForActivityArtwork(activity), activity).toBeNull();
     }
   });

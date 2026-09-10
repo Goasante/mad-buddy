@@ -5613,7 +5613,8 @@ export type PlanCategory =
   | "party"
   | "picnic"
   | "hiking"
-  | "road_trip";
+  | "road_trip"
+  | "walk";
 export type PlanVisibilityType = "invited" | "circle" | "close_friends";
 export type PlanStatus =
   | "draft"

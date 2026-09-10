@@ -228,6 +228,15 @@ function Motif({ motif }: { motif: PlanCoverMotif }) {
           <circle cx="98" cy="24" r="7" fill="rgba(255,255,255,0.5)" />
         </>
       );
+    case "footprints":
+      return (
+        <>
+          <ellipse cx="40" cy="34" rx="9" ry="13" fill={soft} />
+          <ellipse cx="34" cy="58" rx="7" ry="10" fill={soft} />
+          <ellipse cx="80" cy="66" rx="9" ry="13" fill="rgba(255,255,255,0.32)" />
+          <ellipse cx="86" cy="90" rx="7" ry="10" fill="rgba(255,255,255,0.32)" />
+        </>
+      );
     case "mark":
     default:
       // The branded fallback: Mad Buddy's own concentric-proximity motif, the
