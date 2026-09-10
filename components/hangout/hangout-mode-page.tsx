@@ -50,6 +50,7 @@ import { UPFOR_QUICK_IDEAS } from "@/lib/social/upfor";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { withTimeout } from "@/lib/network/resilience";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { upforEducationStorageKey } from "@/lib/hangout/education";
 import type {
   HangoutActivityType,
   HangoutAudienceType,
@@ -266,6 +267,40 @@ export function HangoutModePage({
 
   const [toast, setToast] = useState<Toast>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  /* "Live & temporary" explainer: a first-use teaching moment, not a
+     permanent fixture. Starts hidden (the same value the server would have
+     rendered) and is revealed only after mount confirms the account hasn't
+     dismissed it before -- so a returning user never even sees the banner
+     flash in before disappearing. */
+  const [showEducation, setShowEducation] = useState(false);
+  useEffect(() => {
+    // Deferred a frame rather than set synchronously in the effect body: the
+    // read is a one-off mount check against localStorage, not a subscription
+    // to an external store, so there is nothing to keep in sync on every
+    // render -- the frame boundary is enough to avoid a same-effect
+    // cascading render while still updating before the user can interact.
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        if (window.localStorage.getItem(upforEducationStorageKey(viewerId)) !== "true") {
+          setShowEducation(true);
+        }
+      } catch {
+        // Storage can throw in a locked-down browser context; default to
+        // showing the explainer once rather than failing the whole page.
+        setShowEducation(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [viewerId]);
+  const dismissEducation = useCallback(() => {
+    setShowEducation(false);
+    try {
+      window.localStorage.setItem(upforEducationStorageKey(viewerId), "true");
+    } catch {
+      // Best-effort only -- if storage is unavailable the banner simply
+      // reappears next visit, which is not a functional break.
+    }
+  }, [viewerId]);
   /* Placed after the clock it reads. */
   const managedTimeLabel = managedUpFor ? ownedUpForTimeLabel(managedUpFor, nowMs) : "";
   /* Recomputed as the clock ticks, so a form left open past a slot stops
@@ -798,9 +833,7 @@ export function HangoutModePage({
 
         <div className="min-w-0 flex-1">
           <h1 className="upfor-title">UpFor</h1>
-          <p className="upfor-subtitle">
-            See what people are up for <span aria-hidden="true">⚡</span>
-          </p>
+          <p className="upfor-subtitle">See what people are up for</p>
         </div>
 
         <div className="upfor-header-actions">
@@ -817,18 +850,33 @@ export function HangoutModePage({
         </div>
       </header>
 
-      {/* THE PROMISE. What makes an UpFor different from a plan: it expires. */}
-      <section className="upfor-banner">
-        <span className="upfor-banner-icon" aria-hidden="true">
-          <Clock className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="upfor-banner-title">Live &amp; temporary</p>
-          <p className="upfor-banner-copy">
+      {/* THE PROMISE. What makes an UpFor different from a plan: it expires.
+          A FIRST-USE teaching moment, not a permanent fixture -- once
+          dismissed it stays gone for this account (lib/hangout/education.ts),
+          so a returning user who already understands UpFors is not shown the
+          same explainer forever. */}
+      {showEducation ? (
+        <section className="upfor-banner">
+          <span className="upfor-banner-icon" aria-hidden="true">
+            <Clock className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="upfor-banner-title">Live &amp; temporary</p>
+            <p className="upfor-banner-copy">
 UpFors are temporary and disappear when they end. Jump in while you can!
-          </p>
-        </div>
-      </section>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={dismissEducation}
+            aria-label="Got it, don't show this again"
+            title="Got it"
+            className="upfor-banner-dismiss focus-ring safe-motion"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </section>
+      ) : null}
 
       {/* --------------------------- YOUR UPFORS --------------------------
           Every UpFor the owner holds, live and scheduled. The projection in
@@ -899,7 +947,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
       <section aria-labelledby="upfor-ideas-heading" className="upfor-section">
         <div className="upfor-ideas-head">
           <h2 id="upfor-ideas-heading" className="upfor-section-title">
-            <span aria-hidden="true">⚡</span> Quick Ideas
+            Quick Ideas
           </h2>
           <p className="upfor-ideas-sub">Start an UpFor in one tap</p>
         </div>

@@ -76,13 +76,20 @@ describe("being online never hides an action", () => {
     expect(avatar.slice(0, 2200)).toContain("pointer-events-none");
   });
 
-  it("carries the same actions onto the Muddies grid cards", () => {
-    expect(grid).toContain("useLongPress(() => setMenuOpen(true)");
-    expect(page).toContain("renderActions={(id) => {");
+  it("carries the same actions onto the My Muddies list rows", () => {
+    // "My Muddies" (the All tab) used to be a two-column card grid
+    // (MuddiesGrid) with its own long-press wiring; it now renders the same
+    // MuddyRow list item Close Friends/Circles already use, via
+    // renderUserRow, so there is only one place actions are wired for a
+    // Muddy rather than a second copy that could drift from the first.
+    expect(page).toContain("gridPeople.map(renderUserRow)");
+    expect(page).toContain("const renderUserRow = (user: UserSummary) =>");
   });
 
-  it("does not arm the gesture when there is nothing to show", () => {
-    // A hold that opens an empty menu teaches the user the gesture is broken.
+  it("does not arm the unused grid card's gesture when there is nothing to show", () => {
+    // MuddiesGrid itself is unused today (see above) but stays in the tree in
+    // case another surface needs the card layout; its own long-press guard
+    // must still hold if that ever happens.
     expect(grid).toContain("disabled: !hasActions");
   });
 });
