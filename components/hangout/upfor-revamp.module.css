@@ -1,17 +1,114 @@
 .hero {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(8.4rem, 0.92fr);
+  min-height: 10.6rem;
   margin-bottom: 0.9rem;
   overflow: hidden;
   border: 1px solid hsl(var(--border) / 0.55);
   border-radius: 1.35rem;
-  background: hsl(var(--card));
+  padding: 1.05rem 0.95rem 1rem 1.05rem;
+  background:
+    radial-gradient(circle at 82% 15%, hsl(var(--primary) / 0.24), transparent 42%),
+    linear-gradient(135deg, hsl(var(--primary) / 0.14), hsl(var(--card)) 48%, hsl(var(--secondary) / 0.72));
   box-shadow: 0 16px 44px hsl(var(--foreground) / 0.07);
+  isolation: isolate;
 }
 
-.heroImage {
-  display: block;
-  width: 100%;
-  height: auto;
+.hero::after {
+  content: "";
+  position: absolute;
+  right: -3rem;
+  bottom: -4.5rem;
+  width: 13rem;
+  height: 13rem;
+  border-radius: 9999px;
+  background: hsl(var(--primary) / 0.13);
+  filter: blur(2px);
+  z-index: -1;
+}
+
+.heroCopy {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.1rem 0;
+}
+
+.heroKicker {
+  width: fit-content;
+  margin-bottom: 0.48rem;
+  border: 1px solid hsl(var(--primary) / 0.35);
+  border-radius: 9999px;
+  padding: 0.23rem 0.48rem;
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.heroTitle {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: clamp(1.48rem, 6vw, 1.9rem);
+  font-weight: 850;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.heroText {
+  max-width: 14.5rem;
+  margin: 0.62rem 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.76rem;
+  font-weight: 520;
+  line-height: 1.35;
+}
+
+.heroGallery {
+  position: relative;
+  min-width: 0;
+  min-height: 8.5rem;
+}
+
+.heroTile {
+  position: absolute;
+  top: 50%;
+  width: 5.8rem;
+  height: 7.4rem;
+  overflow: hidden;
+  border: 2px solid hsl(var(--background) / 0.88);
+  border-radius: 1rem;
+  box-shadow: 0 12px 30px rgba(30, 6, 2, 0.25);
+  transform-origin: 50% 100%;
+}
+
+.heroTileBack {
+  right: 3.8rem;
+  z-index: 1;
+  transform: translateY(-48%) rotate(-11deg);
+}
+
+.heroTileMiddle {
+  right: 1.9rem;
+  z-index: 2;
+  transform: translateY(-52%) rotate(5deg);
+}
+
+.heroTileFront {
+  right: -0.25rem;
+  z-index: 3;
+  width: 6.15rem;
+  height: 7.8rem;
+  transform: translateY(-50%) rotate(1deg);
+}
+
+.heroTileImage {
+  object-fit: cover;
 }
 
 .sectionHeading {
@@ -180,6 +277,22 @@
   order: -17;
 }
 
+/* The zero-state should explain the absence, not dominate the phone. */
+:global(.upfor-page):has(.hero) :global(.upfor-empty) {
+  min-height: 0 !important;
+  margin-top: 0.7rem;
+  padding: 1.25rem 1rem 1.1rem !important;
+  border-radius: 1.1rem;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-empty__title) {
+  margin-top: 0;
+}
+
+:global(.upfor-page):has(.hero) :global(.upfor-empty__body) {
+  margin-bottom: 0.9rem;
+}
+
 /* Quick Ideas keeps the existing one-tap behaviour and supported activity
    types, but replaces emoji tiles with image-led cards. */
 :global(.upfor-page):has(.hero) :global(.upfor-ideas-head) {
@@ -201,14 +314,17 @@
   display: none;
 }
 
+/* Flex is deliberate here. The original list styles also set widths on its
+   children; grid auto-columns could therefore collapse the first few items on
+   mobile. Fixed flex-basis plus min/max width makes every idea an equal card. */
 :global(.upfor-page):has(.hero) :global(.upfor-ideas) {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 5.85rem;
-  gap: 0.65rem;
+  display: flex !important;
+  gap: 0.68rem;
   overflow-x: auto;
   margin: 0.65rem 0 0;
-  padding: 0.05rem 0 0.2rem;
+  padding: 0.05rem 0.05rem 0.25rem !important;
+  list-style: none;
+  scroll-padding-inline: 0.05rem;
   scroll-snap-type: x proximity;
   overscroll-behavior-inline: contain;
   scrollbar-width: none;
@@ -219,14 +335,21 @@
 }
 
 :global(.upfor-page):has(.hero) :global(.upfor-ideas > li) {
-  min-width: 0;
+  flex: 0 0 6.35rem !important;
+  width: 6.35rem !important;
+  min-width: 6.35rem !important;
+  max-width: 6.35rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
   scroll-snap-align: start;
+  scroll-snap-stop: normal;
 }
 
 :global(.upfor-page):has(.hero) :global(.upfor-idea) {
   position: relative;
   display: flex;
-  width: 100%;
+  width: 100% !important;
+  min-width: 0 !important;
   height: 6.8rem;
   align-items: flex-end;
   justify-content: flex-start;
@@ -297,13 +420,69 @@
   white-space: nowrap;
 }
 
+@media (max-width: 380px) {
+  .hero {
+    grid-template-columns: minmax(0, 1.12fr) minmax(7.4rem, 0.88fr);
+    padding-left: 0.9rem;
+  }
+
+  .heroTile {
+    width: 5.2rem;
+    height: 6.9rem;
+  }
+
+  .heroTileFront {
+    width: 5.55rem;
+    height: 7.25rem;
+  }
+
+  .heroTileBack {
+    right: 3.15rem;
+  }
+
+  .heroTileMiddle {
+    right: 1.45rem;
+  }
+}
+
 @media (min-width: 520px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.85fr);
+    min-height: 12rem;
+    padding: 1.25rem 1.25rem 1.2rem 1.35rem;
+  }
+
+  .heroText {
+    font-size: 0.82rem;
+  }
+
+  .heroTile {
+    width: 6.7rem;
+    height: 8.6rem;
+  }
+
+  .heroTileFront {
+    width: 7.15rem;
+    height: 9.15rem;
+  }
+
+  .heroTileBack {
+    right: 5.2rem;
+  }
+
+  .heroTileMiddle {
+    right: 2.7rem;
+  }
+
   .popularRail {
     grid-auto-columns: minmax(10.5rem, 31.5%);
   }
 
-  :global(.upfor-page):has(.hero) :global(.upfor-ideas) {
-    grid-auto-columns: 6.35rem;
+  :global(.upfor-page):has(.hero) :global(.upfor-ideas > li) {
+    flex-basis: 6.75rem !important;
+    width: 6.75rem !important;
+    min-width: 6.75rem !important;
+    max-width: 6.75rem !important;
   }
 }
 
