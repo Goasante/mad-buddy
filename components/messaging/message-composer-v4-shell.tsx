@@ -12,6 +12,10 @@ import {
   type OptimisticSendDraftV3
 } from "@/components/messaging/message-composer-v3";
 import type { MentionCandidate } from "@/lib/messaging/mentions";
+import {
+  shouldPublishTypingPresence,
+  TYPING_PRESENCE_HEARTBEAT_MS
+} from "@/lib/messaging/typing-presence";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
 const SERVER_DRAFT_DEBOUNCE_MS = 650;
@@ -61,6 +65,8 @@ export function MessageComposerV4Shell({
   const hydratedConversationRef = useRef<string | null>(null);
   const serverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingPublishedRef = useRef(false);
+  const lastTypingPublishedAtRef = useRef(0);
   const lastDraftRef = useRef("");
   const [online, setOnline] = useState(true);
 
@@ -114,6 +120,19 @@ export function MessageComposerV4Shell({
 
   const publishTyping = useCallback(
     (typing: boolean) => {
+      const now = Date.now();
+      if (!shouldPublishTypingPresence({
+        typing,
+        wasTyping: typingPublishedRef.current,
+        lastPublishedAt: lastTypingPublishedAtRef.current,
+        now,
+        heartbeatMs: TYPING_PRESENCE_HEARTBEAT_MS
+      })) {
+        return;
+      }
+
+      typingPublishedRef.current = typing;
+      lastTypingPublishedAtRef.current = now;
       void heartbeatConversationPresenceAction({ conversationId, typing }).catch(() => {
         // Presence is transient and must never block composing a message.
       });
@@ -133,10 +152,13 @@ export function MessageComposerV4Shell({
     const target = event.target;
     if (!(target instanceof HTMLTextAreaElement)) return;
     const value = target.value;
+    const typing = Boolean(value.trim());
     persistDraft(value);
-    publishTyping(Boolean(value.trim()));
+    publishTyping(typing);
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => publishTyping(false), TYPING_IDLE_MS);
+    typingTimerRef.current = typing
+      ? setTimeout(() => publishTyping(false), TYPING_IDLE_MS)
+      : null;
   }
 
   function handleSent() {
