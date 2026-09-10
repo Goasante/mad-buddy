@@ -14,7 +14,8 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const component = stripComments(read("components/app-shell/quick-actions-launcher.tsx"));
 const shell = stripComments(read("components/app-shell/app-shell.tsx"));
 const haptics = stripComments(read("lib/device/haptics.ts"));
-const css = read("app/globals.css");
+const css = read("app/quick-actions-replica.css");
+const position = stripComments(read("lib/navigation/quick-actions-position.ts"));
 
 // ---------------------------------------------------------------------------
 // 1 + 2. Route visibility
@@ -53,17 +54,11 @@ describe("the launcher appears throughout the app", () => {
   });
 
   it("stays off focused configuration surfaces", () => {
-    /* Settings is rows of toggles down the right edge -- where the pill sits.
-     * Reserving space at the FOOT of a page cannot fix a control somebody
-     * meets mid-scroll, which is why this is a visibility rule rather than
-     * more padding. Sub-pages are the same surface. */
     expect(showsQuickActions("/settings")).toBe(false);
     expect(showsQuickActions("/settings/glow-visibility")).toBe(false);
   });
 
   it("leaves detail routes their own corner", () => {
-    // Each of these has its own primary action low on the screen. The parent
-    // list shows the launcher; the detail view does not.
     for (const path of [
       "/friends/ama",
       "/messages/abc123",
@@ -76,7 +71,6 @@ describe("the launcher appears throughout the app", () => {
   });
 
   it("ignores query strings and hashes", () => {
-    // ?create=1 must not turn a surface into a different route.
     expect(showsQuickActions("/plans?create=1")).toBe(true);
     expect(showsQuickActions("/friends?tab=all")).toBe(true);
     expect(showsQuickActions("/scan?mode=qr")).toBe(false);
@@ -89,17 +83,12 @@ describe("the launcher appears throughout the app", () => {
   });
 
   it("excludes by characteristic rather than by inventory", () => {
-    // The deny list names full-screen and corner-owning surfaces, so the rule
-    // describes a shape instead of enumerating every route in the app.
     const routeModule = stripComments(read("lib/navigation/quick-actions.ts"));
     expect(routeModule).toContain("EXCLUDED_SURFACES");
     expect(routeModule).toContain("EXCLUDED_PREFIXES");
   });
 
   it("needs no rule for routes outside the app shell", () => {
-    // Login, signup, onboarding, admin and billing live outside the (app)
-    // group and never render the shell, so they cannot show the launcher
-    // whatever this function returns.
     const routeModule = stripComments(read("lib/navigation/quick-actions.ts"));
     expect(routeModule).not.toContain('"/login"');
     expect(routeModule).not.toContain('"/signup"');
@@ -108,16 +97,11 @@ describe("the launcher appears throughout the app", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Canonical destinations
+// Canonical destinations
 // ---------------------------------------------------------------------------
 
 describe("every action opens its canonical route", () => {
   it("carries only features that are actually live", () => {
-    /* MOMENTS IS GONE, and not on taste. It is paused, and
-       app/(app)/moments/page.tsx redirects to /dashboard when isMomentsEnabled
-       is false -- so the shortcut took somebody from wherever they were, to
-       Home. A menu item whose only outcome is landing where you already were
-       is a dead action wearing a shortcut's clothes. */
     expect(QUICK_ACTIONS.map((action) => action.id)).toEqual([
       "plans",
       "events",
@@ -141,8 +125,6 @@ describe("every action opens its canonical route", () => {
   });
 
   it("never includes the camera", () => {
-    // Mad Cam belongs to the Home tab's tap/double-tap gesture. A second entry
-    // point with a different gesture would be one feature, two contracts.
     const ids = QUICK_ACTIONS.map((action) => action.id).join(" ");
     expect(ids).not.toContain("camera");
     expect(component).not.toContain("CameraComposer");
@@ -150,7 +132,6 @@ describe("every action opens its canonical route", () => {
   });
 
   it("opens the same destination regardless of the current page", () => {
-    // No context-dependent behaviour in v1: Plans opens Plans everywhere.
     expect(component).not.toContain("pathname ===");
     expect(component).toContain("selectAction(action.href)");
   });
@@ -179,56 +160,44 @@ describe("actions are distinguishable at small sizes", () => {
   it("gives every action its own accent, defined in CSS not inline", () => {
     const tones = QUICK_ACTIONS.map((action) => action.toneClass);
     expect(new Set(tones).size).toBe(QUICK_ACTION_COUNT);
+    const globalsCss = read("app/globals.css");
     for (const tone of tones) {
-      expect(css, `${tone} must be defined`).toContain(`.${tone} {`);
+      expect(globalsCss, `${tone} must be defined`).toContain(`.${tone} {`);
     }
   });
 
   it("never relies on colour alone", () => {
-    // Every row carries a visible text label beside its glyph.
-    expect(component).toContain("quick-actions-label");
+    // Every destination tile carries a visible text label beside its glyph.
+    expect(component).toContain("quick-actions-sheet-label");
     expect(component).toContain("{action.label}");
+  });
+
+  it("uses a launcher glyph, never an up-chevron or arrow", () => {
+    // The previous icon (ChevronUp) read as scroll-to-top/collapse, which is
+    // not what this control does. LayoutGrid reads as "more", correctly.
+    expect(component).toContain("LayoutGrid");
+    expect(component).not.toContain("ChevronUp");
+    expect(component).not.toMatch(/\bArrowUp\b/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3-8. Interaction
+// Open and close behaviour
 // ---------------------------------------------------------------------------
 
 describe("open and close behaviour", () => {
   it("starts collapsed", () => {
-    // Nothing is open until a route records itself as the one it was opened on.
-    expect(component).toContain("useState<string | null>(null)");
-  });
-
-  it("closes on Escape and returns focus to the trigger", () => {
-    expect(component).toContain('event.key !== "Escape"');
-    expect(component).toContain("triggerRef.current?.focus()");
-  });
-
-  it("closes on an outside tap", () => {
-    // pointerdown rather than click, so the menu is gone before the tap lands
-    // on whatever was underneath it.
-    expect(component).toContain('document.addEventListener("pointerdown", onPointerDown)');
-    expect(component).toContain("containerRef.current?.contains(event.target as Node)");
-  });
-
-  it("closes on a downward swipe", () => {
-    expect(component).toContain("onTouchStart");
-    expect(component).toContain("endY - startY > 48");
+    expect(component).toContain('useState<string | null>(null)');
   });
 
   it("closes when the route changes", () => {
-    // DERIVED from the route rather than reset by an effect: the menu is open
-    // only while the route it was opened on is still current. Navigating
-    // therefore closes it by construction, with no cascading re-render and no
-    // frame where a stale menu sits over the new page.
+    // DERIVED from the route rather than reset by an effect: the sheet is
+    // open only while the route it was opened on is still current.
     expect(component).toContain("const open = openedOn !== null && openedOn === pathname");
     expect(component).toContain("setOpenedOn(pathname)");
   });
 
   it("closes before navigating rather than after", () => {
-    // Otherwise the menu is seen collapsing over the page it just opened.
     const select = component.slice(component.indexOf("function selectAction"));
     const closeAt = select.indexOf("setOpenedOn(null)");
     const pushAt = select.indexOf("router.push");
@@ -236,14 +205,23 @@ describe("open and close behaviour", () => {
     expect(closeAt).toBeLessThan(pushAt);
   });
 
-  it("does not persist open state", () => {
-    expect(component).not.toContain("localStorage");
-    expect(component).not.toContain("sessionStorage");
+  it("opens as the shared sheet primitive, not a bespoke overlay", () => {
+    // Dismiss-on-back, focus restoration, safe-area padding and outside-tap
+    // are all owned by Modal; the launcher does not reimplement them.
+    expect(component).toContain('variant="sheet"');
+    expect(component).toContain("<Modal");
+  });
+
+  it("persists only its position, never whether it is open", () => {
+    // Position survives a reload by design (issue 8); the open/closed state
+    // of the sheet itself must not, or a reload could land on a stray sheet.
+    expect(component).not.toMatch(/localStorage[\s\S]*openedOn|openedOn[\s\S]*localStorage/);
+    expect(position).toContain("localStorage");
   });
 });
 
 // ---------------------------------------------------------------------------
-// 10. One instance
+// One instance
 // ---------------------------------------------------------------------------
 
 describe("exactly one launcher exists", () => {
@@ -252,26 +230,21 @@ describe("exactly one launcher exists", () => {
   });
 
   it("is hidden while a conversation is immersive", () => {
-    // The composer owns the lower-right corner there.
     expect(shell).toContain("{immersive ? null : <QuickActionsLauncher />}");
   });
 
   it("is not mounted by any individual page", () => {
-    // Five copies is how a launcher ends up on a screen nobody intended.
     for (const page of [
       "components/dashboard/dashboard-page.tsx",
       "components/friends/friends-page.tsx"
     ]) {
-      // Named distinctly from the Home page's in-page QuickActionsHome rail,
-      // which is a different component entirely -- a content row, not a
-      // floating launcher.
       expect(read(page)).not.toContain("<QuickActionsLauncher");
     }
   });
 });
 
 // ---------------------------------------------------------------------------
-// 11 + 12. Motion and positioning
+// Motion and positioning
 // ---------------------------------------------------------------------------
 
 describe("motion respects the user's preference", () => {
@@ -280,32 +253,28 @@ describe("motion respects the user's preference", () => {
     expect(component).toContain('data-reduced-motion={reducedMotion ? "true" : "false"}');
   });
 
-  it("drops the stagger under reduced motion", () => {
-    // A sequential delay is motion even without movement.
-    const reduced = css.slice(css.indexOf('.quick-actions[data-reduced-motion="true"]'));
-    expect(reduced.slice(0, 400)).toContain("transition-delay: 0ms");
-    expect(reduced.slice(0, 400)).toContain("transform: none");
-  });
-
-  it("also honours the media query, not only the hook", () => {
-    // The hook covers React state; the query covers first paint before it runs.
-    const block = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+  it("drops the transition under reduced motion, in both signals", () => {
+    expect(css).toContain('.quick-actions[data-reduced-motion="true"] .quick-actions-trigger');
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(block.length).toBeGreaterThan(0);
   });
 });
 
 describe("positioning clears the navigation and the safe area", () => {
-  const block = css.slice(css.indexOf(".quick-actions {"), css.indexOf(".quick-actions-stack"));
+  it("reserves the bottom navigation's height and the device safe area", () => {
+    // The reserve calculation lives in app-shell.tsx and consumes the
+    // launcher's own --quick-actions-size, kept in sync in the stylesheet.
+    expect(shell).toContain("--quick-actions-reserve");
+    expect(shell).toContain("var(--mobile-nav-height)");
+    expect(shell).toContain("env(safe-area-inset-bottom,0px)");
+  });
 
-  it("sits above the bottom navigation and the home indicator", () => {
-    expect(block).toContain("var(--mobile-nav-height)");
-    expect(block).toContain("env(safe-area-inset-bottom, 0px)");
+  it("computes its own vertical band clear of the header and the nav", () => {
+    expect(component).toContain("function verticalBounds()");
+    expect(component).toContain("--mobile-nav-height");
   });
 
   it("layers below navigation, dialogs, toasts and the camera", () => {
-    // The launcher is the least important thing on screen. Anything that
-    // opens over it must cover it -- especially the camera and any modal.
+    const block = css.slice(css.indexOf(".quick-actions {"), css.indexOf(".quick-actions--unpositioned"));
     const layer = /z-index:\s*(\d+)/.exec(block);
     expect(layer).not.toBeNull();
     const z = Number(layer?.[1]);
@@ -314,51 +283,101 @@ describe("positioning clears the navigation and the safe area", () => {
     expect(z).toBeLessThan(120); // camera
   });
 
-  it("lets taps through everywhere except the control itself", () => {
-    expect(block).toContain("pointer-events: none");
-    expect(css).toContain(".quick-actions-stack");
-  });
-
-  it("stays small when collapsed", () => {
-    // 2.75rem x 3.75rem = 44 x 60px, inside the 42-48 x 58-68 target.
+  it("keeps a 44px+ touch target when collapsed", () => {
     const trigger = css.slice(css.indexOf(".quick-actions-trigger {"));
     const triggerBlock = trigger.slice(0, trigger.indexOf("}"));
-    expect(triggerBlock).toContain("width: 2.75rem");
-    /* The height moved into --quick-actions-size so the app shell can reserve
-     * exactly this much space beneath a scrolling page. The touch target is
-     * unchanged -- asserted here on the token's VALUE, so tokenising it cannot
-     * quietly shrink the control. */
-    expect(triggerBlock).toContain("height: var(--quick-actions-size)");
-    expect(css).toContain("--quick-actions-size: 3.75rem");
+    expect(triggerBlock).toContain("var(--quick-actions-size)");
+    const sizeMatch = /--quick-actions-size:\s*([\d.]+)rem/.exec(css);
+    expect(sizeMatch).not.toBeNull();
+    expect(Number(sizeMatch?.[1]) * 16).toBeGreaterThanOrEqual(44);
   });
 
-  it("keeps 44px touch targets on every action", () => {
-    const action = css.slice(css.indexOf(".quick-actions-action {"));
-    expect(action.slice(0, action.indexOf("}"))).toContain("min-height: 2.75rem");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 17. Short viewports
-// ---------------------------------------------------------------------------
-
-describe("short viewports fall back to scrolling", () => {
-  it("scrolls only when the column genuinely cannot fit", () => {
-    // Five rows fit on ordinary phones; scrolling is introduced only under a
-    // height query, never by default.
-    expect(css).toContain("@media (max-height: 620px)");
-    const short = css.slice(css.indexOf("@media (max-height: 620px)"));
-    expect(short.slice(0, 600)).toContain("overflow-y: auto");
-  });
-
-  it("hides the scrollbar on that narrow column", () => {
-    const short = css.slice(css.indexOf("@media (max-height: 620px)"));
-    expect(short.slice(0, 800)).toContain("scrollbar-width: none");
+  it("gives every sheet destination a comfortable touch target", () => {
+    const action = css.slice(css.indexOf(".quick-actions-sheet-action {"));
+    const block = action.slice(0, action.indexOf("}"));
+    const minHeight = /min-height:\s*([\d.]+)rem/.exec(block);
+    expect(minHeight).not.toBeNull();
+    expect(Number(minHeight?.[1]) * 16).toBeGreaterThanOrEqual(44);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 13. Accessibility
+// Drag to reposition
+// ---------------------------------------------------------------------------
+
+describe("dragging repositions the launcher without opening it", () => {
+  it("distinguishes a tap from a drag by real pointer movement", () => {
+    expect(component).toContain("DRAG_THRESHOLD_PX");
+    expect(component).toContain("onPointerDown");
+    expect(component).toContain("onPointerMove");
+    expect(component).toContain("onPointerUp");
+  });
+
+  it("only toggles the sheet when the gesture was not a drag", () => {
+    const pointerUp = component.slice(component.indexOf("function onPointerUp"));
+    const block = pointerUp.slice(0, pointerUp.indexOf("function toggle"));
+    expect(block).toContain("if (!drag.isDrag)");
+    expect(block).toContain("toggle()");
+  });
+
+  it("snaps to the nearer edge on release", () => {
+    expect(component).toContain('nextEdge: QuickActionsEdge');
+    expect(component).toContain("settleIntoBounds(nextEdge");
+  });
+
+  it("clamps the vertical position within the safe band on every move", () => {
+    const move = component.slice(component.indexOf("function onPointerMove"));
+    const block = move.slice(0, move.indexOf("function onPointerUp"));
+    expect(block).toContain("clamp(");
+    expect(block).toContain("verticalBounds()");
+  });
+
+  it("captures the pointer once a drag begins, so the gesture survives leaving the control", () => {
+    expect(component).toContain("setPointerCapture");
+    expect(component).toContain("releasePointerCapture");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Position persistence
+// ---------------------------------------------------------------------------
+
+describe("the chosen position is remembered locally", () => {
+  it("stores only an edge and a clamped fraction, never a raw coordinate", () => {
+    expect(position).toContain("QuickActionsEdge");
+    expect(position).toContain("verticalFraction");
+    expect(position).toMatch(/Math\.min\(1, Math\.max\(0, /);
+  });
+
+  it("never trusts a corrupt or foreign stored value", () => {
+    expect(position).toContain("function isEdge(");
+    expect(position).toContain('return value === "left" || value === "right"');
+  });
+
+  it("never throws when storage is unavailable", () => {
+    expect(position).toContain("try {");
+    expect(position).toContain("} catch {");
+  });
+
+  it("re-resolves against the current viewport on load, rather than trusting the stored pixels directly", () => {
+    expect(component).toContain("loadQuickActionsPosition()");
+    expect(component).toContain("verticalBounds()");
+  });
+
+  it("re-clamps on resize so a stored position cannot end up off-screen", () => {
+    expect(component).toContain('window.addEventListener("resize"');
+  });
+
+  it("saves after a drag settles, not on every intermediate frame", () => {
+    const pointerUp = component.slice(component.indexOf("function onPointerUp"));
+    expect(pointerUp.slice(0, pointerUp.indexOf("function toggle"))).toContain("saveQuickActionsPosition(");
+    const move = component.slice(component.indexOf("function onPointerMove"), component.indexOf("function onPointerUp"));
+    expect(move).not.toContain("saveQuickActionsPosition(");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Accessibility
 // ---------------------------------------------------------------------------
 
 describe("the launcher is operable without sight or a mouse", () => {
@@ -367,8 +386,9 @@ describe("the launcher is operable without sight or a mouse", () => {
     expect(component).toContain("aria-controls={panelId}");
   });
 
-  it("names the trigger for both states", () => {
-    expect(component).toContain('aria-label={open ? "Close quick actions" : "Open quick actions"}');
+  it("names the trigger meaningfully, never as a scroll control", () => {
+    expect(component).toContain('aria-label="Quick actions"');
+    expect(component.toLowerCase()).not.toContain("scroll to top");
   });
 
   it("uses real buttons and links, not divs", () => {
@@ -377,30 +397,23 @@ describe("the launcher is operable without sight or a mouse", () => {
     expect(component).toContain("<Link");
   });
 
-  it("announces expansion to screen readers", () => {
-    expect(component).toContain('role="status"');
-    expect(component).toContain('aria-live="polite"');
+  it("keeps the sheet's destinations in a proper menu", () => {
+    expect(component).toContain('role="menu"');
+    expect(component).toContain('role="menuitem"');
   });
 
-  it("keeps collapsed actions out of the tab order", () => {
-    // Otherwise a keyboard user tabs through five invisible links.
-    expect(component).toContain("tabIndex={open ? 0 : -1}");
-    expect(component).toContain("aria-hidden={!open}");
+  it("is activatable by keyboard, not only by drag", () => {
+    expect(component).toContain("onKeyDown");
+    expect(component).toMatch(/event\.key === "Enter"/);
   });
 
   it("shows a visible focus ring", () => {
     expect(component).toContain("focus-ring");
   });
-
-  it("marks the action column as a menu", () => {
-    expect(component).toContain('role="menu"');
-    expect(component).toContain('role="menuitem"');
-    expect(component).toContain('aria-label="Quick actions"');
-  });
 });
 
 // ---------------------------------------------------------------------------
-// 14 + 15. Camera behaviour is untouched
+// Camera behaviour is untouched
 // ---------------------------------------------------------------------------
 
 describe("Mad Cam behaviour is unchanged", () => {
@@ -410,9 +423,6 @@ describe("Mad Cam behaviour is unchanged", () => {
   });
 
   it("keeps the camera mounted separately from the launcher, behind its flag", () => {
-    // Mad Cam is paused (scope reduction), so the mount is additionally gated
-    // on the server-resolved flag. The separation this test protects is
-    // unchanged: the launcher never renders the composer itself.
     expect(shell).toContain("{madCamEnabled && cameraOpen ? <LazyCameraComposer onClose={closeCamera} /> : null}");
   });
 
@@ -424,7 +434,7 @@ describe("Mad Cam behaviour is unchanged", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 16. No backend cost
+// No backend cost
 // ---------------------------------------------------------------------------
 
 describe("the launcher costs nothing to render", () => {
@@ -435,8 +445,6 @@ describe("the launcher costs nothing to render", () => {
   });
 
   it("does not prefetch the feature pages", () => {
-    // Five route prefetches on every browsing screen, for a menu most sessions
-    // never open.
     expect(component).toContain("prefetch={false}");
   });
 
@@ -448,7 +456,7 @@ describe("the launcher costs nothing to render", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 18. Haptics
+// Haptics
 // ---------------------------------------------------------------------------
 
 describe("haptics degrade silently", () => {
@@ -458,8 +466,6 @@ describe("haptics degrade silently", () => {
   });
 
   it("never throws when unsupported or blocked", () => {
-    // iOS Safari has no Vibration API at all, and some browsers throw when a
-    // permissions policy blocks it.
     expect(haptics).toContain("if (!hapticsSupported()) return");
     expect(haptics).toContain("try {");
     expect(haptics).toContain("} catch {");
@@ -473,7 +479,6 @@ describe("haptics degrade silently", () => {
   });
 
   it("keeps every pattern short enough to read as a tick", () => {
-    // A vibration long enough to feel like a buzz reads as an error.
     const durations = [...haptics.matchAll(/:\s*(\d+)\s*$/gm)].map((match) => Number(match[1]));
     for (const duration of durations) {
       expect(duration).toBeLessThanOrEqual(20);
@@ -482,5 +487,10 @@ describe("haptics degrade silently", () => {
 
   it("does not vibrate during ordinary scrolling", () => {
     expect(component).not.toContain("onScroll");
+  });
+
+  it("confirms a completed drag with a tick, distinct from opening the sheet", () => {
+    const pointerUp = component.slice(component.indexOf("function onPointerUp"));
+    expect(pointerUp.slice(0, pointerUp.indexOf("function toggle"))).toContain('haptic("tick")');
   });
 });

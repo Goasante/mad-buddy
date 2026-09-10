@@ -1,166 +1,73 @@
 /*
- * Quick Actions — compact premium floating action menu.
+ * Quick Actions — edge-docked floating launcher.
  *
- * This stylesheet intentionally loads after globals.css. The launcher keeps its
- * existing route, accessibility, haptic, dismissal and reduced-motion logic;
- * only the visual system is refined here.
+ * This stylesheet intentionally loads after globals.css. The launcher keeps
+ * its existing route, accessibility, haptic, dismissal and reduced-motion
+ * logic; this is the visual system for the smaller, quieter, draggable
+ * control and the bottom sheet it opens.
  */
 
 :root {
-  /* Reduced from the first reference pass: still comfortably tappable, but no
-     longer dominates the lower-right corner of a phone. */
-  --quick-actions-size: 3.5rem;
+  /* A secondary utility control, not a primary CTA: comfortably inside the
+     44px touch-target minimum, but no longer reads as a second FAB. */
+  --quick-actions-size: 2.875rem;
 }
 
 .quick-actions {
+  position: fixed;
+  z-index: 40;
+  /* Cleared once JS resolves a real top/left; until then the control is
+     invisible rather than flashing at a wrong default corner. */
+  top: 0;
   right: max(0.85rem, env(safe-area-inset-right, 0px));
-}
-
-.quick-actions-stack {
-  gap: 0.55rem;
-  align-items: flex-end;
-}
-
-.quick-actions-list {
-  width: min(10.75rem, calc(100vw - 1.7rem));
-  gap: 0.42rem;
-  align-items: stretch;
-}
-
-.quick-actions-action {
-  /* The component renders label then glyph for semantic continuity. Reversing
-     the visual row puts the coloured icon disc on the left. */
-  position: relative;
-  isolation: isolate;
-  flex-direction: row-reverse;
-  justify-content: flex-end;
-  width: 100%;
-  min-height: 2.95rem;
-  gap: 0.62rem;
-  padding: 0.28rem 0.82rem 0.28rem 0.32rem;
-  border: 1px solid rgba(78, 4, 1, 0.075);
-  border-radius: 999px;
-  color: #4e0401;
-  background: linear-gradient(135deg, rgba(254, 251, 243, 0.99), rgba(255, 247, 234, 0.97));
-  box-shadow:
-    0 10px 22px rgba(78, 4, 1, 0.105),
-    0 2px 6px rgba(78, 4, 1, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  transition:
-    transform 170ms ease,
-    box-shadow 170ms ease,
-    border-color 170ms ease;
-}
-
-.quick-actions-action::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  z-index: -1;
-  border-radius: inherit;
-  background: linear-gradient(105deg, rgba(255, 255, 255, 0.28), transparent 42%);
   pointer-events: none;
 }
 
-.quick-actions-action:hover {
-  border-color: rgba(232, 140, 43, 0.32);
-  box-shadow:
-    0 12px 25px rgba(78, 4, 1, 0.12),
-    0 3px 8px rgba(78, 4, 1, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.quick-actions-action:active {
-  transform: scale(0.975);
-}
-
-.quick-actions-label {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  font-size: 0.86rem;
-  font-weight: 720;
-  letter-spacing: -0.012em;
-  line-height: 1.1;
-  color: #4e0401;
-}
-
-.quick-actions-glyph {
-  flex: 0 0 auto;
-  width: 2.3rem;
-  height: 2.3rem;
-  border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(145deg, #f0a14a, #e88c2b 58%, #d97a1d);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    0 4px 9px rgba(232, 140, 43, 0.23);
-}
-
-/* Alternating orange / deep-maroon discs create rhythm without introducing a
-   new accent family into the product. */
-.quick-actions-item:nth-child(even) .quick-actions-glyph {
-  background: linear-gradient(145deg, #6a0b07, #4e0401 62%, #350201);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 4px 9px rgba(78, 4, 1, 0.22);
-}
-
-.quick-actions-glyph svg {
-  width: 1.05rem;
-  height: 1.05rem;
-  stroke-width: 2.15;
+.quick-actions--unpositioned {
+  visibility: hidden;
 }
 
 .quick-actions-trigger {
   position: relative;
-  overflow: hidden;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
   width: var(--quick-actions-size);
   height: var(--quick-actions-size);
   min-width: var(--quick-actions-size);
   min-height: var(--quick-actions-size);
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  color: #fff;
-  background: linear-gradient(145deg, #f2a043 0%, #e88c2b 58%, #d87418 100%);
-  box-shadow:
-    0 10px 23px rgba(232, 140, 43, 0.31),
-    0 4px 10px rgba(78, 4, 1, 0.12),
-    0 0 0 5px rgba(232, 140, 43, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  border: 1px solid hsl(var(--border) / 0.85);
+  color: hsl(var(--foreground) / 0.88);
+  background: hsl(var(--card) / 0.92);
+  box-shadow: 0 6px 18px hsl(var(--foreground) / 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  touch-action: none;
+  cursor: grab;
   transition:
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 180ms ease,
-    background-color 180ms ease;
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms ease,
+    border-color 160ms ease;
 }
 
-.quick-actions-trigger::before {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: inherit;
-  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.34), transparent 36%);
-  pointer-events: none;
+.quick-actions-trigger:hover {
+  border-color: hsl(var(--primary) / 0.4);
 }
 
-.quick-actions-trigger:hover,
 .quick-actions[data-open="true"] .quick-actions-trigger {
-  color: #fff;
-  background: linear-gradient(145deg, #f4a74c 0%, #e88c2b 56%, #d87418 100%);
-  border-color: rgba(255, 255, 255, 0.86);
-  box-shadow:
-    0 12px 26px rgba(232, 140, 43, 0.35),
-    0 5px 11px rgba(78, 4, 1, 0.14),
-    0 0 0 6px rgba(232, 140, 43, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  border-color: hsl(var(--primary) / 0.55);
+  color: hsl(var(--primary));
 }
 
 .quick-actions-trigger:active {
   transform: scale(0.95);
+}
+
+.quick-actions[data-dragging="true"] .quick-actions-trigger {
+  cursor: grabbing;
+  box-shadow: 0 10px 26px hsl(var(--foreground) / 0.22);
+  transition: none;
 }
 
 .quick-actions-trigger-icon {
@@ -173,58 +80,96 @@
 }
 
 .quick-actions-trigger-icon svg {
-  width: 1.28rem;
-  height: 1.28rem;
-  stroke-width: 2.2;
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke-width: 1.9;
 }
 
-/* Once expanded, the close X should read as a calm dismiss control rather
-   than spinning into place. The rows provide the reveal motion. */
-.quick-actions[data-open="true"] .quick-actions-trigger-icon {
-  transform: none;
-}
-
-@media (max-width: 359px) {
-  .quick-actions-list {
-    width: min(10rem, calc(100vw - 1.35rem));
-  }
-
-  .quick-actions-action {
-    min-height: 2.8rem;
-    padding-right: 0.7rem;
-  }
-
-  .quick-actions-label {
-    font-size: 0.82rem;
-  }
-
-  .quick-actions-glyph {
-    width: 2.16rem;
-    height: 2.16rem;
-  }
-}
-
-@media (max-height: 700px) {
-  .quick-actions[data-open="true"] .quick-actions-list {
-    max-height: calc(100svh - var(--mobile-nav-height) - env(safe-area-inset-bottom, 0px) - 8rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: none;
-  }
-
-  .quick-actions[data-open="true"] .quick-actions-list::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-.quick-actions[data-reduced-motion="true"] .quick-actions-action,
 .quick-actions[data-reduced-motion="true"] .quick-actions-trigger {
   transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .quick-actions-action,
   .quick-actions-trigger {
+    transition: none;
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * The bottom sheet's contents. The Modal primitive owns the panel chrome
+ * (title, close button, dismissal, safe-area padding); this is only the
+ * grid of destinations inside it.
+ * ---------------------------------------------------------------------- */
+
+.quick-actions-sheet-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+@media (min-width: 420px) {
+  .quick-actions-sheet-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.quick-actions-sheet-item {
+  list-style: none;
+}
+
+.quick-actions-sheet-action {
+  display: flex;
+  min-height: 5.25rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 1rem;
+  background: hsl(var(--secondary) / 0.45);
+  color: hsl(var(--foreground));
+  text-align: center;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.quick-actions-sheet-action:hover {
+  background: hsl(var(--secondary) / 0.75);
+}
+
+.quick-actions-sheet-action:active {
+  transform: scale(0.97);
+}
+
+/* Each destination's own accent, tinted rather than solid so four discs do
+   not compete with each other -- the same --qa-tone tokens the previous
+   pill-stack presentation used, declared once in globals.css. Colour is
+   never the only signal: every tile also carries a text label. */
+.quick-actions-sheet-glyph {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--qa-tone, hsl(var(--primary))) 16%, transparent);
+  color: var(--qa-tone, hsl(var(--primary)));
+}
+
+.quick-actions-sheet-glyph svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  stroke-width: 2.1;
+}
+
+.quick-actions-sheet-label {
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: -0.008em;
+  line-height: 1.15;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-actions-sheet-action {
     transition: none;
   }
 }
