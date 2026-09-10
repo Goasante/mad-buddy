@@ -3372,6 +3372,23 @@ select {
   text-wrap: pretty;
 }
 
+/* Dismiss control for the first-use explainer. A real 44px target, not a
+   small tap-anywhere-nearby guess, positioned to sit level with the title. */
+.upfor-banner-dismiss {
+  display: grid;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  margin: -0.6875rem -0.6875rem -0.6875rem 0;
+  border-radius: 999px;
+  color: hsl(var(--muted-foreground));
+}
+.upfor-banner-dismiss:hover {
+  background: hsl(var(--foreground) / 0.06);
+  color: hsl(var(--foreground));
+}
+
 /* ---------------------------- Your own UpFor -------------------------- */
 .upfor-mine {
   display: flex;
@@ -7041,18 +7058,11 @@ select {
   max-width: 15rem;
 }
 
-/* An eyebrow, not a badge. As a filled pill it competed with the state chip
-   opposite it and with the title directly beneath -- three emphatic shapes
-   stacked in one corner. It now reads as a label above the name. */
-.home-agenda-type {
-  padding: 0;
-  background: none;
-  color: rgb(255 255 255 / 0.66);
-  font-size: 0.625rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
+/* Shared layout mechanics only. Visual treatment (padding/background/color/
+   size) is deliberately NOT here for .home-agenda-type -- see below. It used
+   to be, which meant this shared rule's filled-pill styling always won the
+   cascade over the eyebrow rule further down (equal specificity, declared
+   later), silently turning "an eyebrow, not a badge" back into a badge. */
 .home-agenda-type,
 .home-agenda-rsvp {
   display: inline-flex;
@@ -7060,18 +7070,30 @@ select {
   flex-shrink: 0;
   align-items: center;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.18);
-  padding: 0.2rem 0.55rem;
-  color: #fff;
-  font-size: 0.6875rem;
-  font-weight: 700;
   line-height: 1.2;
+}
+
+/* An eyebrow, not a badge. As a filled pill it competed with the state chip
+   opposite it and with the title directly beneath -- three emphatic shapes
+   stacked in one corner. It now reads as a label above the name. Declared
+   after the shared rule above so its overrides are the ones that apply. */
+.home-agenda-type {
+  padding: 0;
+  background: none;
+  color: rgb(255 255 255 / 0.66);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .home-agenda-rsvp {
   border: 1px solid rgb(255 255 255 / 0.55);
   background: rgb(255 255 255 / 0.14);
+  padding: 0.2rem 0.55rem;
   color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
   /* Same tap size as any other control on a phone. */
   min-height: 1.75rem;
   padding-inline: 0.7rem;
@@ -8629,8 +8651,12 @@ html.dark .linkr-safe-screen {
   to { opacity: 1; transform: scale(1); }
 }
 
-/* --- Empty state ----------------------------------------------------------- */
-.linkr-empty { justify-content: center; min-height: 60dvh; }
+/* --- Empty state -----------------------------------------------------------
+   min-height used to be 60dvh, forcing the illustration/title/body/CTA to
+   fill three-fifths of the viewport no matter how little content there is.
+   Compressed, not redesigned: the same illustration, title, body and CTA in
+   the same order, just not padded out to consume the whole first screen. */
+.linkr-empty { justify-content: center; min-height: 42dvh; padding-bottom: 1.5rem; }
 .linkr-empty__title { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
 .linkr-empty__body { font-size: 0.875rem; color: hsl(var(--muted-foreground)); max-width: 18rem; }
 
