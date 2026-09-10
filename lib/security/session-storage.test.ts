@@ -61,7 +61,11 @@ describe("client-side storage never holds credentials", () => {
     "completedKey",
     "dismissedKey",
     "shownKey",
-    "storageKey" // the local const the install keys are read through
+    "storageKey", // the local const the install keys are read through
+    // UpFor's "Live & temporary" first-use explainer dismissal (per-account,
+    // hashed scope — see lib/hangout/education.ts). Same non-sensitive
+    // one-time-dismiss shape as the notification-onboarding keys above.
+    "upforEducationStorageKey(viewerId)"
   ];
 
   it("writes only approved non-sensitive keys to localStorage/sessionStorage", () => {

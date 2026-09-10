@@ -49,6 +49,10 @@ describe("Messages V5 follow-up polish", () => {
     expect(shell).toContain("useUnreadMessageCount(currentUserId)");
     expect(shell).toContain('tab.href === "/messages" ? messageUnreadCount : 0');
     expect(shell).toContain('tab.href === "/messages" && messageUnreadCount > 0 ? <UnreadBadge count={messageUnreadCount} /> : null');
-    expect(shell).toContain('{count > 99 ? "99+" : count}');
+    // The 99+ cap lives in the canonical components/ui/count-badge.tsx now,
+    // which UnreadBadge here delegates to — one badge implementation for the
+    // whole app instead of a copy per surface.
+    const countBadge = read("components/ui/count-badge.tsx");
+    expect(countBadge).toContain('count > 99 ? "99+" : count');
   });
 });

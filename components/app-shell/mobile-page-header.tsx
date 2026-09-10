@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { cameFromInsideApp, resolveBack } from "@/lib/navigation/entry-origin";
 import { cn } from "@/lib/utils";
+import { CountBadge } from "@/components/ui/count-badge";
 
 /**
  * The canonical mobile page header, shared by every primary screen.
@@ -327,22 +328,17 @@ function HeaderLink({
 }
 
 /**
- * The shared count badge for both header streams.
+ * The shared count badge for both header streams. Canonical implementation
+ * lives in components/ui/count-badge.tsx — this app used to carry three
+ * near-identical copies with drifted sizing (18px vs 20px) and drifted caps
+ * (9+ vs 99+), which had no documented reason to differ.
  *
  * `-right-0.5 -top-0.5` keeps it inside the 44px hit target's padding box, so
- * it cannot clip against the header edge or the screen edge at 320px. Caps at
- * 9+ because two glyphs is all that fits without deforming the circle.
+ * it cannot clip against the header edge or the screen edge at 320px.
  *
  * aria-hidden: the count is already in the parent control's aria-label, so
  * exposing it here too would make a screen reader announce it twice.
  */
 function HeaderBadge({ count }: { count: number }) {
-  return (
-    <span
-      className="absolute -right-0.5 -top-0.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-background bg-red-500 px-1 text-[10px] font-bold leading-none text-white dark:border-[#111112]"
-      aria-hidden="true"
-    >
-      {count > 9 ? "9+" : count}
-    </span>
-  );
+  return <CountBadge count={count} className="dark:border-[#111112]" />;
 }
