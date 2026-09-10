@@ -123,7 +123,6 @@ export const UpForCard = memo(function UpForCard({
       <div className="upfor-card__head">
         <div className="upfor-card__portrait">
           <UserAvatar name={upfor.ownerName} src={upfor.ownerAvatarUrl} size="md" />
-          {expired ? null : <span className="upfor-card__presence" aria-label="Active UpFor" />}
         </div>
 
         <div className="upfor-card__content">
@@ -132,6 +131,18 @@ export const UpForCard = memo(function UpForCard({
             <span>{upForTitle(upfor.activityType)}</span>
           </h3>
           <p className="upfor-card__owner">{isOwner ? "your UpFor" : `with ${upfor.ownerName}`}</p>
+          <div className="upfor-card__meta">
+            {proximity ? (
+              <span className="upfor-card__proximity">
+                <MapPin aria-hidden /> {proximity}
+              </span>
+            ) : null}
+            {proof.label ? (
+              <span className="upfor-card__proof">
+                <Users aria-hidden /> {proof.label}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {/* The timer is a compact warm badge in the top-right, matching the
@@ -142,19 +153,6 @@ export const UpForCard = memo(function UpForCard({
       </div>
 
       {upfor.message ? <p className="upfor-card__message">{upfor.message}</p> : null}
-
-      <div className="upfor-card__meta">
-        {proximity ? (
-          <span className="upfor-card__proximity">
-            <MapPin aria-hidden /> {proximity}
-          </span>
-        ) : null}
-        {proof.label ? (
-          <span className="upfor-card__proof">
-            <Users aria-hidden /> {proof.label}
-          </span>
-        ) : null}
-      </div>
 
       <div className="upfor-card__actions">
         {isOwner ? null : expired ? (
