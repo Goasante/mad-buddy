@@ -1,15 +1,15 @@
 .referenceCard:global(.upfor-card) {
-  gap: 0.72rem;
-  padding: 0.95rem 1rem 0.9rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
+  gap: 0.68rem;
+  padding: 0.92rem 0.95rem 0.86rem;
+  border: 1px solid hsl(var(--border) / 0.72);
   border-radius: 1.45rem;
-  background: #1b1816;
-  color: #fffaf5;
-  box-shadow: 0 12px 34px rgb(0 0 0 / 0.16);
+  background: hsl(var(--card) / 0.98);
+  color: hsl(var(--foreground));
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.08);
 }
 
 .referenceCard:global(.upfor-card--strong) {
-  box-shadow: 0 14px 38px rgb(0 0 0 / 0.2), 0 0 0 1px rgb(232 140 43 / 0.08);
+  box-shadow: 0 13px 34px rgb(0 0 0 / 0.1), 0 0 0 1px hsl(var(--primary) / 0.07);
 }
 
 .referenceCard :global(.upfor-card__head) {
@@ -17,19 +17,24 @@
   align-items: center;
 }
 
-.referenceCard :global(.upfor-card__portrait > span) {
-  width: 3.35rem;
-  height: 3.35rem;
-  border-radius: 999px;
+.referenceCard :global(.upfor-card__portrait) {
+  align-self: center;
 }
 
+.referenceCard :global(.upfor-card__portrait > span) {
+  width: 3.55rem;
+  height: 3.55rem;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 2px hsl(var(--card)),
+    0 0 0 3px hsl(var(--border) / 0.88);
+}
+
+/* The supplied reference keeps the profile photo completely unobstructed.
+   UpFor activity is already communicated by the card itself, so no green
+   presence/online dot should cover the avatar. */
 .referenceCard :global(.upfor-card__presence) {
-  right: -0.06rem;
-  bottom: 0.03rem;
-  width: 0.76rem;
-  height: 0.76rem;
-  border: 2px solid #1b1816;
-  background: #63d58a;
+  display: none;
 }
 
 .referenceCard :global(.upfor-card__content) {
@@ -43,40 +48,55 @@
 .referenceCard :global(.upfor-card__activity) {
   margin: 0;
   gap: 0.38rem;
-  color: #fffaf5;
+  min-width: 0;
+  color: hsl(var(--foreground));
   font-size: 1.08rem;
   font-weight: 760;
   line-height: 1.15;
   letter-spacing: -0.018em;
 }
 
+.referenceCard :global(.upfor-card__activity > span) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .referenceCard :global(.upfor-card__activity-icon) {
   width: 1.02rem;
   height: 1.02rem;
-  color: #ffb44d;
+  flex: 0 0 auto;
+  color: var(--color-brand-orange);
 }
 
 .referenceCard :global(.upfor-card__owner) {
   margin-top: 0.18rem;
-  color: #a99f97;
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
   font-size: 0.82rem;
   font-weight: 500;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Keep the timer visually white/cream like the reference in both themes.
+   The surrounding card itself remains theme-adaptive. */
 .referenceCard :global(.upfor-card__timer) {
   align-self: flex-start;
   min-height: 2rem;
   gap: 0.28rem;
   padding: 0.4rem 0.68rem;
-  border: 0;
+  border: 1px solid #f2dcc8;
   border-radius: 999px;
-  background: #4a250d;
-  color: #ffad3d;
+  background: #fff8f1;
+  color: #c95108;
   font-size: 0.8rem;
   font-weight: 760;
   line-height: 1;
-  box-shadow: inset 0 0 0 1px rgb(255 174 61 / 0.04);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(90 49 16 / 0.05);
 }
 
 .referenceCard :global(.upfor-card__timer svg) {
@@ -85,67 +105,83 @@
 }
 
 .referenceCard :global(.upfor-card__timer.is-ended) {
-  background: #2a2724;
-  color: #817971;
+  border-color: hsl(var(--border) / 0.8);
+  background: hsl(var(--muted) / 0.92);
+  color: hsl(var(--muted-foreground));
+  box-shadow: none;
 }
 
 .referenceCard :global(.upfor-card__message) {
-  margin: -0.08rem 0 0;
-  color: #d7d0c9;
+  margin: -0.08rem 0 0 4.33rem;
+  color: hsl(var(--muted-foreground));
   font-size: 0.82rem;
   line-height: 1.38;
 }
 
+/* Metadata now lives directly under the owner line, matching the compact
+   reference instead of consuming a separate full card row. */
 .referenceCard :global(.upfor-card__meta) {
-  gap: 0.35rem 1.05rem;
-  color: #b9b0a9;
+  margin-top: 0.34rem;
+  gap: 0.35rem 0.92rem;
+  color: hsl(var(--muted-foreground));
   font-size: 0.82rem;
-  font-weight: 500;
+  font-weight: 560;
 }
 
 .referenceCard :global(.upfor-card__proximity),
 .referenceCard :global(.upfor-card__proof) {
   gap: 0.34rem;
-  color: #b9b0a9;
+  color: hsl(var(--muted-foreground));
 }
 
 .referenceCard :global(.upfor-card__proximity svg) {
-  width: 0.86rem;
-  height: 0.86rem;
-  color: #ff4f86;
+  width: 0.9rem;
+  height: 0.9rem;
+  color: #f22970;
 }
 
 .referenceCard :global(.upfor-card__proof svg) {
-  width: 0.9rem;
-  height: 0.9rem;
-  color: #a77c98;
+  width: 0.92rem;
+  height: 0.92rem;
+  color: #9c648b;
 }
 
+/* Actions sit to the right of the avatar rail, which trims the card vertically
+   and mirrors the supplied reference. Pending/Going reserve less width than
+   the primary View action, so View remains deliberately prominent. */
 .referenceCard :global(.upfor-card__actions) {
-  gap: 0.72rem;
-  margin-top: 0.05rem;
+  gap: 0.58rem;
+  margin-top: 0.02rem;
+  padding-left: 4.33rem;
+  align-items: stretch;
+}
+
+.referenceCard :global(.upfor-card__actions:empty) {
+  display: none;
 }
 
 .referenceCard :global(.upfor-card__action),
 .referenceCard :global(.upfor-card__view),
 .referenceCard :global(.upfor-card__state),
 .referenceCard :global(.upfor-card__status) {
-  min-height: 3rem;
-  padding: 0.6rem 0.92rem;
+  min-height: 2.9rem;
+  padding: 0.58rem 0.88rem;
   border-radius: 0.95rem;
   font-size: 0.88rem;
   font-weight: 720;
 }
 
-.referenceCard :global(.upfor-card__status) {
-  flex: 0 0 auto;
+.referenceCard :global(.upfor-card__status),
+.referenceCard :global(.upfor-card__state) {
+  flex: 0 0 29%;
+  justify-content: center;
 }
 
 .referenceCard :global(.upfor-card__status--going) {
   gap: 0.4rem;
-  border: 1px solid #31583f;
-  background: #182b20;
-  color: #62d58a;
+  border: 1px solid hsl(142 52% 48% / 0.28);
+  background: hsl(142 52% 48% / 0.1);
+  color: hsl(142 58% 38%);
 }
 
 .referenceCard :global(.upfor-card__status-dot) {
@@ -157,25 +193,26 @@
 }
 
 .referenceCard :global(.upfor-card__status--requested) {
-  border: 1px solid #3b3632;
-  background: #26221f;
-  color: #c1b8b0;
+  border: 1px solid hsl(var(--border) / 0.86);
+  background: hsl(var(--muted) / 0.44);
+  color: hsl(var(--muted-foreground));
 }
 
 .referenceCard :global(.upfor-card__action--join) {
-  flex: 0 0 auto;
-  border: 1px solid rgb(232 140 43 / 0.38);
-  background: rgb(232 140 43 / 0.1);
-  color: #f1ae67;
+  flex: 0 0 35%;
+  border: 1px solid hsl(var(--primary) / 0.34);
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
   box-shadow: none;
 }
 
 .referenceCard :global(.upfor-card__view) {
-  flex: 1;
+  min-width: 0;
+  flex: 1 1 auto;
   border: 1px solid var(--color-brand-orange);
   background: var(--color-brand-orange);
-  color: #180c03;
-  box-shadow: none;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgb(232 140 43 / 0.18);
 }
 
 .referenceCard :global(.upfor-card__view:active),
@@ -184,18 +221,19 @@
 }
 
 .referenceCard :global(.upfor-card__state) {
-  border: 1px solid #3b3632;
-  background: #26221f;
-  color: #aaa198;
+  border: 1px solid hsl(var(--border) / 0.86);
+  background: hsl(var(--muted) / 0.44);
+  color: hsl(var(--muted-foreground));
 }
 
 .referenceCard :global(.upfor-card__more) {
-  width: 3rem;
-  height: 3rem;
-  border: 1px solid #3b3632;
+  width: 2.9rem;
+  height: 2.9rem;
+  flex: 0 0 2.9rem;
+  border: 1px solid hsl(var(--border) / 0.92);
   border-radius: 0.95rem;
-  background: transparent;
-  color: #9f958c;
+  background: hsl(var(--card) / 0.9);
+  color: hsl(var(--muted-foreground));
 }
 
 .referenceCard :global(.upfor-card__more svg) {
@@ -205,35 +243,42 @@
 
 .referenceCard :global(.upfor-card__momentum) {
   margin-top: 0.05rem;
-  border: 1px solid rgb(255 255 255 / 0.08);
+  border: 1px solid hsl(var(--border) / 0.78);
   border-radius: 1rem;
-  background: #211e1b;
-  color: #fffaf5;
+  background: hsl(var(--muted) / 0.34);
+  color: hsl(var(--foreground));
 }
 
 .referenceCard :global(.upfor-card__momentum-title) {
-  color: #fffaf5;
+  color: hsl(var(--foreground));
 }
 
 .referenceCard :global(.upfor-card__momentum-body) {
-  color: #a99f97;
+  color: hsl(var(--muted-foreground));
 }
 
 .referenceCard :global(.upfor-card__momentum-cta) {
   background: var(--color-brand-orange);
-  color: #180c03;
+  color: #ffffff;
+}
+
+/* On dark mode the semantic card/foreground/border tokens automatically flip
+   the surface dark. Only the green attendance text needs a brighter dark-theme
+   value; the cream timer intentionally stays light per the approved reference. */
+:global(.dark) .referenceCard :global(.upfor-card__status--going) {
+  color: #62d58a;
 }
 
 @media (max-width: 370px) {
   .referenceCard:global(.upfor-card) {
-    gap: 0.62rem;
-    padding: 0.82rem;
+    gap: 0.6rem;
+    padding: 0.8rem;
     border-radius: 1.25rem;
   }
 
   .referenceCard :global(.upfor-card__portrait > span) {
-    width: 3.1rem;
-    height: 3.1rem;
+    width: 3.08rem;
+    height: 3.08rem;
   }
 
   .referenceCard :global(.upfor-card__activity) {
@@ -246,25 +291,42 @@
   }
 
   .referenceCard :global(.upfor-card__timer) {
-    padding-inline: 0.58rem;
-    font-size: 0.74rem;
+    padding-inline: 0.56rem;
+    font-size: 0.73rem;
+  }
+
+  .referenceCard :global(.upfor-card__message) {
+    margin-left: 3.74rem;
   }
 
   .referenceCard :global(.upfor-card__actions) {
-    gap: 0.55rem;
+    gap: 0.48rem;
+    padding-left: 3.74rem;
   }
 
   .referenceCard :global(.upfor-card__action),
   .referenceCard :global(.upfor-card__view),
   .referenceCard :global(.upfor-card__state),
   .referenceCard :global(.upfor-card__status) {
-    min-height: 2.8rem;
-    padding-inline: 0.72rem;
-    font-size: 0.8rem;
+    min-height: 2.76rem;
+    padding-inline: 0.66rem;
+    font-size: 0.79rem;
+  }
+
+  .referenceCard :global(.upfor-card__status),
+  .referenceCard :global(.upfor-card__state) {
+    flex-basis: 28%;
   }
 
   .referenceCard :global(.upfor-card__more) {
-    width: 2.8rem;
-    height: 2.8rem;
+    width: 2.76rem;
+    height: 2.76rem;
+    flex-basis: 2.76rem;
+  }
+}
+
+@media (max-width: 335px) {
+  .referenceCard :global(.upfor-card__actions) {
+    padding-left: 0;
   }
 }
