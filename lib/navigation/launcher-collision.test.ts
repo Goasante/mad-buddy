@@ -6,19 +6,23 @@ import { showsQuickActions } from "@/lib/navigation/quick-actions";
 /**
  * A floating control must not come to rest on top of a real one.
  *
- * The shell cleared the bottom bar's height but not the Quick Actions pill
- * sitting above it, so the last stretch of every scrolling page ended
- * underneath a fixed element -- a primary CTA could land there and be
- * unreadable, or lose the tap entirely.
+ * The shell reserves the bottom bar's height plus the launcher's own
+ * footprint on every scrolling page that shows the launcher, so the page's
+ * last control never terminates underneath a fixed element. The launcher
+ * itself additionally computes a safe vertical band at runtime (see
+ * quick-actions-launcher.tsx) because, unlike the old fixed bottom-right
+ * pill, it can now rest anywhere along either edge.
  */
 
-const css = readFileSync("app/globals.css", "utf8");
+const globalsCss = readFileSync("app/globals.css", "utf8");
+const replicaCss = readFileSync("app/quick-actions-replica.css", "utf8");
 const shell = stripComments(readFileSync("components/app-shell/app-shell.tsx", "utf8"));
+const component = stripComments(readFileSync("components/app-shell/quick-actions-launcher.tsx", "utf8"));
 
 /** The token block, so an unrelated later rule cannot satisfy these. */
-const tokens = css.slice(css.indexOf("--quick-actions-gap"), css.indexOf(".quick-actions {"));
+const tokens = globalsCss.slice(globalsCss.indexOf("--quick-actions-gap"), globalsCss.indexOf("}", globalsCss.indexOf("--quick-actions-reserve")));
 
-describe("the pill's geometry has one source", () => {
+describe("the pill's reserved footprint has one source", () => {
   it("declares the gap and size as tokens", () => {
     expect(tokens).toContain("--quick-actions-gap");
     expect(tokens).toContain("--quick-actions-size");
@@ -33,19 +37,13 @@ describe("the pill's geometry has one source", () => {
     expect(reserve).toContain("var(--quick-actions-size)");
   });
 
-  it("positions the pill from the tokens too", () => {
-    const block = css.slice(css.indexOf(".quick-actions {"), css.indexOf(".quick-actions-stack"));
-    expect(block).toContain("var(--quick-actions-gap)");
-  });
-
-  it("sizes the trigger from the token the shell reserves", () => {
-    const trigger = css.slice(
-      css.indexOf(".quick-actions-trigger {"),
-      css.indexOf(".quick-actions-trigger:hover")
-    );
-    expect(trigger).toContain("height: var(--quick-actions-size)");
-    // The 44x60 touch target is unchanged by tokenising it.
-    expect(tokens).toContain("--quick-actions-size: 3.75rem");
+  it("the visual stylesheet restates --quick-actions-size, not a second literal", () => {
+    // The replica stylesheet loads after globals.css and legitimately
+    // overrides the token's VALUE (a smaller, quieter control) -- but it must
+    // still go through the same variable app-shell.tsx reserves space from,
+    // not a parallel hardcoded size that could drift from the reservation.
+    expect(replicaCss).toContain("--quick-actions-size:");
+    expect(replicaCss).not.toMatch(/\.quick-actions-trigger\s*{[^}]*width:\s*[\d.]+rem/);
   });
 });
 
@@ -55,16 +53,11 @@ describe("the shell owns the reservation, not the pages", () => {
   });
 
   it("keeps using the shared nav and safe-area tokens", () => {
-    // Never a per-device number: the bar's own height and the device inset.
     expect(shell).toContain("var(--mobile-nav-height)");
     expect(shell).toContain("env(safe-area-inset-bottom,0px)");
   });
 
   it("hard-codes no device dimensions in the reservation", () => {
-    /* Scoped to the padding expressions, and `0px` inside the safe-area
-     * fallback is not a device dimension -- the first version of this flagged
-     * it, which would have forced the shell to write `env()` differently just
-     * to satisfy a test. */
     const main = shell.slice(shell.indexOf('id="app-main-content"'), shell.indexOf("</main>"));
     const padding = main.match(/pb-\[[^\]]+\]/g) ?? [];
     expect(padding.length).toBeGreaterThan(0);
@@ -74,9 +67,6 @@ describe("the shell owns the reservation, not the pages", () => {
   });
 
   it("reserves only where the launcher actually renders", () => {
-    /* Safe Arrival and open conversations exclude the pill deliberately.
-     * Reserving there would leave a dead strip under a page with nothing
-     * floating above it. */
     expect(shell).toContain("showsQuickActions(pathname)");
     expect(shell).toContain("reservesQuickActions");
   });
@@ -88,8 +78,6 @@ describe("the shell owns the reservation, not the pages", () => {
 
 describe("immersive surfaces stay flush", () => {
   it("drops the reservation when the bar and pill step aside", () => {
-    // A dead strip under an open conversation is its own bug.
-    // Immersive keeps its flush padding; the reserve is gated alongside it.
     expect(shell).toContain("!immersive && showsQuickActions(pathname)");
     const main = shell.slice(shell.indexOf('id="app-main-content"'), shell.indexOf("</main>"));
     expect(main).toContain("immersive");
@@ -103,9 +91,6 @@ describe("no screen carries a launcher-specific workaround", () => {
     ["components/activation/first-muddy-card.tsx"],
     ["components/dashboard/dashboard-page.tsx"]
   ])("%s has no pill-avoidance padding", (path) => {
-    /* The collision was noticed on the activation CTA, but it belonged to
-     * every scrolling page. A margin here would have fixed one screen and
-     * left the rest broken. */
     const source = stripComments(readFileSync(path, "utf8"));
     expect(source).not.toContain("quick-actions");
     expect(source).not.toContain("--quick-actions-reserve");
@@ -114,7 +99,6 @@ describe("no screen carries a launcher-specific workaround", () => {
 
 describe("the exclusion rule still holds", () => {
   it("keeps the pill off surfaces that own their lower-right corner", () => {
-    // Safety controls must never be under a floating shortcut.
     expect(showsQuickActions("/safe-arrival")).toBe(false);
     expect(showsQuickActions("/scan")).toBe(false);
     expect(showsQuickActions("/linkr")).toBe(false);
@@ -128,21 +112,27 @@ describe("the exclusion rule still holds", () => {
 });
 
 describe("navigation is untouched", () => {
-  it("keeps the launcher below the bottom bar in the stack", () => {
-    const block = css.slice(css.indexOf(".quick-actions {"), css.indexOf(".quick-actions-stack"));
+  it("keeps the launcher below the bottom bar in the visual stylesheet", () => {
+    const block = replicaCss.slice(replicaCss.indexOf(".quick-actions {"), replicaCss.indexOf(".quick-actions--unpositioned"));
     expect(block).toContain("z-index: 40");
   });
 
-  it("leaves the collapsed control with no hit area", () => {
-    // Collapsed, it must not intercept a tap meant for the page beneath.
-    const listAt = css.indexOf(".quick-actions-list {");
-    const list = css.slice(listAt, css.indexOf(".quick-actions[data-open", listAt));
-    expect(list).toContain("max-height: 0");
-    expect(list).toContain("pointer-events: none");
+  it("the launcher computes its own safe vertical band at runtime", () => {
+    // Unlike the old fixed bottom-right pill, this control can rest anywhere
+    // along either edge, so a static CSS reservation alone cannot keep it off
+    // the nav -- verticalBounds() is what does that job now.
+    expect(component).toContain("function verticalBounds()");
+    expect(component).toContain("--mobile-nav-height");
   });
 
-  it("lets the page stay interactive around the pill", () => {
-    const block = css.slice(css.indexOf(".quick-actions {"), css.indexOf(".quick-actions-stack"));
+  it("only the trigger itself receives pointer events, never its fixed container", () => {
+    // The container spans the whole viewport corner-to-corner conceptually
+    // (top/left are set inline once positioned); only the 44px+ control
+    // inside it should ever intercept a tap.
+    const block = replicaCss.slice(replicaCss.indexOf(".quick-actions {"), replicaCss.indexOf(".quick-actions--unpositioned"));
     expect(block).toContain("pointer-events: none");
+    expect(replicaCss).toContain(".quick-actions-trigger {");
+    const trigger = replicaCss.slice(replicaCss.indexOf(".quick-actions-trigger {"));
+    expect(trigger.slice(0, trigger.indexOf("}"))).toContain("pointer-events: auto");
   });
 });

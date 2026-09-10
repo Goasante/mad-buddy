@@ -61,7 +61,10 @@ describe("client-side storage never holds credentials", () => {
     "completedKey",
     "dismissedKey",
     "shownKey",
-    "storageKey" // the local const the install keys are read through
+    "storageKey", // the local const the install keys are read through
+    // The Quick Actions launcher's remembered edge/vertical position -- never
+    // a raw coordinate, never user-identifying.
+    "STORAGE_KEY"
   ];
 
   it("writes only approved non-sensitive keys to localStorage/sessionStorage", () => {

@@ -8,11 +8,22 @@
   border: 1px solid hsl(var(--border) / 0.55);
   border-radius: 1.35rem;
   padding: 0.75rem 0.95rem 0.75rem 1.05rem;
-  background:
-    radial-gradient(circle at 82% 15%, hsl(var(--primary) / 0.24), transparent 42%),
-    linear-gradient(135deg, hsl(var(--primary) / 0.14), hsl(var(--card)) 48%, hsl(var(--secondary) / 0.72));
+  /* One uniform warm surface. A previous version shifted from --card to
+     --secondary across the card, which reads as two different panels once
+     the photo stack sits on top of the seam. The only variation left is a
+     faint ambient lift centred behind the photos -- present, but never
+     strong enough that the eye can find where it starts or ends. */
+  background: hsl(var(--card));
   box-shadow: 0 16px 44px hsl(var(--foreground) / 0.07);
   isolation: isolate;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 78% 40%, hsl(var(--primary) / 0.1), transparent 65%);
+  z-index: 0;
 }
 
 .hero::after {
@@ -23,9 +34,9 @@
   width: 13rem;
   height: 13rem;
   border-radius: 9999px;
-  background: hsl(var(--primary) / 0.13);
+  background: hsl(var(--primary) / 0.08);
   filter: blur(2px);
-  z-index: -1;
+  z-index: 0;
 }
 
 .heroCopy {
