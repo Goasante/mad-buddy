@@ -170,7 +170,13 @@ export function Modal({
               "flex min-w-0 shrink-0 items-start justify-between gap-3",
               // Floated over the content it is hiding for, so the panel body
               // can run edge-to-edge underneath the close button.
-              hideTitle && "pointer-events-none absolute inset-x-0 top-0 z-10 p-3"
+              hideTitle && "pointer-events-none absolute inset-x-0 top-0 z-10 p-3",
+              // Event Room has its own top-right Share/QR action in the first
+              // row. Put the sheet dismiss control just inside the hero instead
+              // of stacking two independent 44px hit targets on top of each
+              // other. The room header is 44px tall, so top-11 preserves the
+              // same 12px inset once the artwork begins.
+              hideTitle && owner === "EventRoomDetailModal" && "top-11"
             )}
           >
             {/* min-w-0 for the same reason as the body below: without it a long
