@@ -176,9 +176,32 @@ export default async function DashboardPage() {
       })
     : null;
 
+  /* UNKNOWN IS NOT "no_muddies".
+   *
+   * `loadActivationProjection` reports `status: "unavailable"` when the
+   * queries that feed `state` could not be trusted -- a missing service-role
+   * credential, or a failed read for one specific request. Its `state` field
+   * still gets computed in that case (kept for diagnostics), and it would
+   * read as `no_muddies` for the exact same shape a genuine first-day account
+   * produces. Passing that straight through is the defect that suppressed
+   * Near, Trending, Suggestions and the Smart Card together for established
+   * accounts whenever one read hiccuped.
+   *
+   * `activationState: null` is the existing, already-tested meaning of
+   * "activation has nothing to say" (see home-composition.test.ts's
+   * "a returning user keeps their ordinary Home" cases) -- `isEarlyActivation`
+   * returns false for it, so Home falls through to its mature composition
+   * instead of the onboarding-suppression branch. Real evidence-backed fields
+   * (muddyCount, nearby, milestones, maturity counts) are passed through
+   * unchanged either way: `loadActivationProjection` now attempts the
+   * maturity-evidence rescue read even when the muddy count itself failed, so
+   * an established account keeps its established Home whenever any of that
+   * evidence could still be read. */
+  const activationUnavailable = activation?.status === "unavailable";
+
   return (
     <DashboardPageContent
-      activationState={activation?.state ?? null}
+      activationState={activationUnavailable ? null : activation?.state ?? null}
       firstMuddy={activation?.acknowledgeFirstMuddy ? activation.firstMuddy : null}
       firstMuddyNeedsLocation={activation ? !activation.locationGranted : false}
       activationMilestones={activation?.milestones ?? []}

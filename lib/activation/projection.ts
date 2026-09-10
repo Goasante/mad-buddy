@@ -34,6 +34,27 @@ import {
  */
 
 export type ActivationProjection = {
+  /**
+   * Whether this projection reflects a real read, or a failure Home must not
+   * mistake for a real answer.
+   *
+   * THE BUG THIS EXISTS TO PREVENT: `EMPTY` below is bit-for-bit identical to
+   * a genuine brand-new account (no Muddies, no location, nothing). Before
+   * this field existed, a missing service-role credential or a failed query
+   * for one established user produced exactly the shape a real first-day
+   * account produces, and every caller -- `resolveActivationState`,
+   * `composeHome`, the Smart Card arbiter -- had no way to tell the two
+   * apart. They agreed, confidently and wrongly, that the account had never
+   * done anything, and suppressed Near, Trending, Suggestions and the Smart
+   * Card together for people who had been using the product for months.
+   *
+   * "unavailable" means: do not trust `state`, do not trust the zeroed
+   * counts, and do not let this collapse an established account into
+   * onboarding. Callers that receive "unavailable" should treat activation
+   * as having nothing to say (i.e. behave as they already do for
+   * `state: null`) rather than as having confirmed a fresh account.
+   */
+  status: "ok" | "unavailable";
   state: ActivationState;
   teachGlow: boolean;
   muddyCount: number;
@@ -85,9 +106,14 @@ export type ActivationProjection = {
   relationshipFocus: RelationshipFocus | null;
 };
 
-/** Everything absent, for a logged-out or misconfigured read. Fails to the
- *  state that blocks nothing and asks for the least. */
+/** Everything absent, for a misconfigured read (see `loadActivationProjection`
+ *  -- the only caller, and it is only ever invoked for a signed-in user, so
+ *  this path means the service-role credential is missing, never "logged
+ *  out"). Fails to the state that blocks nothing and asks for the least, but
+ *  `status: "unavailable"` so a caller does not mistake this shape for a real
+ *  brand-new account -- see the comment on `status` above. */
 const EMPTY: ActivationProjection = {
+  status: "unavailable",
   state: "no_muddies",
   teachGlow: false,
   muddyCount: 0,
@@ -332,14 +358,27 @@ export async function loadActivationProjection(userId: string): Promise<Activati
 
   const admin = createSupabaseAdminClient();
 
+  /* NEARBY IS ALLOWED TO FAIL WITHOUT TAKING THE REST DOWN.
+   *
+   * `loadNearbyForUser` does not surface `.error` itself (see that module),
+   * so a thrown rejection here is the one way it can fail loudly. Caught
+   * separately from the batched reads below so a nearby outage cannot be
+   * mistaken for "everything failed" -- the muddy count, milestones and
+   * maturity evidence may all have loaded fine even when this one did not. */
+  let nearbyFailed = false;
+  const nearbyPromise = loadNearbyForUser(admin, userId).catch(() => {
+    nearbyFailed = true;
+    return [] as SafeNearbyFriend[];
+  });
+
   const [
-    { count: muddyCount },
+    muddyResult,
     { data: milestoneRows },
     { data: profile },
     { count: pendingOutgoingCount },
     { data: viewerLocation },
     nearby,
-    { count: planCount }
+    planResult
   ] = await Promise.all([
       /* Live friendships only, counted the way listMuddies counts them.
        *
@@ -369,13 +408,30 @@ export async function loadActivationProjection(userId: string): Promise<Activati
         .eq("status", "pending"),
       // The viewer's own fix, from the same table the proximity service reads.
       admin.from("user_locations").select("last_updated").eq("user_id", userId).maybeSingle(),
-      loadNearbyForUser(admin, userId),
+      nearbyPromise,
       admin
         .from("plan_participants")
         .select("plan_id", { count: "exact", head: true })
         .eq("user_id", userId)
         .in("rsvp_status", ["going", "maybe", "invited"])
     ]);
+
+  /* THE BUG THIS BLOCK CLOSES.
+   *
+   * `{ count } = await query` never throws on a Postgrest failure -- the
+   * client resolves with `{ data: null, count: null, error }` -- so the old
+   * code's `count ?? 0` turned a permission error, a dropped connection or a
+   * misconfigured credential into the exact same zero a genuinely new account
+   * produces. `resolveActivationState` cannot tell "this person has zero
+   * Muddies" from "the read failed" unless something upstream checks `.error`
+   * first, so this is that check. Only the query that feeds
+   * `resolveActivationState`'s very first branch (muddyCount) and the one
+   * `Plans` depends on are load-bearing enough to flip `status` -- a failure
+   * on, say, the pending-request count degrades one nudge, not the whole
+   * screen, so it is left to its existing soft `?? 0` default. */
+  const projectionFailed = Boolean(muddyResult.error) || Boolean(planResult.error) || nearbyFailed;
+  const muddyCount = muddyResult.count;
+  const planCount = planResult.count;
 
   /* Location is judged by EVIDENCE, not by a stored intention.
    *
@@ -445,16 +501,23 @@ export async function loadActivationProjection(userId: string): Promise<Activati
   const relationshipFocus =
     (muddyCount ?? 0) > 0 ? await loadRelationshipFocus(admin, userId) : null;
 
-  /* MATURITY EVIDENCE, loaded whenever there is a Muddy at all.
+  /* MATURITY EVIDENCE, loaded whenever there is a Muddy at all -- OR whenever
+   * the muddy count itself is the thing that failed to load.
+   *
+   * `(muddyCount ?? 0) > 0` alone re-creates the bug this file exists to fix:
+   * a failed friendships query makes `muddyCount` null, `null ?? 0` is 0, and
+   * an established account with real Plans and replied conversations would
+   * skip the one lookup that could still have proven it. Attempting maturity
+   * evidence whenever the count is unusable costs one extra pair of cheap
+   * reads on a failure that should already be rare, and it is the difference
+   * between "we don't know, so protect them" and "we don't know, so treat
+   * them as new".
    *
    * Not folded into loadRelationshipFocus: that only runs on the quiet-evening
    * Home, and Home needs to know how experienced somebody is on every screen --
    * including the one where a Muddy is actually nearby. */
-  /* Maturity evidence and unread run TOGETHER, and only when there is somebody
-   * to have a conversation with. Home pays for neither on an account with no
-   * Muddies, where both answers are known to be zero. */
   const [maturity, unreadConversationCount] =
-    (muddyCount ?? 0) > 0
+    (muddyCount ?? 0) > 0 || muddyResult.error
       ? await Promise.all([
           loadMaturityEvidence(admin, userId),
           /* The CANONICAL count (MB-GOD-052), not a second definition. It reads
@@ -478,6 +541,13 @@ export async function loadActivationProjection(userId: string): Promise<Activati
   };
 
   return {
+    /* "unavailable" when muddyCount, upcoming-plan count or nearby could not
+     * be established. `state` below is still computed for diagnostic value
+     * and for callers that only care about the ordinary path, but a caller
+     * that respects `status` (Home's own page does) must not treat `state`
+     * as a confirmed answer while this is "unavailable" -- see the big
+     * comment on `status` above and on `EMPTY`. */
+    status: projectionFailed ? "unavailable" : "ok",
     state: resolveActivationState(inputs),
     teachGlow: shouldTeachGlow(inputs),
     muddyCount: inputs.muddyCount,

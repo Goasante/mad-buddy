@@ -439,3 +439,79 @@ describe("unread suppresses setup, and nothing else", () => {
     expect(waiting.showProfileReminder).toBe(false);
   });
 });
+
+describe("REGRESSION: an activation read failure must not read as no_muddies", () => {
+  /* THE INCIDENT. `lib/activation/projection.ts#loadActivationProjection`
+   * returns `status: "unavailable"` when the queries that feed `state`
+   * could not be trusted. `app/(app)/dashboard/page.tsx` maps that to
+   * `activationState: null` before it ever reaches this module -- the same
+   * value the "returning user keeps their ordinary Home" tests above already
+   * prove opens Home fully. This block asserts the failure-shaped input
+   * (an established account, `activationState: null`, real historical
+   * evidence still attached) produces exactly the mature Home a working
+   * projection would have produced, so the page-level mapping has something
+   * concrete to be correct against. */
+  const establishedAfterFailedRead: HomeCompositionInputs = at({
+    // What page.tsx now passes instead of the raw (and wrong) "no_muddies".
+    activationState: null,
+    muddyCount: 4,
+    milestones: new Set(["first_muddy_added", "first_message_sent", "first_plan_created"]),
+    twoSidedConversationCount: 1,
+    planParticipationCount: 2,
+    upcomingPlanCount: 1
+  });
+
+  it("does not collapse into the early-activation branch", () => {
+    expect(isEarlyActivation(establishedAfterFailedRead)).toBe(false);
+  });
+
+  it("keeps Near, Trending, Suggestions and the Journey card all visible together", () => {
+    const home = composeHome(establishedAfterFailedRead);
+    expect(home.showNearby).toBe(true);
+    expect(home.showTrending).toBe(true);
+    expect(home.showSuggestions).toBe(true);
+    expect(home.showJourneyCard).toBe(true);
+    expect(home.showMoments).toBe(true);
+  });
+
+  it("is indistinguishable from the same account on a successful read that happened to be no_one_nearby's sibling state", () => {
+    /* Not a claim that null and every real state render identically -- Near's
+     * empty-state copy differs -- but the SET of modules that render must
+     * match, because both represent "this account has plenty of history and
+     * nothing here should be suppressed for activation reasons". */
+    const failedRead = composeHome(establishedAfterFailedRead);
+    const workingRead = composeHome({ ...establishedAfterFailedRead, activationState: "muddy_nearby" });
+    expect(failedRead.showTrending).toBe(workingRead.showTrending);
+    expect(failedRead.showSuggestions).toBe(workingRead.showSuggestions);
+    expect(failedRead.showMoments).toBe(workingRead.showMoments);
+  });
+
+  it("contrasts with what the OLD behaviour actually produced, to prove this is a real regression test", () => {
+    /* The literal old defect was not "state leaks through as no_muddies while
+     * milestones stay intact" -- `EMPTY` in projection.ts zeroes EVERYTHING
+     * together: no milestones, no muddyCount, no maturity evidence, because
+     * the whole projection came from the same failed/misconfigured read.
+     * `page.tsx` used to pass that shape straight through as
+     * `activation?.state ?? null`, i.e. exactly `hadTheBugSurvived` below --
+     * an established account's REAL evidence (milestones, maturity counts)
+     * never reached this module at all, because the same failure that broke
+     * `state` also zeroed the fields `isEarlyActivation` reads. */
+    const zeroedByTheOldBug = at({ activationState: "no_muddies", muddyCount: 0, milestones: new Set() });
+    expect(isEarlyActivation(zeroedByTheOldBug)).toBe(true);
+    const hadTheBugSurvived = composeHome(zeroedByTheOldBug);
+    expect(hadTheBugSurvived.showNearby).toBe(false);
+    expect(hadTheBugSurvived.showTrending).toBe(false);
+    expect(hadTheBugSurvived.showSuggestions).toBe(false);
+
+    /* The fix: `loadActivationProjection` now attempts the maturity-evidence
+     * rescue read even when the muddy-count query fails (see projection.ts),
+     * and `page.tsx` maps `status: "unavailable"` to `activationState: null`
+     * instead of forwarding the failed read's `state`. So the SAME account,
+     * correctly handled, keeps its real milestones and evidence and reaches
+     * the composition asserted above -- not the suppressed one here. */
+    const fixed = composeHome(establishedAfterFailedRead);
+    expect(fixed.showNearby).not.toBe(hadTheBugSurvived.showNearby);
+    expect(fixed.showTrending).not.toBe(hadTheBugSurvived.showTrending);
+    expect(fixed.showSuggestions).not.toBe(hadTheBugSurvived.showSuggestions);
+  });
+});

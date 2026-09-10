@@ -47,6 +47,24 @@ describe("the server hands over the people, not a number", () => {
     expect(route).toContain("serverNearby={activation?.nearby ?? []}");
   });
 
+  /* REGRESSION (Home content disappearance incident): a failed or
+   * misconfigured activation read must never reach Home as `no_muddies`.
+   *
+   * `serverNearby` above is passed through unconditionally -- correct, and
+   * unaffected by the incident -- but `activationState` used to be
+   * `activation?.state ?? null`, which forwarded projection.ts's `EMPTY`
+   * fallback's `state: "no_muddies"` whenever the projection failed. That
+   * state alone was enough for composeHome's early-activation branch to hide
+   * Near, Trending, Suggestions, the Journey card and Moments together --
+   * discarding whatever `serverNearby` had already correctly resolved. */
+  it("never forwards an unavailable projection's state as a real answer", () => {
+    const route = stripComments(readFileSync("app/(app)/dashboard/page.tsx", "utf8"));
+    expect(route).toContain('activation?.status === "unavailable"');
+    expect(route).toContain("activationState={activationUnavailable ? null : activation?.state ?? null}");
+    // The literal old line must be gone, not merely joined by a new one.
+    expect(route).not.toContain("activationState={activation?.state ?? null}");
+  });
+
   it("adds no location precision to the browser", () => {
     /* The same safe shape the nearby route returns: bands, never coordinates.
      * The client type is the contract. */
