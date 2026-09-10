@@ -1,8 +1,9 @@
 "use client";
 
 import { memo } from "react";
-import { Clock3, Loader2, MapPin, Users } from "lucide-react";
+import { CheckCircle2, Clock3, Loader2, MapPin, MoreHorizontal, Users } from "lucide-react";
 import { UpForActivityIcon } from "@/components/hangout/upfor-activity-icon";
+import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -93,6 +94,22 @@ export const UpForCard = memo(function UpForCard({
   const busy = responseState === "pending";
   const expired = Date.parse(upfor.endsAt) <= nowMs;
 
+  // The overflow menu only ever holds one destructive item: whichever of
+  // "Leave" or "Cancel request" matches the viewer's actual response. It
+  // exists so the Accepted/Pending pill can stay a plain status readout
+  // instead of doubling as the withdraw control.
+  const withdrawMenuItems: AppMenuItem[] = joined
+    ? [
+        {
+          id: "withdraw",
+          label: accepted ? "Leave" : "Cancel request",
+          destructive: true,
+          disabled: busy,
+          onSelect: () => onWithdraw(upfor.id)
+        }
+      ]
+    : [];
+
   return (
     <article
       className={cn("upfor-card", `upfor-card--${momentum}`)}
@@ -101,39 +118,43 @@ export const UpForCard = memo(function UpForCard({
       data-momentum={momentum}
       data-owner={isOwner ? "self" : "other"}
     >
-      <div className="upfor-card__portrait">
-        <UserAvatar name={upfor.ownerName} src={upfor.ownerAvatarUrl} size="md" />
-        {expired ? null : <span className="upfor-card__presence" aria-label="Active UpFor" />}
-      </div>
-
-      <div className="upfor-card__content">
-        <p className="upfor-card__owner">{isOwner ? "Your UpFor" : upfor.ownerName}</p>
-        <h3 className="upfor-card__activity">
-          <UpForActivityIcon activity={upfor.activityType} className="upfor-card__activity-icon" />
-          <span>{upForTitle(upfor.activityType)}</span>
-        </h3>
-
-        {upfor.message ? <p className="upfor-card__message">{upfor.message}</p> : null}
-
-        <div className="upfor-card__meta">
-          {proximity ? (
-            <span className="upfor-card__proximity">
-              <MapPin aria-hidden /> {proximity}
-            </span>
-          ) : null}
-          {proof.label ? (
-            <span className="upfor-card__proof">
-              <Users aria-hidden /> {proof.label}
-            </span>
-          ) : null}
+      <div className="upfor-card__head">
+        <div className="upfor-card__portrait">
+          <UserAvatar name={upfor.ownerName} src={upfor.ownerAvatarUrl} size="md" />
+          {expired ? null : <span className="upfor-card__presence" aria-label="Active UpFor" />}
         </div>
-      </div>
 
-      <div className="upfor-card__rail">
+        <div className="upfor-card__content">
+          <p className="upfor-card__owner">{isOwner ? "Your UpFor" : upfor.ownerName}</p>
+          <h3 className="upfor-card__activity">
+            <UpForActivityIcon activity={upfor.activityType} className="upfor-card__activity-icon" />
+            <span>{upForTitle(upfor.activityType)}</span>
+          </h3>
+        </div>
+
+        {/* The timer is a corner badge on the card as a whole, not a rail
+            item -- it is a fact about the UpFor, not an action on it. */}
         <p className={cn("upfor-card__timer", !timeLabel && "is-ended")}>
           <Clock3 aria-hidden /> {timeLabel ?? "Ended"}
         </p>
+      </div>
 
+      {upfor.message ? <p className="upfor-card__message">{upfor.message}</p> : null}
+
+      <div className="upfor-card__meta">
+        {proximity ? (
+          <span className="upfor-card__proximity">
+            <MapPin aria-hidden /> {proximity}
+          </span>
+        ) : null}
+        {proof.label ? (
+          <span className="upfor-card__proof">
+            <Users aria-hidden /> {proof.label}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="upfor-card__actions">
         {isOwner ? null : expired ? (
           <span className="upfor-card__state">Closed</span>
         ) : declined ? (
@@ -141,29 +162,16 @@ export const UpForCard = memo(function UpForCard({
              fell back to "I'm in", inviting the person to ask again and be
              declined again. */
           <span className="upfor-card__state">Not this time</span>
-        ) : joined ? (
-            <div className="upfor-card__decision">
-              {/* THE WAITING STATE, NAMED.
-                  "Interested" is the action; Pending is what the person is in
-                  afterwards. Previously the card showed only "Cancel request",
-                  so a submitted answer looked identical to no answer and the
-                  user could not tell an accepted request from a waiting one. */}
-              <span
-                className="upfor-card__state"
-                data-request-state={accepted ? "accepted" : "pending"}
-              >
-                {accepted ? "Accepted" : "Pending"}
-              </span>
-              <button
-                type="button"
-                className="upfor-card__action upfor-card__action--joined"
-                onClick={() => onWithdraw(upfor.id)}
-                disabled={busy}
-              >
-                {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-                {accepted ? "Leave" : "Cancel request"}
-              </button>
-            </div>
+        ) : accepted ? (
+          <span className="upfor-card__status upfor-card__status--going">
+            <CheckCircle2 aria-hidden /> Accepted
+          </span>
+        ) : requested ? (
+          /* THE WAITING STATE, NAMED.
+             "Interested" is the action; Pending is what the person is in
+             afterwards -- distinct from no answer at all, or the card looks
+             identical whether a request went through or was never sent. */
+          <span className="upfor-card__status upfor-card__status--requested">Pending</span>
         ) : (
           <button
             type="button"
@@ -176,15 +184,38 @@ export const UpForCard = memo(function UpForCard({
           </button>
         )}
 
-        <button
-          type="button"
-          className="upfor-card__view"
-          onClick={() => onOpen?.(upfor.id)}
-          disabled={!onOpen}
-          aria-label={`View ${upForTitle(upfor.activityType)} from ${upfor.ownerName}`}
-        >
-          View
-        </button>
+        {isOwner || expired ? null : (
+          <button
+            type="button"
+            className="upfor-card__view"
+            onClick={() => onOpen?.(upfor.id)}
+            disabled={!onOpen}
+            aria-label={`View ${upForTitle(upfor.activityType)} from ${upfor.ownerName}`}
+          >
+            View
+          </button>
+        )}
+
+        {/* Withdrawing lives behind the overflow menu once there is a status
+            pill to protect: a status readout that is ALSO the leave button
+            reads as "tap your own attendance to cancel it", which is the
+            wrong affordance for the common case of just checking in. */}
+        {!isOwner && !expired && joined ? (
+          <AppMenu
+            label={accepted ? "Accepted options" : "Request options"}
+            trigger={
+              <button
+                type="button"
+                className="upfor-card__more"
+                aria-label={accepted ? "More options for this UpFor" : "More options for this request"}
+                disabled={busy}
+              >
+                <MoreHorizontal aria-hidden />
+              </button>
+            }
+            items={withdrawMenuItems}
+          />
+        ) : null}
       </div>
 
       {offerPlan && onCreatePlan ? (
