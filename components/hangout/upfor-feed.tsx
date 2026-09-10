@@ -120,15 +120,48 @@ export function UpForFeed({
   return (
     <section className="upfor-feed" aria-label="UpFor">
       <div className={styles.hero}>
-        <Image
-          src="/illustrations/upfor/good-people-great-plans.jpg"
-          alt="Good people. Great plans. Discover hangouts, meetups and chill sessions on Mad Buddy."
-          width={1200}
-          height={675}
-          priority
-          sizes="(max-width: 640px) 100vw, 560px"
-          className={styles.heroImage}
-        />
+        <div className={styles.heroCopy}>
+          <span className={styles.heroKicker}>RIGHT NOW</span>
+          <h2 className={styles.heroTitle}>
+            Good people.
+            <br />
+            Great plans.
+          </h2>
+          <p className={styles.heroText}>See what&apos;s happening, join in, or start something.</p>
+        </div>
+
+        <div className={styles.heroGallery} aria-hidden="true">
+          <span className={`${styles.heroTile} ${styles.heroTileBack}`}>
+            <Image
+              src="/visuals/activities/beach.jpg"
+              alt=""
+              fill
+              priority
+              sizes="110px"
+              className={styles.heroTileImage}
+            />
+          </span>
+          <span className={`${styles.heroTile} ${styles.heroTileMiddle}`}>
+            <Image
+              src="/visuals/activities/football.jpg"
+              alt=""
+              fill
+              priority
+              sizes="110px"
+              className={styles.heroTileImage}
+            />
+          </span>
+          <span className={`${styles.heroTile} ${styles.heroTileFront}`}>
+            <Image
+              src="/visuals/activities/dinner.jpg"
+              alt=""
+              fill
+              priority
+              sizes="120px"
+              className={styles.heroTileImage}
+            />
+          </span>
+        </div>
       </div>
 
       <UpForTabs active={mode} onChange={setMode} counts={counts} />
