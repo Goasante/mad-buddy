@@ -3,9 +3,10 @@
 import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
 import { Users } from "lucide-react";
+import { UpForActivityIcon } from "@/components/hangout/upfor-activity-icon";
 import { filterForMode, rankForYou, type UpForMode } from "@/lib/social/upfor-feed";
-import { upForGoingLabel, upForTitle } from "@/lib/social/upfor";
-import type { HangoutActivityType } from "@/lib/supabase/database.types";
+import { UPFOR_QUICK_IDEAS, upForGoingLabel, upForTitle } from "@/lib/social/upfor";
+import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
 import { UpForCard, type UpForCardModel } from "@/components/hangout/upfor-card";
 import {
   UpForEmptyState,
@@ -14,6 +15,7 @@ import {
   UpForTabs
 } from "@/components/hangout/upfor-feed-parts";
 import styles from "@/components/hangout/upfor-revamp.module.css";
+import imageStyles from "@/components/hangout/upfor-image-hardening.module.css";
 
 /**
  * UpFor is an activity-discovery surface, not a second Plans page.
@@ -47,22 +49,23 @@ export type UpForFeedProps = {
   onStart?: () => void;
 };
 
-/** Curated Mad Buddy artwork for UpFor categories. User-uploaded media can
- * replace this later; these are deterministic, local fallbacks today. */
-const ACTIVITY_ART: Partial<Record<HangoutActivityType, string>> = {
-  anything: "/visuals/activities/party.jpg",
-  food: "/visuals/activities/dinner.jpg",
-  study: "/visuals/activities/coffee.jpg",
-  sports: "/visuals/activities/football.jpg",
-  gym: "/visuals/activities/football.jpg",
-  walk: "/visuals/activities/picnic.jpg",
-  gaming: "/visuals/activities/movie.jpg",
-  chill: "/visuals/activities/beach.jpg"
-};
+/**
+ * Quick Ideas is still rendered by the parent page, but its photography is
+ * resolved here from the same semantic authority as Popular right now. The
+ * generated nth-child selectors are presentation plumbing only: the IMAGE is
+ * chosen by `idea.id`, so reordering UPFOR_QUICK_IDEAS cannot silently remap
+ * Study to coffee or Gaming to movie again.
+ */
+const QUICK_IDEA_ARTWORK_CSS = UPFOR_QUICK_IDEAS.map((idea, index) => {
+  const selector = `.upfor-page:has([data-upfor-image-hardening]) .upfor-ideas > li:nth-child(${index + 1}) .upfor-idea`;
+  const artwork = resolveUpForActivityArtwork(idea.id);
 
-function activityArtwork(activity: HangoutActivityType): string {
-  return ACTIVITY_ART[activity] ?? "/visuals/activities/party.jpg";
-}
+  if (artwork) {
+    return `${selector}{background-image:url("${artwork.asset.path}")!important;background-position:${artwork.objectPosition}!important}${selector} .upfor-idea-emoji{display:none!important}`;
+  }
+
+  return `${selector}{background-image:radial-gradient(circle at 72% 20%,rgb(232 140 43 / .34),transparent 42%),linear-gradient(145deg,#4e0401 0%,#24110d 58%,#120b09 100%)!important;background-position:center!important}${selector} .upfor-idea-emoji{display:grid!important}`;
+}).join("\n");
 
 export function UpForFeed({
   items,
@@ -118,7 +121,13 @@ export function UpForFeed({
   );
 
   return (
-    <section className="upfor-feed" aria-label="UpFor">
+    <section
+      className={`upfor-feed ${imageStyles.scope}`}
+      aria-label="UpFor"
+      data-upfor-image-hardening
+    >
+      <style>{QUICK_IDEA_ARTWORK_CSS}</style>
+
       <div className={styles.hero}>
         <div className={styles.heroCopy}>
           <span className={styles.heroKicker}>RIGHT NOW</span>
@@ -138,7 +147,7 @@ export function UpForFeed({
               fill
               priority
               sizes="110px"
-              className={styles.heroTileImage}
+              className={`${styles.heroTileImage} ${imageStyles.bleedImage}`}
             />
           </span>
           <span className={`${styles.heroTile} ${styles.heroTileMiddle}`}>
@@ -148,7 +157,7 @@ export function UpForFeed({
               fill
               priority
               sizes="110px"
-              className={styles.heroTileImage}
+              className={`${styles.heroTileImage} ${imageStyles.bleedImage}`}
             />
           </span>
           <span className={`${styles.heroTile} ${styles.heroTileFront}`}>
@@ -158,7 +167,7 @@ export function UpForFeed({
               fill
               priority
               sizes="120px"
-              className={styles.heroTileImage}
+              className={`${styles.heroTileImage} ${imageStyles.bleedImage}`}
             />
           </span>
         </div>
@@ -214,22 +223,30 @@ export function UpForFeed({
               <div className={styles.popularRail}>
                 {popular.map((item) => {
                   const going = upForGoingLabel(item.goingCount);
+                  const artwork = resolveUpForActivityArtwork(item.activityType);
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      className={styles.popularCard}
+                      className={`${styles.popularCard} ${imageStyles.imageCard}`}
                       onClick={() => onOpen?.(item.id)}
                       disabled={!onOpen}
                       aria-label={`View ${upForTitle(item.activityType)} from ${item.ownerName}`}
                     >
-                      <Image
-                        src={activityArtwork(item.activityType)}
-                        alt=""
-                        fill
-                        sizes="168px"
-                        className={styles.popularImage}
-                      />
+                      {artwork ? (
+                        <Image
+                          src={artwork.asset.path}
+                          alt=""
+                          fill
+                          sizes="168px"
+                          className={`${styles.popularImage} ${imageStyles.bleedImage}`}
+                          style={{ objectPosition: artwork.objectPosition }}
+                        />
+                      ) : (
+                        <span className={imageStyles.fallback} aria-hidden="true">
+                          <UpForActivityIcon activity={item.activityType} />
+                        </span>
+                      )}
                       <span className={styles.popularScrim} aria-hidden="true" />
                       <span className={styles.popularContent}>
                         <span className={styles.popularTitle}>{upForTitle(item.activityType)}</span>
