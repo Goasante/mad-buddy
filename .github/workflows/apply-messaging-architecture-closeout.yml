@@ -1,0 +1,495 @@
+name: Apply messaging architecture closeout
+
+on:
+  push:
+    branches: [fix/messaging-architecture-closeout]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/messaging-architecture-closeout
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply targeted messaging fixes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match in {path}, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          mobile = "lib/messaging/mobile.ts"
+          replace_once(
+              mobile,
+              'import { z } from "zod";\n',
+              'import { after } from "next/server";\nimport { z } from "zod";\n',
+              "mobile after import"
+          )
+
+          old_send_tail = '''  await admin
+            .from("conversations")
+            .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq("id", parsed.data.conversationId);
+
+          /* Speaking in a chat you hid brings it back for you.
+           *
+           * The reappearance rule (last_user_message_at > hidden_at) already covers
+           * the RECIPIENTS of this message. It does not cover the sender, whose
+           * hidden_at is newer than every message that existed when they hid it --
+           * without this, you could message someone and still not see the
+           * conversation in your own inbox. Scoped to the sender's row only. */
+          await admin
+            .from("conversation_members")
+            .update({ hidden_at: null, updated_at: new Date().toISOString() })
+            .eq("conversation_id", parsed.data.conversationId)
+            .eq("user_id", userId)
+            .not("hidden_at", "is", null);
+
+          /* Mentions are stored only now, against a message that definitely exists,
+           * so a failed send can never leave orphan rows. persistMentions re-checks
+           * every id against current joined membership and returns the ones it kept,
+           * which is exactly the set the notification step marks -- one source of
+           * truth for "who was mentioned". */
+          const mentionedUserIds = await persistMentions(
+            admin,
+            parsed.data.conversationId,
+            message.id,
+            userId,
+            parsed.data.mentionUserIds ?? []
+          );
+
+          await notifyOtherMembers(
+            admin,
+            parsed.data.conversationId,
+            userId,
+            messagePreviewText(messageType, parsed.data.text) ?? "",
+            mentionedUserIds
+          );
+
+          await recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId);
+
+          return { ok: true, message: "Sent.", messageId: message.id };
+          }
+'''
+          new_send_tail = '''  /* The message row is durable now. Keep only state that must be coherent before
+           * acknowledgement on the critical path, and do those independent writes in
+           * parallel. A normal text with no mentions therefore pays one parallel
+           * metadata round instead of three serial rounds. */
+          const [mentionedUserIds] = await Promise.all([
+            persistMentions(
+              admin,
+              parsed.data.conversationId,
+              message.id,
+              userId,
+              parsed.data.mentionUserIds ?? []
+            ),
+            admin
+              .from("conversations")
+              .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+              .eq("id", parsed.data.conversationId),
+            admin
+              .from("conversation_members")
+              .update({ hidden_at: null, updated_at: new Date().toISOString() })
+              .eq("conversation_id", parsed.data.conversationId)
+              .eq("user_id", userId)
+              .not("hidden_at", "is", null)
+          ]);
+
+          /* Notification fan-out and activation bookkeeping are not evidence that
+           * the message was accepted -- the INSERT above is. Running them after the
+           * response keeps push/analytics failures from holding the sender in a
+           * fake "sending" state. Next's after() keeps this work attached to the
+           * request lifecycle instead of abandoning an un-awaited promise when a
+           * serverless invocation returns. */
+          await scheduleAfterMessageAcknowledgement(async () => {
+            await Promise.allSettled([
+              notifyOtherMembers(
+                admin,
+                parsed.data.conversationId,
+                userId,
+                messagePreviewText(messageType, parsed.data.text) ?? "",
+                mentionedUserIds
+              ),
+              recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId)
+            ]);
+          });
+
+          return { ok: true, message: "Sent.", messageId: message.id };
+          }
+
+          /**
+           * Registers post-send work with Next's request lifecycle. Unit/integration
+           * harnesses can invoke sendMessage outside a Next request; in that case we
+           * await the same work so tests remain deterministic and no behavior is
+           * silently dropped.
+           */
+          async function scheduleAfterMessageAcknowledgement(task: () => Promise<void>): Promise<void> {
+            try {
+              after(async () => {
+                try {
+                  await task();
+                } catch {
+                  console.warn("[messaging] post-send side effect failed");
+                }
+              });
+            } catch {
+              try {
+                await task();
+              } catch {
+                console.warn("[messaging] post-send side effect failed");
+              }
+            }
+          }
+'''
+          replace_once(mobile, old_send_tail, new_send_tail, "send acknowledgement tail")
+
+          replace_once(
+              mobile,
+              '  options: { limit?: number; messageId?: string; clientMessageId?: string } = {}\n',
+              '  options: { limit?: number; messageId?: string; clientMessageId?: string; before?: { createdAt: string; id: string } } = {}\n',
+              "cursor options"
+          )
+          replace_once(
+              mobile,
+              '  if (options.clientMessageId && (options.clientMessageId.length < 1 || options.clientMessageId.length > 64)) return [];\n\n  const admin = createSupabaseAdminClient();\n',
+              '  if (options.clientMessageId && (options.clientMessageId.length < 1 || options.clientMessageId.length > 64)) return [];\n  if (options.before && (!uuidSchema.safeParse(options.before.id).success || !Number.isFinite(Date.parse(options.before.createdAt)))) return [];\n\n  const admin = createSupabaseAdminClient();\n',
+              "cursor validation"
+          )
+          old_query = '''  const { data: messages } = options.messageId
+            ? await baseQuery.eq("id", options.messageId).limit(1)
+            : options.clientMessageId
+              ? await baseQuery
+                  .eq("sender_id", userId)
+                  .eq("client_message_id", options.clientMessageId)
+                  .limit(1)
+            : await baseQuery
+                .order("created_at", { ascending: false })
+                .order("id", { ascending: false })
+                .limit(pageLimit);
+'''
+          new_query = '''  let historyQuery = baseQuery
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .limit(pageLimit);
+          if (options.before) {
+            /* Stable keyset pagination. created_at is the primary ordering key and
+             * id breaks timestamp ties, so inserting new messages while somebody is
+             * reading old history cannot shift or duplicate the next page. */
+            historyQuery = historyQuery.or(
+              `created_at.lt.${options.before.createdAt},and(created_at.eq.${options.before.createdAt},id.lt.${options.before.id})`
+            );
+          }
+          const { data: messages } = options.messageId
+            ? await baseQuery.eq("id", options.messageId).limit(1)
+            : options.clientMessageId
+              ? await baseQuery
+                  .eq("sender_id", userId)
+                  .eq("client_message_id", options.clientMessageId)
+                  .limit(1)
+              : await historyQuery;
+'''
+          replace_once(mobile, old_query, new_query, "cursor query")
+
+          actions = "app/(app)/messaging-actions.ts"
+          anchor = '''export async function getRecentMessagesAction(conversationId: string): Promise<ChatMessageView[]> {
+            const userId = await getMessagingIdentityId();
+            if (!userId) return [];
+
+            return listMessages(userId, conversationId, { limit: PROACTIVE_WARM_MESSAGE_LIMIT });
+          }
+'''
+          older = anchor + '''
+          const OLDER_MESSAGE_PAGE_SIZE = 40;
+
+          /** Keyset-paginated history used only when the reader scrolls upward. */
+          export async function getOlderMessagesAction(
+            conversationId: string,
+            before: { createdAt: string; id: string }
+          ): Promise<{ messages: ChatMessageView[]; hasMore: boolean }> {
+            const userId = await getMessagingIdentityId();
+            if (!userId) return { messages: [], hasMore: false };
+
+            const rows = await listMessages(userId, conversationId, {
+              limit: OLDER_MESSAGE_PAGE_SIZE + 1,
+              before
+            });
+            const hasMore = rows.length > OLDER_MESSAGE_PAGE_SIZE;
+            return {
+              messages: hasMore ? rows.slice(1) : rows,
+              hasMore
+            };
+          }
+'''
+          replace_once(actions, anchor, older, "older messages action")
+
+          page = "components/messages/messages-page-v4.tsx"
+          replace_once(
+              page,
+              '  getMessageableFriendsAction,\n  getMessagesAction,\n',
+              '  getMessageableFriendsAction,\n  getMessagesAction,\n  getOlderMessagesAction,\n',
+              "older action import"
+          )
+          replace_once(
+              page,
+              'import { selectWarmConversations, shouldRefreshWarmThread } from "@/lib/messaging/thread-warmup";\n',
+              'import { PROACTIVE_WARM_MESSAGE_LIMIT, selectWarmConversations, shouldRefreshWarmThread } from "@/lib/messaging/thread-warmup";\n',
+              "warm limit import"
+          )
+          replace_once(
+              page,
+              '  const [loadingMessages, setLoadingMessages] = useState(false);\n',
+              '  const [loadingMessages, setLoadingMessages] = useState(false);\n  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);\n  const [hasOlderMessages, setHasOlderMessages] = useState(false);\n',
+              "pagination state"
+          )
+          replace_once(
+              page,
+              '    setLoadingMessages(!hasCachedThread);\n    setFeedback("");\n',
+              '    setLoadingMessages(!hasCachedThread);\n    setLoadingOlderMessages(false);\n    setHasOlderMessages(false);\n    setFeedback("");\n',
+              "pagination reset"
+          )
+          replace_once(
+              page,
+              '      const loaded = await withTimeout(getMessagesAction(conversationId), { operation: "load conversation" });\n',
+              '      const loaded = await withTimeout(getRecentMessagesAction(conversationId), { operation: "load recent conversation" });\n',
+              "bounded initial load"
+          )
+          old_reconcile = '''      loadedFromServerRef.current = requestId;
+          const patches = realtimePatchesRef.current.get(conversationId);
+          const reconciled = loaded.length === 0
+            ? loaded
+            : mergeThreadPatches(loaded, patches?.values() ?? []);
+          realtimePatchesRef.current.delete(conversationId);
+'''
+          new_reconcile = '''      loadedFromServerRef.current = requestId;
+          const patches = realtimePatchesRef.current.get(conversationId);
+          const serverTail = loaded.length === 0
+            ? loaded
+            : mergeThreadPatches(loaded, patches?.values() ?? []);
+          /* A bounded freshness sync must not erase history that was already
+             paged into memory. Retain only rows strictly older than the server
+             tail's keyset boundary; the fresh tail remains authoritative for
+             everything at or after that point. */
+          const localBeforeServer = readThread(viewerIdRef.current, conversationId)?.messages ?? [];
+          const boundary = serverTail[0];
+          const retainedOlder = boundary
+            ? localBeforeServer.filter((message) =>
+                message.createdAt < boundary.createdAt ||
+                (message.createdAt === boundary.createdAt && message.id < boundary.id)
+              )
+            : [];
+          const tailIds = new Set(serverTail.map((message) => message.id));
+          const reconciled = [
+            ...retainedOlder.filter((message) => !tailIds.has(message.id)),
+            ...serverTail
+          ];
+          setHasOlderMessages(loaded.length >= PROACTIVE_WARM_MESSAGE_LIMIT);
+          realtimePatchesRef.current.delete(conversationId);
+'''
+          replace_once(page, old_reconcile, new_reconcile, "bounded reconciliation")
+
+          scroll_anchor = '''  function scrollToBottom(behavior: ScrollBehavior = "smooth") {
+            const node = threadRef.current;
+            if (!node) return;
+            node.scrollTo({ top: node.scrollHeight, behavior });
+            nearBottomRef.current = true;
+            setUnseenIncoming(0);
+          }
+'''
+          pagination_fn = '''  const loadOlderMessages = useCallback(async () => {
+            const conversationId = selectedIdRef.current;
+            const first = messages[0];
+            if (!conversationId || !first || loadingOlderMessages || !hasOlderMessages) return;
+
+            const node = threadRef.current;
+            const previousHeight = node?.scrollHeight ?? 0;
+            const previousTop = node?.scrollTop ?? 0;
+            setLoadingOlderMessages(true);
+            try {
+              const page = await getOlderMessagesAction(conversationId, {
+                createdAt: first.createdAt,
+                id: first.id
+              });
+              if (!mountedRef.current || selectedIdRef.current !== conversationId) return;
+              setHasOlderMessages(page.hasMore);
+              if (page.messages.length === 0) return;
+              setMessages((current) => {
+                const known = new Set(current.map((message) => message.id));
+                const older = page.messages.filter((message) => !known.has(message.id));
+                const next = [...older, ...current];
+                writeThreadMessages(viewerIdRef.current, conversationId, next);
+                return next;
+              });
+              requestAnimationFrame(() => {
+                if (!node || selectedIdRef.current !== conversationId) return;
+                node.scrollTop = previousTop + (node.scrollHeight - previousHeight);
+              });
+            } catch {
+              // Older history is progressive enhancement. Keep the current thread
+              // readable and let another upward scroll retry without a global toast.
+            } finally {
+              if (mountedRef.current && selectedIdRef.current === conversationId) {
+                setLoadingOlderMessages(false);
+              }
+            }
+          }, [hasOlderMessages, loadingOlderMessages, messages]);
+
+''' + scroll_anchor
+          replace_once(page, scroll_anchor, pagination_fn, "older message loader")
+
+          replace_once(
+              page,
+              '''                  nearBottomRef.current = near;
+                  if (near && unseenIncoming > 0) setUnseenIncoming(0);
+''',
+              '''                  nearBottomRef.current = near;
+                  if (node.scrollTop < 80 && hasOlderMessages && !loadingOlderMessages) {
+                    void loadOlderMessages();
+                  }
+                  if (near && unseenIncoming > 0) setUnseenIncoming(0);
+''',
+              "scroll pagination trigger"
+          )
+          replace_once(
+              page,
+              '''              >
+                {loadingMessages && messages.length === 0 ?''',
+              '''              >
+                {loadingOlderMessages ? <div className="flex justify-center py-2" role="status" aria-label="Loading earlier messages"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div> : null}
+                {loadingMessages && messages.length === 0 ?''',
+              "older loading affordance"
+          )
+
+          replace_once(
+              page,
+              '''    if (outcome === "pending") scheduleSendConfirmation(conversationId, clientMessageId);
+    else cancelSendConfirmation(clientMessageId);
+''',
+              '''    if (outcome === "pending" || outcome === "sent") scheduleSendConfirmation(conversationId, clientMessageId);
+    else cancelSendConfirmation(clientMessageId);
+''',
+              "single message send reconciliation"
+          )
+          replace_once(
+              page,
+              '''      updateOptimistic(conversationId, (current) => markRetrying(current, clientMessageId));
+      void refreshMessages(conversationId, false);
+      void syncConversations();
+''',
+              '''      updateOptimistic(conversationId, (current) => markRetrying(current, clientMessageId));
+      scheduleSendConfirmation(conversationId, clientMessageId);
+      void syncConversations();
+''',
+              "retry lightweight reconciliation"
+          )
+          replace_once(
+              page,
+              '''                onSent={() => { void refreshMessages(selected.id, false); void syncConversations(); scrollToBottom(); }}
+''',
+              '''                onSent={() => { void syncConversations(); scrollToBottom(); }}
+''',
+              "send no full thread refetch"
+          )
+          replace_once(
+              page,
+              'className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 mx-auto max-w-md rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-top-2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2"',
+              'className="fixed inset-x-3 top-[calc(max(0.75rem,env(safe-area-inset-top))+var(--mobile-header-height,3.5rem))] z-40 mx-auto max-w-md rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-top-2 md:inset-x-auto md:left-1/2 md:top-4 md:-translate-x-1/2"',
+              "feedback below header"
+          )
+
+          composer = "components/messaging/message-composer-v3.tsx"
+          # Send failures already have a per-bubble failed state. Do not also
+          # raise a global banner over navigation for the same failure.
+          replace_once(
+              composer,
+              '''          if (!result.ok) {
+            onOptimisticSettled?.(send.clientMessageId, "failed");
+            onFeedback(result.message);
+            // A later photo failing must not undo the ones already sent.
+''',
+              '''          if (!result.ok) {
+            onOptimisticSettled?.(send.clientMessageId, "failed");
+            // The failed optimistic bubble owns this error and exposes Retry.
+            // Do not duplicate it as a global chat banner.
+            // A later photo failing must not undo the ones already sent.
+''',
+              "text send scoped failure"
+          )
+          replace_once(
+              composer,
+              '''            onOptimisticSettled?.(send.clientMessageId, "failed");
+            if (send.attachment) unsent.push(send.attachment);
+            onFeedback("The message could not be sent. Try again.");
+''',
+              '''            onOptimisticSettled?.(send.clientMessageId, "failed");
+            if (send.attachment) unsent.push(send.attachment);
+''',
+              "text network scoped failure"
+          )
+          replace_once(
+              composer,
+              '''        if (!result.ok) {
+          onOptimisticSettled?.(clientMessageId, "failed");
+          onFeedback(result.message);
+          return;
+''',
+              '''        if (!result.ok) {
+          onOptimisticSettled?.(clientMessageId, "failed");
+          return;
+''',
+              "voice scoped failure"
+          )
+
+          test_path = Path("lib/messaging/messaging-architecture-closeout.test.ts")
+          test_path.write_text('''import fs from "node:fs";\nimport path from "node:path";\nimport { describe, expect, it } from "vitest";\n\nconst root = process.cwd();\nconst read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");\n\ndescribe("messaging architecture closeout", () => {\n  it("acknowledges durable sends before notification and activation fan-out", () => {\n    const mobile = read("lib/messaging/mobile.ts");\n    expect(mobile).toContain('import { after } from "next/server"');\n    expect(mobile).toContain("scheduleAfterMessageAcknowledgement");\n    expect(mobile).toContain("Promise.allSettled([\\n      notifyOtherMembers(");\n  });\n\n  it("uses keyset history pagination and a bounded initial conversation load", () => {\n    const mobile = read("lib/messaging/mobile.ts");\n    const actions = read("app/(app)/messaging-actions.ts");\n    const page = read("components/messages/messages-page-v4.tsx");\n    expect(mobile).toContain("before?: { createdAt: string; id: string }");\n    expect(mobile).toContain("created_at.lt.${options.before.createdAt}");\n    expect(actions).toContain("getOlderMessagesAction");\n    expect(page).toContain('getRecentMessagesAction(conversationId), { operation: "load recent conversation" }');\n    expect(page).toContain("loadOlderMessages");\n  });\n\n  it("does not refetch the full thread as the normal successful-send acknowledgement", () => {\n    const page = read("components/messages/messages-page-v4.tsx");\n    expect(page).toContain('onSent={() => { void syncConversations(); scrollToBottom(); }}');\n    expect(page).toContain('outcome === "pending" || outcome === "sent"');\n  });\n\n  it("keeps ordinary send failures on the affected optimistic bubble", () => {\n    const composer = read("components/messaging/message-composer-v3.tsx");\n    const sendText = composer.slice(composer.indexOf("function sendText()"), composer.indexOf("const sendVoice"));\n    expect(sendText).not.toContain("onFeedback(result.message)");\n    expect(sendText).not.toContain('onFeedback("The message could not be sent. Try again.")');\n  });\n});\n''')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Messaging closeout tests
+        run: npx vitest run lib/messaging/messaging-architecture-closeout.test.ts lib/messaging/optimistic-messages.test.ts lib/messaging/thread-cache.test.ts lib/messaging/thread-store.test.ts lib/messaging/warm-thread-open.test.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Full tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      - name: Commit verified changes
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-messaging-architecture-closeout.yml
+          git add lib/messaging/mobile.ts app/'(app)'/messaging-actions.ts components/messages/messages-page-v4.tsx components/messaging/message-composer-v3.tsx lib/messaging/messaging-architecture-closeout.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: make messaging acknowledgement resilient and fast"
+          git push origin HEAD:fix/messaging-architecture-closeout
