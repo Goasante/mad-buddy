@@ -1,0 +1,270 @@
+.referenceCard:global(.upfor-card) {
+  gap: 0.72rem;
+  padding: 0.95rem 1rem 0.9rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 1.45rem;
+  background: #1b1816;
+  color: #fffaf5;
+  box-shadow: 0 12px 34px rgb(0 0 0 / 0.16);
+}
+
+.referenceCard:global(.upfor-card--strong) {
+  box-shadow: 0 14px 38px rgb(0 0 0 / 0.2), 0 0 0 1px rgb(232 140 43 / 0.08);
+}
+
+.referenceCard :global(.upfor-card__head) {
+  gap: 0.78rem;
+  align-items: center;
+}
+
+.referenceCard :global(.upfor-card__portrait > span) {
+  width: 3.35rem;
+  height: 3.35rem;
+  border-radius: 999px;
+}
+
+.referenceCard :global(.upfor-card__presence) {
+  right: -0.06rem;
+  bottom: 0.03rem;
+  width: 0.76rem;
+  height: 0.76rem;
+  border: 2px solid #1b1816;
+  background: #63d58a;
+}
+
+.referenceCard :global(.upfor-card__content) {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.referenceCard :global(.upfor-card__activity) {
+  margin: 0;
+  gap: 0.38rem;
+  color: #fffaf5;
+  font-size: 1.08rem;
+  font-weight: 760;
+  line-height: 1.15;
+  letter-spacing: -0.018em;
+}
+
+.referenceCard :global(.upfor-card__activity-icon) {
+  width: 1.02rem;
+  height: 1.02rem;
+  color: #ffb44d;
+}
+
+.referenceCard :global(.upfor-card__owner) {
+  margin-top: 0.18rem;
+  color: #a99f97;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.referenceCard :global(.upfor-card__timer) {
+  align-self: flex-start;
+  min-height: 2rem;
+  gap: 0.28rem;
+  padding: 0.4rem 0.68rem;
+  border: 0;
+  border-radius: 999px;
+  background: #4a250d;
+  color: #ffad3d;
+  font-size: 0.8rem;
+  font-weight: 760;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgb(255 174 61 / 0.04);
+}
+
+.referenceCard :global(.upfor-card__timer svg) {
+  width: 0.86rem;
+  height: 0.86rem;
+}
+
+.referenceCard :global(.upfor-card__timer.is-ended) {
+  background: #2a2724;
+  color: #817971;
+}
+
+.referenceCard :global(.upfor-card__message) {
+  margin: -0.08rem 0 0;
+  color: #d7d0c9;
+  font-size: 0.82rem;
+  line-height: 1.38;
+}
+
+.referenceCard :global(.upfor-card__meta) {
+  gap: 0.35rem 1.05rem;
+  color: #b9b0a9;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.referenceCard :global(.upfor-card__proximity),
+.referenceCard :global(.upfor-card__proof) {
+  gap: 0.34rem;
+  color: #b9b0a9;
+}
+
+.referenceCard :global(.upfor-card__proximity svg) {
+  width: 0.86rem;
+  height: 0.86rem;
+  color: #ff4f86;
+}
+
+.referenceCard :global(.upfor-card__proof svg) {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: #a77c98;
+}
+
+.referenceCard :global(.upfor-card__actions) {
+  gap: 0.72rem;
+  margin-top: 0.05rem;
+}
+
+.referenceCard :global(.upfor-card__action),
+.referenceCard :global(.upfor-card__view),
+.referenceCard :global(.upfor-card__state),
+.referenceCard :global(.upfor-card__status) {
+  min-height: 3rem;
+  padding: 0.6rem 0.92rem;
+  border-radius: 0.95rem;
+  font-size: 0.88rem;
+  font-weight: 720;
+}
+
+.referenceCard :global(.upfor-card__status) {
+  flex: 0 0 auto;
+}
+
+.referenceCard :global(.upfor-card__status--going) {
+  gap: 0.4rem;
+  border: 1px solid #31583f;
+  background: #182b20;
+  color: #62d58a;
+}
+
+.referenceCard :global(.upfor-card__status-dot) {
+  width: 0.42rem;
+  height: 0.42rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.referenceCard :global(.upfor-card__status--requested) {
+  border: 1px solid #3b3632;
+  background: #26221f;
+  color: #c1b8b0;
+}
+
+.referenceCard :global(.upfor-card__action--join) {
+  flex: 0 0 auto;
+  border: 1px solid rgb(232 140 43 / 0.38);
+  background: rgb(232 140 43 / 0.1);
+  color: #f1ae67;
+  box-shadow: none;
+}
+
+.referenceCard :global(.upfor-card__view) {
+  flex: 1;
+  border: 1px solid var(--color-brand-orange);
+  background: var(--color-brand-orange);
+  color: #180c03;
+  box-shadow: none;
+}
+
+.referenceCard :global(.upfor-card__view:active),
+.referenceCard :global(.upfor-card__action--join:active) {
+  transform: translateY(1px);
+}
+
+.referenceCard :global(.upfor-card__state) {
+  border: 1px solid #3b3632;
+  background: #26221f;
+  color: #aaa198;
+}
+
+.referenceCard :global(.upfor-card__more) {
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid #3b3632;
+  border-radius: 0.95rem;
+  background: transparent;
+  color: #9f958c;
+}
+
+.referenceCard :global(.upfor-card__more svg) {
+  width: 1.04rem;
+  height: 1.04rem;
+}
+
+.referenceCard :global(.upfor-card__momentum) {
+  margin-top: 0.05rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 1rem;
+  background: #211e1b;
+  color: #fffaf5;
+}
+
+.referenceCard :global(.upfor-card__momentum-title) {
+  color: #fffaf5;
+}
+
+.referenceCard :global(.upfor-card__momentum-body) {
+  color: #a99f97;
+}
+
+.referenceCard :global(.upfor-card__momentum-cta) {
+  background: var(--color-brand-orange);
+  color: #180c03;
+}
+
+@media (max-width: 370px) {
+  .referenceCard:global(.upfor-card) {
+    gap: 0.62rem;
+    padding: 0.82rem;
+    border-radius: 1.25rem;
+  }
+
+  .referenceCard :global(.upfor-card__portrait > span) {
+    width: 3.1rem;
+    height: 3.1rem;
+  }
+
+  .referenceCard :global(.upfor-card__activity) {
+    font-size: 1rem;
+  }
+
+  .referenceCard :global(.upfor-card__owner),
+  .referenceCard :global(.upfor-card__meta) {
+    font-size: 0.76rem;
+  }
+
+  .referenceCard :global(.upfor-card__timer) {
+    padding-inline: 0.58rem;
+    font-size: 0.74rem;
+  }
+
+  .referenceCard :global(.upfor-card__actions) {
+    gap: 0.55rem;
+  }
+
+  .referenceCard :global(.upfor-card__action),
+  .referenceCard :global(.upfor-card__view),
+  .referenceCard :global(.upfor-card__state),
+  .referenceCard :global(.upfor-card__status) {
+    min-height: 2.8rem;
+    padding-inline: 0.72rem;
+    font-size: 0.8rem;
+  }
+
+  .referenceCard :global(.upfor-card__more) {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
+}
