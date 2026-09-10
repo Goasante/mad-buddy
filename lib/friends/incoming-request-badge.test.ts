@@ -62,11 +62,15 @@ describe("Add Muddy header control", () => {
     expect(page).toContain("countIncomingRequests(user.id)");
   });
 
-  it("hides the badge at zero and caps the display at 9+", () => {
+  it("hides the badge at zero and caps the display at 99+", () => {
     expect(header).toContain("const hasRequests = incomingRequestCount > 0;");
-    // The cap now lives in the shared HeaderBadge, used by both the Add Muddy
-    // and Notifications badges so the two can never format differently.
-    expect(header).toContain('count > 9 ? "9+" : count');
+    // The cap now lives in components/ui/count-badge.tsx, the one canonical
+    // count badge for the whole app (Add Muddy, Notifications, and every nav
+    // badge) so none of them can format differently from each other. Caps at
+    // 99+, not 9+: the old 9-glyph cap was one of three separately-drifted
+    // badge implementations with no documented reason for the narrower cap.
+    const badge = read("components/ui/count-badge.tsx");
+    expect(badge).toContain('count > 99 ? "99+" : count');
     expect(header).toContain("<HeaderBadge count={incomingRequestCount} />");
   });
 

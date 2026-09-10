@@ -1810,19 +1810,25 @@ type QuickAction = {
 /**
  * The suggestion card palettes.
  *
- * Deliberately soft: a low-alpha wash rather than a saturated fill, so the
- * rail reads as calm at a glance and every tone works on both themes without
- * a second set of values. Dark mode leans on the same alpha over a dark
- * surface, which desaturates naturally instead of glowing.
+ * `surface` is now ONE shared warm-neutral card background for every tone —
+ * previously each card's entire surface carried a low-alpha wash of its own
+ * hue (violet, sky, pink...), which at small-card size reads as a large
+ * colour block rather than an accent, and put lavender/blue tiles in
+ * competition with the orange/maroon/warm-paper brand identity as their own
+ * quiet secondary palette. Category colour now lives only where the product
+ * identity says it belongs: the small icon chip, and the thin rotating rim
+ * (still per-tone, still soft) — never the card body itself.
  */
 type SuggestionTone = "orange" | "lavender" | "green" | "blue" | "blush";
 
+/** One shared card surface for every suggestion tone — see comment above. */
+const SUGGESTION_CARD_SURFACE = "bg-card/70 dark:bg-white/[0.04]";
+
 const SUGGESTION_TONE: Record<
   SuggestionTone,
-  { surface: string; icon: string; edge: { a: string; b: string } }
+  { icon: string; edge: { a: string; b: string } }
 > = {
   orange: {
-    surface: "bg-orange-500/[0.09] dark:bg-orange-400/[0.12]",
     icon: "bg-orange-500/15 text-orange-600 dark:bg-orange-400/20 dark:text-orange-300",
     // orange-500 -> coral. Each card sweeps in its OWN family, never a shared
     // rainbow, so the border reads as part of the card rather than an effect
@@ -1830,25 +1836,21 @@ const SUGGESTION_TONE: Record<
     edge: { a: "232 140 43", b: "251 113 133" }
   },
   lavender: {
-    surface: "bg-violet-500/[0.09] dark:bg-violet-400/[0.12]",
     icon: "bg-violet-500/15 text-violet-600 dark:bg-violet-400/20 dark:text-violet-300",
     // violet-500 -> indigo-500
     edge: { a: "139 92 246", b: "99 102 241" }
   },
   green: {
-    surface: "bg-emerald-500/[0.09] dark:bg-emerald-400/[0.12]",
     icon: "bg-emerald-500/15 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-300",
     // emerald-500 -> mint
     edge: { a: "16 185 129", b: "52 211 153" }
   },
   blue: {
-    surface: "bg-sky-500/[0.09] dark:bg-sky-400/[0.12]",
     icon: "bg-sky-500/15 text-sky-600 dark:bg-sky-400/20 dark:text-sky-300",
     // sky-500 -> cyan-400
     edge: { a: "14 165 233", b: "34 211 238" }
   },
   blush: {
-    surface: "bg-pink-500/[0.09] dark:bg-pink-400/[0.12]",
     icon: "bg-pink-500/15 text-pink-600 dark:bg-pink-400/20 dark:text-pink-300",
     // pink-500 -> rose-400
     edge: { a: "236 72 153", b: "251 113 133" }
@@ -2085,7 +2087,7 @@ function SuggestionCard({ action, sweeping = false }: { action: QuickAction; swe
         // its own — both text blocks are line-clamped.
         "focus-ring safe-motion suggestion-card relative flex w-[7.75rem] shrink-0 flex-col rounded-[1.25rem] border border-black/[0.04] p-3 shadow-[0_1px_3px_hsl(var(--shadow)/0.05)] transition-[transform,box-shadow] active:scale-[0.98] active:shadow-[0_4px_14px_hsl(var(--shadow)/0.12)] motion-reduce:transition-none motion-reduce:active:scale-100 dark:border-white/[0.06]",
         sweeping && "is-sweeping",
-        tone.surface
+        SUGGESTION_CARD_SURFACE
       )}
     >
       <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[0.625rem]", tone.icon)}>

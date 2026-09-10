@@ -215,7 +215,11 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
         <div className={cn("mt-4", hasTruthfulMedia || !quiet ? "max-w-[72%]" : "max-w-[80%]")}>
           <h2
             className={cn(
-              "font-extrabold leading-[1.06] tracking-[-0.028em] text-white",
+              // text-balance: without it a long owner name plus a short
+              // trailing word ("goasante is UpFor gym") can strand that last
+              // word alone on its own line at this column width. Balancing
+              // keeps the wrap natural instead.
+              "text-balance font-extrabold leading-[1.06] tracking-[-0.028em] text-white",
               prominent && !quiet ? "text-[1.65rem]" : "text-[1.42rem]"
             )}
           >

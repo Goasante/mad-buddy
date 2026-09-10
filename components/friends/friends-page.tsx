@@ -70,7 +70,6 @@ import type { ProximityBand } from "@/lib/proximity/bands";
 import { proximityBandLabel } from "@/lib/proximity/bands";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import { MuddiesClosestRail } from "@/components/friends/muddies-closest-rail";
-import { MuddiesGrid } from "@/components/friends/muddies-grid";
 import { MuddiesRequests } from "@/components/friends/muddies-requests";
 import {
   MUDDIES_FILTERS,
@@ -1008,19 +1007,13 @@ export function FriendsPageContent({
             </div>
 
             {gridPeople.length > 0 ? (
-              <MuddiesGrid
-                people={gridPeople}
-                proximityByFriendId={proximityByFriendId}
-                onOpenProfile={(id) => {
-                  const person = friendUsers.find((candidate) => candidate.id === id);
-                  if (person) setProfileUser(person);
-                }}
-                onMessage={openConversationWith}
-                renderActions={(id) => {
-                  const person = friendUsers.find((candidate) => candidate.id === id);
-                  return person ? muddyActions(person) : [];
-                }}
-              />
+              // Compact vertical list, not a two-column card grid: this is a
+              // people-management surface where scanning speed matters, and a
+              // large photo-card tile per person spent most of a phone
+              // viewport on two people at a time. Reuses the exact row the
+              // Close Friends/Circles tabs already use (MuddyRow), so "My
+              // Muddies" is not a third list implementation.
+              <ul className="divide-y divide-border/60">{gridPeople.map(renderUserRow)}</ul>
             ) : (
               <FriendsEmptyState
                 activeTab="all"

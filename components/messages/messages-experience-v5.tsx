@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { CountBadge } from "@/components/ui/count-badge";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
 import type { ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
@@ -121,7 +122,7 @@ export function MessagesExperienceV5({
             className="focus-ring relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/55 bg-card/75 text-foreground shadow-sm transition-transform active:scale-95"
           >
             <Bell className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
-            {unreadCount > 0 ? <CountBadge count={unreadCount} /> : null}
+            {unreadCount > 0 ? <CountBadge count={unreadCount} tone="primary" /> : null}
           </Link>
 
           <Link
@@ -312,14 +313,6 @@ function MessagesV5Styles() {
   );
 }
 
-function CountBadge({ count }: { count: number }) {
-  return (
-    <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-background bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">
-      {count > 99 ? "99+" : count}
-    </span>
-  );
-}
-
 function FavoritePerson({ conversation, onClick }: { conversation: ConversationView; onClick: () => void }) {
   return (
     <button
@@ -377,7 +370,7 @@ function FavoriteShortcut({
     >
       <span className="relative grid h-10 w-10 place-items-center rounded-full bg-secondary/75 text-muted-foreground ring-1 ring-border/45">
         {icon}
-        {badge ? <CountBadge count={Math.min(badge, 99)} /> : null}
+        {badge ? <CountBadge count={Math.min(badge, 99)} tone="primary" /> : null}
       </span>
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
     </button>

@@ -37,6 +37,7 @@ import { LiveSignalToast } from "@/components/notifications/live-signal-toast";
 import { Button } from "@/components/ui/button";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { CountBadge } from "@/components/ui/count-badge";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { cn } from "@/lib/utils";
 import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
@@ -1524,11 +1525,9 @@ function WallpaperLayer({ wallpaper }: { wallpaper: ResolvedWallpaper | null }) 
 }
 
 function UnreadBadge({ count }: { count: number }) {
-  if (count <= 0) return null;
-
-  return (
-    <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-background bg-red-500 px-1 text-[10px] font-bold leading-none text-white" aria-hidden="true">
-      {count > 99 ? "99+" : count}
-    </span>
-  );
+  // Canonical badge (components/ui/count-badge.tsx). Position nudged to
+  // -right-1/-top-1 here (vs. the shared -right-0.5/-top-0.5 default) because
+  // this badge sits on a smaller icon pill than the header's, and needs a
+  // touch more clearance to avoid the pill's own edge.
+  return <CountBadge count={count} className="-right-1 -top-1" />;
 }

@@ -99,8 +99,14 @@ describe("mobile page header Add Muddy badge", () => {
     expect(header).toContain("{hasRequests ? <HeaderBadge count={incomingRequestCount} /> : null}");
   });
 
-  it("caps the displayed count at 9+", () => {
-    expect(header).toContain('count > 9 ? "9+" : count');
+  it("caps the displayed count at 99+, via the one canonical count badge", () => {
+    // The cap used to be defined inline here at 9+, one of three
+    // independently-drifted badge implementations across the app (18px/9+
+    // here, 20px/99+ elsewhere) with no documented reason for the narrower
+    // cap. components/ui/count-badge.tsx is now the single implementation.
+    const badge = read("components/ui/count-badge.tsx");
+    expect(badge).toContain('count > 99 ? "99+" : count');
+    expect(header).toContain("<CountBadge");
   });
 
   it("is documented as pending incoming requests, never a notification count", () => {
