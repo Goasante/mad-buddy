@@ -1,418 +1,172 @@
+/* One in-flow three-zone layout for every response state. */
 .referenceCard:global(.upfor-card) {
-  gap: 0.68rem;
-  padding: 0.92rem 0.95rem 0.86rem;
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr) 7rem;
+  align-items: center;
+  gap: 0.55rem 0.65rem;
+  min-height: 7.75rem;
+  padding: 1rem;
   border: 1px solid hsl(var(--border) / 0.72);
   border-radius: 1.45rem;
   background: hsl(var(--card) / 0.98);
   color: hsl(var(--foreground));
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.08);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.07);
 }
-
-.referenceCard:global(.upfor-card--strong) {
-  box-shadow: 0 13px 34px rgb(0 0 0 / 0.1), 0 0 0 1px hsl(var(--primary) / 0.07);
-}
-
-.referenceCard :global(.upfor-card__head) {
-  gap: 0.78rem;
-  align-items: center;
-}
-
-.referenceCard :global(.upfor-card__portrait) {
-  align-self: center;
-}
-
+.referenceCard :global(.upfor-card__head) { display: contents; }
 .referenceCard :global(.upfor-card__portrait > span) {
-  width: 3.55rem;
-  height: 3.55rem;
-  border-radius: 999px;
-  box-shadow:
-    0 0 0 2px hsl(var(--card)),
-    0 0 0 3px hsl(var(--border) / 0.88);
+  width: 4rem;
+  height: 4rem;
+  box-shadow: 0 0 0 1px hsl(var(--border) / 0.8);
 }
-
-/* The supplied reference keeps the profile photo completely unobstructed.
-   UpFor activity is already communicated by the card itself, so no green
-   presence/online dot should cover the avatar. */
-.referenceCard :global(.upfor-card__presence) {
-  display: none;
-}
-
-.referenceCard :global(.upfor-card__content) {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-}
-
+.referenceCard :global(.upfor-card__content) { min-width: 0; }
 .referenceCard :global(.upfor-card__activity) {
   margin: 0;
-  gap: 0.38rem;
-  min-width: 0;
-  color: hsl(var(--foreground));
-  font-size: 1.08rem;
-  font-weight: 760;
-  line-height: 1.15;
-  letter-spacing: -0.018em;
+  gap: 0.3rem;
+  font-family: inherit;
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
 }
-
 .referenceCard :global(.upfor-card__activity > span) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
-
 .referenceCard :global(.upfor-card__activity-icon) {
-  width: 1.02rem;
-  height: 1.02rem;
+  width: 1rem;
+  height: 1rem;
   flex: 0 0 auto;
   color: var(--color-brand-orange);
 }
-
 .referenceCard :global(.upfor-card__owner) {
-  margin-top: 0.18rem;
-  overflow: hidden;
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.25;
   color: hsl(var(--muted-foreground));
-  font-size: 0.82rem;
-  font-weight: 500;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-
-/* Keep the timer visually white/cream like the reference in both themes.
-   The surrounding card itself remains theme-adaptive. */
-.referenceCard :global(.upfor-card__timer) {
-  align-self: flex-start;
-  min-height: 2rem;
-  gap: 0.28rem;
-  padding: 0.4rem 0.68rem;
-  border: 1px solid #f2dcc8;
-  border-radius: 999px;
-  background: #fff8f1;
-  color: #c95108;
-  font-size: 0.8rem;
-  font-weight: 760;
-  line-height: 1;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgb(90 49 16 / 0.05);
-}
-
-.referenceCard :global(.upfor-card__timer svg) {
-  width: 0.86rem;
-  height: 0.86rem;
-}
-
-.referenceCard :global(.upfor-card__timer.is-ended) {
-  border-color: hsl(var(--border) / 0.8);
-  background: hsl(var(--muted) / 0.92);
-  color: hsl(var(--muted-foreground));
-  box-shadow: none;
-}
-
-.referenceCard :global(.upfor-card__message) {
-  margin: -0.08rem 0 0 4.33rem;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.82rem;
-  line-height: 1.38;
-}
-
-/* Metadata now lives directly under the owner line, matching the compact
-   reference instead of consuming a separate full card row. */
 .referenceCard :global(.upfor-card__meta) {
-  margin-top: 0.34rem;
-  gap: 0.35rem 0.92rem;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.82rem;
-  font-weight: 560;
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
 }
-
 .referenceCard :global(.upfor-card__proximity),
-.referenceCard :global(.upfor-card__proof) {
-  gap: 0.34rem;
-  color: hsl(var(--muted-foreground));
+.referenceCard :global(.upfor-card__proof) { color: hsl(var(--muted-foreground)); gap: 0.25rem; }
+.referenceCard :global(.upfor-card__meta svg) { color: currentColor; flex-shrink: 0; }
+.referenceCard :global(.upfor-card__rail) {
+  display: flex;
+  min-width: 0;
+  align-self: stretch;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
-
-.referenceCard :global(.upfor-card__proximity svg) {
-  width: 0.9rem;
-  height: 0.9rem;
-  color: #f22970;
+.referenceCard :global(.upfor-card__timer) {
+  align-self: flex-end;
+  min-height: 1.75rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.65rem;
+  background: hsl(var(--secondary) / 0.65);
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: right;
 }
-
-.referenceCard :global(.upfor-card__proof svg) {
-  width: 0.92rem;
-  height: 0.92rem;
-  color: #9c648b;
-}
-
-/* Actions sit to the right of the avatar rail, which trims the card vertically
-   and mirrors the supplied reference. Pending/Going reserve less width than
-   the primary View action, so View remains deliberately prominent. */
+.referenceCard :global(.upfor-card__timer svg) { width: 0.8rem; height: 0.8rem; flex-shrink: 0; }
 .referenceCard :global(.upfor-card__actions) {
-  gap: 0.58rem;
-  margin-top: 0.02rem;
-  padding-left: 4.33rem;
-  align-items: stretch;
+  display: flex;
+  width: 100%;
+  gap: 0.375rem;
+  align-items: center;
+  justify-content: flex-end;
 }
-
-.referenceCard :global(.upfor-card__actions:empty) {
-  display: none;
-}
-
+.referenceCard :global(.upfor-card__actions:empty) { display: none; }
 .referenceCard :global(.upfor-card__action),
 .referenceCard :global(.upfor-card__view),
-.referenceCard :global(.upfor-card__state),
-.referenceCard :global(.upfor-card__status) {
-  min-height: 2.9rem;
-  padding: 0.58rem 0.88rem;
-  border-radius: 0.95rem;
-  font-size: 0.88rem;
-  font-weight: 720;
-}
-
-.referenceCard :global(.upfor-card__status),
-.referenceCard :global(.upfor-card__state) {
-  flex: 0 0 29%;
+.referenceCard :global(.upfor-card__more) {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   justify-content: center;
-}
-
-.referenceCard :global(.upfor-card__status--going) {
-  gap: 0.4rem;
-  border: 1px solid hsl(142 52% 48% / 0.28);
-  background: hsl(142 52% 48% / 0.1);
-  color: hsl(142 58% 38%);
-}
-
-.referenceCard :global(.upfor-card__status-dot) {
-  width: 0.42rem;
-  height: 0.42rem;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.referenceCard :global(.upfor-card__status--requested) {
-  border: 1px solid hsl(var(--border) / 0.86);
-  background: hsl(var(--muted) / 0.44);
-  color: hsl(var(--muted-foreground));
-}
-
-.referenceCard :global(.upfor-card__action--join) {
-  flex: 0 0 35%;
-  border: 1px solid hsl(var(--primary) / 0.34);
-  background: hsl(var(--primary) / 0.08);
-  color: hsl(var(--primary));
+  align-items: center;
+  flex: 1 1 auto;
+  padding: 0.45rem 0.4rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.8rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
   box-shadow: none;
 }
-
-.referenceCard :global(.upfor-card__view) {
-  min-width: 0;
-  flex: 1 1 auto;
-  border: 1px solid var(--color-brand-orange);
+.referenceCard :global(.upfor-card__action--join),
+.referenceCard :global(.upfor-card__view--next) {
+  border-color: var(--color-brand-orange);
   background: var(--color-brand-orange);
-  color: #ffffff;
-  box-shadow: 0 6px 18px rgb(232 140 43 / 0.18);
+  color: #321307;
 }
-
-.referenceCard :global(.upfor-card__view:active),
-.referenceCard :global(.upfor-card__action--join:active) {
-  transform: translateY(1px);
-}
-
-.referenceCard :global(.upfor-card__state) {
-  border: 1px solid hsl(var(--border) / 0.86);
-  background: hsl(var(--muted) / 0.44);
-  color: hsl(var(--muted-foreground));
-}
-
+.referenceCard :global(.upfor-card__view:not(.upfor-card__view--next)),
 .referenceCard :global(.upfor-card__more) {
-  width: 2.9rem;
-  height: 2.9rem;
-  flex: 0 0 2.9rem;
-  border: 1px solid hsl(var(--border) / 0.92);
-  border-radius: 0.95rem;
-  background: hsl(var(--card) / 0.9);
-  color: hsl(var(--muted-foreground));
+  background: transparent;
+  color: hsl(var(--foreground) / 0.85);
 }
-
-.referenceCard :global(.upfor-card__more svg) {
-  width: 1.04rem;
-  height: 1.04rem;
-}
-
-.referenceCard :global(.upfor-card__momentum) {
-  margin-top: 0.05rem;
-  border: 1px solid hsl(var(--border) / 0.78);
-  border-radius: 1rem;
-  background: hsl(var(--muted) / 0.34);
-  color: hsl(var(--foreground));
-}
-
-.referenceCard :global(.upfor-card__momentum-title) {
-  color: hsl(var(--foreground));
-}
-
-.referenceCard :global(.upfor-card__momentum-body) {
-  color: hsl(var(--muted-foreground));
-}
-
-.referenceCard :global(.upfor-card__momentum-cta) {
-  background: var(--color-brand-orange);
-  color: #ffffff;
-}
-
-/* On dark mode the semantic card/foreground/border tokens automatically flip
-   the surface dark. Only the green attendance text needs a brighter dark-theme
-   value; the cream timer intentionally stays light per the approved reference. */
-:global(.dark) .referenceCard :global(.upfor-card__status--going) {
-  color: #62d58a;
-}
-
-@media (max-width: 370px) {
-  .referenceCard:global(.upfor-card) {
-    gap: 0.6rem;
-    padding: 0.8rem;
-    border-radius: 1.25rem;
-  }
-
-  .referenceCard :global(.upfor-card__portrait > span) {
-    width: 3.08rem;
-    height: 3.08rem;
-  }
-
-  .referenceCard :global(.upfor-card__activity) {
-    font-size: 1rem;
-  }
-
-  .referenceCard :global(.upfor-card__owner),
-  .referenceCard :global(.upfor-card__meta) {
-    font-size: 0.76rem;
-  }
-
-  .referenceCard :global(.upfor-card__timer) {
-    padding-inline: 0.56rem;
-    font-size: 0.73rem;
-  }
-
-  .referenceCard :global(.upfor-card__message) {
-    margin-left: 3.74rem;
-  }
-
-  .referenceCard :global(.upfor-card__actions) {
-    gap: 0.48rem;
-    padding-left: 3.74rem;
-  }
-
-  .referenceCard :global(.upfor-card__action),
-  .referenceCard :global(.upfor-card__view),
-  .referenceCard :global(.upfor-card__state),
-  .referenceCard :global(.upfor-card__status) {
-    min-height: 2.76rem;
-    padding-inline: 0.66rem;
-    font-size: 0.79rem;
-  }
-
-  .referenceCard :global(.upfor-card__status),
-  .referenceCard :global(.upfor-card__state) {
-    flex-basis: 28%;
-  }
-
-  .referenceCard :global(.upfor-card__more) {
-    width: 2.76rem;
-    height: 2.76rem;
-    flex-basis: 2.76rem;
-  }
-}
-
-@media (max-width: 335px) {
-  .referenceCard :global(.upfor-card__actions) {
-    padding-left: 0;
-  }
-}
-
-/* Reference-layout hardening -------------------------------------------------
-   The supplied three-state reference has one important asymmetry: the fresh
-   opt-in card is shorter, with its two decisions tucked into a compact rail on
-   the RIGHT beneath the countdown. Once the viewer has responded, Pending or
-   Going returns to the wider bottom action row with a deliberately long View
-   button and the overflow control. Keep those states visually distinct. */
-.referenceCard :global(.upfor-card__timer) {
-  margin-left: auto;
-}
-
+.referenceCard :global(.upfor-card__more) { width: 2.75rem; height: 2.75rem; flex: 0 0 2.75rem; }
+.referenceCard :global(.upfor-card__more svg) { width: 1rem; height: 1rem; }
 .referenceCard :global(.upfor-card__status),
 .referenceCard :global(.upfor-card__state) {
-  flex-basis: 26%;
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
+  margin-top: 0.3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
 }
-
-.referenceCard :global(.upfor-card__more) {
-  width: 2.78rem;
-  height: 2.78rem;
-  flex-basis: 2.78rem;
+.referenceCard :global(.upfor-card__status-dot) {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: currentColor;
 }
-
-/* A fresh card is the only state containing the join control. Use that stable
-   state marker to reproduce the reference without changing any UpFor logic. */
-.referenceCard:has(:global(.upfor-card__action--join)) {
-  position: relative;
-  min-height: 7.15rem;
-  gap: 0.28rem;
-}
-
-.referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__content) {
-  padding-right: 1.7rem;
-}
-
-.referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__message) {
-  margin-right: 8rem;
-}
-
-.referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__actions) {
-  position: absolute;
-  right: 0.95rem;
-  bottom: 0.86rem;
-  width: 7.35rem;
+.referenceCard :global(.upfor-card__message) {
+  grid-column: 2 / -1;
   margin: 0;
-  padding-left: 0;
-  gap: 0.38rem;
-  z-index: 2;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: hsl(var(--muted-foreground));
+  -webkit-line-clamp: 2;
 }
-
-.referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__action--join) {
-  flex: 0 0 40%;
-  padding-inline: 0.55rem;
+.referenceCard :global(.upfor-card__momentum) { grid-column: 1 / -1; }
+.referenceCard :global(.upfor-card__momentum-cta) { min-height: 2.75rem; color: #321307; }
+.referenceCard :global(button:focus-visible) { outline: 2px solid var(--color-brand-orange); outline-offset: 3px; }
+/* Preserve the rail on small phones; only an unusually narrow container
+   places it below the identity. Text enlargement can grow the card naturally. */
+@media (max-width: 374px) {
+  .referenceCard:global(.upfor-card) { grid-template-columns: 3.5rem minmax(0, 1fr) 6.5rem; padding-inline: 0.75rem; gap: 0.5rem; }
+  .referenceCard :global(.upfor-card__portrait > span) { width: 3.5rem; height: 3.5rem; }
 }
-
-.referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__view) {
-  flex: 1 1 auto;
-  padding-inline: 0.55rem;
-}
-
-@media (max-width: 370px) {
-  .referenceCard :global(.upfor-card__status),
-  .referenceCard :global(.upfor-card__state) {
-    flex-basis: 25.5%;
-  }
-
-  .referenceCard:has(:global(.upfor-card__action--join)) {
-    min-height: 6.8rem;
-    gap: 0.22rem;
-  }
-
-  .referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__content) {
-    padding-right: 1.35rem;
-  }
-
-  .referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__message) {
-    margin-right: 7.35rem;
-  }
-
-  .referenceCard:has(:global(.upfor-card__action--join)) :global(.upfor-card__actions) {
-    right: 0.8rem;
-    bottom: 0.8rem;
-    width: 6.95rem;
-    padding-left: 0;
-    gap: 0.32rem;
-  }
+@media (max-width: 319px) {
+  .referenceCard:global(.upfor-card) { grid-template-columns: 3.5rem minmax(0, 1fr); }
+  .referenceCard :global(.upfor-card__rail) { grid-column: 1 / -1; }
+  .referenceCard :global(.upfor-card__actions) { width: auto; }
 }

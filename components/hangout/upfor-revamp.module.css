@@ -7,7 +7,7 @@
   overflow: hidden;
   border: 1px solid hsl(var(--border) / 0.55);
   border-radius: 1.35rem;
-  padding: 1.05rem 0.95rem 1rem 1.05rem;
+  padding: 0.75rem 0.95rem 0.75rem 1.05rem;
   background:
     radial-gradient(circle at 82% 15%, hsl(var(--primary) / 0.24), transparent 42%),
     linear-gradient(135deg, hsl(var(--primary) / 0.14), hsl(var(--card)) 48%, hsl(var(--secondary) / 0.72));
@@ -72,7 +72,7 @@
 .heroGallery {
   position: relative;
   min-width: 0;
-  min-height: 8.5rem;
+  min-height: 7.8rem;
 }
 
 .heroTile {
@@ -490,5 +490,40 @@
   .popularCard,
   .popularImage {
     transition: none;
+  }
+}
+
+/* Feed-scoped density: preserve the artwork and all shell safe-area owners. */
+:global(.upfor-page):has(.hero) :global(.upfor-create-button) { width: 3.125rem; height: 3.125rem; }
+:global(.upfor-feed):has(.hero) :global(.upfor-tab) { padding-inline: 0.65rem; }
+:global(.upfor-feed):has(.hero) :global(.upfor-tab__count) {
+  display: inline-flex;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  background: hsl(var(--foreground) / 0.1);
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  :global(.upfor-page):has(.hero) :global(.upfor-header-actions) { padding-left: 3rem; }
+  :global(body):has(.hero) :global(.quick-actions) {
+    --quick-actions-size: 2.75rem;
+    top: calc(env(safe-area-inset-top, 0px) + 0.9rem);
+    right: max(4.65rem, calc((100vw - 560px) / 2 + 3.65rem));
+    bottom: auto;
+  }
+  :global(body):has(.hero) :global(.quick-actions-stack) { flex-direction: column-reverse; }
+  :global(body):has(.hero) :global(.quick-actions-trigger) {
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--secondary));
+    color: hsl(var(--foreground));
+    box-shadow: none;
   }
 }

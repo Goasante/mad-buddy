@@ -13,14 +13,10 @@ describe("approved compact UpFor activity card", () => {
     expect(feed).not.toContain("All Hangouts");
   });
 
-  it("renders the reference's avatar, content, and a full-width action row", () => {
-    /* Restructured 2026-09-10: the timer moved from a narrow rail item to a
-     * corner badge on the head row, and Accepted/Pending/View/overflow became
-     * one full-width row -- a status pill needs room beside real buttons,
-     * which the previous fixed narrow rail column could not give it. */
+  it("renders the host, content, and a stable right-side action rail", () => {
     expect(card).toContain("upfor-card__portrait");
     expect(card).toContain("upfor-card__content");
-    expect(card).toContain("upfor-card__head");
+    expect(card).toContain("upfor-card__rail");
     expect(card).toContain("upfor-card__actions");
     expect(css).toContain(".upfor-card__actions {");
   });
