@@ -3,16 +3,21 @@
  *
  * The server still decides the user's privacy-safe `ProximityBand`. This file
  * only decides how that band looks. It never receives coordinates, exact
- * distance or accuracy, and it cannot widen the 15 km eligibility gate.
+ * distance or accuracy, and it cannot widen the 15 km Nearby eligibility gate.
  *
- * MAGNETIC PULSE replaces the former spark/orbit treatment with a restrained
- * stack of concentric transform/opacity pulses plus an optional rotating sweep.
- * The closest states add energy by adding rings, brightness and speed; the
- * furthest states remove layers instead of turning into decorative noise.
+ * MAGNETIC PULSE is a restrained stack of concentric transform/opacity pulses
+ * plus an optional rotating sweep. The closest stages add energy by adding
+ * rings, brightness and speed; the furthest stages remove layers instead of
+ * turning into decorative noise.
  */
 
 import type { ProximityBand } from "@/lib/proximity/bands";
 
+/**
+ * Stable internal identifiers. Public labels are owned by the config below.
+ * They intentionally remain stable so existing dev harnesses and CSS hooks do
+ * not become a migration concern just because product vocabulary changed.
+ */
 export type ProximityGlowLevel =
   | "right-here"
   | "just-around"
@@ -21,7 +26,7 @@ export type ProximityGlowLevel =
   | "around-town"
   | "across-town";
 
-/** Ordered closest-first. */
+/** Ordered strongest/closest first. */
 export const PROXIMITY_GLOW_LEVELS: readonly ProximityGlowLevel[] = [
   "right-here",
   "just-around",
@@ -31,14 +36,23 @@ export const PROXIMITY_GLOW_LEVELS: readonly ProximityGlowLevel[] = [
   "across-town"
 ] as const;
 
-const GLOW_LEVEL_BY_BAND: Record<ProximityBand, ProximityGlowLevel | null> = {
+/**
+ * Six PUBLIC visual stages:
+ * Just Around, Very Close, Close, In Area, Nearby, Far.
+ *
+ * The backend still has two broad in-range bands from 5–10 and 10–15 km. Both
+ * deliberately collapse to the same public Nearby Glow. `outside_range` maps
+ * to the quiet Far treatment for surfaces that already have that state; the
+ * Nearby endpoint itself still excludes candidates beyond 15 km.
+ */
+const GLOW_LEVEL_BY_BAND: Record<ProximityBand, ProximityGlowLevel> = {
   right_here: "right-here",
   around_you: "just-around",
   close_by: "close-by",
   nearby: "in-your-area",
   around_town: "around-town",
-  further_away: "across-town",
-  outside_range: null
+  further_away: "around-town",
+  outside_range: "across-town"
 };
 
 export function glowLevelForBand(
@@ -65,7 +79,7 @@ export type GlowLayers = {
   sweepOpacity: number;
   /** Seconds per revolution when the sweep is present. */
   sweepSeconds: number | null;
-  /** Solid ring width at the avatar edge. Kept for geometry tests and sizing. */
+  /** Solid ring width at the avatar edge. */
   ringWidth: number;
 };
 
@@ -89,60 +103,54 @@ export type ProximityGlowConfig = {
 /**
  * Magnetic Pulse progression.
  *
- * Mad Buddy already has a state tighter than the supplied prototype's closest
- * "Just Around" slot: `Right Here` (<=100 m at high confidence). The existing
- * state vocabulary and thresholds stay untouched. The requested Just Around
- * timing is therefore kept exactly at 1.70 s / 2.15 s, while Right Here is
- * allowed to be slightly faster and brighter so the real six-state ordering
- * remains monotonic.
- *
- * Geometry stays close to the existing production footprint so Muddies/Home do
- * not reflow and their already-proven bloom reservation remains sufficient.
+ * Just Around is the nearest/highest user-facing stage (0–100 m when the
+ * reading is confident enough to claim it), and therefore receives the exact
+ * requested 1.70 s pulse / 2.15 s sweep cadence.
  */
 export const PROXIMITY_GLOW_CONFIG: Record<ProximityGlowLevel, ProximityGlowConfig> = {
   "right-here": {
     level: "right-here",
-    label: "Right Here",
+    label: "Just Around",
     description: "Immediate surroundings",
     ring: 154,
     outer: 205,
     blur: 31,
     strength: 1,
-    pulseSeconds: 1.45,
+    pulseSeconds: 1.7,
     layers: {
       pulseCount: 3,
       pulseMode: "pulse-hot",
       pulseScale: 1.52,
-      pulseAlpha: 0.44,
-      haloAlpha: 0.94,
+      pulseAlpha: 0.5,
+      haloAlpha: 1,
       sweepOpacity: 1,
-      sweepSeconds: 1.9,
+      sweepSeconds: 2.15,
       ringWidth: 2
     }
   },
   "just-around": {
     level: "just-around",
-    label: "Just Around",
+    label: "Very Close",
     description: "Very local",
     ring: 148,
     outer: 188,
     blur: 25,
-    strength: 0.9,
-    pulseSeconds: 1.7,
+    strength: 0.88,
+    pulseSeconds: 2.25,
     layers: {
       pulseCount: 3,
       pulseMode: "pulse-hot",
       pulseScale: 1.48,
       pulseAlpha: 0.4,
       haloAlpha: 0.86,
-      sweepOpacity: 0.98,
-      sweepSeconds: 2.15,
+      sweepOpacity: 0.86,
+      sweepSeconds: 3.2,
       ringWidth: 1.75
     }
   },
   "close-by": {
     level: "close-by",
-    label: "Close By",
+    label: "Close",
     description: "Within your local vicinity",
     ring: 140,
     outer: 174,
@@ -162,7 +170,7 @@ export const PROXIMITY_GLOW_CONFIG: Record<ProximityGlowLevel, ProximityGlowConf
   },
   "in-your-area": {
     level: "in-your-area",
-    label: "In Your Area",
+    label: "In Area",
     description: "Same general part of town",
     ring: 134,
     outer: 164,
@@ -182,19 +190,19 @@ export const PROXIMITY_GLOW_CONFIG: Record<ProximityGlowLevel, ProximityGlowConf
   },
   "around-town": {
     level: "around-town",
-    label: "Around Town",
-    description: "Somewhere around the wider town",
+    label: "Nearby",
+    description: "Within the wider nearby area",
     ring: 130,
     outer: 158,
     blur: 8,
-    strength: 0.32,
+    strength: 0.3,
     pulseSeconds: 5,
     layers: {
       pulseCount: 1,
       pulseMode: "pulse",
       pulseScale: 1.28,
       pulseAlpha: 0.15,
-      haloAlpha: 0.32,
+      haloAlpha: 0.3,
       sweepOpacity: 0,
       sweepSeconds: null,
       ringWidth: 1.25
@@ -202,19 +210,19 @@ export const PROXIMITY_GLOW_CONFIG: Record<ProximityGlowLevel, ProximityGlowConf
   },
   "across-town": {
     level: "across-town",
-    label: "Across Town",
-    description: "Within your broader city area",
+    label: "Far",
+    description: "Outside the 15 km Nearby range",
     ring: 126,
     outer: 152,
     blur: 5,
-    strength: 0.16,
+    strength: 0.14,
     pulseSeconds: 6.2,
     layers: {
       pulseCount: 1,
       pulseMode: "breathe",
       pulseScale: 1.08,
       pulseAlpha: 0.1,
-      haloAlpha: 0.18,
+      haloAlpha: 0.16,
       sweepOpacity: 0,
       sweepSeconds: null,
       ringWidth: 1
@@ -280,7 +288,7 @@ export function resolveGlowGeometry(
   const core = round(PROTOTYPE_CORE_PX * scale);
   const field = round(PROTOTYPE_FIELD_PX * scale);
 
-  // Keep the production-tested "tightened" geometry: a state changes its aura,
+  // Keep the production-tested tightened geometry: a state changes its aura,
   // never the avatar's layout box.
   const ring = round((config.ring * scale + core) / 2);
   const outer = round((config.outer * scale + config.ring * scale) / 2);
@@ -293,8 +301,6 @@ export function resolveGlowGeometry(
     blur: round(Math.max(config.blur * scale, blurFloor)),
     core,
     field,
-    // Published for surfaces that intentionally reserve the full bloom. The
-    // product component itself still occupies only `avatar` and overflows.
     box: roundUp(Math.max(field, pulsePeak, outer, core)),
     sparkRadius: round(LEGACY_SPARK_RADIUS_PX * scale),
     avatar: avatarPx
