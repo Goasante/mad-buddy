@@ -47,7 +47,7 @@ describe("band boundaries", () => {
 });
 
 describe("confidence never lets a reading overclaim", () => {
-  it("only high confidence may claim Right Here", () => {
+  it("only high confidence may claim the closest Just Around band", () => {
     expect(resolveProximityBand(50, "high")).toBe("right_here");
     expect(resolveProximityBand(50, "medium")).toBe("around_you");
     expect(resolveProximityBand(50, "low")).toBe("close_by");
@@ -89,14 +89,14 @@ describe("15 km eligibility gate", () => {
 });
 
 describe("canonical qualitative labels", () => {
-  it("keeps the approved six names", () => {
-    expect(proximityBandLabel("right_here")).toBe("Right Here");
-    expect(proximityBandLabel("around_you")).toBe("Just Around");
-    expect(proximityBandLabel("close_by")).toBe("Close By");
-    expect(proximityBandLabel("nearby")).toBe("In Your Area");
-    expect(proximityBandLabel("around_town")).toBe("Around Town");
-    expect(proximityBandLabel("further_away")).toBe("Across Town");
-    expect(proximityBandLabel("outside_range")).toBeNull();
+  it("uses the approved six-stage public vocabulary", () => {
+    expect(proximityBandLabel("right_here")).toBe("Just Around");
+    expect(proximityBandLabel("around_you")).toBe("Very Close");
+    expect(proximityBandLabel("close_by")).toBe("Close");
+    expect(proximityBandLabel("nearby")).toBe("In Area");
+    expect(proximityBandLabel("around_town")).toBe("Nearby");
+    expect(proximityBandLabel("further_away")).toBe("Nearby");
+    expect(proximityBandLabel("outside_range")).toBe("Far");
   });
 
   it("never turns the primary label into a numeric measurement", () => {
@@ -113,37 +113,33 @@ describe("canonical secondary range labels", () => {
     ["around_you", "100–500 m"],
     ["close_by", "500 m–2 km"],
     ["nearby", "2–5 km"],
-    ["around_town", "5–10 km"],
-    ["further_away", "10–15 km"]
-  ] as Array<[ProximityBand, string]>)("%s explains its configured band as %s", (band, copy) => {
+    ["around_town", "5–15 km"],
+    ["further_away", "5–15 km"],
+    ["outside_range", "15 km+"]
+  ] as Array<[ProximityBand, string]>)("%s explains its public stage as %s", (band, copy) => {
     expect(proximityBandRangeLabel(band)).toBe(copy);
   });
 
-  it("shows no range outside the eligibility gate", () => {
-    expect(proximityBandRangeLabel("outside_range")).toBeNull();
-  });
-
-  it("reads both ends from the same threshold authority", () => {
+  it("keeps Just Around anchored to the real <=100 m threshold", () => {
     expect(proximityBandRangeLabel("right_here")).toBe(
       `0–${PROXIMITY_BAND_MAX_METERS.right_here} m`
     );
-    expect(proximityBandRangeLabel("around_you")).toBe(
-      `${PROXIMITY_BAND_MAX_METERS.right_here}–${PROXIMITY_BAND_MAX_METERS.around_you} m`
-    );
-    expect(proximityBandRangeLabel("further_away")).toBe(
-      `${PROXIMITY_BAND_MAX_METERS.around_town / 1_000}–${PROXIMITY_BAND_MAX_METERS.further_away / 1_000} km`
-    );
   });
 
-  it("never suggests somebody can be shown past 15 km", () => {
-    expect(proximityBandRangeLabel("further_away")).toBe("10–15 km");
-    expect(proximityBandRangeLabel("further_away")).not.toContain("+");
+  it("collapses both broad in-range bands into one Nearby explanation", () => {
+    expect(proximityBandRangeLabel("around_town")).toBe("5–15 km");
+    expect(proximityBandRangeLabel("further_away")).toBe("5–15 km");
+  });
+
+  it("describes Far as 15 km+ without widening the Nearby gate", () => {
+    expect(proximityBandRangeLabel("outside_range")).toBe("15 km+");
+    expect(bucketProximity(FAR_MAX_METERS + 1)).toBeNull();
   });
 });
 
 describe("unusable distances", () => {
   it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, -5_000])(
-    "%p cannot claim a proximity state",
+    "%p cannot claim an in-range proximity state",
     (value) => {
       expect(resolveProximityBand(value as number, "high")).toBe("outside_range");
     }
