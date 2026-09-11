@@ -17,12 +17,6 @@ import {
   type NearbyProfileRow
 } from "@/lib/proximity/backend";
 
-// ---------------------------------------------------------------------------
-// assertPrivacySafeResponse, the product's core promise. These tests are the
-// regression guard the audit (I-09) said was missing: if anyone ever adds a
-// coordinate-bearing field to a nearby response, this suite goes red.
-// ---------------------------------------------------------------------------
-
 describe("assertPrivacySafeResponse", () => {
   it("accepts a well-formed safe response", () => {
     expect(() =>
@@ -83,41 +77,34 @@ describe("assertPrivacySafeResponse", () => {
           muddy_availability: null,
           muddy_activity: null,
           muddy_status_note: null,
-          latitude: 5.55 // stripped by zod, but never trusted to be
+          latitude: 5.55
         }
       ]
     });
 
-    // zod dropped the key, and the assertion would catch it if it hadn't.
     expect(JSON.stringify(smuggled)).not.toContain("latitude");
     expect(() => assertPrivacySafeResponse(smuggled)).not.toThrow();
   });
 });
 
-// ---------------------------------------------------------------------------
-// Proximity bucketing and confidence math
-// ---------------------------------------------------------------------------
-
 describe("bucketProximity", () => {
   it.each([
     [0, "close"],
     [4_990, "close"],
-    [CLOSE_MAX_METERS, "close"], // 5.00km -> Close
-    [CLOSE_MAX_METERS + 10, "near"], // 5.01km -> Near
+    [CLOSE_MAX_METERS, "close"],
+    [CLOSE_MAX_METERS + 10, "near"],
     [9_990, "near"],
-    [NEAR_MAX_METERS, "near"], // 10.00km -> Near
-    [NEAR_MAX_METERS + 10, "far"], // 10.01km -> Far
+    [NEAR_MAX_METERS, "near"],
+    [NEAR_MAX_METERS + 10, "far"],
     [14_990, "far"],
-    [FAR_MAX_METERS, "far"], // 15.00km -> Far
-    [FAR_MAX_METERS + 10, null], // 15.01km -> outside nearby range
+    [FAR_MAX_METERS, "far"],
+    [FAR_MAX_METERS + 10, null],
     [MAX_NEARBY_METERS + 10, null]
   ])("%d meters -> %s", (meters, level) => {
     expect(bucketProximity(meters)).toBe(level);
   });
 });
 
-// Exact boundary values from the product spec, expressed in km -> meters, so
-// the mapping to the canonical 5/10/15km bands is traceable one to one.
 describe("bucketProximity: canonical km boundaries", () => {
   it.each([
     [0, "close"],
@@ -144,19 +131,17 @@ describe("bucketProximityWithConfidence", () => {
   );
 
   it("only moves a medium-confidence reading outward near a boundary", () => {
-    // medium margin is 200m: 4_700+200=4_900 stays Close, 4_900+200=5_100 tips to Near.
     expect(bucketProximityWithConfidence(4_700, "medium")).toBe("close");
     expect(bucketProximityWithConfidence(4_900, "medium")).toBe("near");
   });
 
   it("uses a wider safety margin for a weak signal, never promoting into a closer bucket", () => {
-    // low margin is 2_000m: verify it pushes readings outward at each boundary.
-    expect(bucketProximityWithConfidence(2_900, "low")).toBe("close"); // 4_900 -> Close
-    expect(bucketProximityWithConfidence(3_100, "low")).toBe("near"); // 5_100 -> Near
-    expect(bucketProximityWithConfidence(7_900, "low")).toBe("near"); // 9_900 -> Near
-    expect(bucketProximityWithConfidence(8_100, "low")).toBe("far"); // 10_100 -> Far
-    expect(bucketProximityWithConfidence(12_900, "low")).toBe("far"); // 14_900 -> Far
-    expect(bucketProximityWithConfidence(13_100, "low")).toBe(null); // 15_100 -> outside range
+    expect(bucketProximityWithConfidence(2_900, "low")).toBe("close");
+    expect(bucketProximityWithConfidence(3_100, "low")).toBe("near");
+    expect(bucketProximityWithConfidence(7_900, "low")).toBe("near");
+    expect(bucketProximityWithConfidence(8_100, "low")).toBe("far");
+    expect(bucketProximityWithConfidence(12_900, "low")).toBe("far");
+    expect(bucketProximityWithConfidence(13_100, "low")).toBe(null);
   });
 });
 
@@ -199,10 +184,6 @@ describe("haversineMeters", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// buildSafeNearbyFriends, Ghost Mode, blocking, staleness enforcement
-// ---------------------------------------------------------------------------
-
 const NOW = Date.parse("2026-07-16T12:00:00.000Z");
 
 function location(userId: string, overrides: Partial<NearbyLocationRow> = {}): NearbyLocationRow {
@@ -229,8 +210,6 @@ function profile(userId: string, overrides: Partial<NearbyProfileRow> = {}): Nea
 
 function build(input: Partial<Parameters<typeof buildSafeNearbyFriends>[0]> = {}) {
   return buildSafeNearbyFriends({
-    // A fresh viewer by default, from the same helper the friends use: the
-    // engine now holds both ends of a distance to one freshness rule.
     viewer: location("viewer"),
     friendIds: [],
     blockedIds: new Set(),
@@ -307,7 +286,7 @@ describe("buildSafeNearbyFriends", () => {
     expect(result[0].glow_strength).toBe(0);
   });
 
-  it("keeps same-place readings very close while preserving weak confidence", () => {
+  it("keeps same-place readings conservative when confidence is genuinely low", () => {
     const result = build({
       viewer: location("viewer", { confidence: "high" }),
       friendIds: ["fuzzy"],
@@ -317,15 +296,10 @@ describe("buildSafeNearbyFriends", () => {
 
     expect(result[0].proximity_level).toBe("close");
     expect(result[0].confidence).toBe("low");
-    // THE PRECISION GATE, end to end. These two are at effectively the same
-    // spot, but the reading is weak -- so it may not claim "Right here". A
-    // band hardcoded to high confidence, or one that ignored the pair
-    // confidence entirely, would publish the tightest label here.
     expect(result[0].proximity_band).toBe("close_by");
   });
 
-  it("lets a confident same-place reading say Right here", () => {
-    // The other half of the gate: precision is allowed when it is earned.
+  it("lets a high-confidence same-place reading resolve to Just Around", () => {
     const result = build({
       viewer: location("viewer", { confidence: "high" }),
       friendIds: ["sharp"],
@@ -336,8 +310,7 @@ describe("buildSafeNearbyFriends", () => {
     expect(result[0].proximity_band).toBe("right_here");
   });
 
-  it("takes the weaker of the two readings, never the viewer's alone", () => {
-    // A confident viewer must not make someone else's soft fix look precise.
+  it("lets a medium-confidence same-place pair resolve to Just Around", () => {
     const result = build({
       viewer: location("viewer", { confidence: "high" }),
       friendIds: ["soft"],
@@ -345,7 +318,8 @@ describe("buildSafeNearbyFriends", () => {
       profileByUserId: new Map([["soft", profile("soft")]])
     });
 
-    expect(result[0].proximity_band).toBe("around_you");
+    expect(result[0].confidence).toBe("medium");
+    expect(result[0].proximity_band).toBe("right_here");
   });
 
   it("attaches an active Muddy Status and passes the privacy assertion", () => {
@@ -395,7 +369,6 @@ describe("buildSafeNearbyFriends", () => {
   });
 
   it("far friends (10-15km) get a subtle but non-zero glow", () => {
-    // ~0.1 degree of latitude is ~11.1km, inside the Far band (>10-15km).
     const result = build({
       friendIds: ["far"],
       locationByUserId: new Map([["far", location("far", { latitude: 5.6037 + 0.1 })]]),
@@ -407,7 +380,6 @@ describe("buildSafeNearbyFriends", () => {
   });
 
   it("excludes friends beyond the 15km nearby range entirely, not just muted", () => {
-    // ~1 degree of latitude is ~111km, far outside MAX_NEARBY_METERS.
     const result = build({
       friendIds: ["outside-range"],
       locationByUserId: new Map([["outside-range", location("outside-range", { latitude: 6.7 })]]),
@@ -432,8 +404,6 @@ describe("buildSafeNearbyFriends", () => {
     });
 
     expect(withoutPremium[0].proximity_level).toBe(withPremium[0].proximity_level);
-    // glow_strength includes +/-5 random jitter, so compare the base range
-    // rather than exact equality between two independent calls.
     expect(withoutPremium[0].glow_strength).toBeGreaterThanOrEqual(85);
     expect(withPremium[0].glow_strength).toBeGreaterThanOrEqual(85);
     expect(withPremium[0].is_premium_theme_unlocked).toBe(true);
