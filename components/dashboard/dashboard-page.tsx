@@ -45,7 +45,7 @@ import { QuickControlsSheet } from "@/components/dashboard/quick-controls-sheet"
 import { SplitText } from "@/components/ui/split-text";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import type { ProximityBand } from "@/lib/proximity/bands";
-import { proximityBandLabel } from "@/lib/proximity/bands";
+import { proximityBandLabel, proximityBandRangeLabel } from "@/lib/proximity/bands";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
 import { ProfileCompletionReminder } from "@/components/profile/profile-completion-reminder";
@@ -1197,7 +1197,6 @@ export function DashboardPageContent({
             their feet, exactly one appears — and null is a legitimate answer:
             whitespace beats a filler card. */}
         {nextStep ? <NextForYou step={nextStep} /> : null}
-
         {/* Quick actions: first-time activation set, or the returning-user set.
 
             The first-time set (UpFor, Invite, Find Muddies) is KEPT during
@@ -1566,11 +1565,16 @@ function NearbyHero({
             <span className="text-lg font-semibold leading-tight">
               {capitalize(firstName(heroFriend.displayName || heroFriend.username))}
             </span>
-            {/* Canonical wording, never a measurement. The dot repeats what the
-                label already says, so the label carries it alone here. */}
+            {/* The state stays readable; the range underneath only teaches
+                what that Mad Buddy term means. Neither is an exact reading. */}
             <span className="text-sm font-medium text-muted-foreground">
               {proximityBandLabel(heroFriend.proximityBand)}
             </span>
+            {proximityBandRangeLabel(heroFriend.proximityBand) ? (
+              <span className="text-[10px] font-medium leading-3 text-muted-foreground/70">
+                {proximityBandRangeLabel(heroFriend.proximityBand)}
+              </span>
+            ) : null}
           </span>
 
           {soloActions}
@@ -1602,6 +1606,7 @@ function NearbyHero({
         >
           {railFriends.map((friend) => {
             const name = friend.displayName || friend.username;
+            const rangeLabel = proximityBandRangeLabel(friend.proximityBand);
             return (
               <button
                 key={friend.friendId}
@@ -1658,16 +1663,23 @@ function NearbyHero({
                   {capitalize(firstName(name))}
                 </span>
                 {/* The glow already carries proximity; this quietly confirms
-                    it. A dot plus muted text, never a coloured pill. */}
-                <span className="inline-flex max-w-full items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <span
-                    className={cn(
-                      "h-1.5 w-1.5 shrink-0 rounded-full",
-                      PROXIMITY_DOT_CLASS[friend.proximityLevel] ?? "bg-muted-foreground"
-                    )}
-                    aria-hidden="true"
-                  />
-                  <span className="truncate">{proximityBandLabel(friend.proximityBand)}</span>
+                    it. The range stays smaller and lighter than the state. */}
+                <span className="flex max-w-full flex-col items-center gap-0.5">
+                  <span className="inline-flex max-w-full items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        PROXIMITY_DOT_CLASS[friend.proximityLevel] ?? "bg-muted-foreground"
+                      )}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{proximityBandLabel(friend.proximityBand)}</span>
+                  </span>
+                  {rangeLabel ? (
+                    <span className="text-[10px] font-medium leading-3 text-muted-foreground/70">
+                      {rangeLabel}
+                    </span>
+                  ) : null}
                 </span>
               </button>
             );
