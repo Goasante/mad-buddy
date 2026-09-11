@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from "react";
 import { discardMessageAttachmentAction } from "@/app/(app)/messaging-actions";
-import { uploadMediaToSignedUrlWithProgress } from "@/lib/media/signed-upload-progress";
 import {
   createVoiceUploadIntentViaApi,
   finalizeVoiceUploadViaApi
@@ -10,14 +9,15 @@ import {
 import type { LocalVoiceRecording } from "@/lib/messaging/voice-recording";
 import { browserIsOnline, reportVoiceFailure } from "@/lib/messaging/voice-reliability";
 import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /**
  * The voice upload lifecycle, without any presentation.
  *
- * Raw audio bytes go straight from the browser to private Supabase Storage.
- * Intent and finalize used to be React Server Actions, which put a voice note
- * back on the same congestible lane as draft/presence mutations. They now use
- * the independent messaging media JSON lane while retaining the exact server
+ * Raw audio bytes continue to use the proven direct browser -> private
+ * Supabase Storage upload. Only the latency-sensitive control steps around it
+ * moved away from React Server Actions: intent and finalize now use the
+ * independent messaging media JSON lane while retaining the same server-side
  * authorization, entitlement and byte/container validation services.
  *
  * ONE ERROR AT A TIME. Every failure path sets exactly one message. A local
@@ -75,13 +75,14 @@ export function useVoiceUpload(conversationId: string) {
         intentRef.current = mediaId;
 
         try {
-          await uploadMediaToSignedUrlWithProgress({
-            path: created.path,
-            token: created.token,
-            file: recording.blob,
-            contentType,
-            upsert: false
-          });
+          const supabase = createSupabaseBrowserClient();
+          const { error } = await supabase.storage
+            .from("media")
+            .uploadToSignedUrl(created.path, created.token, recording.blob, {
+              contentType,
+              upsert: true
+            });
+          if (error) throw error;
         } catch {
           if (operation !== operationRef.current) return null;
           reportVoiceFailure("upload_failed");
