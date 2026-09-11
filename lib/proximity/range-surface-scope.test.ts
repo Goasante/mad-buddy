@@ -16,9 +16,8 @@ describe("proximity range vocabulary", () => {
     ["around_you", "100–500 m"],
     ["close_by", "500 m–2 km"],
     ["nearby", "2–5 km"],
-    ["around_town", "5–15 km"],
-    ["further_away", "5–15 km"],
-    ["outside_range", "15 km+"]
+    ["around_town", "5–10 km"],
+    ["further_away", "10–15 km"]
   ] as Array<[ProximityBand, string]>)("%s is explained as %s", (band, range) => {
     expect(proximityBandRangeLabel(band)).toBe(range);
   });
@@ -27,8 +26,9 @@ describe("proximity range vocabulary", () => {
     expect(proximityBandRangeLabel("right_here")).toBe("0–100 m");
   });
 
-  it("uses Far 15 km+ as explanatory copy without widening the live Nearby gate", () => {
-    expect(proximityBandRangeLabel("outside_range")).toBe("15 km+");
+  it("keeps Far inside the 15 km gate and exposes no 15 km+ public stage", () => {
+    expect(proximityBandRangeLabel("further_away")).toBe("10–15 km");
+    expect(proximityBandRangeLabel("outside_range")).toBeNull();
   });
 });
 
@@ -46,6 +46,6 @@ describe("range copy is limited to Glow-led teaching surfaces", () => {
 
   it("does not add numeric range copy to the regular Muddies grid", () => {
     expect(muddiesGrid).not.toContain("proximityBandRangeLabel");
-    expect(muddiesGrid).not.toMatch(/0[–-]100\s*m|100[–-]500\s*m|15\s*km\+/);
+    expect(muddiesGrid).not.toMatch(/0[–-]100\s*m|100[–-]500\s*m|10[–-]15\s*km/);
   });
 });
