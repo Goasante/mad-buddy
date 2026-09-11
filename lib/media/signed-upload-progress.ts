@@ -20,11 +20,11 @@ function signedUploadUrl(path: string, token: string) {
  * Upload a server-authorized private media object while exposing the browser's
  * real byte progress.
  *
- * This intentionally mirrors Supabase Storage's browser File path: PUT to the
- * signed-upload endpoint with a multipart body containing cacheControl and the
- * File itself. XMLHttpRequest is used only because its upload progress event
- * exposes transferred bytes; authorization and object authority still come
- * from the server-minted signed upload token.
+ * This intentionally mirrors Supabase Storage's browser File/Blob path: PUT to
+ * the signed-upload endpoint with a multipart body containing cacheControl and
+ * the media Blob itself. XMLHttpRequest is used only because its upload
+ * progress event exposes transferred bytes; authorization and object authority
+ * still come from the server-minted signed upload token.
  */
 export function uploadToSignedUrlWithProgress({
   path,
@@ -35,7 +35,7 @@ export function uploadToSignedUrlWithProgress({
 }: {
   path: string;
   token: string;
-  file: File;
+  file: Blob;
   contentType: string;
   upsert: boolean;
   onProgress?: (progress: SignedUploadProgress) => void;
