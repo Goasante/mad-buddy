@@ -29,6 +29,7 @@ export function VoiceMessageBubbleV4({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressRef = useRef<HTMLButtonElement | null>(null);
   const lastPersistedRef = useRef(0);
+  const elapsedRef = useRef(Math.max(0, initialSeconds));
   const [playback, setPlayback] = useState<AuthorizedVoicePlayback | null>(null);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -41,19 +42,29 @@ export function VoiceMessageBubbleV4({
   const speed = SPEEDS[speedIndex];
   const mine = senderName === "you";
 
+  /*
+   * Persist playback position only when this message actually unmounts (or its
+   * identity changes). The old effect depended on `elapsed`, so every
+   * `timeupdate` ran the previous effect cleanup and paused the audio. That is
+   * why a sent voice note played for a fraction of a second, flipped back to
+   * Play, and immediately paused again on the next tap.
+   *
+   * A ref keeps the latest position available to the unmount cleanup without
+   * making playback progress itself a teardown boundary.
+   */
   useEffect(() => {
-    const audio = audioRef.current;
     return () => {
-      audio?.pause();
-      if (elapsed > 0 && Math.abs(elapsed - lastPersistedRef.current) > 1) {
+      audioRef.current?.pause();
+      const currentElapsed = elapsedRef.current;
+      if (currentElapsed > 0 && Math.abs(currentElapsed - lastPersistedRef.current) > 1) {
         void updateConversationUserPreferencesAction({
           conversationId,
           voicePlaybackMessageId: messageId,
-          voicePlaybackSeconds: elapsed
+          voicePlaybackSeconds: currentElapsed
         });
       }
     };
-  }, [conversationId, elapsed, messageId]);
+  }, [conversationId, messageId]);
 
   const loadPlayback = useCallback(async (showLoading: boolean) => {
     if (showLoading) setLoading(true);
@@ -106,10 +117,8 @@ export function VoiceMessageBubbleV4({
     // Never reuse an expired URL, and never try to autoplay once an async
     // fetch resolves: on iOS/WebKit that later audio.play() call is no
     // longer inside this tap's user-activation window and gets silently
-    // blocked, which is exactly what made sent voice notes look like they
-    // "cut off" instead of playing. A second explicit tap (now almost always
-    // unnecessary thanks to the prefetch above) keeps the play() call inside
-    // its own real gesture.
+    // blocked. A second explicit tap (now almost always unnecessary thanks to
+    // the prefetch above) keeps play() inside a real user gesture.
     if (!playback || voicePlaybackNeedsRefresh(playback.expiresAt)) {
       await loadPlayback(true);
       return;
@@ -140,6 +149,7 @@ export function VoiceMessageBubbleV4({
     const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
     const next = ratio * audio.duration;
     audio.currentTime = next;
+    elapsedRef.current = next;
     setElapsed(next);
     if (!playing) void audio.play().then(() => setPlaying(true)).catch(() => undefined);
   }
@@ -165,10 +175,14 @@ export function VoiceMessageBubbleV4({
             playsInline
             onLoadedMetadata={(event) => {
               event.currentTarget.playbackRate = speed;
-              if (initialSeconds > 0 && initialSeconds < event.currentTarget.duration) event.currentTarget.currentTime = initialSeconds;
+              if (initialSeconds > 0 && initialSeconds < event.currentTarget.duration) {
+                event.currentTarget.currentTime = initialSeconds;
+                elapsedRef.current = initialSeconds;
+              }
             }}
             onTimeUpdate={(event) => {
               const next = event.currentTarget.currentTime;
+              elapsedRef.current = next;
               setElapsed(next);
               persistPosition(next);
             }}
@@ -176,6 +190,7 @@ export function VoiceMessageBubbleV4({
             onPause={() => setPlaying(false)}
             onEnded={() => {
               setPlaying(false);
+              elapsedRef.current = 0;
               setElapsed(0);
               lastPersistedRef.current = 0;
               void updateConversationUserPreferencesAction({ conversationId, voicePlaybackMessageId: null, voicePlaybackSeconds: 0 });

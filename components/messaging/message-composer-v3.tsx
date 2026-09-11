@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, AtSign, Loader2, Lock, Mic, Pause, Play, Send, Trash2, X } from "lucide-react";
+import { AtSign, Check, Loader2, Lock, Mic, Pause, Play, Send, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { sendMessageViaApi as sendMessageAction } from "@/lib/messaging/send-client";
@@ -55,12 +55,12 @@ type Props = {
 };
 
 type VoiceGesture = "idle" | "holding" | "cancel" | "lock";
-type DeferredRelease = "tap" | "send" | "lock" | "cancel";
+type DeferredRelease = "tap" | "review" | "lock" | "cancel";
 
 const MAX_FIELD_PX = 148;
 const CANCEL_DISTANCE = 76;
 const LOCK_DISTANCE = 72;
-/** A quick press enters hands-free mode. A longer press sends on release. */
+/** A quick press enters hands-free mode. A longer press finishes into review. */
 const TAP_TO_LOCK_MS = 280;
 /** Past this point the browser is probably showing a permission surface. */
 const PERMISSION_PROMPT_LIKELY_MS = 450;
@@ -144,7 +144,6 @@ export function MessageComposerV3({
   const deferredReleaseRef = useRef<DeferredRelease | null>(null);
   const permissionPromptLikelyRef = useRef(false);
   const permissionPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sendOnNextTakeRef = useRef(false);
   const sendingRef = useRef(false);
 
   useEffect(() => {
@@ -396,14 +395,6 @@ export function MessageComposerV3({
     [conversationId, onCancelReply, onFeedback, onOptimisticSend, onOptimisticSettled, onSent, replyToMessageId, voice, voiceUpload]
   );
 
-  useEffect(() => {
-    if (!sendOnNextTakeRef.current || voice.state.kind !== "preview") return;
-    const take = voice.state.recording;
-    sendOnNextTakeRef.current = false;
-    const handle = setTimeout(() => void sendVoice(take), 0);
-    return () => clearTimeout(handle);
-  }, [sendVoice, voice.state]);
-
   const clearPermissionPromptTimer = useCallback(() => {
     if (permissionPromptTimerRef.current) clearTimeout(permissionPromptTimerRef.current);
     permissionPromptTimerRef.current = null;
@@ -413,7 +404,9 @@ export function MessageComposerV3({
     clearPermissionPromptTimer();
     deferredReleaseRef.current = null;
     permissionPromptLikelyRef.current = false;
-    sendOnNextTakeRef.current = false;
+    audioRef.current?.pause();
+    setPlaying(false);
+    setPlayedSeconds(0);
     voiceUpload.reset();
     voice.cancel();
     lockedRef.current = false;
@@ -441,13 +434,16 @@ export function MessageComposerV3({
       if (mode === "tap" || mode === "lock") {
         lockedRef.current = true;
         setLocked(true);
-        setMicHint(mode === "tap" ? "Recording hands-free. Tap Send when you’re done." : null);
+        setMicHint(mode === "tap" ? "Recording hands-free. Tap the check when you’re done." : null);
         softHaptic(10);
         return;
       }
 
+      // Finishing a take always enters review. Sending is a separate explicit
+      // choice from the preview row, so the person can listen or discard first.
       setMicHint(null);
-      sendOnNextTakeRef.current = true;
+      lockedRef.current = false;
+      setLocked(false);
       voice.stop();
       softHaptic(8);
     },
@@ -510,11 +506,12 @@ export function MessageComposerV3({
         mode = "lock";
       } else if (durationMs < TAP_TO_LOCK_MS) {
         // Quick tap = the familiar tap-to-record mode. It keeps recording and
-        // exposes Send, which is also a reliable accessibility/PWA fallback.
+        // exposes the check control as a reliable accessibility/PWA fallback.
         mode = "tap";
       } else {
-        // Real hold = release-to-send.
-        mode = "send";
+        // Real hold = release into review. Nothing is sent before the person
+        // has a chance to listen to or discard the completed take.
+        mode = "review";
       }
 
       if (stateKind === "recording") {
@@ -525,7 +522,7 @@ export function MessageComposerV3({
         // `getUserMedia()` is asynchronous even when permission was already
         // granted. Carry the release intent across that gap instead of losing
         // it when the original mic button disappears.
-        deferredReleaseRef.current = permissionPromptLikelyRef.current && mode === "send" ? "lock" : mode;
+        deferredReleaseRef.current = permissionPromptLikelyRef.current && mode === "review" ? "lock" : mode;
         return;
       }
       if (mode === "cancel") cancelRecordingRef.current();
@@ -548,7 +545,7 @@ export function MessageComposerV3({
    * Resolve a release that occurred while getUserMedia/permission was still
    * pending. If the permission surface swallowed the release entirely, the
    * timer below marks that session and we safely convert it to locked mode as
-   * soon as capture begins, so a visible Send button is always available.
+   * soon as capture begins, so a visible check button is always available.
    */
   useEffect(() => {
     if (voice.state.kind === "failed") {
@@ -564,8 +561,8 @@ export function MessageComposerV3({
 
     const deferred = deferredReleaseRef.current;
     if (deferred) {
-      if (permissionPromptLikelyRef.current && deferred === "send") {
-        setMicHint("Microphone approved. Recording is hands-free — tap Send when you’re done.");
+      if (permissionPromptLikelyRef.current && deferred === "review") {
+        setMicHint("Microphone approved. Recording is hands-free — tap the check when you’re done.");
         applyRelease("lock");
       } else {
         applyRelease(deferred);
@@ -581,7 +578,7 @@ export function MessageComposerV3({
       setLocked(true);
       gestureRef.current = "idle";
       setGesture("idle");
-      setMicHint("Microphone approved. Recording is hands-free — tap Send when you’re done.");
+      setMicHint("Microphone approved. Recording is hands-free — tap the check when you’re done.");
       softHaptic(10);
     }
   }, [applyRelease, clearPermissionPromptTimer, voice.state.kind]);
@@ -625,13 +622,12 @@ export function MessageComposerV3({
     void voice.start();
   }
 
-  function stopAndSendRecording() {
+  function finishRecordingForReview() {
     if (getVoiceState().kind !== "recording") return;
     pointerStartRef.current = null;
     deferredReleaseRef.current = null;
     clearPermissionPromptTimer();
     permissionPromptLikelyRef.current = false;
-    sendOnNextTakeRef.current = true;
     lockedRef.current = false;
     setLocked(false);
     gestureRef.current = "idle";
@@ -659,7 +655,7 @@ export function MessageComposerV3({
           ? "Release to cancel"
           : gesture === "lock"
             ? "Release to lock"
-            : "Release to send · ← cancel · ↑ lock";
+            : "Release to review · ← cancel · ↑ lock";
 
     return (
       <div className={cn("border-t border-border/60 bg-background/95 backdrop-blur-xl", className)}>
@@ -687,12 +683,12 @@ export function MessageComposerV3({
           <button
             type="button"
             disabled={busy || voice.state.kind !== "recording"}
-            onClick={stopAndSendRecording}
+            onClick={finishRecordingForReview}
             className="voice-bar-send"
-            aria-label="Send voice message"
-            title="Send voice message"
+            aria-label="Review voice message"
+            title="Review voice message"
           >
-            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
           </button>
         </div>
         {micHint ? <p className="px-4 pb-1 text-center text-xs font-medium text-primary">{micHint}</p> : null}
@@ -718,8 +714,8 @@ export function MessageComposerV3({
               setPlayedSeconds(0);
             }}
           />
-          <button type="button" onClick={cancelRecording} className="voice-bar-button" aria-label="Delete voice recording">
-            <Trash2 className="h-5 w-5" />
+          <button type="button" onClick={cancelRecording} className="voice-bar-button" aria-label="Discard voice recording">
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -736,8 +732,7 @@ export function MessageComposerV3({
                   setPlaying(false);
                   onFeedback("That recording could not be played back.");
                 });
-              }
-              else {
+              } else {
                 audio.pause();
                 setPlaying(false);
               }
@@ -747,8 +742,15 @@ export function MessageComposerV3({
           </button>
           <StaticVoiceWaveform waveform={take.waveform} progress={playedSeconds / duration} />
           <span className="voice-bar-time">{formatDuration(playing || playedSeconds > 0 ? playedSeconds : duration)}</span>
-          <button type="button" onClick={() => void sendVoice(take)} disabled={busySending} className="voice-bar-send" aria-label="Send voice message">
-            {busySending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+          <button
+            type="button"
+            onClick={() => void sendVoice(take)}
+            disabled={busySending}
+            className="voice-bar-send"
+            aria-label="Send voice message"
+            title="Send voice message"
+          >
+            {busySending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
           </button>
         </div>
         {voiceError ? <p className="voice-bar-error" role="alert">{voiceError}</p> : null}
@@ -771,7 +773,7 @@ export function MessageComposerV3({
                 aria-selected={index === activeMention}
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  chooseMention(candidate);
+                  chooseMention(mentionSuggestions[index] ?? candidate);
                 }}
                 onMouseEnter={() => setActiveMention(index)}
                 className={cn("flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left", index === activeMention ? "bg-secondary" : "hover:bg-secondary/60")}
@@ -895,9 +897,9 @@ export function MessageComposerV3({
             onPointerDown={startHold}
             onContextMenu={(event) => event.preventDefault()}
             disabled={uploadBusy}
-            aria-label="Tap to record hands-free. Hold to record and release to send. Slide left to cancel or up to lock."
+            aria-label="Tap to record hands-free. Hold to record and release to review. Slide left to cancel or up to lock."
             className="composer-action touch-none select-none"
-            title="Tap: record hands-free · Hold: release to send · ← cancel · ↑ lock"
+            title="Tap: record hands-free · Hold: release to review · ← cancel · ↑ lock"
           >
             <Mic className="h-5 w-5" />
           </button>

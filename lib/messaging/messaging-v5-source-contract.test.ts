@@ -41,13 +41,16 @@ describe("Messaging V5 product source contracts", () => {
     expect(page).not.toContain("Swipe chats → unread/favorite");
   });
 
-  it("converges the canonical composer onto the V3 voice gesture model", () => {
+  it("converges the canonical composer onto the V3 review-before-send voice gesture model", () => {
     const canonical = source("components/messaging/message-composer.tsx");
     const rich = source("components/messaging/message-composer-v3.tsx");
     expect(canonical).toContain("MessageComposerV3");
     expect(rich).toContain("onPointerDown={startHold}");
-    expect(rich).toContain("Release to send");
+    expect(rich).toContain("Release to review");
     expect(rich).toContain("Slide left to cancel or up to lock");
+    expect(rich).toContain('aria-label="Discard voice recording"');
+    expect(rich).toContain('aria-label="Send voice message"');
+    expect(rich).not.toContain("sendOnNextTakeRef");
   });
 
   it("does not force light hex backgrounds in the V4 conversation theme", () => {
