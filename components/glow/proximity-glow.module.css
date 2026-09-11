@@ -24,11 +24,11 @@
   z-index: 1;
   width: calc(var(--glow-avatar) + 8px);
   height: calc(var(--glow-avatar) + 8px);
-  border: var(--glow-ring-width) solid rgba(var(--glow-brand), var(--glow-halo-alpha));
+  border: var(--glow-ring-width) solid rgb(var(--glow-brand) / var(--glow-halo-alpha));
   box-shadow:
-    0 0 0 1px rgba(var(--glow-maroon), 0.035),
-    0 0 var(--glow-blur) rgba(var(--glow-brand), var(--glow-halo-shadow)),
-    0 8px 22px rgba(var(--glow-maroon), 0.08);
+    0 0 0 1px rgb(var(--glow-maroon) / 0.035),
+    0 0 var(--glow-blur) rgb(var(--glow-brand) / var(--glow-halo-shadow)),
+    0 8px 22px rgb(var(--glow-maroon) / 0.08);
 }
 
 .pulse {
@@ -39,8 +39,8 @@
   z-index: 0;
   width: var(--glow-core);
   height: var(--glow-core);
-  border: var(--glow-ring-width) solid rgba(var(--glow-brand), 0.86);
-  box-shadow: 0 0 var(--glow-blur) rgba(var(--glow-brand), var(--pulse-shadow));
+  border: var(--glow-ring-width) solid rgb(var(--glow-brand) / 0.86);
+  box-shadow: 0 0 var(--glow-blur) rgb(var(--glow-brand) / var(--pulse-shadow));
   opacity: 0;
   transform: scale(0.92);
 }
@@ -53,9 +53,9 @@
   background: conic-gradient(
     from 0deg,
     transparent 0 43%,
-    rgba(var(--glow-paper), 0.04) 46%,
-    rgba(var(--glow-highlight), 0.96) 50%,
-    rgba(var(--glow-brand), 0.86) 53.5%,
+    rgb(var(--glow-paper) / 0.04) 46%,
+    rgb(var(--glow-highlight) / 0.96) 50%,
+    rgb(var(--glow-brand) / 0.86) 53.5%,
     transparent 59% 100%
   );
   -webkit-mask: radial-gradient(
@@ -185,7 +185,7 @@
    blooming into a neon edge against the darker canvas. */
 :global(.dark) .halo {
   box-shadow:
-    0 0 0 1px rgba(var(--glow-paper), 0.035),
-    0 0 var(--glow-blur) rgba(var(--glow-brand), var(--glow-halo-shadow)),
+    0 0 0 1px rgb(var(--glow-paper) / 0.035),
+    0 0 var(--glow-blur) rgb(var(--glow-brand) / var(--glow-halo-shadow)),
     0 8px 24px rgba(0, 0, 0, 0.2);
 }
