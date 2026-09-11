@@ -107,15 +107,15 @@ describe("canonical qualitative labels", () => {
   });
 });
 
-describe("privacy-safe secondary range labels", () => {
+describe("canonical secondary range labels", () => {
   it.each([
-    ["right_here", "Within 100 m"],
-    ["around_you", "Within 500 m"],
-    ["close_by", "Within 2 km"],
-    ["nearby", "Within 5 km"],
-    ["around_town", "Within 10 km"],
-    ["further_away", "Within 15 km"]
-  ] as Array<[ProximityBand, string]>)("%s derives %s from the canonical ceiling", (band, copy) => {
+    ["right_here", "0–100 m"],
+    ["around_you", "100–500 m"],
+    ["close_by", "500 m–2 km"],
+    ["nearby", "2–5 km"],
+    ["around_town", "5–10 km"],
+    ["further_away", "10–15 km"]
+  ] as Array<[ProximityBand, string]>)("%s explains its configured band as %s", (band, copy) => {
     expect(proximityBandRangeLabel(band)).toBe(copy);
   });
 
@@ -123,16 +123,21 @@ describe("privacy-safe secondary range labels", () => {
     expect(proximityBandRangeLabel("outside_range")).toBeNull();
   });
 
-  it("reads from the same threshold authority rather than an alternate table", () => {
-    expect(proximityBandRangeLabel("right_here")).toContain(
-      String(PROXIMITY_BAND_MAX_METERS.right_here)
+  it("reads both ends from the same threshold authority", () => {
+    expect(proximityBandRangeLabel("right_here")).toBe(
+      `0–${PROXIMITY_BAND_MAX_METERS.right_here} m`
     );
-    expect(proximityBandRangeLabel("around_you")).toContain(
-      String(PROXIMITY_BAND_MAX_METERS.around_you)
+    expect(proximityBandRangeLabel("around_you")).toBe(
+      `${PROXIMITY_BAND_MAX_METERS.right_here}–${PROXIMITY_BAND_MAX_METERS.around_you} m`
     );
-    expect(proximityBandRangeLabel("further_away")).toContain(
-      String(PROXIMITY_BAND_MAX_METERS.further_away / 1_000)
+    expect(proximityBandRangeLabel("further_away")).toBe(
+      `${PROXIMITY_BAND_MAX_METERS.around_town / 1_000}–${PROXIMITY_BAND_MAX_METERS.further_away / 1_000} km`
     );
+  });
+
+  it("never suggests somebody can be shown past 15 km", () => {
+    expect(proximityBandRangeLabel("further_away")).toBe("10–15 km");
+    expect(proximityBandRangeLabel("further_away")).not.toContain("+");
   });
 });
 
