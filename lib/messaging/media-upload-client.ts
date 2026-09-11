@@ -91,7 +91,8 @@ export async function finalizeImageUploadViaApi(input: {
     { operation: "finalize", mediaKind: "image", ...input },
     45_000
   );
-  return payload ?? { ok: false, message: "Couldn't finish that photo. Try again." };
+  if (!payload) return { ok: false as const, message: "Couldn't finish that photo. Try again." };
+  return { ...payload, message: payload.message ?? (payload.ok ? "Photo ready." : "Couldn't finish that photo. Try again.") };
 }
 
 export async function createRichMediaUploadIntentViaApi(input: {
@@ -126,7 +127,8 @@ export async function finalizeRichMediaUploadViaApi(input: {
     },
     45_000
   );
-  return payload ?? { ok: false, message: "Couldn't finish that attachment. Try again." };
+  if (!payload) return { ok: false as const, message: "Couldn't finish that attachment. Try again." };
+  return { ...payload, message: payload.message ?? (payload.ok ? "Attachment ready." : "Couldn't finish that attachment. Try again.") };
 }
 
 /**
