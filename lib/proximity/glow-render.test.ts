@@ -54,8 +54,9 @@ describe("Magnetic Pulse DOM", () => {
 });
 
 describe("requested timing reaches the DOM", () => {
-  it("sets Just Around to a 1.7s pulse and 2.15s revolution", () => {
-    const html = render("just-around", { size: "lg" });
+  it("sets closest Just Around to a 1.7s pulse and 2.15s revolution", () => {
+    const html = render("right-here", { size: "lg" });
+    expect(PROXIMITY_GLOW_CONFIG["right-here"].label).toBe("Just Around");
     expect(html).toContain("--glow-pulse:1.7s");
     expect(html).toContain("--glow-sweep:2.15s");
     expect(html).toContain('data-pulse-count="3"');
@@ -95,8 +96,8 @@ describe("geometry reaches the DOM without changing layout", () => {
 
 describe("reduced motion and intensity", () => {
   it("stops animation when the caller requests reduced motion", () => {
-    expect(render("just-around")).toContain('data-animate="true"');
-    expect(render("just-around", { reducedMotion: true })).toContain('data-animate="false"');
+    expect(render("right-here")).toContain('data-animate="true"');
+    expect(render("right-here", { reducedMotion: true })).toContain('data-animate="false"');
   });
 
   it("keeps all six states distinct as still frames", () => {
@@ -113,7 +114,7 @@ describe("reduced motion and intensity", () => {
 });
 
 describe("no signal", () => {
-  it("renders a bare subject without inventing a Far state", () => {
+  it("renders a bare subject when no proximity state exists", () => {
     const html = render(null);
     expect(html).toContain("<span>avatar</span>");
     expect(html).not.toContain("data-pulse-ring");

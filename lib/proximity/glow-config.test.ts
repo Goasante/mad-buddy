@@ -13,15 +13,11 @@ import {
   type ProximityGlowLevel,
   type ProximityGlowSize
 } from "@/lib/proximity/glow-config";
-import {
-  bandForDistance,
-  PROXIMITY_BAND_LABELS,
-  type ProximityBand
-} from "@/lib/proximity/bands";
+import { bandForDistance, type ProximityBand } from "@/lib/proximity/bands";
 
 const SIZES = Object.keys(PROXIMITY_GLOW_SIZES) as ProximityGlowSize[];
 
-describe("distance still resolves to the existing six proximity states", () => {
+describe("distance resolves to the corrected public glow stages", () => {
   const glowForDistance = (distanceMeters: number): ProximityGlowLevel | null =>
     glowLevelForBand(bandForDistance(distanceMeters));
 
@@ -36,42 +32,55 @@ describe("distance still resolves to the existing six proximity states", () => {
     [5_000, "in-your-area"],
     [5_001, "around-town"],
     [10_000, "around-town"],
-    [10_001, "across-town"],
-    [15_000, "across-town"]
+    [10_001, "around-town"],
+    [15_000, "around-town"],
+    [15_001, null]
   ] as const)("%dm renders %s", (meters, expected) => {
     expect(glowForDistance(meters)).toBe(expected);
   });
 
-  it("keeps the 15 km eligibility boundary", () => {
-    expect(glowForDistance(15_001)).toBeNull();
-    expect(glowForDistance(50_000)).toBeNull();
+  it("maps the two broad in-range backend bands to one public Nearby glow", () => {
+    expect(glowLevelForBand("around_town")).toBe("around-town");
+    expect(glowLevelForBand("further_away")).toBe("around-town");
   });
 
-  it("maps every in-range band exactly once", () => {
+  it("does not render an outside-range Glow after the 15 km Nearby gate", () => {
+    expect(glowLevelForBand("outside_range")).toBeNull();
+  });
+
+  it("still maps every band deterministically", () => {
     const bands: ProximityBand[] = [
       "right_here",
       "around_you",
       "close_by",
       "nearby",
       "around_town",
-      "further_away"
+      "further_away",
+      "outside_range"
     ];
-    expect(bands.map((band) => glowLevelForBand(band))).toEqual(PROXIMITY_GLOW_LEVELS);
-    expect(glowLevelForBand("outside_range")).toBeNull();
+    expect(bands.map((band) => glowLevelForBand(band))).toEqual([
+      "right-here",
+      "just-around",
+      "close-by",
+      "in-your-area",
+      "around-town",
+      "around-town",
+      null
+    ]);
   });
 });
 
 describe("Magnetic Pulse progression", () => {
   const ordered = PROXIMITY_GLOW_LEVELS.map((level) => PROXIMITY_GLOW_CONFIG[level]);
 
-  it("keeps the canonical state names", () => {
+  it("uses the approved six public stage names", () => {
     expect(ordered.map((config) => config.label)).toEqual([
-      PROXIMITY_BAND_LABELS.right_here,
-      PROXIMITY_BAND_LABELS.around_you,
-      PROXIMITY_BAND_LABELS.close_by,
-      PROXIMITY_BAND_LABELS.nearby,
-      PROXIMITY_BAND_LABELS.around_town,
-      PROXIMITY_BAND_LABELS.further_away
+      "Just Around",
+      "Very Close",
+      "Close",
+      "In Area",
+      "Nearby",
+      "Far"
     ]);
     for (const level of PROXIMITY_GLOW_LEVELS) {
       expect(proximityGlowLabel(level)).toBe(PROXIMITY_GLOW_CONFIG[level].label);
@@ -90,19 +99,22 @@ describe("Magnetic Pulse progression", () => {
     }
   });
 
-  it("uses the requested Just Around timing", () => {
-    const justAround = PROXIMITY_GLOW_CONFIG["just-around"];
+  it("puts the requested 1.7s / 2.15s cadence on Just Around, the strongest stage", () => {
+    const justAround = PROXIMITY_GLOW_CONFIG["right-here"];
+    expect(justAround.label).toBe("Just Around");
     expect(justAround.pulseSeconds).toBe(1.7);
     expect(justAround.layers.sweepSeconds).toBe(2.15);
     expect(justAround.layers.pulseCount).toBe(3);
+    expect(justAround.strength).toBe(1);
   });
 
-  it("keeps Right Here stronger than Just Around without changing thresholds", () => {
-    const rightHere = PROXIMITY_GLOW_CONFIG["right-here"];
-    const justAround = PROXIMITY_GLOW_CONFIG["just-around"];
-    expect(rightHere.pulseSeconds).toBeLessThan(justAround.pulseSeconds);
-    expect(rightHere.layers.sweepSeconds!).toBeLessThan(justAround.layers.sweepSeconds!);
-    expect(rightHere.strength).toBeGreaterThan(justAround.strength);
+  it("keeps Very Close below Just Around", () => {
+    const justAround = PROXIMITY_GLOW_CONFIG["right-here"];
+    const veryClose = PROXIMITY_GLOW_CONFIG["just-around"];
+    expect(veryClose.label).toBe("Very Close");
+    expect(veryClose.pulseSeconds).toBeGreaterThan(justAround.pulseSeconds);
+    expect(veryClose.layers.sweepSeconds!).toBeGreaterThan(justAround.layers.sweepSeconds!);
+    expect(veryClose.strength).toBeLessThan(justAround.strength);
   });
 
   it("builds intensity through rings instead of particles or decorative orbits", () => {
@@ -176,6 +188,12 @@ describe("brand and motion safeguards", () => {
     expect(css).toContain("--glow-maroon: 78 4 1");
     expect(css).toContain("--glow-paper: 254 251 243");
     expect(css).not.toMatch(/167 139 250|139 92 246|#a78bfa|#8b5cf6/i);
+  });
+
+  it("uses Safari-safe modern rgb variable syntax for the pulse layers", () => {
+    expect(css).toContain("rgb(var(--glow-brand) / var(--glow-halo-alpha))");
+    expect(css).toContain("rgb(var(--glow-brand) / 0.86)");
+    expect(css).not.toContain("rgba(var(--glow-brand),");
   });
 
   it("has a CSS reduced-motion stop as a second line of defence", () => {

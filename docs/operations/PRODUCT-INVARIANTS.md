@@ -6,9 +6,10 @@ These are not styling preferences. They are product/security boundaries that a d
 
 - Never expose exact GPS coordinates to another user.
 - Never show exact measured distance, street-level location, live map pins, or location history.
-- Proximity is represented with coarse qualitative bands such as `Right Here`, `Just Around`, `Close By`, `In Your Area`, `Around Town`, and `Across Town`.
-- Approved Glow-led teaching surfaces may pair those terms with their canonical category ranges (`0–100 m`, `100–500 m`, `500 m–2 km`, `2–5 km`, `5–10 km`, `10–15 km`). These ranges explain the vocabulary; they are derived from the same band thresholds and are not the person’s measured distance.
-- The 15 km nearby eligibility ceiling remains authoritative. Never imply an in-range state such as `15 km+` that would include people the backend excludes.
+- Proximity uses the six public stages `Just Around`, `Very Close`, `Close`, `In Area`, `Nearby`, and `Far`.
+- `Just Around` is the closest/highest stage and explains the `0–100 m` category. `Very Close` explains `100–500 m`, `Close` explains `500 m–2 km`, `In Area` explains `2–5 km`, `Nearby` explains the broad `5–15 km` category, and `Far` explains `15 km+`.
+- These numbers explain category vocabulary; they are not the person’s measured distance. The client still receives a resolved privacy-safe band rather than raw distance or coordinates.
+- The backend Nearby/discovery eligibility ceiling remains 15 km. `Far — 15 km+` may describe an already-known Muddy as an outer category where that state is available, but it must not silently re-admit >15 km candidates into Nearby discovery.
 - Stale proximity is not current proximity. Cached/stale state must not be presented as live truth.
 - The database intentionally stores only the latest user location rather than a movement history.
 

@@ -36,7 +36,7 @@ describe("canonical proximity parity", () => {
     expect(mobileMuddies).not.toContain('near?.proximity_level ?? "far"');
   });
 
-  it("includes Far in the fresh nearby-Moments audience", () => {
+  it("includes the broad in-range tier in the fresh nearby-Moments audience", () => {
     const service = read("lib/content/service.ts");
     expect(service).toContain('friend.proximity_level !== "hidden"');
     expect(service).not.toContain('friend.proximity_level !== "far"');
@@ -57,22 +57,17 @@ describe("canonical proximity parity", () => {
     const pulseRoute = read("app/api/pulse/route.ts");
 
     // Preserve the narrower existing alert threshold to avoid a deployment
-    // notification surge; Far still appears in Pulse as an in-range signal.
+    // notification surge; the widest in-range tier still appears in Pulse.
     expect(nearbyRoute).toContain('friend.proximity_level === "close" || friend.proximity_level === "near"');
     expect(pulseRoute).toContain('nearby.filter((friend) => friend.proximity_level !== "hidden")');
   });
 
   it("keeps the six user-facing Glow labels on the canonical presentation authority", () => {
-    const expected = [
-      "Right Here",
-      "Just Around",
-      "Close By",
-      "In Your Area",
-      "Around Town",
-      "Across Town"
-    ];
+    const expected = ["Just Around", "Very Close", "Close", "In Area", "Nearby", "Far"];
 
-    expect(Object.values(PROXIMITY_BAND_LABELS).filter((label) => label !== "Too far")).toEqual(expected);
+    // The backend retains two internal bands inside the public 5–15 km Nearby
+    // stage, so de-duplicate band labels before comparing public vocabulary.
+    expect([...new Set(Object.values(PROXIMITY_BAND_LABELS))]).toEqual(expected);
     expect(Object.values(PROXIMITY_GLOW_CONFIG).map((config) => config.label)).toEqual(expected);
   });
 
