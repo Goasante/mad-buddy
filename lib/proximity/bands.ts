@@ -1,13 +1,9 @@
 import type { ConfidenceLevel } from "@/lib/proximity";
 
 /**
- * Privacy-safe presentation bands layered on top of the stored coarse
+ * The six privacy-safe presentation bands layered on top of the stored coarse
  * proximity enum. The server resolves these from measured distance; clients
  * receive only the band identifier, never coordinates or exact distance.
- *
- * Public vocabulary is intentionally simpler than the internal thresholds:
- * the two broad 5–10 km and 10–15 km bands both read as "Nearby". That keeps
- * the product at six user-facing stages without changing backend eligibility.
  */
 export type ProximityBand =
   | "right_here"
@@ -31,12 +27,11 @@ export const PROXIMITY_BAND_MAX_METERS = {
 } as const;
 
 /**
- * User-facing stage names, closest first:
+ * Canonical public vocabulary, closest first:
  * Just Around → Very Close → Close → In Area → Nearby → Far.
  *
- * `Far` describes the outside-range category (15 km+). The Nearby discovery
- * endpoint still excludes candidates beyond 15 km; this label does not widen
- * that gate.
+ * All six public states are inside the existing 15 km eligibility boundary.
+ * Anything beyond 15 km is outside range and must not be presented as Far.
  */
 export const PROXIMITY_BAND_LABELS: Record<ProximityBand, string> = {
   right_here: "Just Around",
@@ -44,8 +39,8 @@ export const PROXIMITY_BAND_LABELS: Record<ProximityBand, string> = {
   close_by: "Close",
   nearby: "In Area",
   around_town: "Nearby",
-  further_away: "Nearby",
-  outside_range: "Far"
+  further_away: "Far",
+  outside_range: "Too far"
 };
 
 /** Ordered once so resolution and display ranges cannot drift apart. */
@@ -94,21 +89,22 @@ export function resolveProximityBand(
   return BAND_ORDER.indexOf(measured) < BAND_ORDER.indexOf(finest) ? finest : measured;
 }
 
-/** Qualitative label only; never an exact measured distance. */
-export function proximityBandLabel(band: ProximityBand): string {
-  return PROXIMITY_BAND_LABELS[band];
+/** The qualitative label a person reads, or null when there is no in-range state. */
+export function proximityBandLabel(band: ProximityBand): string | null {
+  return band === "outside_range" ? null : PROXIMITY_BAND_LABELS[band];
 }
 
 /**
- * Secondary copy explaining the stage vocabulary. This is not the measured
- * distance. Both the label and range are derived from the already-resolved band.
+ * Secondary copy explaining what a proximity term means, not where somebody
+ * exactly is. The UI receives only the already-resolved band, so this never
+ * exposes the measured distance or coordinates.
  *
- * Two internal broad bands intentionally collapse to the same public Nearby
- * stage and therefore the same explanatory range: 5–15 km.
+ * Both ends are derived from the SAME canonical ceiling table used by the band
+ * resolver. If a boundary changes, the displayed category range changes with
+ * it rather than leaving stale copy in a component.
  */
-export function proximityBandRangeLabel(band: ProximityBand): string {
-  if (band === "outside_range") return "15 km+";
-  if (band === "around_town" || band === "further_away") return "5–15 km";
+export function proximityBandRangeLabel(band: ProximityBand): string | null {
+  if (band === "outside_range") return null;
 
   const index = IN_RANGE_BANDS.indexOf(band);
   const previousBand = index > 0 ? IN_RANGE_BANDS[index - 1] : null;
