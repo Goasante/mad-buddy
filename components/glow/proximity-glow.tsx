@@ -65,7 +65,7 @@ export function ProximityGlow({
   const config = PROXIMITY_GLOW_CONFIG[level];
   const geometry = resolveGlowGeometry(level, size);
   const { layers } = config;
-  const strength = clamp(config.strength * Math.max(0, intensity));
+  const strength = Math.min(1, Math.max(0, config.strength * Math.max(0, intensity)));
 
   // Custom Glow styles recolour the same Magnetic Pulse. They never change
   // ring count, speed or geometry, so cosmetics cannot make a Muddy look
