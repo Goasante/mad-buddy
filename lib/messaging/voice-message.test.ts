@@ -78,13 +78,14 @@ describe("Phase 4F canonical voice messages", () => {
     expect(group).toContain("senderName={message.isMine ? \"you\" : message.senderName}");
   });
 
-  it("roots sent playback in conversation -> message -> asset and mints lazily", () => {
+  it("roots sent playback in conversation -> message -> asset and uses the independent media lane", () => {
     expect(playback).toContain("projectVoiceMessages");
     expect(playback).toContain('.eq("id", input.messageId)');
     expect(playback).toContain('.eq("conversation_id", input.conversationId)');
-    // Lazily minted on first play, through the per-message grant.
-    expect(bubble).toContain("getMessageVoicePlaybackAction");
-    expect(bubble).toContain("if (!src)");
+    expect(bubble).toContain("getVoiceMessagePlaybackViaApi");
+    expect(bubble).not.toContain("getMessageVoicePlaybackAction");
+    expect(bubble).toContain("voicePlaybackNeedsRefresh");
+    expect(bubble).toContain("await audio.play()");
     expect(service).not.toContain("storageKey:");
   });
 
