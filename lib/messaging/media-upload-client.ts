@@ -1,5 +1,6 @@
 "use client";
 
+import type { AuthorizedVoicePlayback } from "@/lib/messaging/voice-playback";
 import type { RichMediaMessageView } from "@/lib/messaging/rich-media-v4-types";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 
@@ -31,6 +32,7 @@ type FinalizePayload = {
   contentType?: string;
   fileName?: string;
   sizeBytes?: number;
+  durationMs?: number;
 };
 
 async function postMedia<T>(body: unknown, timeoutMs: number): Promise<T | null> {
@@ -59,7 +61,7 @@ async function postMedia<T>(body: unknown, timeoutMs: number): Promise<T | null>
   }
 }
 
-/** The old Server Action return shape, preserved for the picker. */
+/** The old Server Action return shape, preserved for the photo picker. */
 export async function createImageUploadIntentViaApi(input: {
   conversationId: string;
   contentType: string;
@@ -129,6 +131,63 @@ export async function finalizeRichMediaUploadViaApi(input: {
   );
   if (!payload) return { ok: false as const, message: "Couldn't finish that attachment. Try again." };
   return { ...payload, message: payload.message ?? (payload.ok ? "Attachment ready." : "Couldn't finish that attachment. Try again.") };
+}
+
+/** Voice control-plane transport; the raw recording still uploads to Storage. */
+export async function createVoiceUploadIntentViaApi(input: {
+  conversationId: string;
+  contentType: string;
+  sizeBytes: number;
+}) {
+  const payload = await postMedia<IntentPayload>(
+    { operation: "voice_intent", ...input },
+    12_000
+  );
+  if (!payload?.ok || !payload.intent) {
+    return { ok: false as const, message: payload?.message ?? "Couldn't prepare that voice message. Try again." };
+  }
+  return {
+    ok: true as const,
+    message: payload.message ?? "Voice upload ready.",
+    mediaId: payload.intent.mediaId,
+    path: payload.intent.path,
+    token: payload.intent.token,
+    signedUrl: payload.intent.signedUrl,
+    expiresAt: payload.intent.expiresAt
+  };
+}
+
+export async function finalizeVoiceUploadViaApi(input: {
+  conversationId: string;
+  mediaId: string;
+  waveform: number[] | null;
+  clientDurationMs: number;
+}) {
+  const payload = await postMedia<FinalizePayload>(
+    { operation: "voice_finalize", ...input },
+    45_000
+  );
+  if (!payload) return { ok: false as const, message: "Couldn't finish that voice message. Try again." };
+  return {
+    ...payload,
+    message: payload.message ?? (payload.ok ? "Voice message prepared." : "Couldn't finish that voice message. Try again.")
+  };
+}
+
+/**
+ * Sent voice-note playback projection. A transport failure is `ok: false`;
+ * `ok: true, playback: null` is the server authoritatively saying the message
+ * is unavailable, expired, removed or inaccessible.
+ */
+export async function getVoiceMessagePlaybackViaApi(input: {
+  conversationId: string;
+  messageId: string;
+}): Promise<{ ok: boolean; playback: AuthorizedVoicePlayback | null }> {
+  const payload = await postMedia<{ ok: boolean; playback: AuthorizedVoicePlayback | null }>(
+    { operation: "voice_view", ...input },
+    15_000
+  );
+  return payload ?? { ok: false, playback: null };
 }
 
 /**
