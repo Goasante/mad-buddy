@@ -65,9 +65,7 @@ describe("canonical proximity parity", () => {
   it("keeps the six user-facing Glow labels on the canonical presentation authority", () => {
     const expected = ["Just Around", "Very Close", "Close", "In Area", "Nearby", "Far"];
 
-    // The backend retains two internal bands inside the public 5–15 km Nearby
-    // stage, so de-duplicate band labels before comparing public vocabulary.
-    expect([...new Set(Object.values(PROXIMITY_BAND_LABELS))]).toEqual(expected);
+    expect(Object.values(PROXIMITY_BAND_LABELS).filter((label) => label !== "Too far")).toEqual(expected);
     expect(Object.values(PROXIMITY_GLOW_CONFIG).map((config) => config.label)).toEqual(expected);
   });
 
