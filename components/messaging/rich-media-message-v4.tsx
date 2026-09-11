@@ -57,8 +57,6 @@ export function RichMediaMessageV4({
 
   useEffect(() => {
     let disposed = false;
-    setMedia(undefined);
-    setLoadFailed(false);
     void getRichMediaMessageViaApi({ conversationId, messageId }).then((result) => {
       if (disposed) return;
       if (!result.ok) {
