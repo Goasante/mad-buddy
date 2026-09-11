@@ -37,7 +37,6 @@ import {
   muteConversationAction,
   openDirectConversationAction,
   reactToMessageAction,
-  sendMessageAction,
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import { forwardMessageAction } from "@/app/(app)/messaging-forward-actions";
@@ -80,6 +79,7 @@ import {
   pruneConfirmed,
   type OptimisticMessage
 } from "@/lib/messaging/optimistic-messages";
+import { sendMessageViaApi } from "@/lib/messaging/send-client";
 import {
   bindThreadCacheOwner,
   type CachedConversationControls,
@@ -407,7 +407,7 @@ export function MessagesPageV4({
     }
   }, []);
 
-  const refreshMessages = useCallback(async (conversationId: string, countIncoming = true) => {
+  const refreshMessages = useCallback(async (conversationId: string, countIncoming = true, reportFailure = true) => {
     try {
       const [loaded, replies] = await Promise.all([
         withTimeout(getMessagesAction(conversationId), { operation: "refresh conversation" }),
@@ -432,7 +432,10 @@ export function MessagesPageV4({
       setReplyContexts(nextReplies);
       writeThreadMessages(viewerIdRef.current, conversationId, reconciled, nextReplies);
     } catch (error) {
-      setFeedback(failureMessage(error));
+      // A Realtime fallback or post-mutation reconciliation is background work:
+      // keep the already-rendered thread instead of telling the user the chat
+      // failed. First-load failures still report through loadConversation.
+      if (reportFailure) setFeedback(failureMessage(error));
     }
     /* setFeedback is referentially stable by contract (useTransientFeedback
        wraps it in useCallback), so listing it cannot retrigger this. */
@@ -617,7 +620,10 @@ export function MessagesPageV4({
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (disposed) return;
-        void refreshMessages(selectedId, true);
+        // Realtime fallback is reconciliation, not a foreground user action.
+        // If its full snapshot is slow, keep the already-rendered chat calm;
+        // the next event/open will reconcile again.
+        void refreshMessages(selectedId, true, false);
         void syncConversations();
         /* If the thread is on screen, an incoming message is read now. This is
            intentionally background work; it also drives the sender's Seen
@@ -1033,15 +1039,16 @@ export function MessagesPageV4({
     startTransition(async () => {
       /* The SAME clientMessageId. The server's unique (sender_id,
          client_message_id) makes a retry of a send that actually landed return
-         the original message instead of posting a second one. */
-      const result = await sendMessageAction({ conversationId, text: draft.text ?? "", mediaId: draft.mediaId, clientMessageId }).catch(() => ({ ok: false, message: "Could not retry." }));
+         the original message instead of posting a second one. The retry now
+         uses the same independent JSON lane as the original composer send. */
+      const result = await sendMessageViaApi({ conversationId, text: draft.text ?? "", mediaId: draft.mediaId, clientMessageId }).catch(() => ({ ok: false, message: "Could not retry." }));
       if (!result.ok) {
         updateOptimistic(conversationId, (current) => markFailed(current, clientMessageId));
         setFeedback(result.message);
         return;
       }
       updateOptimistic(conversationId, (current) => markRetrying(current, clientMessageId));
-      void refreshMessages(conversationId, false);
+      void refreshMessages(conversationId, false, false);
       void syncConversations();
     });
   }
@@ -1318,14 +1325,10 @@ export function MessagesPageV4({
                 onOptimisticSend={(draft) => addOptimistic(selected.id, draft)}
                 onOptimisticSettled={(clientMessageId, outcome) => settleOptimistic(selected.id, clientMessageId, outcome)}
                 confirmedClientMessageIds={new Set(messages.map((message) => message.clientMessageId).filter((id): id is string => Boolean(id)))}
-                /* Reconciliation stays, but it never gates the composer: the
-                   optimistic row is already drawn and already reads "sent", so
-                   this only replaces it with the canonical one and refreshes
-                   the inbox preview. Kept rather than left to the Realtime echo
-                   alone, because a send must resolve even when the socket is
-                   down -- that is the one path where the person is watching
-                   their own message. */
-                onSent={() => { void refreshMessages(selected.id, false); void syncConversations(); scrollToBottom(); }}
+                /* The shell's ordinary-send path intentionally does not invoke
+                   this anymore. It remains for non-message composer actions;
+                   any reconciliation it triggers is non-blocking. */
+                onSent={() => { void refreshMessages(selected.id, false, false); void syncConversations(); scrollToBottom(); }}
               />
               )}
             </>
