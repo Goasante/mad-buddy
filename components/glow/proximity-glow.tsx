@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
+
+import styles from "./proximity-glow.module.css";
 import { cn } from "@/lib/utils";
 import {
-  GLOW_SPARKS,
   PROXIMITY_GLOW_CONFIG,
   resolveGlowGeometry,
   type ProximityGlowLevel,
@@ -10,70 +11,32 @@ import {
 import { glowColorById } from "@/lib/glow/custom-colors";
 
 /**
- * The canonical Proximity Glow.
+ * The canonical Magnetic Pulse renderer for Muddy proximity.
  *
- * ONE COMPONENT, ONE SOURCE OF TRUTH. Every proximity surface renders this;
- * none of them holds its own ring sizes, blur radii or pulse timings. The
- * numbers come from lib/proximity/glow-config.ts, the structure from the
- * `.proximity-glow*` rules in app/globals.css, and this file is only the
- * bridge -- it maps one level and one size onto custom properties and data
- * attributes, then hands the layers to CSS.
+ * The server owns proximity. This component receives only a privacy-safe state
+ * and turns it into presentation. It cannot see coordinates or an exact
+ * distance, and it never changes who is eligible to appear.
  *
- * WHY LAYERS ARE CONDITIONAL RATHER THAN ALWAYS-RENDERED-AT-ZERO-OPACITY.
- * Two reasons, and both matter. Perceptually, the six states separate BECAUSE
- * layers disappear -- that is the design. Practically, a Muddies list can hold
- * dozens of avatars, and rendering a masked conic gradient plus nine
- * absolutely-positioned sparks for every one of them, invisible, would be a
- * real cost paid for nothing. Only the two closest states carry sparks; only
- * the closest carries the radial field.
- *
- * THE GLOW IS NEVER PART OF THE AVATAR. Everything here is runtime decoration
- * drawn around `children`. The same avatar renders identically with any level,
- * or with none.
+ * PERFORMANCE. Each avatar renders one stationary halo, 1-3 simple pulse rings
+ * and (only for the closest states) one rotating highlight. There are no spark
+ * particles, dotted orbits, filters or JS animation loops. Motion is transform
+ * + opacity only, and both the caller preference and CSS reduced-motion query
+ * can stop it.
  */
-
 export type ProximityGlowProps = {
-  /**
-   * The proximity state to render. `null` means no proximity signal -- the
-   * subject renders bare, with no Glow at all.
-   *
-   * Deliberately not defaulted to the weakest state: "we do not know where
-   * this person is" and "this person is across town" are different claims, and
-   * conflating them would put a Glow on every chat and group avatar in the app.
-   */
   level: ProximityGlowLevel | null;
   size?: ProximityGlowSize;
-  /**
-   * Honour prefers-reduced-motion from the caller when it already knows.
-   *
-   * The stylesheet enforces reduced motion on its own via a media query, so
-   * this is belt-and-braces for surfaces holding the preference in state --
-   * never the only protection.
-   */
   reducedMotion?: boolean;
-  /** Optional custom-glow palette id (custom_glow_styles entitlement). */
   glowColorId?: string | null;
-  /**
-   * Presentation-only strength multiplier (1 = the approved value).
-   *
-   * Applied uniformly to the resolved strength, so the ordering between states
-   * is preserved at any intensity: a surface may render the whole scale calmer
-   * or bolder, but it can never make Across Town outshine Right Here.
-   */
+  /** Presentation-only multiplier. It never changes geometry or state. */
   intensity?: number;
   className?: string;
-  /**
-   * Accessible name for the whole Glow-plus-subject unit.
-   *
-   * Set here rather than on the avatar because the subject component owns its
-   * own labelling and cannot take one; an explicit role="img" goes with it, so
-   * the label is reliably exposed (a labelled generic <div> is not guaranteed
-   * to reach every browser accessibility tree).
-   */
   "aria-label"?: string;
   "aria-hidden"?: boolean;
   children: ReactNode;
 };
+
+const PULSE_ALPHA_FACTORS = [1, 0.62, 0.34] as const;
 
 export function ProximityGlow({
   level,
@@ -86,7 +49,6 @@ export function ProximityGlow({
   "aria-hidden": ariaHidden,
   children
 }: ProximityGlowProps) {
-  // No signal: the subject alone. No wrapper geometry, no layers, no animation.
   if (!level) {
     return (
       <div
@@ -103,108 +65,91 @@ export function ProximityGlow({
   const config = PROXIMITY_GLOW_CONFIG[level];
   const geometry = resolveGlowGeometry(level, size);
   const { layers } = config;
-
-  // Clamped so a caller cannot push a state past full strength and flatten the
-  // top of the scale, and cannot drive it negative.
   const strength = Math.min(1, Math.max(0, config.strength * Math.max(0, intensity)));
 
-  // A custom colour recolours the Glow only. Geometry, layer count, pulse speed
-  // and strength are untouched, so a purchased palette can never make someone
-  // look closer than they are.
-  // Both properties are set together: recolouring only the brand while the
-  // highlight stayed orange would leave every custom palette with an orange
-  // core inside a coloured halo.
+  // Custom Glow styles recolour the same Magnetic Pulse. They never change
+  // ring count, speed or geometry, so cosmetics cannot make a Muddy look
+  // closer than their resolved proximity band says they are.
   const custom = glowColorById(glowColorId);
-  const colorStyle: Record<string, string> = custom
-    ? { "--glow-brand": custom.rgb, "--glow-highlight": custom.rgb }
-    : {};
+  const brand = custom?.rgb ?? "232 140 43"; // Orange Grove #E88C2B
+  const highlight = custom?.rgb ?? "255 224 142";
+  const hasSweep = layers.sweepOpacity > 0 && layers.sweepSeconds !== null;
 
   const style = {
+    "--glow-brand": brand,
+    "--glow-highlight": highlight,
+    "--glow-maroon": "78 4 1", // Deep Maroon #4E0401
+    "--glow-paper": "254 251 243", // Warm Paper #FEFBF3
+    "--glow-avatar": `${geometry.avatar}px`,
     "--glow-ring": `${geometry.ring}px`,
-    "--glow-outer": `${geometry.outer}px`,
     "--glow-core": `${geometry.core}px`,
-    "--glow-field": `${geometry.field}px`,
+    "--glow-outer": `${geometry.outer}px`,
     "--glow-blur": `${geometry.blur}px`,
     "--glow-strength": strength,
     "--glow-pulse": `${config.pulseSeconds}s`,
+    "--glow-pulse-scale": layers.pulseScale,
     "--glow-ring-width": `${layers.ringWidth}px`,
-    "--glow-ring-style": layers.ringStyle,
-    "--glow-ring2-opacity": layers.ring2Opacity,
-    "--glow-spark-opacity": layers.sparkOpacity,
-    // LAYOUT FOOTPRINT vs VISUAL FOOTPRINT. These are deliberately different.
-    //
-    // The bloom reaches `geometry.box` -- roughly 2.2x the avatar, the ratio
-    // the prototype's generous empty stage assumed. Claiming that much LAYOUT
-    // space breaks every real product row: on Home's Near strip (a 76px column
-    // in a scroll container with 8px of vertical room) a 118px box pushed
-    // neighbours apart, collided with the name beneath it, and was sliced flat
-    // by the container's clip.
-    //
-    // So the element occupies exactly the avatar's box and the layers, which
-    // are absolutely positioned and centred, simply overflow it. Overflow is
-    // free: it costs no space, moves no sibling, and changes no row height.
-    // `geometry.box` is still published for surfaces that WANT to reserve the
-    // full bloom (the comparison harness does), via --glow-box.
+    "--glow-halo-alpha": clamp(layers.haloAlpha * strength),
+    "--glow-halo-shadow": clamp(layers.haloAlpha * strength * 0.42),
+    "--glow-sweep-opacity": clamp(layers.sweepOpacity * strength),
+    "--glow-sweep": `${layers.sweepSeconds ?? 1}s`,
+    // Layout footprint remains the avatar. The aura overflows without moving
+    // siblings; --glow-box remains available to comparison/review harnesses.
     width: `${geometry.avatar}px`,
     height: `${geometry.avatar}px`,
-    "--glow-box": `${geometry.box}px`,
-    ...colorStyle
+    "--glow-box": `${geometry.box}px`
   } as CSSProperties;
-
-  // Sparks orbit forward or in reverse depending on the state -- the reverse
-  // drift is part of what makes Right Here read as more energetic than a
-  // simply-faster version of Just Around.
-  const sparkMotion = level === "right-here" ? "reverse" : "forward";
 
   return (
     <div
-      className={cn("proximity-glow", `proximity-glow-${level}`, className)}
+      className={cn("proximity-glow", `proximity-glow-${level}`, styles.root, className)}
       data-level={level}
       data-size={size}
       data-animate={reducedMotion ? "false" : "true"}
-      data-ring2={layers.ring2}
-      data-ring-spin={layers.ringSpin ? "true" : "false"}
-      data-core-bloom={layers.coreBloom}
-      data-spark-motion={sparkMotion}
+      data-pulse-mode={layers.pulseMode}
+      data-pulse-count={layers.pulseCount}
+      data-has-sweep={hasSweep ? "true" : "false"}
       role={ariaLabel ? "img" : undefined}
       aria-label={ariaLabel}
       aria-hidden={ariaHidden}
       style={style}
     >
-      {layers.radial ? (
-        <div className="proximity-glow__layer proximity-glow__radial" aria-hidden="true" />
+      <div className={cn(styles.layer, styles.halo)} aria-hidden="true" />
+
+      {Array.from({ length: layers.pulseCount }, (_, index) => {
+        const factor = PULSE_ALPHA_FACTORS[index] ?? PULSE_ALPHA_FACTORS.at(-1)!;
+        const pulseStyle = {
+          "--pulse-alpha": clamp(layers.pulseAlpha * strength * factor),
+          "--pulse-shadow": clamp(layers.pulseAlpha * strength * factor * 0.62),
+          // The reference uses thirds of the cycle to create a continuous
+          // magnetic cadence. Keeping the offset deterministic also prevents
+          // dozens of avatars from allocating random animation state.
+          "--pulse-delay": `${round((config.pulseSeconds / 3) * index)}s`,
+          "--pulse-rest-scale": 1.04 + index * 0.07
+        } as CSSProperties;
+
+        return (
+          <div
+            key={index}
+            className={cn(styles.layer, styles.pulse)}
+            data-pulse-ring={index + 1}
+            aria-hidden="true"
+            style={pulseStyle}
+          />
+        );
+      })}
+
+      {hasSweep ? (
+        <div className={cn(styles.layer, styles.sweep)} aria-hidden="true" />
       ) : null}
 
-      {layers.sparkOpacity > 0 ? (
-        <div className="proximity-glow__layer proximity-glow__sparks" aria-hidden="true">
-          {GLOW_SPARKS.map((spark) => (
-            <i
-              key={spark.angle}
-              style={
-                {
-                  "--spark-angle": `${spark.angle}deg`,
-                  "--spark-radius": `${round(geometry.sparkRadius * spark.radiusRatio)}px`
-                } as CSSProperties
-              }
-            />
-          ))}
-        </div>
-      ) : null}
-
-      {layers.orbit ? (
-        <div className="proximity-glow__layer proximity-glow__orbit" aria-hidden="true" />
-      ) : null}
-
-      {layers.ring2 !== "none" ? (
-        <div className="proximity-glow__layer proximity-glow__ring2" aria-hidden="true" />
-      ) : null}
-
-      <div className="proximity-glow__layer proximity-glow__ring" aria-hidden="true" />
-      <div className="proximity-glow__layer proximity-glow__core" aria-hidden="true" />
-
-      <div className="proximity-glow__subject">{children}</div>
+      <div className={styles.subject}>{children}</div>
     </div>
   );
+}
+
+function clamp(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 function round(value: number): number {

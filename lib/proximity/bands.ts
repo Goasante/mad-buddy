@@ -1,26 +1,10 @@
 import type { ConfidenceLevel } from "@/lib/proximity";
 
 /**
- * The six proximity bands a person actually reads.
- *
- * WHY THIS IS SEPARATE FROM ProximityLevel. `ProximityLevel`
- * ("close" | "near" | "far" | "hidden") is a stored database enum, pinned to
- * the generated types by lib/proximity/parity.test.ts. These bands are a
- * PRESENTATION refinement on top of the same measured distance -- they make
- * the existing 0-15km range more informative without changing what is stored,
- * transmitted, or authorized.
- *
- * NOTHING HERE WIDENS ACCESS. The 15km eligibility gate lives in
- * bucketProximity(), which returns null past FAR_MAX_METERS and causes the
- * person to be dropped from the response entirely. `outside_range` here is
- * the same boundary restated for presentation; it never re-admits anyone.
- *
- * NOTHING HERE EXPOSES DISTANCE. Callers pass metres that were computed
- * server-side and receive a band identifier. The measured distance is never
- * part of a response -- assertPrivacySafeResponse rejects any payload
- * containing distance/meters/coord/accuracy keys.
+ * The six privacy-safe presentation bands layered on top of the stored coarse
+ * proximity enum. The server resolves these from measured distance; clients
+ * receive only the band identifier, never coordinates or exact distance.
  */
-
 export type ProximityBand =
   | "right_here"
   | "around_you"
@@ -30,13 +14,9 @@ export type ProximityBand =
   | "further_away"
   | "outside_range";
 
-/**
- * Upper bound of each band, in metres, inclusive.
- *
- * One canonical table. Components must never re-derive these: a second copy
- * of "100" somewhere in a card is how two surfaces start disagreeing about
- * what "Right here" means.
- */
+type InRangeProximityBand = Exclude<ProximityBand, "outside_range">;
+
+/** Canonical inclusive upper bound for every in-range band, in metres. */
 export const PROXIMITY_BAND_MAX_METERS = {
   right_here: 100,
   around_you: 500,
@@ -46,16 +26,6 @@ export const PROXIMITY_BAND_MAX_METERS = {
   further_away: 15_000
 } as const;
 
-/**
- * User-facing copy. Stable ids above, wording here.
- *
- * These are the approved Proximity Glow V2 names. They are Title Case because
- * they read as named states rather than as descriptions -- a person is IN
- * "Close By", they are not "close by" in the adjectival sense. The same six
- * strings appear in lib/proximity/glow-config.ts, which is the presentation
- * authority; a mismatch between the two is a bug, and
- * lib/proximity/glow-config.test.ts asserts they agree.
- */
 export const PROXIMITY_BAND_LABELS: Record<ProximityBand, string> = {
   right_here: "Right Here",
   around_you: "Just Around",
@@ -63,57 +33,33 @@ export const PROXIMITY_BAND_LABELS: Record<ProximityBand, string> = {
   nearby: "In Your Area",
   around_town: "Around Town",
   further_away: "Across Town",
-  // Never rendered: someone outside range is excluded from the response
-  // before any label is chosen. Present so the type is total.
   outside_range: "Too far"
 };
 
-/**
- * The tightest band a reading of each confidence may claim.
- *
- * THE PRECISION GATE. The existing model already pads a distance outward by
- * its uncertainty before bucketing (see confidenceUncertaintyMeters in
- * backend.ts) -- a soft reading resolves further away, never closer. That
- * padding is preserved exactly and is NOT rescaled.
- *
- * But padding alone was calibrated for 5km-wide bands. With a 100m band, a
- * medium reading whose true error is ±200m could still land in "Right here"
- * by luck of rounding. So confidence additionally caps how precise a CLAIM
- * may be: only a high-confidence fix may say "Right here", because only a
- * high-confidence fix knows it.
- *
- * This never moves anyone closer -- it can only widen the band outward.
- */
-const FINEST_BAND_BY_CONFIDENCE: Record<ConfidenceLevel, ProximityBand> = {
-  high: "right_here",
-  // A soft signal can honestly say "around you", not "right here".
-  medium: "around_you",
-  // A weak one commits to nothing tighter than a neighbourhood.
-  low: "close_by"
-};
-
-/** Bands from tightest to widest, so a cap can be applied by position. */
-const BAND_ORDER: readonly ProximityBand[] = [
+/** Ordered once so resolution and display ranges cannot drift apart. */
+const IN_RANGE_BANDS: readonly InRangeProximityBand[] = [
   "right_here",
   "around_you",
   "close_by",
   "nearby",
   "around_town",
-  "further_away",
-  "outside_range"
+  "further_away"
 ];
 
 /**
- * Which band a measured distance falls in, before any confidence cap.
- *
- * Boundaries are inclusive-upper and contiguous: every non-negative distance
- * maps to exactly one band, with no gap and no overlap. 100 is "right here";
- * 100.01 is "around you".
+ * The tightest claim a reading of each confidence may make. This is a privacy
+ * guard, not a visual preference: weak readings are widened outward rather than
+ * allowed to look more precise than the location fix supports.
  */
+const FINEST_BAND_BY_CONFIDENCE: Record<ConfidenceLevel, ProximityBand> = {
+  high: "right_here",
+  medium: "around_you",
+  low: "close_by"
+};
+
+const BAND_ORDER: readonly ProximityBand[] = [...IN_RANGE_BANDS, "outside_range"];
+
 export function bandForDistance(distanceMeters: number): ProximityBand {
-  // A distance that is not a usable number cannot support any claim about
-  // where someone is, so it resolves to the outermost result rather than
-  // defaulting into a precise one.
   if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return "outside_range";
 
   if (distanceMeters <= PROXIMITY_BAND_MAX_METERS.right_here) return "right_here";
@@ -125,14 +71,6 @@ export function bandForDistance(distanceMeters: number): ProximityBand {
   return "outside_range";
 }
 
-/**
- * The canonical resolver. Everything user-facing goes through this.
- *
- * @param distanceMeters server-computed metres. Never sent to a client.
- * @param confidence the weaker of the two readings, as the backend already
- *   computes it. Omitted only where no confidence is known, which is treated
- *   as the least certain case rather than the most.
- */
 export function resolveProximityBand(
   distanceMeters: number,
   confidence: ConfidenceLevel = "low"
@@ -141,11 +79,57 @@ export function resolveProximityBand(
   if (measured === "outside_range") return "outside_range";
 
   const finest = FINEST_BAND_BY_CONFIDENCE[confidence];
-  // Widen to the finest band this confidence may claim, never narrow.
   return BAND_ORDER.indexOf(measured) < BAND_ORDER.indexOf(finest) ? finest : measured;
 }
 
-/** The label a person reads, or null when there is nothing to show. */
+/** The qualitative label a person reads, or null when there is no in-range state. */
 export function proximityBandLabel(band: ProximityBand): string | null {
   return band === "outside_range" ? null : PROXIMITY_BAND_LABELS[band];
+}
+
+/**
+ * Secondary copy explaining what a proximity term means, not where somebody
+ * exactly is. The UI receives only the already-resolved band, so this never
+ * exposes the measured distance or coordinates.
+ *
+ * Both ends are derived from the SAME canonical ceiling table used by the band
+ * resolver. If the 500 m boundary changes, for example, the displayed range
+ * changes with it rather than leaving a stale number in a component.
+ *
+ * These are intentionally category ranges such as "100–500 m". Confidence
+ * capping and hysteresis may conservatively widen the resolved band; the range
+ * explains the band's vocabulary and is not presented as an exact measurement.
+ */
+export function proximityBandRangeLabel(band: ProximityBand): string | null {
+  if (band === "outside_range") return null;
+
+  const index = IN_RANGE_BANDS.indexOf(band);
+  const previousBand = index > 0 ? IN_RANGE_BANDS[index - 1] : null;
+  const minMeters = previousBand ? PROXIMITY_BAND_MAX_METERS[previousBand] : 0;
+  const maxMeters = PROXIMITY_BAND_MAX_METERS[band];
+
+  return formatBandRange(minMeters, maxMeters);
+}
+
+function formatBandRange(minMeters: number, maxMeters: number): string {
+  const minUsesKilometers = minMeters >= 1_000;
+  const maxUsesKilometers = maxMeters >= 1_000;
+
+  if (minUsesKilometers === maxUsesKilometers) {
+    const unit = maxUsesKilometers ? "km" : "m";
+    return `${formatBandMagnitude(minMeters, unit)}–${formatBandMagnitude(maxMeters, unit)} ${unit}`;
+  }
+
+  return `${formatBandDistance(minMeters)}–${formatBandDistance(maxMeters)}`;
+}
+
+function formatBandMagnitude(meters: number, unit: "m" | "km"): string {
+  if (unit === "m") return String(meters);
+  const kilometers = meters / 1_000;
+  return Number.isInteger(kilometers) ? String(kilometers) : kilometers.toFixed(1);
+}
+
+function formatBandDistance(meters: number): string {
+  const unit = meters < 1_000 ? "m" : "km";
+  return `${formatBandMagnitude(meters, unit)} ${unit}`;
 }

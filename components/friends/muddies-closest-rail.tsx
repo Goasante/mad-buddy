@@ -9,16 +9,10 @@ import {
   railToneClass,
   type MuddyProximity
 } from "@/lib/friends/muddies-presentation";
+import { proximityBandRangeLabel } from "@/lib/proximity/bands";
 import { cn } from "@/lib/utils";
 
-/**
- * "Who's closest to you" — the rail at the top of Muddies.
- *
- * The glow is the existing proximity halo, not a new treatment: same classes,
- * same breathing, same privacy model. Only two things are page-specific — the
- * intensity is raised (the rail is the one surface whose whole job is showing
- * distance, so the aura carries it) and the hue tracks the distance band.
- */
+/** "Who's closest to you" — the rail at the top of Muddies. */
 export function MuddiesClosestRail({
   people,
   proximityByFriendId,
@@ -43,8 +37,6 @@ export function MuddiesClosestRail({
         </h2>
       </div>
 
-      {/* Marked swipe-exempt: dragging this strip sideways must scroll it,
-          never change tab under the finger. */}
       <ul
         {...{ [SWIPE_OPT_OUT_ATTRIBUTE]: "" }}
         className="no-scrollbar muddies-rail-track"
@@ -52,6 +44,12 @@ export function MuddiesClosestRail({
         {people.map((person) => {
           const proximity = proximityByFriendId[person.id];
           const level = proximity?.proximityLevel ?? "far";
+          const band =
+            proximity?.proximityBand && proximity.proximityBand !== "outside_range"
+              ? proximity.proximityBand
+              : null;
+          const stateLabel = railDistanceLabel(proximity);
+          const rangeLabel = band ? proximityBandRangeLabel(band) : null;
 
           return (
             <li key={person.id} className="muddies-rail-item">
@@ -59,17 +57,14 @@ export function MuddiesClosestRail({
                 type="button"
                 onClick={() => onSelect(person.id)}
                 className="muddies-rail-button focus-ring"
-                /* ONE composed label for the whole card. The visible text
-                   below is aria-hidden and the avatar is decorative, so a
-                   screen reader hears this sentence once rather than the name
-                   and the state twice over. */
-                aria-label={[person.displayName, railDistanceLabel(proximity).toLowerCase()]
+                aria-label={[
+                  person.displayName,
+                  railDistanceLabel(proximity).toLowerCase(),
+                  rangeLabel?.toLowerCase()
+                ]
                   .filter(Boolean)
                   .join(", ")}
               >
-                {/* aria-hidden on the WRAPPER as well as on the avatar: the
-                    button above already announces name and proximity as one
-                    sentence, so nothing inside may speak again. */}
                 <span className={cn("muddies-rail-glow", railToneClass(level))} aria-hidden="true">
                   <ProximityGlowAvatar
                     name={person.displayName}
@@ -86,7 +81,12 @@ export function MuddiesClosestRail({
                   {person.displayName}
                 </span>
                 <span className={cn("muddies-rail-distance", railToneClass(level))} aria-hidden="true">
-                  {railDistanceLabel(proximity)}
+                  <span className="block font-semibold">{stateLabel}</span>
+                  {rangeLabel ? (
+                    <span className="mt-0.5 block text-[10px] font-medium leading-3 text-muted-foreground/75">
+                      {rangeLabel}
+                    </span>
+                  ) : null}
                 </span>
               </button>
             </li>
