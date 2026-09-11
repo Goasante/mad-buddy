@@ -17,7 +17,7 @@ import { bandForDistance, type ProximityBand } from "@/lib/proximity/bands";
 
 const SIZES = Object.keys(PROXIMITY_GLOW_SIZES) as ProximityGlowSize[];
 
-describe("distance resolves to the corrected six public glow stages", () => {
+describe("distance resolves to the corrected public glow stages", () => {
   const glowForDistance = (distanceMeters: number): ProximityGlowLevel | null =>
     glowLevelForBand(bandForDistance(distanceMeters));
 
@@ -34,7 +34,7 @@ describe("distance resolves to the corrected six public glow stages", () => {
     [10_000, "around-town"],
     [10_001, "around-town"],
     [15_000, "around-town"],
-    [15_001, "across-town"]
+    [15_001, null]
   ] as const)("%dm renders %s", (meters, expected) => {
     expect(glowForDistance(meters)).toBe(expected);
   });
@@ -44,8 +44,8 @@ describe("distance resolves to the corrected six public glow stages", () => {
     expect(glowLevelForBand("further_away")).toBe("around-town");
   });
 
-  it("maps outside_range to the quiet Far treatment without widening backend eligibility", () => {
-    expect(glowLevelForBand("outside_range")).toBe("across-town");
+  it("does not render an outside-range Glow after the 15 km Nearby gate", () => {
+    expect(glowLevelForBand("outside_range")).toBeNull();
   });
 
   it("still maps every band deterministically", () => {
@@ -65,7 +65,7 @@ describe("distance resolves to the corrected six public glow stages", () => {
       "in-your-area",
       "around-town",
       "around-town",
-      "across-town"
+      null
     ]);
   });
 });
