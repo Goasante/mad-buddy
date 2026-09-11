@@ -43,6 +43,7 @@ export function MessageComposerV4Shell({
   onFeedback,
   onOptimisticSend,
   onOptimisticSettled,
+  onDraftCleared,
   confirmedClientMessageIds
 }: {
   conversationId: string;
@@ -57,6 +58,8 @@ export function MessageComposerV4Shell({
   onFeedback: (message: string) => void;
   onOptimisticSend?: (message: OptimisticSendDraftV3) => void;
   onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed" | "pending") => void;
+  /** Clears the page/cache copy immediately when a successful send empties it. */
+  onDraftCleared?: () => void;
   /**
    * Kept in the public prop contract for callers that also use this shell for
    * non-message mutations. Ordinary message sends intentionally do not invoke
@@ -74,16 +77,28 @@ export function MessageComposerV4Shell({
   const typingPublishedRef = useRef(false);
   const lastTypingPublishedAtRef = useRef(0);
   const lastDraftRef = useRef("");
+  /**
+   * Draft writes must be ordered. Previously a 650ms non-empty save could be
+   * in flight while Send queued a clear; if the older request completed last,
+   * the already-sent text resurrected as a draft on the next open.
+   */
+  const draftWriteChainRef = useRef<Promise<void>>(Promise.resolve());
   const [online, setOnline] = useState(true);
 
   const syncDraftToServer = useCallback(
     (value: string) => {
-      void updateConversationUserPreferencesAction({
-        conversationId,
-        draftText: value || null
-      }).catch(() => {
-        // The current textarea keeps the draft in memory if the network drops.
-      });
+      const next = draftWriteChainRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          await updateConversationUserPreferencesAction({
+            conversationId,
+            draftText: value || null
+          }).catch(() => {
+            // The current textarea remains the local source if the network drops.
+          });
+        });
+      draftWriteChainRef.current = next;
+      return next;
     }, [conversationId]
   );
 
@@ -92,7 +107,7 @@ export function MessageComposerV4Shell({
       const nextOnline = navigator.onLine;
       setOnline(nextOnline);
       if (nextOnline && lastDraftRef.current) {
-        syncDraftToServer(lastDraftRef.current);
+        void syncDraftToServer(lastDraftRef.current);
       }
     };
     update();
@@ -119,7 +134,8 @@ export function MessageComposerV4Shell({
       lastDraftRef.current = value;
       if (serverTimerRef.current) clearTimeout(serverTimerRef.current);
       serverTimerRef.current = setTimeout(() => {
-        syncDraftToServer(value);
+        serverTimerRef.current = null;
+        void syncDraftToServer(value);
       }, SERVER_DRAFT_DEBOUNCE_MS);
     }, [syncDraftToServer]
   );
@@ -149,8 +165,10 @@ export function MessageComposerV4Shell({
     return () => {
       if (serverTimerRef.current) clearTimeout(serverTimerRef.current);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-      const pending = lastDraftRef.current;
-      if (pending) syncDraftToServer(pending);
+      // Flush EVEN AN EMPTY value. The old cleanup only flushed truthy text,
+      // so leaving within the debounce window cancelled the very clear that a
+      // successful Send had scheduled and resurrected the server draft.
+      void syncDraftToServer(lastDraftRef.current);
     };
   }, [syncDraftToServer]);
 
@@ -168,23 +186,28 @@ export function MessageComposerV4Shell({
   }
 
   function handleSent() {
-    persistDraft("");
+    // A sent message is not a draft. Clear locally and enqueue the server clear
+    // NOW rather than debouncing it; the serialized write chain guarantees any
+    // older non-empty save finishes first and can never win afterward.
+    if (serverTimerRef.current) {
+      clearTimeout(serverTimerRef.current);
+      serverTimerRef.current = null;
+    }
+    lastDraftRef.current = "";
+    void syncDraftToServer("");
+    onDraftCleared?.();
     publishTyping(false);
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     /*
      * Do NOT immediately call the page's onSent callback here.
      *
      * MessagesPageV4 historically used that callback to refetch the complete
-     * conversation after every successful/ambiguous send. The screenshot that
-     * triggered this fix is the consequence: an optimistic bubble was already
-     * visible, then a redundant 200-row reload timed out and painted "Chats
-     * took too long to respond" over an otherwise usable thread.
+     * conversation after every successful/ambiguous send. An optimistic bubble
+     * was already visible, then a redundant 200-row reload could time out and
+     * paint a global error over an otherwise usable thread.
      *
-     * The canonical path is now local optimistic row -> durable API ack ->
-     * Realtime one-message projection. Ambiguous timeouts are already resolved
-     * by clientMessageId in MessagesPageV4. A later navigation/open still does
-     * the normal authoritative reconciliation, so removing this eager reload
-     * changes latency, not message authority.
+     * The canonical path is local optimistic row -> durable API ack -> Realtime
+     * one-message projection. Ambiguous sends are resolved by clientMessageId.
      */
   }
 
@@ -209,6 +232,7 @@ export function MessageComposerV4Shell({
         onOptimisticSend={onOptimisticSend}
         onOptimisticSettled={onOptimisticSettled}
         onSent={handleSent}
+        deliveryFeedback="inline"
         confirmedClientMessageIds={confirmedClientMessageIds}
         className="w-full border-0 bg-transparent pb-[max(.45rem,env(safe-area-inset-bottom))] lg:pb-1"
       />
