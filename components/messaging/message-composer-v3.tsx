@@ -3,7 +3,7 @@
 import { ArrowUp, AtSign, Loader2, Lock, Mic, Pause, Play, Send, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { sendMessageAction } from "@/app/(app)/messaging-actions";
+import { sendMessageViaApi as sendMessageAction } from "@/lib/messaging/send-client";
 import {
   AttachmentPicker,
   AttachmentPreview,

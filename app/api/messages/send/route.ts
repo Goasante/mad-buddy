@@ -1,7 +1,65 @@
-import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
+import { NextResponse, after } from "next/server";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
-import { sendMessage } from "@/lib/messaging/mobile";
+import { sendMessage, sendMessageSchema, type MessagingResult } from "@/lib/messaging/mobile";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+
+const COMMIT_PROBE_DELAYS_MS = [250, 500, 1_000, 2_000] as const;
+
+type ObservedSend =
+  | { kind: "result"; result: MessagingResult }
+  | { kind: "error"; error: unknown };
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+async function findCommittedSend(
+  userId: string,
+  input: { conversationId: string; clientMessageId: string; mediaId?: string }
+): Promise<MessagingResult | null> {
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("messages")
+    .select("id, conversation_id, media_id")
+    .eq("sender_id", userId)
+    .eq("client_message_id", input.clientMessageId)
+    .maybeSingle();
+
+  if (!data) return null;
+  if (data.conversation_id !== input.conversationId) return null;
+  if (data.media_id !== (input.mediaId ?? null)) return null;
+  return { ok: true, message: "Sent.", messageId: data.id };
+}
+
+function acknowledge(request: Request, result: MessagingResult) {
+  if (result.ok) {
+    // The previous Server Action send invalidated Home after first_message_sent
+    // (BETA-011). The composer now uses this API route, so preserve that exact
+    // cache contract rather than reintroducing the stuck "Say hi" card.
+    revalidatePath("/dashboard");
+  }
+  return withCors(
+    NextResponse.json(result, { status: result.ok ? 200 : 400 }),
+    request
+  );
+}
+
+function keepPostCommitWorkAlive(send: Promise<MessagingResult>) {
+  after(async () => {
+    try {
+      await send;
+    } catch (error) {
+      // The canonical row was already proven durable before the response was
+      // returned. Notification/progression follow-up must never retroactively
+      // turn that committed message into a user-facing send failure.
+      console.error("[messaging] post-commit send follow-up failed", {
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+}
 
 export function OPTIONS(request: Request) {
   return preflightResponse(request);
@@ -15,6 +73,57 @@ export async function POST(request: Request) {
   }
 
   const input = await request.json().catch(() => null);
-  const result = await sendMessage(auth.user.id, input);
-  return withCors(NextResponse.json(result, { status: result.ok ? 200 : 400 }), request);
+  const parsed = sendMessageSchema.safeParse(input);
+  if (!parsed.success) {
+    const result = await sendMessage(auth.user.id, input);
+    return acknowledge(request, result);
+  }
+
+  /*
+   * The message INSERT is the acknowledgement boundary.
+   *
+   * sendMessage() deliberately performs useful follow-up after that insert:
+   * conversation projection updates, mention persistence, recipient
+   * notification work and activation bookkeeping. None of those is allowed to
+   * make the sender stare at "Sending…" once the canonical row is already in
+   * Postgres. Race the full service result against a few tiny, sender-scoped
+   * idempotency probes. If the service finishes first, return it normally. If
+   * the durable row wins, return success immediately and keep the remaining
+   * work alive with Next after().
+   */
+  const sendPromise = sendMessage(auth.user.id, parsed.data);
+  const observed: Promise<ObservedSend> = sendPromise.then(
+    (result) => ({ kind: "result" as const, result }),
+    (error) => ({ kind: "error" as const, error })
+  );
+
+  for (const delayMs of COMMIT_PROBE_DELAYS_MS) {
+    const race = await Promise.race([
+      observed,
+      sleep(delayMs).then(() => ({ kind: "probe" as const }))
+    ]);
+
+    if (race.kind === "result") {
+      return acknowledge(request, race.result);
+    }
+
+    if (race.kind === "error") {
+      const committed = await findCommittedSend(auth.user.id, parsed.data);
+      if (committed) return acknowledge(request, committed);
+      throw race.error;
+    }
+
+    const committed = await findCommittedSend(auth.user.id, parsed.data);
+    if (committed) {
+      keepPostCommitWorkAlive(sendPromise);
+      return acknowledge(request, committed);
+    }
+  }
+
+  const final = await observed;
+  if (final.kind === "result") return acknowledge(request, final.result);
+
+  const committed = await findCommittedSend(auth.user.id, parsed.data);
+  if (committed) return acknowledge(request, committed);
+  throw final.error;
 }
