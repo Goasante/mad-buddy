@@ -169,7 +169,10 @@ export function SafeArrivalSetup({
     <Modal
       open={open}
       onOpenChange={handleOpenChange}
-      title="Start Safe Arrival"
+      /* Consequential language ("Start") is reserved for the step where a
+         session is actually about to be created. Details/Contacts are still
+         setup -- nothing exists yet until Review's Start action runs. */
+      title={step === "review" ? "Start Safe Arrival" : "Set up Safe Arrival"}
       variant="sheet"
       compact
       footer={footer}

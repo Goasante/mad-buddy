@@ -41,7 +41,7 @@ console.log("baseline:", JSON.stringify(before));
 
 /* ---- traveller starts ---- */
 const T = await open("qa", "/safe-arrival");
-await T.p.getByRole("button", { name: /Start Safe Arrival/i }).first().click();
+await T.p.getByRole("button", { name: /Set up Safe Arrival|Start Safe Arrival/i }).first().click();
 await T.p.waitForTimeout(2500);
 const dlg = T.p.locator("[role='dialog']");
 await dlg.locator("input").first().fill("Final smoke destination");

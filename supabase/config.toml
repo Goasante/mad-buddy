@@ -1,12 +1,22 @@
-project_id = "mad-buddy"
+project_id = "mb-safe-arrival-ux"
 
 [api]
 enabled = true
+port = 59321
 schemas = ["public", "storage"]
 extra_search_path = ["public", "extensions"]
 
 [db]
+port = 59322
 major_version = 15
+
+[studio]
+enabled = true
+port = 59323
+
+[inbucket]
+enabled = true
+port = 59324
 
 [auth]
 enabled = true
@@ -18,3 +28,6 @@ enable_confirmations = true
 
 [storage]
 enabled = true
+
+[analytics]
+enabled = false

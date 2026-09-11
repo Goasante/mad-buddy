@@ -110,7 +110,14 @@ export function Modal({
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
-            "modal-drop-overlay fixed inset-0 backdrop-blur-[2px]",
+            /* z-[60]: explicitly above the fixed mobile bottom nav (z-50 in
+               components/app-shell/app-shell.tsx). Both are `position: fixed`
+               with an explicit z-index, so DOM/portal order does not decide
+               stacking -- without this, any sheet or dialog opened while the
+               bottom nav is visible could paint underneath it. Real defect,
+               not stylistic: this is what let "How it works" render partially
+               hidden behind the nav bar. */
+            "modal-drop-overlay fixed inset-0 z-[60] backdrop-blur-[2px]",
             isSheet ? "bg-black/45" : "bg-black/25"
           )}
         />
@@ -134,7 +141,11 @@ export function Modal({
             (event.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
           }}
           className={cn(
-            "flex flex-col overflow-hidden border border-border/80 bg-card/95 outline-none supports-[backdrop-filter]:bg-card/90",
+            /* z-[61]: one above the overlay's z-[60], same pairing used by
+               every other sheet dialog in the app (home-settings-sheet,
+               quick-controls-sheet, skipped-people-sheet). Both values sit
+               above the fixed bottom nav's explicit z-50. */
+            "z-[61] flex flex-col overflow-hidden border border-border/80 bg-card/95 outline-none supports-[backdrop-filter]:bg-card/90",
             compact ? "p-3" : "p-4",
             isSheet
               ? // Phone: pinned to the bottom, full width, safe-area padded,

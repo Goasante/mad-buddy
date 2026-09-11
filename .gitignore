@@ -47,6 +47,10 @@ qa-shots/
 # Never commit: .hardening/auth-*.json contains a real session token.
 .hardening/
 
+# Ad-hoc UI review screenshots (Playwright runs against a local stack).
+# Local verification evidence only, never a build artifact.
+.review-screenshots/
+
 # Added by `vercel link`, and kept: it is stricter than the entries above and
 # catches any .env variant a future tool might create. `.env.example` is
 # already tracked, so this does not hide it.
@@ -55,7 +59,6 @@ qa-shots/
 
 # Local visual-verification output (see scripts/shoot-event-rooms.mjs).
 /screenshots/
-.review-screenshots/
 
 # Written by `next dev` (16.3.x+), not by us: it generates an agent-instruction
 # AGENTS.md at the repo root and a CLAUDE.md that just points at it, and re-adds
