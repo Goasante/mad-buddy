@@ -83,6 +83,14 @@ export function MessageComposerV4Shell({
    * the already-sent text resurrected as a draft on the next open.
    */
   const draftWriteChainRef = useRef<Promise<void>>(Promise.resolve());
+  /**
+   * Message delivery failure already has a durable home directly beneath the
+   * optimistic row (Not sent · Retry · Delete). MessageComposerV3 historically
+   * emitted a second copy to page-level feedback immediately after marking the
+   * row failed. Suppress exactly that next synchronous feedback call in V4;
+   * recorder, attachment, structured-share and other feedback still passes.
+   */
+  const suppressNextDeliveryFeedbackRef = useRef(false);
   const [online, setOnline] = useState(true);
 
   const syncDraftToServer = useCallback(
@@ -185,6 +193,27 @@ export function MessageComposerV4Shell({
       : null;
   }
 
+  const handleOptimisticSettled = useCallback((clientMessageId: string, outcome: "sent" | "failed" | "pending") => {
+    if (outcome === "failed") {
+      suppressNextDeliveryFeedbackRef.current = true;
+      // Upload failure can mark an optimistic voice row failed without emitting
+      // page feedback afterward. Clear the one-shot marker after this stack so
+      // an unrelated later error is never swallowed.
+      queueMicrotask(() => {
+        suppressNextDeliveryFeedbackRef.current = false;
+      });
+    }
+    onOptimisticSettled?.(clientMessageId, outcome);
+  }, [onOptimisticSettled]);
+
+  const handleComposerFeedback = useCallback((message: string) => {
+    if (message && suppressNextDeliveryFeedbackRef.current) {
+      suppressNextDeliveryFeedbackRef.current = false;
+      return;
+    }
+    onFeedback(message);
+  }, [onFeedback]);
+
   function handleSent() {
     // A sent message is not a draft. Clear locally and enqueue the server clear
     // NOW rather than debouncing it; the serialized write chain guarantees any
@@ -228,11 +257,10 @@ export function MessageComposerV4Shell({
         replyToMessageId={replyToMessageId}
         replyPreview={replyPreview}
         onCancelReply={onCancelReply}
-        onFeedback={onFeedback}
+        onFeedback={handleComposerFeedback}
         onOptimisticSend={onOptimisticSend}
-        onOptimisticSettled={onOptimisticSettled}
+        onOptimisticSettled={handleOptimisticSettled}
         onSent={handleSent}
-        deliveryFeedback="inline"
         confirmedClientMessageIds={confirmedClientMessageIds}
         className="w-full border-0 bg-transparent pb-[max(.45rem,env(safe-area-inset-bottom))] lg:pb-1"
       />
