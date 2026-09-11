@@ -55,6 +55,7 @@ qa-shots/
 
 # Local visual-verification output (see scripts/shoot-event-rooms.mjs).
 /screenshots/
+.review-screenshots/
 
 # Written by `next dev` (16.3.x+), not by us: it generates an agent-instruction
 # AGENTS.md at the repo root and a CLAUDE.md that just points at it, and re-adds

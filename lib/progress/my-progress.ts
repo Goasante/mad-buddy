@@ -32,6 +32,10 @@ export type MyProgressData = {
     unlockedCount: number;
     featured: ProgressAchievement[];
     recent: ProgressAchievement[];
+    /** The complete earned set, chronological (newest first) -- feeds the
+     * full activity history view, which needs every achievement-unlock
+     * event rather than just the "recent" preview slice. */
+    all: ProgressAchievement[];
   };
   milestones: ProgressMilestone[];
   timeline: ProgressTimelineItem[];
@@ -65,7 +69,7 @@ export function featuredAchievements(achievements: readonly ProgressAchievement[
 export function progressTimeline(
   score: BuddyScoreData,
   achievements: readonly ProgressAchievement[],
-  limit = 12
+  limit = 100
 ): ProgressTimelineItem[] {
   const scoreItems: ProgressTimelineItem[] = score.recentActivity
     .filter((activity) => activity.eventType !== "achievement_earned")

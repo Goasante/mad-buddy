@@ -3,8 +3,8 @@
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, Circle, LockKeyhole } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, Check, ChevronDown, Circle, PartyPopper } from "lucide-react";
+import { useEffect, useId, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { JourneyGuideButton } from "@/components/journey/journey-guide-button";
 import type { JourneyData, JourneyStep } from "@/lib/journey/journey";
@@ -20,7 +20,106 @@ export function JourneyProgress({ journey, variant = "full" }: { journey: Journe
     return <Card className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Journey</p><p className="mt-1 text-lg font-semibold">{journey.currentStep?.title ?? "Journey complete"}</p><p className="mt-1 text-sm text-muted-foreground">{journey.completedCount} of {journey.totalCount} steps complete</p></div><span className="rounded-full bg-secondary/50 px-3 py-1 text-sm font-semibold tabular-nums">{journey.completedCount}/{journey.totalCount}</span></div><Link href="/buddy-score" className="focus-ring mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg text-sm font-semibold text-primary">View My Progress <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></Card>;
   }
 
-  return <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/45">{journey.steps.map((step, index) => <div key={step.id} className={cn("flex gap-3 px-4 py-4 sm:px-5", index > 0 && "border-t border-border/60", step.state === "locked" && "text-muted-foreground")}><span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full border", step.state === "completed" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500" : step.state === "current" ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-secondary/25")} aria-hidden="true">{step.state === "completed" ? <Check className="h-4 w-4" /> : step.state === "current" ? <Circle className="h-3.5 w-3.5 fill-current" /> : <LockKeyhole className="h-3.5 w-3.5" />}</span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-foreground">{step.title}</p><p className="mt-1 text-sm leading-6 text-muted-foreground">{step.state === "locked" ? "Complete the previous step to continue." : step.description}</p>{step.state !== "locked" ? <p className="mt-1 text-xs text-muted-foreground">{step.unlockCondition}</p> : null}</div>{step.state === "completed" && step.guide ? <JourneyGuideButton tourVersionId={step.guide.tourVersionId} destination={step.destination} label={step.title} /> : null}</div>{step.state === "current" ? <Link href={step.destination as Route} className="focus-ring mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Continue <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link> : null}</div></div>)}</div>;
+  return <JourneyFull journey={journey} />;
+}
+
+/**
+ * "full" variant, used only on My Progress.
+ *
+ * The next incomplete step is the only one that gets rich treatment (title,
+ * description, unlock condition, CTA) -- it is the one thing the viewer can
+ * actually act on right now. Completed steps compress to a single row
+ * (checkmark + title + short context) with no repeated marketing copy and no
+ * "Replay guide" control sitting on every one of them; once there is more
+ * than a couple, they collapse behind a disclosure so a long history does
+ * not push the actionable step off screen. Locked steps stay out of the way
+ * entirely -- they carry no information the viewer can use yet.
+ */
+function JourneyFull({ journey }: { journey: JourneyData }) {
+  const completed = journey.steps.filter((step) => step.state === "completed");
+  const current = journey.steps.find((step) => step.state === "current") ?? null;
+  const [expanded, setExpanded] = useState(completed.length <= 2);
+  const listId = useId();
+
+  return (
+    <div className="space-y-3">
+      {current ? <CurrentStepCard step={current} /> : <JourneyCompleteCard />}
+
+      {completed.length > 0 ? (
+        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/30">
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={expanded}
+            aria-controls={listId}
+            className="focus-ring flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 text-left sm:px-5"
+          >
+            <span className="text-sm font-semibold text-foreground">
+              {completed.length} completed {completed.length === 1 ? "step" : "steps"}
+            </span>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", expanded && "rotate-180")} aria-hidden="true" />
+          </button>
+          {expanded ? (
+            <div id={listId} className="divide-y divide-border/50 border-t border-border/60">
+              {completed.map((step) => <CompletedStepRow key={step.id} step={step} />)}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CurrentStepCard({ step }: { step: JourneyStep }) {
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-primary/50 bg-primary/10 text-primary" aria-hidden="true">
+          <Circle className="h-4 w-4 fill-current" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Next step</p>
+          <p className="mt-1 text-lg font-semibold text-foreground">{step.title}</p>
+          <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{step.description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{step.unlockCondition}</p>
+        </div>
+      </div>
+      <Link href={step.destination as Route} className="focus-ring mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">
+        Continue <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </Link>
+    </Card>
+  );
+}
+
+function JourneyCompleteCard() {
+  return (
+    <Card className="flex items-start gap-3 p-5">
+      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-500" aria-hidden="true">
+        <PartyPopper className="h-4 w-4" />
+      </span>
+      <div>
+        <p className="text-sm font-semibold text-foreground">Journey complete</p>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">You have completed every step. Nothing left to do here for now.</p>
+      </div>
+    </Card>
+  );
+}
+
+function CompletedStepRow({ step }: { step: JourneyStep }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-500" aria-hidden="true">
+        <Check className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">
+          <span className="sr-only">Completed: </span>
+          {step.title}
+        </p>
+      </div>
+      {step.guide ? <JourneyGuideButton tourVersionId={step.guide.tourVersionId} destination={step.destination} label={step.title} compact /> : null}
+    </div>
+  );
 }
 
 /**

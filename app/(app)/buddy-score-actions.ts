@@ -21,7 +21,7 @@ export async function loadBuddyScoreAction(): Promise<MyProgressData> {
         recentActivity: []
       },
       profileCompletion: { completed: 0, total: 3, percent: 0 },
-      achievements: { unlockedCount: 0, featured: [], recent: [] },
+      achievements: { unlockedCount: 0, featured: [], recent: [], all: [] },
       milestones: [],
       timeline: [],
       // Never hard-code the Journey length here: pausing/removing a canonical
