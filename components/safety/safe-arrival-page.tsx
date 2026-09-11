@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, ChevronRight, Clock, MapPin, RefreshCcw, ShieldCheck, UserRound, WifiOff } from "lucide-react";
+import { BellRing, CalendarClock, ChevronRight, MapPin, RefreshCcw, ShieldCheck, UserRound, UsersRound, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -257,17 +257,45 @@ export function SafeArrivalPage({
 // Screen 1: Home
 // ---------------------------------------------------------------------------
 
-const HOME_POINTS = [
-  { icon: MapPin, text: "They'll know your destination and expected arrival time." },
-  { icon: Clock, text: "You can extend your time if you need to." },
-  { icon: ShieldCheck, text: "No live location is shared. You're in control." }
+/**
+ * Outcome-oriented, not feature-oriented: each line says what the traveller
+ * gets to decide or rely on, rather than listing what the system technically
+ * does. Wording is checked against the real implementation, not assumed:
+ *  - "you decide who" matches the Contacts step in SafeArrivalSetup, which
+ *    requires at least one chosen Muddy before Start is reachable.
+ *  - "expected time" matches validateExpectedArrival / the grace-period math
+ *    in lib/safety/safe-arrival.ts -- there is no live tracking to promise.
+ *  - "extend or cancel" matches the traveller controls on ActiveJourneyView
+ *    (EXTENSION_OPTIONS_MINUTES, cancelSafeArrivalAction) -- both always
+ *    available to the traveller while the session is non-terminal
+ *    (canTravellerAct).
+ *  - "no live location" matches contactCoverageSummary/ContactStrip and the
+ *    notification builder: only a destination LABEL, a time, and a status
+ *    are ever sent. No coordinates exist in the data model.
+ */
+const HOME_STEPS = [
+  {
+    icon: UsersRound,
+    title: "Choose trusted Muddies",
+    text: "You decide who should know you're on your way."
+  },
+  {
+    icon: CalendarClock,
+    title: "Set your expected arrival",
+    text: "If you haven't confirmed after your grace period, your Muddies are told you haven't checked in."
+  },
+  {
+    icon: ShieldCheck,
+    title: "You stay in control",
+    text: "Extend or cancel any time. No live location is ever shared."
+  }
 ];
 
 function SafeArrivalHome({ onStart }: { onStart: () => void }) {
   const [howOpen, setHowOpen] = useState(false);
 
   return (
-    <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW} className="space-y-5">
+    <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW} className="space-y-4">
       {/* Reached from Home's Quick Controls rather than a bottom-nav tab, so
           the nested Back variant. The centred subtitle below is kept. */}
       <PageHeader title="Safe Arrival" backHref="/dashboard" />
@@ -275,30 +303,59 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
       <header className="px-1 text-center">
         {/* Hidden on mobile: the shared header carries the title there. */}
         <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Safe Arrival</h1>
-        <p className="mx-auto mt-1.5 max-w-[16rem] text-sm text-muted-foreground">
+        <p className="mx-auto mt-1 max-w-[17rem] text-sm text-muted-foreground">
           Let trusted Muddies know you got there safely.
         </p>
       </header>
 
-      <JourneyVisual tone="transit" className="min-h-[11rem]">
-        <JourneyMark tone="transit" large />
+      {/* Hero reduced from min-h-[11rem] to min-h-[9rem] (~18% shorter) so the
+          primary action sits higher on short phones, while keeping the same
+          rounded container, map/pin motif and warm orange glow. */}
+      <JourneyVisual tone="transit" className="min-h-[9rem]">
+        <JourneyMark tone="transit" />
       </JourneyVisual>
 
-      <ul className="space-y-2.5 px-1">
-        {HOME_POINTS.map((point) => (
-          <li key={point.text} className="flex items-start gap-3">
+      <ul className="space-y-2 px-1">
+        {HOME_STEPS.map((step) => (
+          <li key={step.title} className="flex items-start gap-3">
             <span
               className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-400/12 text-orange-600 dark:text-orange-300"
               aria-hidden="true"
             >
-              <point.icon className="h-4 w-4" />
+              <step.icon className="h-4 w-4" />
             </span>
-            <p className="min-w-0 flex-1 text-sm leading-6 text-muted-foreground">{point.text}</p>
+            <p className="min-w-0 flex-1 text-sm leading-6">
+              <span className="font-semibold">{step.title}.</span>{" "}
+              <span className="text-muted-foreground">{step.text}</span>
+            </p>
           </li>
         ))}
       </ul>
 
-      <div className="space-y-2 px-1">
+      {/* Privacy trust row: quieter than a warning, but visually heavier than
+          ordinary helper text -- a shield glyph plus a warm-neutral panel,
+          never alarming colours. Copy names exactly what IS shared
+          (destination label + expected time, per SafeArrivalSetup's review
+          step) alongside what never is, so this never reads as "zero data
+          shared" when contacts do see a label and a time. */}
+      <div className="flex items-start gap-3 rounded-[1.25rem] border border-border/70 bg-card/60 px-4 py-3.5">
+        <span
+          className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-400/12 text-orange-600 dark:text-orange-300"
+          aria-hidden="true"
+        >
+          <ShieldCheck className="h-4 w-4" />
+        </span>
+        <p className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground">
+          <span className="font-semibold text-foreground">No live location is shared.</span>{" "}
+          Your chosen Muddies only see your destination label and expected arrival time.
+        </p>
+      </div>
+
+      <div className="space-y-2 px-1 pt-1">
+        {/* Case B (confirmed against createSafeArrivalAction / SafeArrivalSetup):
+            this button never starts a session by itself -- it opens the setup
+            sheet. "Start Safe Arrival" is reserved for the sheet's final,
+            confirmed action once destination/time/contacts are chosen. */}
         <Button
           type="button"
           size="lg"
@@ -306,7 +363,7 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
           onClick={onStart}
           data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_START}
         >
-          Start Safe Arrival
+          Set up Safe Arrival
         </Button>
         <button
           type="button"
@@ -322,8 +379,8 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
           {[
             "You set your destination, expected arrival time, and grace period.",
             "You choose trusted Muddies to check in on your journey.",
-            "They're notified when you start, extend, arrive, or don't confirm.",
-            "No live location is shared. Your privacy stays protected."
+            "They're notified when you start, extend, arrive, or don't confirm in time.",
+            "No live location is shared, ever. Your Muddies only see your destination label and expected time."
           ].map((line, index) => (
             <li key={line} className="flex items-start gap-3">
               <span
