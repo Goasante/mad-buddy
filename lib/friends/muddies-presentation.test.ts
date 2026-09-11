@@ -132,7 +132,7 @@ describe("distance wording matches the glow it sits under", () => {
     expect(railDistanceLabel({ ...at("near"), proximityBand: "close_by" })).toBe("Close");
     expect(railDistanceLabel({ ...at("near"), proximityBand: "nearby" })).toBe("In Area");
     expect(railDistanceLabel({ ...at("far"), proximityBand: "around_town" })).toBe("Nearby");
-    expect(railDistanceLabel({ ...at("far"), proximityBand: "further_away" })).toBe("Nearby");
+    expect(railDistanceLabel({ ...at("far"), proximityBand: "further_away" })).toBe("Far");
   });
 
   it("falls back to the widest state a bare level can honestly claim", () => {
@@ -140,7 +140,7 @@ describe("distance wording matches the glow it sits under", () => {
     // widens rather than guessing -- it can never overstate closeness.
     expect(railDistanceLabel(at("close"))).toBe("Very Close");
     expect(railDistanceLabel(at("near"))).toBe("In Area");
-    expect(railDistanceLabel(at("far"))).toBe("Nearby");
+    expect(railDistanceLabel(at("far"))).toBe("Far");
   });
 
   it("never renders a distance", () => {
@@ -255,7 +255,7 @@ describe("every filter answers from data the page already holds", () => {
 
   it("keeps the broad Nearby filter separate from per-person stage resolution", () => {
     // The filter is a set selector; the row label is resolved from the person's
-    // band. Sharing the everyday word Nearby does not make the chip a 5–15 km
+    // band. Sharing the everyday word Nearby does not make the chip a 5–10 km
     // stage-only filter.
     expect(MUDDIES_FILTERS.find((filter) => filter.id === "nearby")?.label).toBe("Nearby");
   });
