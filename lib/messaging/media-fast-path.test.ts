@@ -40,10 +40,11 @@ describe("chat media control transport", () => {
 });
 
 describe("voice-note fast path", () => {
-  it("moves voice intent and finalize off the Server Action queue while keeping direct Storage upload", () => {
+  it("moves voice intent and finalize off the Server Action queue while keeping direct Storage bytes", () => {
     expect(voiceUpload).toContain("createVoiceUploadIntentViaApi");
     expect(voiceUpload).toContain("finalizeVoiceUploadViaApi");
-    expect(voiceUpload).toContain("uploadMediaToSignedUrlWithProgress");
+    expect(voiceUpload).toContain("uploadToSignedUrl");
+    expect(voiceUpload).toContain("createSupabaseBrowserClient");
     expect(voiceUpload).not.toContain("createVoiceMessageUploadIntentAction");
     expect(voiceUpload).not.toContain("finalizeVoiceMessageUploadAction");
     expect(mediaRoute).toContain('operation: z.literal("voice_intent")');
