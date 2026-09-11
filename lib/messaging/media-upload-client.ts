@@ -130,17 +130,17 @@ export async function finalizeRichMediaUploadViaApi(input: {
 }
 
 /**
- * V4 video/document bubble transport. Null means the message is inaccessible,
- * expired, removed, or the request was interrupted; no Server Action queue is
- * involved in minting the short-lived playback URL.
+ * V4 video/document bubble transport. `ok: false` is a network/transport
+ * problem and is retryable. `ok: true, media: null` is an authoritative server
+ * answer that the message is unavailable/expired/inaccessible.
  */
 export async function getRichMediaMessageViaApi(input: {
   conversationId: string;
   messageId: string;
-}): Promise<RichMediaMessageView | null> {
+}): Promise<{ ok: boolean; media: RichMediaMessageView | null }> {
   const payload = await postMedia<{ ok: boolean; media: RichMediaMessageView | null }>(
     { operation: "view", ...input },
     15_000
   );
-  return payload?.ok ? payload.media : null;
+  return payload ?? { ok: false, media: null };
 }
