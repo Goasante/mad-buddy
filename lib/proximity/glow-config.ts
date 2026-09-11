@@ -41,18 +41,19 @@ export const PROXIMITY_GLOW_LEVELS: readonly ProximityGlowLevel[] = [
  * Just Around, Very Close, Close, In Area, Nearby, Far.
  *
  * The backend still has two broad in-range bands from 5–10 and 10–15 km. Both
- * deliberately collapse to the same public Nearby Glow. `outside_range` maps
- * to the quiet Far treatment for surfaces that already have that state; the
- * Nearby endpoint itself still excludes candidates beyond 15 km.
+ * deliberately collapse to the same public Nearby Glow. `outside_range` does
+ * not render a live Glow because the Nearby endpoint excludes candidates past
+ * 15 km; `Far` remains the outer explanatory/catalog state rather than a way to
+ * smuggle excluded location data back into Home Near.
  */
-const GLOW_LEVEL_BY_BAND: Record<ProximityBand, ProximityGlowLevel> = {
+const GLOW_LEVEL_BY_BAND: Record<ProximityBand, ProximityGlowLevel | null> = {
   right_here: "right-here",
   around_you: "just-around",
   close_by: "close-by",
   nearby: "in-your-area",
   around_town: "around-town",
   further_away: "around-town",
-  outside_range: "across-town"
+  outside_range: null
 };
 
 export function glowLevelForBand(
