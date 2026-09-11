@@ -39,7 +39,10 @@ describe("canonical authenticated viewport contract", () => {
 
   it("does not invent canonical headers for nested detail surfaces", () => {
     const registry = shell.slice(shell.indexOf("function hasOwnHeader"), shell.indexOf("function hasWallpaper"));
-    expect(shell).toContain('pathname.startsWith("/settings/") && pathname !== "/settings/access"');
+    // /settings/access now renders SettingsSubHeader like every other Settings
+    // descendant, so it is covered by the general settings prefix rather than
+    // needing its own carve-out.
+    expect(shell).toContain('pathname.startsWith("/settings/")) return true');
     expect(shell).toContain('return pathname === "/events/top"');
     expect(registry).not.toContain('pathname.startsWith(`${href}/`)');
   });

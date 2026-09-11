@@ -227,13 +227,17 @@ const IMMERSIVE_HEADER_PAGES: readonly string[] = [
 
 function hasOwnHeader(pathname: string): boolean {
   /* Most entries are exact screens. Treating every entry as a prefix made
-     /friends/:username, /groups/:id and /settings/access inherit a fixed
-     MobilePageHeader they do not render. The shell then reserved an empty
-     header band and stood the real AppHeader down. Settings descendants and
-     the ranked Events screen are the only current nested routes that render
-     PageHeader themselves. */
+     /friends/:username and /groups/:id inherit a fixed MobilePageHeader they
+     do not render. The shell then reserved an empty header band and stood
+     the real AppHeader down. Settings descendants and the ranked Events
+     screen are the only current nested routes that render PageHeader
+     themselves.
+     /settings/access now renders SettingsSubHeader like every other Settings
+     descendant -- it used to be carved out here as an exception, which is
+     exactly why it carried both the global AppHeader AND its own in-content
+     back link/title stacked on top of each other. */
   if (PAGES_WITH_OWN_HEADER.some((href) => pathname === href)) return true;
-  if (pathname.startsWith("/settings/") && pathname !== "/settings/access") return true;
+  if (pathname.startsWith("/settings/")) return true;
   /* Profile VNext draws its own inline header on EVERY /profile-lab screen,
      including the nested ones, so the whole subtree stands the global header
      down. Without this each lab screen carried two bars stacked on top of each
