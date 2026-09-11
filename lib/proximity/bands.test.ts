@@ -47,13 +47,13 @@ describe("band boundaries", () => {
 });
 
 describe("confidence never lets a reading overclaim", () => {
-  it("only high confidence may claim the closest Just Around band", () => {
+  it("lets normal indoor medium confidence claim Just Around when the measured band is 0-100m", () => {
     expect(resolveProximityBand(50, "high")).toBe("right_here");
-    expect(resolveProximityBand(50, "medium")).toBe("around_you");
+    expect(resolveProximityBand(50, "medium")).toBe("right_here");
     expect(resolveProximityBand(50, "low")).toBe("close_by");
   });
 
-  it("widens outward and never inward", () => {
+  it("still widens genuinely low-confidence readings and never promotes beyond the measurement", () => {
     const order: ProximityBand[] = [
       "right_here",
       "around_you",
