@@ -1,17 +1,19 @@
 "use client";
 
 import { MessageCircle, MoreHorizontal } from "lucide-react";
+
+import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { useState } from "react";
 
-import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
+import { useLongPress } from "@/hooks/use-long-press";
+
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
-import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { useLongPress } from "@/hooks/use-long-press";
 import { type MuddyProximity } from "@/lib/friends/muddies-presentation";
-import { proximityBandLabel, proximityBandRangeLabel } from "@/lib/proximity/bands";
+import { proximityBandLabel } from "@/lib/proximity/bands";
+import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +61,6 @@ export function MuddiesGrid({
             ? proximity.proximityBand
             : null;
         const proximityText = band ? proximityBandLabel(band) : null;
-        const proximityRange = band ? proximityBandRangeLabel(band) : null;
 
         return (
           <li key={person.id} className="muddies-card">
@@ -86,14 +87,7 @@ export function MuddiesGrid({
               </span>
 
               {proximityText ? (
-                <span className="muddies-card-presence">
-                  <span className="block font-semibold">{proximityText}</span>
-                  {proximityRange ? (
-                    <span className="mt-0.5 block text-[11px] font-medium leading-4 text-muted-foreground/75">
-                      {proximityRange}
-                    </span>
-                  ) : null}
-                </span>
+                <span className="muddies-card-presence">{proximityText}</span>
               ) : null}
             </MuddyCardIdentity>
 
@@ -157,6 +151,8 @@ function MuddyCardIdentity({
 
   return (
     <span className="relative block w-full">
+      {/* Gesture surface. Not focusable and not a control: the button below
+          owns activation, so this must not appear in the tab order twice. */}
       <span
         onPointerDown={handlers.onPointerDown}
         onPointerMove={handlers.onPointerMove}
@@ -165,13 +161,20 @@ function MuddyCardIdentity({
         onPointerCancel={handlers.onPointerCancel}
         onContextMenu={handlers.onContextMenu}
         className={cn(
+          // `relative` only: the identity LAYOUT lives on the inner content
+          // wrapper below, because that is the element that actually holds the
+          // avatar, name and proximity line now.
           "relative block w-full",
           pressing && "scale-95 transition-transform motion-reduce:transform-none"
         )}
       >
+        {/* Navigation target, stretched behind the identity content. z-0 keeps
+            it under the verified mark, which needs its own tap. */}
         <button
           type="button"
           onClick={(event) => {
+            // The hook swallows the click synthesised after a hold, so holding
+            // cannot also open the profile behind the menu that just opened.
             handlers.onClick(event);
             if (event.defaultPrevented) return;
             onOpenProfile();
@@ -180,6 +183,10 @@ function MuddyCardIdentity({
           className="focus-ring absolute inset-0 z-0 block w-full rounded-[inherit]"
         />
 
+        {/* Identity content sits above the navigation button, and carries the
+            card's column layout. `pointer-events-none` lets taps fall through
+            to that button, while any real control inside (the verified mark)
+            re-enables its own so its popover still opens. */}
         <span className="muddies-card-identity pointer-events-none relative z-10 [&_button]:pointer-events-auto">
           {children}
         </span>
@@ -190,6 +197,20 @@ function MuddyCardIdentity({
           open={menuOpen}
           onOpenChange={setMenuOpen}
           label={`Actions for ${person.displayName}`}
+          /* A REAL CONTROL, not a zero-height aria-hidden span.
+           *
+           * The trigger used to be invisible to everything except the
+           * press-and-hold gesture: `aria-hidden`, `pointer-events-none` and
+           * `h-0`. Press-and-hold is a pointer gesture and useLongPress binds
+           * no key handlers, so View profile, Close Friends, Remove Muddy and
+           * Block were reachable ONLY with a finger or mouse. A keyboard user
+           * could not remove or block anybody from this grid, which is not a
+           * cosmetic gap -- Block is a safety control.
+           *
+           * This keeps press-and-hold exactly as it was and adds the
+           * equivalent affordance beside it: focusable, named, and a full
+           * 44px target. It is visually quiet (it only gains ink on hover or
+           * focus) so the card still reads as identity plus one action. */
           trigger={
             <button
               type="button"
