@@ -4,19 +4,21 @@ import { fetchWithTimeout } from "@/lib/network/resilience";
 
 type MediaKind = "image" | "video" | "file";
 
+type UploadIntent = {
+  mediaId: string;
+  path: string;
+  token: string;
+  signedUrl: string;
+  expiresAt: string;
+  contentType?: string;
+  fileName?: string;
+  mediaKind?: "video" | "file";
+};
+
 type IntentPayload = {
   ok: boolean;
   message: string;
-  intent?: {
-    mediaId: string;
-    path: string;
-    token: string;
-    signedUrl: string;
-    expiresAt: string;
-    contentType?: string;
-    fileName?: string;
-    mediaKind?: "video" | "file";
-  };
+  intent?: UploadIntent;
 };
 
 type FinalizePayload = {
@@ -30,26 +32,31 @@ type FinalizePayload = {
   sizeBytes?: number;
 };
 
-async function postMedia<T>(body: unknown, timeoutMs: number): Promise<T> {
-  const response = await fetchWithTimeout(
-    "/api/messages/media",
-    {
-      method: "POST",
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
+async function postMedia<T>(body: unknown, timeoutMs: number): Promise<T | null> {
+  try {
+    const response = await fetchWithTimeout(
+      "/api/messages/media",
+      {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
       },
-      body: JSON.stringify(body)
-    },
-    timeoutMs,
-    "chat media"
-  );
+      timeoutMs,
+      "chat media"
+    );
 
-  const payload = await response.json().catch(() => null) as T | null;
-  if (payload) return payload;
-  throw new Error("The attachment service returned an invalid response.");
+    return await response.json().catch(() => null) as T | null;
+  } catch {
+    // The picker owns retry UI. Returning a normal failed result keeps it out
+    // of an unhandled promise state where the + button can remain disabled
+    // forever after a network timeout or an interrupted mobile request.
+    return null;
+  }
 }
 
 /** The old Server Action return shape, preserved for the picker. */
@@ -62,7 +69,9 @@ export async function createImageUploadIntentViaApi(input: {
     { operation: "intent", mediaKind: "image", ...input },
     12_000
   );
-  if (!payload.ok || !payload.intent) return { ok: false as const, message: payload.message };
+  if (!payload?.ok || !payload.intent) {
+    return { ok: false as const, message: payload?.message ?? "Couldn't prepare that photo. Try again." };
+  }
   return {
     ok: true as const,
     message: payload.message,
@@ -78,10 +87,11 @@ export async function finalizeImageUploadViaApi(input: {
   conversationId: string;
   mediaId: string;
 }) {
-  return postMedia<FinalizePayload>(
+  const payload = await postMedia<FinalizePayload>(
     { operation: "finalize", mediaKind: "image", ...input },
-    30_000
+    45_000
   );
+  return payload ?? { ok: false, message: "Couldn't finish that photo. Try again." };
 }
 
 export async function createRichMediaUploadIntentViaApi(input: {
@@ -91,10 +101,14 @@ export async function createRichMediaUploadIntentViaApi(input: {
   mediaKind: "video" | "file";
   fileName: string;
 }) {
-  return postMedia<IntentPayload>(
+  const payload = await postMedia<IntentPayload>(
     { operation: "intent", ...input },
     12_000
   );
+  if (!payload?.ok || !payload.intent) {
+    return { ok: false as const, message: payload?.message ?? "Couldn't prepare that attachment. Try again." };
+  }
+  return { ok: true as const, message: payload.message, intent: payload.intent };
 }
 
 export async function finalizeRichMediaUploadViaApi(input: {
@@ -103,13 +117,14 @@ export async function finalizeRichMediaUploadViaApi(input: {
   expectedMediaKind: "video" | "file";
 }) {
   const mediaKind: MediaKind = input.expectedMediaKind;
-  return postMedia<FinalizePayload>(
+  const payload = await postMedia<FinalizePayload>(
     {
       operation: "finalize",
       conversationId: input.conversationId,
       mediaId: input.mediaId,
       mediaKind
     },
-    30_000
+    45_000
   );
+  return payload ?? { ok: false, message: "Couldn't finish that attachment. Try again." };
 }
