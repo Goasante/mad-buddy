@@ -14,6 +14,8 @@ export type ProximityBand =
   | "further_away"
   | "outside_range";
 
+type InRangeProximityBand = Exclude<ProximityBand, "outside_range">;
+
 /** Canonical inclusive upper bound for every in-range band, in metres. */
 export const PROXIMITY_BAND_MAX_METERS = {
   right_here: 100,
@@ -34,6 +36,16 @@ export const PROXIMITY_BAND_LABELS: Record<ProximityBand, string> = {
   outside_range: "Too far"
 };
 
+/** Ordered once so resolution and display ranges cannot drift apart. */
+const IN_RANGE_BANDS: readonly InRangeProximityBand[] = [
+  "right_here",
+  "around_you",
+  "close_by",
+  "nearby",
+  "around_town",
+  "further_away"
+];
+
 /**
  * The tightest claim a reading of each confidence may make. This is a privacy
  * guard, not a visual preference: weak readings are widened outward rather than
@@ -45,15 +57,7 @@ const FINEST_BAND_BY_CONFIDENCE: Record<ConfidenceLevel, ProximityBand> = {
   low: "close_by"
 };
 
-const BAND_ORDER: readonly ProximityBand[] = [
-  "right_here",
-  "around_you",
-  "close_by",
-  "nearby",
-  "around_town",
-  "further_away",
-  "outside_range"
-];
+const BAND_ORDER: readonly ProximityBand[] = [...IN_RANGE_BANDS, "outside_range"];
 
 export function bandForDistance(distanceMeters: number): ProximityBand {
   if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return "outside_range";
@@ -84,22 +88,30 @@ export function proximityBandLabel(band: ProximityBand): string | null {
 }
 
 /**
- * Privacy-safe secondary range copy for the same band that drives the Glow.
+ * Secondary copy explaining what a proximity term means, not where somebody
+ * exactly is. The UI receives only the already-resolved band, so this never
+ * exposes the measured distance or coordinates.
  *
- * This deliberately renders the CANONICAL CEILING ("Within 500 m"), not a
- * lower-to-upper interval and never the measured distance. Confidence capping
- * and asymmetric band hysteresis are allowed to keep a person in a broader
- * band than their raw measurement. In that legitimate case, copy such as
- * "100-500 m" could be false while "Within 500 m" remains true. Reading the
- * ceiling from PROXIMITY_BAND_MAX_METERS also means label, range and Glow can
- * never drift onto separate threshold tables.
+ * Both ends are derived from the SAME canonical ceiling table used by the band
+ * resolver. If the 500 m boundary changes, for example, the displayed range
+ * changes with it rather than leaving a stale number in a component.
+ *
+ * These are intentionally category ranges such as "100–500 m". Confidence
+ * capping and hysteresis may conservatively widen the resolved band; the range
+ * explains the band's vocabulary and is not presented as an exact measurement.
  */
 export function proximityBandRangeLabel(band: ProximityBand): string | null {
   if (band === "outside_range") return null;
-  return `Within ${formatBandCeiling(PROXIMITY_BAND_MAX_METERS[band])}`;
+
+  const index = IN_RANGE_BANDS.indexOf(band);
+  const previousBand = index > 0 ? IN_RANGE_BANDS[index - 1] : null;
+  const minMeters = previousBand ? PROXIMITY_BAND_MAX_METERS[previousBand] : 0;
+  const maxMeters = PROXIMITY_BAND_MAX_METERS[band];
+
+  return `${formatBandDistance(minMeters)}–${formatBandDistance(maxMeters)}`;
 }
 
-function formatBandCeiling(meters: number): string {
+function formatBandDistance(meters: number): string {
   if (meters < 1_000) return `${meters} m`;
   const kilometers = meters / 1_000;
   return `${Number.isInteger(kilometers) ? kilometers : kilometers.toFixed(1)} km`;
