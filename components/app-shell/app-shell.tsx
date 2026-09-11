@@ -494,10 +494,20 @@ function AppShellInner({
              * document height. `pb-5` alone was 1.25rem against a 5rem bar
              * plus the device inset.
              *
-             * Computed from the same canonical variables the bar itself uses,
-             * never a per-device magic number: --mobile-nav-height is the bar's
-             * own height and the safe-area inset is what it pads itself by.
-             * Desktop has no bottom bar, so md: returns to ordinary spacing.
+             * Computed from the same canonical variable the bar itself uses,
+             * never a per-device magic number -- but NOT plus a second,
+             * separate safe-area term. --mobile-nav-height is the bar's
+             * COMPLETE on-screen footprint: mobile-shell-stability.css fits the
+             * bar to exactly this height and absorbs the safe-area inset
+             * inside it (capped, with the row's own top padding giving back
+             * the difference) rather than growing the bar taller. Adding
+             * env(safe-area-inset-bottom) again here reserved more space than
+             * the bar actually occupies -- typically its full ~34px on a
+             * device with a home indicator -- leaving a dead, flat gap of bare
+             * page background between the last scrolled card and the floating
+             * dock, which read as a solid strip blocking the bottom of the
+             * page. Desktop has no bottom bar, so md: returns to ordinary
+             * spacing.
              *
              * THE FLOATING LAUNCHER IS RESERVED FOR HERE TOO.
              *
@@ -510,7 +520,7 @@ function AppShellInner({
              * collision was noticed. --quick-actions-reserve carries the
              * pill's own geometry, and collapses to ordinary spacing on
              * desktop where the pill sits clear of the content column. */
-            "relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+1rem)] lg:pb-6 md:scroll-pb-6 md:pt-0",
+            "relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-[calc(var(--mobile-nav-height)+1rem)] lg:pb-6 md:scroll-pb-6 md:pt-0",
             // Ordinary pages keep the shell's page margin; a full-bleed surface
             // gets it back at md+, where there is a content column rather than
             // a screen edge.
@@ -521,13 +531,14 @@ function AppShellInner({
                 // is hidden while immersive, so its reserve goes too.
                 "pb-5"
               : reservesQuickActions
-                ? "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+var(--quick-actions-reserve))] md:pb-5"
-                : /* The bar's own height and the device inset are what a page
-                     must clear; the extra 1.25rem on top of both was a third
-                     helping of space that showed up as a dead gap above the
-                     nav. A small breathing allowance stays so the last card
-                     does not sit flush against the bar. */
-                  "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+0.5rem)] md:pb-5",
+                ? "pb-[calc(var(--mobile-nav-height)+var(--quick-actions-reserve))] md:pb-5"
+                : /* The bar's own COMPLETE footprint (safe-area already
+                     included, see above) is what a page must clear; the extra
+                     1.25rem on top of it was a second helping of space that
+                     showed up as a dead gap above the nav. A small breathing
+                     allowance stays so the last card does not sit flush
+                     against the bar. */
+                  "pb-[calc(var(--mobile-nav-height)+0.5rem)] md:pb-5",
             // Both mobile headers are FIXED (out of normal flow), so <main>
             // reserves the matching footprint here — the one place either
             // offset is computed, so no page needs its own top-padding guess

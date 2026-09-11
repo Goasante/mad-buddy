@@ -120,16 +120,29 @@ describe("mobile bottom navigation", () => {
 describe("mobile content clearance", () => {
   it("reserves the bottom bar's real footprint so the last section is reachable", () => {
     const main = shell.slice(shell.indexOf('<main'));
-    expect(main).toContain(
-      "pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)"
-    );
+    expect(main).toContain("pb-[calc(var(--mobile-nav-height)");
+  });
+
+  /*
+   * REGRESSION: --mobile-nav-height used to EXCLUDE the safe-area inset (the
+   * bar "padded itself by that" on top of it), which is why this padding
+   * formula originally added env(safe-area-inset-bottom) as a second term.
+   * mobile-shell-stability.css later fit the bar to a fixed, COMPLETE
+   * on-screen footprint -- exactly --mobile-nav-height, safe-area absorbed
+   * inside it -- without this formula being updated to match. The result:
+   * <main> reserved the bar's height PLUS a full extra safe-area inset the
+   * bar no longer needed, leaving a flat, contentless gap between the last
+   * scrolled card and the floating dock that read as a solid strip blocking
+   * the bottom of the page. Never reintroduce the second term.
+   */
+  it("does not double-reserve the safe-area inset on top of the bar's own footprint", () => {
+    const main = shell.slice(shell.indexOf('<main'), shell.indexOf('<main') + 4000);
+    expect(main).not.toContain("var(--mobile-nav-height)+env(safe-area-inset-bottom");
   });
 
   it("reserves the bottom bar on the scroll owner only", () => {
     const beforeMain = shell.slice(0, shell.indexOf('<main'));
-    expect(beforeMain).not.toContain(
-      'pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px))]'
-    );
+    expect(beforeMain).not.toContain("pb-[calc(var(--mobile-nav-height)");
     expect(shell).toContain("data-app-scroll-owner");
   });
 

@@ -216,8 +216,14 @@ describe("content clears the fixed bottom bar", () => {
   it("reserves the bar's footprint on the element that scrolls", () => {
     // The outer shell's padding sits outside <main>'s scroll box, so the last
     // card slid under the bar regardless of it.
+    //
+    // --mobile-nav-height is the bar's COMPLETE footprint (safe-area already
+    // absorbed inside it by mobile-shell-stability.css), so this must NOT
+    // also add env(safe-area-inset-bottom) as a second term -- that reserved
+    // more space than the bar actually occupies and left a flat, contentless
+    // gap between the last scrolled card and the floating dock.
     expect(main).toContain("var(--mobile-nav-height)");
-    expect(main).toContain("env(safe-area-inset-bottom,0px)");
+    expect(main).not.toContain("var(--mobile-nav-height)+env(safe-area-inset-bottom");
   });
 
   it("computes it from canonical variables, not a per-device number", () => {
