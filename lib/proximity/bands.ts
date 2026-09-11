@@ -108,11 +108,28 @@ export function proximityBandRangeLabel(band: ProximityBand): string | null {
   const minMeters = previousBand ? PROXIMITY_BAND_MAX_METERS[previousBand] : 0;
   const maxMeters = PROXIMITY_BAND_MAX_METERS[band];
 
+  return formatBandRange(minMeters, maxMeters);
+}
+
+function formatBandRange(minMeters: number, maxMeters: number): string {
+  const minUsesKilometers = minMeters >= 1_000;
+  const maxUsesKilometers = maxMeters >= 1_000;
+
+  if (minUsesKilometers === maxUsesKilometers) {
+    const unit = maxUsesKilometers ? "km" : "m";
+    return `${formatBandMagnitude(minMeters, unit)}–${formatBandMagnitude(maxMeters, unit)} ${unit}`;
+  }
+
   return `${formatBandDistance(minMeters)}–${formatBandDistance(maxMeters)}`;
 }
 
-function formatBandDistance(meters: number): string {
-  if (meters < 1_000) return `${meters} m`;
+function formatBandMagnitude(meters: number, unit: "m" | "km"): string {
+  if (unit === "m") return String(meters);
   const kilometers = meters / 1_000;
-  return `${Number.isInteger(kilometers) ? kilometers : kilometers.toFixed(1)} km`;
+  return Number.isInteger(kilometers) ? String(kilometers) : kilometers.toFixed(1);
+}
+
+function formatBandDistance(meters: number): string {
+  const unit = meters < 1_000 ? "m" : "km";
+  return `${formatBandMagnitude(meters, unit)} ${unit}`;
 }
