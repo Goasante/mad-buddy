@@ -44,7 +44,7 @@ function item(overrides: Partial<RankableUpFor> = {}): RankableUpFor {
 }
 
 describe("proximity never becomes a distance", () => {
-  it("uses only the canonical Glow V2 labels", () => {
+  it("uses only the canonical proximity labels", () => {
     const allowed = Object.values(PROXIMITY_BAND_LABELS);
     for (const tier of ["close_by", "nearby", "wider_area"] as const) {
       const label = upForProximityLabel(tier);
@@ -54,21 +54,20 @@ describe("proximity never becomes a distance", () => {
   });
 
   it("widens outward and never claims the tightest bands", () => {
-    /* UpFor stores three tiers; Glow V2 names six bands. The closest tier
-     * means "the nearest of three buckets", which cannot support a claim of
-     * being metres away -- so "Right Here" and "Just Around" are unreachable
-     * from this data by construction. */
-    expect(upForProximityLabel("close_by")).toBe("Close By");
-    expect(upForProximityLabel("nearby")).toBe("In Your Area");
-    expect(upForProximityLabel("wider_area")).toBe("Around Town");
+    /* UpFor stores three tiers while proximity has finer presentation bands.
+     * The closest UpFor tier cannot support Just Around or Very Close, so it
+     * starts at the broader Close label and only widens from there. */
+    expect(upForProximityLabel("close_by")).toBe("Close");
+    expect(upForProximityLabel("nearby")).toBe("In Area");
+    expect(upForProximityLabel("wider_area")).toBe("Nearby");
 
     const reachable = (["close_by", "nearby", "wider_area"] as const).map(upForProximityLabel);
-    expect(reachable).not.toContain("Right Here");
     expect(reachable).not.toContain("Just Around");
+    expect(reachable).not.toContain("Very Close");
   });
 
   it("says nothing when the tier is unknown", () => {
-    // Silence, not a guess. "Across Town" would be as invented as "Right Here".
+    // Silence, not a guess. "Far" would be as invented as "Just Around".
     expect(upForProximityLabel(null)).toBeNull();
   });
 
