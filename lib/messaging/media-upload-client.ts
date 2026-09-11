@@ -1,5 +1,6 @@
 "use client";
 
+import type { RichMediaMessageView } from "@/lib/messaging/rich-media-v4-types";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 
 type MediaKind = "image" | "video" | "file";
@@ -17,13 +18,13 @@ type UploadIntent = {
 
 type IntentPayload = {
   ok: boolean;
-  message: string;
+  message?: string;
   intent?: UploadIntent;
 };
 
 type FinalizePayload = {
   ok: boolean;
-  message: string;
+  message?: string;
   mediaId?: string;
   previewUrl?: string | null;
   mediaKind?: "video" | "file";
@@ -52,9 +53,8 @@ async function postMedia<T>(body: unknown, timeoutMs: number): Promise<T | null>
 
     return await response.json().catch(() => null) as T | null;
   } catch {
-    // The picker owns retry UI. Returning a normal failed result keeps it out
-    // of an unhandled promise state where the + button can remain disabled
-    // forever after a network timeout or an interrupted mobile request.
+    // The caller owns retry/fallback UI. Returning null/failed keeps mobile
+    // network interruption out of an unhandled promise state.
     return null;
   }
 }
@@ -74,7 +74,7 @@ export async function createImageUploadIntentViaApi(input: {
   }
   return {
     ok: true as const,
-    message: payload.message,
+    message: payload.message ?? "Upload ready.",
     mediaId: payload.intent.mediaId,
     path: payload.intent.path,
     token: payload.intent.token,
@@ -108,7 +108,7 @@ export async function createRichMediaUploadIntentViaApi(input: {
   if (!payload?.ok || !payload.intent) {
     return { ok: false as const, message: payload?.message ?? "Couldn't prepare that attachment. Try again." };
   }
-  return { ok: true as const, message: payload.message, intent: payload.intent };
+  return { ok: true as const, message: payload.message ?? "Upload ready.", intent: payload.intent };
 }
 
 export async function finalizeRichMediaUploadViaApi(input: {
@@ -127,4 +127,20 @@ export async function finalizeRichMediaUploadViaApi(input: {
     45_000
   );
   return payload ?? { ok: false, message: "Couldn't finish that attachment. Try again." };
+}
+
+/**
+ * V4 video/document bubble transport. Null means the message is inaccessible,
+ * expired, removed, or the request was interrupted; no Server Action queue is
+ * involved in minting the short-lived playback URL.
+ */
+export async function getRichMediaMessageViaApi(input: {
+  conversationId: string;
+  messageId: string;
+}): Promise<RichMediaMessageView | null> {
+  const payload = await postMedia<{ ok: boolean; media: RichMediaMessageView | null }>(
+    { operation: "view", ...input },
+    15_000
+  );
+  return payload?.ok ? payload.media : null;
 }
