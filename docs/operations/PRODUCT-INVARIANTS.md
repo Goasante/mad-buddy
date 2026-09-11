@@ -5,8 +5,10 @@ These are not styling preferences. They are product/security boundaries that a d
 ## Privacy and proximity
 
 - Never expose exact GPS coordinates to another user.
-- Never show exact numerical distance, street-level location, live map pins, or location history.
+- Never show exact measured distance, street-level location, live map pins, or location history.
 - Proximity is represented with coarse qualitative bands such as `Right Here`, `Just Around`, `Close By`, `In Your Area`, `Around Town`, and `Across Town`.
+- Approved Glow-led teaching surfaces may pair those terms with their canonical category ranges (`0–100 m`, `100–500 m`, `500 m–2 km`, `2–5 km`, `5–10 km`, `10–15 km`). These ranges explain the vocabulary; they are derived from the same band thresholds and are not the person’s measured distance.
+- The 15 km nearby eligibility ceiling remains authoritative. Never imply an in-range state such as `15 km+` that would include people the backend excludes.
 - Stale proximity is not current proximity. Cached/stale state must not be presented as live truth.
 - The database intentionally stores only the latest user location rather than a movement history.
 
