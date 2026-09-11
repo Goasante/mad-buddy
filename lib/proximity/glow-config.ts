@@ -37,14 +37,12 @@ export const PROXIMITY_GLOW_LEVELS: readonly ProximityGlowLevel[] = [
 ] as const;
 
 /**
- * Six PUBLIC visual stages:
+ * Six PUBLIC visual stages, all inside the existing 15 km eligibility range:
  * Just Around, Very Close, Close, In Area, Nearby, Far.
  *
- * The backend still has two broad in-range bands from 5–10 and 10–15 km. Both
- * deliberately collapse to the same public Nearby Glow. `outside_range` does
- * not render a live Glow because the Nearby endpoint excludes candidates past
- * 15 km; `Far` remains the outer explanatory/catalog state rather than a way to
- * smuggle excluded location data back into Home Near.
+ * Nearby is the 5–10 km band. Far is the 10–15 km band. `outside_range` does
+ * not render a live Glow because anything beyond 15 km is outside proximity,
+ * not a seventh public state.
  */
 const GLOW_LEVEL_BY_BAND: Record<ProximityBand, ProximityGlowLevel | null> = {
   right_here: "right-here",
@@ -52,7 +50,7 @@ const GLOW_LEVEL_BY_BAND: Record<ProximityBand, ProximityGlowLevel | null> = {
   close_by: "close-by",
   nearby: "in-your-area",
   around_town: "around-town",
-  further_away: "around-town",
+  further_away: "across-town",
   outside_range: null
 };
 
@@ -192,7 +190,7 @@ export const PROXIMITY_GLOW_CONFIG: Record<ProximityGlowLevel, ProximityGlowConf
   "around-town": {
     level: "around-town",
     label: "Nearby",
-    description: "Within the wider nearby area",
+    description: "Within the 5–10 km nearby band",
     ring: 130,
     outer: 158,
     blur: 8,
@@ -212,7 +210,7 @@ export const PROXIMITY_GLOW_CONFIG: Record<ProximityGlowLevel, ProximityGlowConf
   "across-town": {
     level: "across-town",
     label: "Far",
-    description: "Outside the 15 km Nearby range",
+    description: "Within the outer 10–15 km proximity band",
     ring: 126,
     outer: 152,
     blur: 5,
