@@ -57,7 +57,11 @@ export function MuddiesClosestRail({
                 type="button"
                 onClick={() => onSelect(person.id)}
                 className="muddies-rail-button focus-ring"
-                aria-label={[person.displayName, stateLabel.toLowerCase(), rangeLabel?.toLowerCase()]
+                aria-label={[
+                  person.displayName,
+                  railDistanceLabel(proximity).toLowerCase(),
+                  rangeLabel?.toLowerCase()
+                ]
                   .filter(Boolean)
                   .join(", ")}
               >
