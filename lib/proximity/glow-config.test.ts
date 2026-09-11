@@ -32,19 +32,19 @@ describe("distance resolves to the corrected public glow stages", () => {
     [5_000, "in-your-area"],
     [5_001, "around-town"],
     [10_000, "around-town"],
-    [10_001, "around-town"],
-    [15_000, "around-town"],
+    [10_001, "across-town"],
+    [15_000, "across-town"],
     [15_001, null]
   ] as const)("%dm renders %s", (meters, expected) => {
     expect(glowForDistance(meters)).toBe(expected);
   });
 
-  it("maps the two broad in-range backend bands to one public Nearby glow", () => {
+  it("maps Nearby and Far to separate 5–10 km and 10–15 km glows", () => {
     expect(glowLevelForBand("around_town")).toBe("around-town");
-    expect(glowLevelForBand("further_away")).toBe("around-town");
+    expect(glowLevelForBand("further_away")).toBe("across-town");
   });
 
-  it("does not render an outside-range Glow after the 15 km Nearby gate", () => {
+  it("does not render an outside-range Glow after 15 km", () => {
     expect(glowLevelForBand("outside_range")).toBeNull();
   });
 
@@ -64,7 +64,7 @@ describe("distance resolves to the corrected public glow stages", () => {
       "close-by",
       "in-your-area",
       "around-town",
-      "around-town",
+      "across-town",
       null
     ]);
   });

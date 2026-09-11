@@ -95,11 +95,11 @@ describe("canonical qualitative labels", () => {
     expect(proximityBandLabel("close_by")).toBe("Close");
     expect(proximityBandLabel("nearby")).toBe("In Area");
     expect(proximityBandLabel("around_town")).toBe("Nearby");
-    expect(proximityBandLabel("further_away")).toBe("Nearby");
-    expect(proximityBandLabel("outside_range")).toBe("Far");
+    expect(proximityBandLabel("further_away")).toBe("Far");
+    expect(proximityBandLabel("outside_range")).toBeNull();
   });
 
-  it("never turns the primary label into a numeric measurement", () => {
+  it("never turns a stored qualitative label into a numeric measurement", () => {
     for (const label of Object.values(PROXIMITY_BAND_LABELS)) {
       expect(label).not.toMatch(/\d/);
       expect(label.toLowerCase()).not.toMatch(/metre|meter|\bkm\b|mile|away in/);
@@ -113,9 +113,8 @@ describe("canonical secondary range labels", () => {
     ["around_you", "100–500 m"],
     ["close_by", "500 m–2 km"],
     ["nearby", "2–5 km"],
-    ["around_town", "5–15 km"],
-    ["further_away", "5–15 km"],
-    ["outside_range", "15 km+"]
+    ["around_town", "5–10 km"],
+    ["further_away", "10–15 km"]
   ] as Array<[ProximityBand, string]>)("%s explains its public stage as %s", (band, copy) => {
     expect(proximityBandRangeLabel(band)).toBe(copy);
   });
@@ -126,13 +125,13 @@ describe("canonical secondary range labels", () => {
     );
   });
 
-  it("collapses both broad in-range bands into one Nearby explanation", () => {
-    expect(proximityBandRangeLabel("around_town")).toBe("5–15 km");
-    expect(proximityBandRangeLabel("further_away")).toBe("5–15 km");
+  it("keeps Nearby and Far as separate in-range categories", () => {
+    expect(proximityBandRangeLabel("around_town")).toBe("5–10 km");
+    expect(proximityBandRangeLabel("further_away")).toBe("10–15 km");
   });
 
-  it("describes Far as 15 km+ without widening the Nearby gate", () => {
-    expect(proximityBandRangeLabel("outside_range")).toBe("15 km+");
+  it("shows no public range beyond the 15 km eligibility gate", () => {
+    expect(proximityBandRangeLabel("outside_range")).toBeNull();
     expect(bucketProximity(FAR_MAX_METERS + 1)).toBeNull();
   });
 });
