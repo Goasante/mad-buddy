@@ -54,13 +54,17 @@ const IN_RANGE_BANDS: readonly InRangeProximityBand[] = [
 ];
 
 /**
- * The tightest claim a reading of each confidence may make. This is a privacy
- * guard, not a visual preference: weak readings are widened outward rather than
- * allowed to look more precise than the location fix supports.
+ * The tightest claim a reading of each confidence may make.
+ *
+ * Medium confidence is allowed to use the measured 0–100 m band. Real-world
+ * browser GPS commonly reports medium confidence indoors even when two phones
+ * are physically together; forcing every such reading outward made same-room
+ * Muddies show Very Close by construction. Low confidence remains widened so a
+ * genuinely weak fix still cannot claim the tightest proximity states.
  */
 const FINEST_BAND_BY_CONFIDENCE: Record<ConfidenceLevel, ProximityBand> = {
   high: "right_here",
-  medium: "around_you",
+  medium: "right_here",
   low: "close_by"
 };
 
