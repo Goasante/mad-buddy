@@ -19,6 +19,7 @@ import {
   Megaphone,
   MessageCircle,
   MoreHorizontal,
+  MoreVertical,
   Send,
   ShieldAlert,
   ShieldCheck,
@@ -142,14 +143,23 @@ function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
   }
 }
 
-/** Per-category accent for the row icon (real, derived from the type). */
+/** Per-category accent for the row icon (real, derived from the type).
+ *
+ * Was lavender/purple for "social" -- the one hue nowhere else in the app's
+ * identity, which made Pulse read as a different product mid-navigation.
+ * Every category now sits in the brand family: primary orange for the two
+ * proximity-and-plans categories, the deeper brand ember for social (warm,
+ * not purple, and visually distinct from orange at this size), and a
+ * restrained cool sky only for Safety -- the one category where a
+ * non-brand-warm signal is deliberate. Small icon-only accents, not large
+ * filled containers, per the same restraint. */
 function categoryIconClass(category: ReturnType<typeof categoryForType>): string {
   switch (category) {
     case "nearby":
     case "plans":
       return "bg-primary/10 text-primary";
     case "social":
-      return "bg-violet-500/12 text-violet-600 dark:text-violet-300";
+      return "bg-[color-mix(in_srgb,var(--color-brand-ember)_14%,transparent)] text-[var(--color-brand-ember)] dark:text-[var(--color-brand-amber)]";
     case "safety":
       return "bg-sky-500/12 text-sky-600 dark:text-sky-300";
     default:
@@ -187,7 +197,7 @@ export function NotificationsPageContent({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
+  const [toast, setToast] = useState<{ message: string; error: boolean; onUndo?: () => void } | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -210,10 +220,13 @@ export function NotificationsPageContent({
   const allVisibleSelected =
     visibleNotifications.length > 0 && visibleNotifications.every((item) => selectedIds.has(item.id));
 
-  const showToast = useCallback((message: string, error = false) => {
-    setToast({ message, error });
+  const showToast = useCallback((message: string, error = false, onUndo?: () => void) => {
+    setToast({ message, error, onUndo });
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3500);
+    // Undo gets a longer window than a plain status toast: reading "Update
+    // deleted" and deciding to act on it takes longer than reading "Reply
+    // sent".
+    toastTimer.current = setTimeout(() => setToast(null), onUndo ? 6000 : 3500);
   }, []);
   const notificationGroups = useMemo(
     () => groupNotificationsByDate(visibleNotifications, initialClockMs),
@@ -474,6 +487,77 @@ export function NotificationsPageContent({
     });
   }
 
+  /* SINGLE-ROW DELETE, FROM THE ROW'S OWN OVERFLOW MENU.
+   *
+   * Deletion moved off a permanently-visible trash icon on every row (equal
+   * visual weight to opening the notification, on every single row) into the
+   * row's overflow menu -- reusing AppMenu, the same primitive the bulk
+   * toolbar's "Selected update actions" already uses, rather than inventing a
+   * swipe gesture the rest of the app has no precedent for.
+   *
+   * A single tap on a destructive menu item is not "one tap to destroy": the
+   * row must first be tapped to open the menu, THEN the destructive item
+   * chosen -- and this still gives six full seconds to undo before the
+   * network call fires at all, so an accidental confirm is still free to
+   * reverse. The row vanishes immediately (so the list feels responsive);
+   * the actual DELETE request is deferred until the undo window closes,
+   * which makes "Undo" a real, guaranteed-safe reversal rather than a
+   * best-effort re-insert against a backend that has already dropped the
+   * row. */
+  function deleteNotificationWithUndo(notification: NotificationItem) {
+    const previous = notifications;
+    const next = notifications.filter((item) => item.id !== notification.id);
+    setNotifications(next);
+    if (selectedRequest?.id === notification.id) setSelectedRequest(null);
+    if (detailNotification?.id === notification.id) setDetailNotification(null);
+    window.dispatchEvent(
+      new CustomEvent("mad-buddy:notifications-updated", {
+        detail: { unreadCount: next.filter((item) => item.unread).length }
+      })
+    );
+
+    let undone = false;
+    showToast("Update deleted", false, () => {
+      undone = true;
+      setNotifications(previous);
+      window.dispatchEvent(
+        new CustomEvent("mad-buddy:notifications-updated", {
+          detail: { unreadCount: previous.filter((item) => item.unread).length }
+        })
+      );
+    });
+
+    // Fires once the undo toast has fully expired. If Undo was pressed, the
+    // closure above already restored the row and this becomes a no-op.
+    window.setTimeout(() => {
+      if (undone) return;
+      startTransition(async () => {
+        try {
+          const response = await fetchWithTimeout("/api/notifications", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: [notification.id] })
+          }, 12_000, "delete notification");
+          const result = (await response.json().catch(() => null)) as { deletedIds?: string[] } | null;
+          const deletedIds = new Set(result?.deletedIds ?? []);
+          if (!response.ok || !deletedIds.has(notification.id)) {
+            throw new Error("delete failed");
+          }
+        } catch {
+          setNotifications((current) =>
+            current.some((item) => item.id === notification.id) ? current : [...current, notification]
+          );
+          window.dispatchEvent(
+            new CustomEvent("mad-buddy:notifications-updated", {
+              detail: { unreadCount: unreadCount }
+            })
+          );
+          showToast("Couldn’t delete this update. Try again.", true);
+        }
+      });
+    }, 6100);
+  }
+
   return (
     <div className="mx-auto max-w-[1050px] space-y-4 md:pt-6">
       {/* This IS the notifications stream, so the header's own Bell would
@@ -481,10 +565,18 @@ export function NotificationsPageContent({
       <PageHeader title="Pulse" showNotifications={false} />
 
       <section data-tour-id={TOUR_TARGET_IDS.PULSE_OVERVIEW}>
-        <div className="flex items-center justify-between gap-4 pt-1 md:pt-0">
-          {/* Hidden on mobile: the shared header carries the title there. */}
+        {/* `justify-between` needs TWO flex items to have anything to space
+            apart. The h1 is `hidden` on mobile (the shared MobilePageHeader
+            already carries the title there), which left the trailing button
+            cluster as the row's only child -- and a lone flex-between child
+            sits at the START, not the end. That put the "..." trigger
+            stranded at the left edge below the header, with dead space to
+            its right and no visible relationship to anything above it. `ml-auto`
+            pins the cluster to the right regardless of whether the h1 is
+            actually present as a flex item. */}
+        <div className="flex items-center gap-4 pt-0.5 md:pt-0">
           <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Pulse</h1>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5">
             <Popover.Root open={optionsOpen} onOpenChange={setOptionsOpen}>
               <Popover.Trigger asChild>
                 <Button
@@ -644,36 +736,33 @@ export function NotificationsPageContent({
           </div>
         ) : (
           // Category chips (All / Nearby / Social / Plans / Safety), scrollable.
+          // `.muddies-filter` / `.muddies-pills` are the canonical scrollable
+          // chip-rail classes from the Muddies tabs (44px targets, full labels
+          // that never truncate, the last pill kept clear of the edge) --
+          // reused here rather than a second, slightly-different rail.
           <div
             data-tour-id={TOUR_TARGET_IDS.PULSE_FILTERS}
-            className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
-            role="tablist"
-            aria-label="Pulse filters"
+            className="no-scrollbar muddies-pills"
           >
-            {PULSE_CATEGORIES.map((option) => {
-              const active = category === option.value;
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setCategory(option.value)}
-                  className={cn(
-                    // min-h-11 (44px): the app-wide minimum touch target. This filter
-                    // row is the primary way to triage notifications and was 34px.
-                    "focus-ring safe-motion inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium",
-                    active
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border/70 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                  )}
-                >
-                  {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
-                  {option.label}
-                </button>
-              );
-            })}
+            <div role="tablist" aria-label="Pulse filters" className="muddies-pills-row">
+              {PULSE_CATEGORIES.map((option) => {
+                const active = category === option.value;
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setCategory(option.value)}
+                    className={cn("muddies-filter focus-ring", active && "muddies-filter-on")}
+                  >
+                    {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -688,7 +777,7 @@ export function NotificationsPageContent({
                   >
                     {group.label}
                   </h2>
-                  <div className="space-y-2">
+                  <div>
                     {group.notifications.map((notification) => (
                       <NotificationCard
                         key={notification.id}
@@ -697,7 +786,7 @@ export function NotificationsPageContent({
                         selectionMode={selectionMode}
                         selected={selectedIds.has(notification.id)}
                         onToggleSelect={() => toggleSelected(notification.id)}
-                        onDelete={() => deleteNotifications([notification.id])}
+                        onDelete={() => deleteNotificationWithUndo(notification)}
                         onActivate={() => {
                           if (notification.meetupRequestId) return openMeetupRequest(notification);
                           if (notification.birthdayUserId) {
@@ -867,6 +956,19 @@ export function NotificationsPageContent({
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
             )}
             <p className="min-w-0 flex-1 text-sm">{toast.message}</p>
+            {toast.onUndo ? (
+              <button
+                type="button"
+                onClick={() => {
+                  toast.onUndo?.();
+                  setToast(null);
+                  if (toastTimer.current) clearTimeout(toastTimer.current);
+                }}
+                className="focus-ring shrink-0 rounded text-sm font-semibold text-[var(--color-brand-amber)] hover:text-white"
+              >
+                Undo
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setToast(null)}
@@ -1033,13 +1135,14 @@ function NotificationCard({
      plain <article>: not focusable, not tappable, and with its message clipped
      to one line, so the text could neither be opened nor finished. */
   const isLink = !actionable && destination !== null;
+  const hasChevron = isLink && !selectionMode;
 
   const body = (
     <>
       {selectionMode ? (
         <span
           className={cn(
-            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center self-center rounded-md border",
+            "flex h-5 w-5 shrink-0 items-center justify-center self-center rounded-md border",
             selected ? "border-primary bg-primary text-white" : "border-border bg-transparent"
           )}
           aria-hidden="true"
@@ -1047,14 +1150,23 @@ function NotificationCard({
           {selected ? <Check className="h-3.5 w-3.5" /> : null}
         </span>
       ) : null}
-      <div className={cn("mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full", iconClass)}>
+      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-full", iconClass)}>
         <notification.icon className="h-4 w-4" aria-hidden="true" />
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <h3 className="truncate text-sm font-semibold">{notification.title}</h3>
+      {/* Middle column: title + unread dot on one line, secondary/social
+          copy underneath. Timestamp and chevron are OUTSIDE this column so
+          long titles/bodies never push them out of alignment. */}
+      <div className="min-w-0 flex-1 self-center">
+        <div className="flex items-baseline gap-1.5">
+          {/* Wraps rather than truncating -- a long display name or a long
+              request title now stays readable instead of clipping mid-word,
+              per the long-content pass. Two lines is the ceiling so one very
+              long title cannot push the row past its neighbours. */}
+          <h3 className="line-clamp-2 min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug">
+            {notification.title}
+          </h3>
           {notification.unread ? (
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />
+            <span className="h-1.5 w-1.5 shrink-0 translate-y-[-1px] rounded-full bg-primary" aria-label="Unread" />
           ) : null}
         </div>
         {/* TWO LINES ON THE ROW, the whole thing in the detail.
@@ -1064,39 +1176,64 @@ function NotificationCard({
             still has to stay scannable, so it clamps rather than growing
             without limit; the full text now lives one tap away. */}
         {notification.message ? (
-          <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+          <p className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-5 text-muted-foreground">
             {notification.message}
           </p>
         ) : null}
         {actionable ? (
-          <p className="mt-1 text-xs font-medium text-primary">
+          <p className="mt-1 text-xs font-semibold text-primary">
             {notification.birthdayUserId ? "Wish Happy Birthday" : "Reply"}
           </p>
         ) : null}
       </div>
-      <span className="mt-0.5 shrink-0 text-[11px] text-muted-foreground">{notification.time}</span>
-      {isLink && !selectionMode ? (
-        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 self-center text-muted-foreground" aria-hidden="true" />
-      ) : null}
+      {/* Right rail: timestamp pinned top-right, chevron below it where a
+          real destination exists -- both outside the flexible middle column
+          so they never drift out of alignment row to row. */}
+      <div className="flex h-full shrink-0 flex-col items-end justify-between self-stretch py-0.5">
+        <span className="whitespace-nowrap text-[0.75rem] text-muted-foreground">{notification.time}</span>
+        {hasChevron ? (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        ) : null}
+      </div>
     </>
   );
 
   const wrapperClass = "flex items-stretch border-b border-border/60 last:border-b-0";
-  const baseClass =
-    "flex min-h-[80px] min-w-0 flex-1 items-start gap-3 rounded-xl px-2 py-3";
+  const baseClass = "flex min-h-[72px] min-w-0 flex-1 items-center gap-3 px-2 py-3";
   const interactiveClass =
     "focus-ring cursor-pointer text-left transition-colors hover:bg-secondary/50 active:bg-secondary/70";
+  /* DELETE MOVED OFF THE ROW.
+   *
+   * A permanently-visible trash icon on every single row gave a rare,
+   * destructive action the same visual weight as opening the notification,
+   * and ate the same horizontal space whether or not anyone ever used it.
+   * The row's own overflow menu (AppMenu -- the same primitive the bulk
+   * toolbar already uses for "Selected update actions") now carries it, so
+   * the destructive control only appears when deliberately requested. */
   const deleteControl = !selectionMode ? (
-    <button
-      type="button"
-      onClick={onDelete}
-      disabled={false}
-      aria-label={`Delete: ${notification.title}`}
-      title="Delete update"
-      className="focus-ring my-auto mr-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-    >
-      <Trash2 className="h-4 w-4" aria-hidden="true" />
-    </button>
+    <AppMenu
+      label={`Update actions: ${notification.title}`}
+      align="end"
+      trigger={
+        <button
+          type="button"
+          aria-label={`More actions for: ${notification.title}`}
+          title="More actions"
+          className="focus-ring my-auto grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary"
+        >
+          <MoreVertical className="h-4 w-4" aria-hidden="true" />
+        </button>
+      }
+      items={[
+        {
+          id: "delete",
+          label: "Delete",
+          icon: <Trash2 className="h-4 w-4" />,
+          destructive: true,
+          onSelect: onDelete
+        }
+      ]}
+    />
   ) : null;
 
   // Selection mode wins: the whole row toggles selection (checkbox semantics),
@@ -1275,5 +1412,6 @@ function formatNotificationTime(createdAt: string, nowMs: number) {
     return `${ageHours} hr ago`;
   }
 
-  return `${Math.floor(ageHours / 24)} days ago`;
+  const ageDays = Math.floor(ageHours / 24);
+  return ageDays === 1 ? "1 day ago" : `${ageDays} days ago`;
 }
