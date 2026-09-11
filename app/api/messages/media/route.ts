@@ -9,6 +9,7 @@ import {
   createChatV4RichUploadIntent,
   finalizeChatV4RichUpload
 } from "@/lib/media/chat-v4-rich-upload-service";
+import { getRichMediaMessage } from "@/lib/messaging/rich-media-service";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -31,7 +32,13 @@ const finalizeSchema = z.object({
   mediaId: uuid
 });
 
-const requestSchema = z.discriminatedUnion("operation", [intentSchema, finalizeSchema]);
+const viewSchema = z.object({
+  operation: z.literal("view"),
+  conversationId: uuid,
+  messageId: uuid
+});
+
+const requestSchema = z.discriminatedUnion("operation", [intentSchema, finalizeSchema, viewSchema]);
 
 function json(request: Request, payload: unknown, status = 200) {
   return withCors(NextResponse.json(payload, { status }), request);
@@ -45,11 +52,11 @@ export function OPTIONS(request: Request) {
  * Independent transport for the media lifecycle used by the chat composer.
  *
  * The bytes already upload directly from the phone to private Supabase
- * Storage. What used to remain on the React Server Action lane were the two
- * latency-sensitive control steps around that upload: minting the signed
- * intent and finalising/verifying the stored asset. Keeping those in the same
- * action transport as presence, drafts and other chat mutations meant a slow
- * media operation could make the composer look frozen even though Storage was
+ * Storage. What used to remain on the React Server Action lane were the
+ * latency-sensitive control steps around that upload and the URL projection
+ * after send. Keeping those in the same action transport as presence, drafts
+ * and other chat mutations meant a slow media operation could make the
+ * composer or a video/document bubble look frozen even though Storage was
  * progressing normally.
  *
  * This route keeps the exact server-side authorization and validation services
@@ -66,6 +73,11 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdminClient();
   const userId = auth.user.id;
+
+  if (parsed.data.operation === "view") {
+    const media = await getRichMediaMessage(admin, userId, parsed.data);
+    return json(request, { ok: true, media });
+  }
 
   if (parsed.data.operation === "intent") {
     if (parsed.data.mediaKind === "image") {
