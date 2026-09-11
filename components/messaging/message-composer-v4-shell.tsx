@@ -43,7 +43,6 @@ export function MessageComposerV4Shell({
   onFeedback,
   onOptimisticSend,
   onOptimisticSettled,
-  onSent,
   confirmedClientMessageIds
 }: {
   conversationId: string;
@@ -58,6 +57,13 @@ export function MessageComposerV4Shell({
   onFeedback: (message: string) => void;
   onOptimisticSend?: (message: OptimisticSendDraftV3) => void;
   onOptimisticSettled?: (clientMessageId: string, outcome: "sent" | "failed" | "pending") => void;
+  /**
+   * Kept in the public prop contract for callers that also use this shell for
+   * non-message mutations. Ordinary message sends intentionally do not invoke
+   * it anymore: V4's callback performs a 200-row thread reload, while Realtime
+   * already projects the canonical row and the page has a clientMessageId
+   * resolver for ambiguous sends.
+   */
   onSent: () => void | Promise<void>;
   confirmedClientMessageIds?: ReadonlySet<string>;
 }) {
@@ -165,10 +171,21 @@ export function MessageComposerV4Shell({
     persistDraft("");
     publishTyping(false);
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    /* The server has already accepted the message at this point. Thread/inbox
-       reconciliation is background work and must not keep the composer in its
-       sending transition or make the user wait before sending the next text. */
-    void onSent();
+    /*
+     * Do NOT immediately call the page's onSent callback here.
+     *
+     * MessagesPageV4 historically used that callback to refetch the complete
+     * conversation after every successful/ambiguous send. The screenshot that
+     * triggered this fix is the consequence: an optimistic bubble was already
+     * visible, then a redundant 200-row reload timed out and painted "Chats
+     * took too long to respond" over an otherwise usable thread.
+     *
+     * The canonical path is now local optimistic row -> durable API ack ->
+     * Realtime one-message projection. Ambiguous timeouts are already resolved
+     * by clientMessageId in MessagesPageV4. A later navigation/open still does
+     * the normal authoritative reconciliation, so removing this eager reload
+     * changes latency, not message authority.
+     */
   }
 
   return (
