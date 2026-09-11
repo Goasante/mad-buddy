@@ -712,7 +712,7 @@ export function MessageComposerV3({
             src={take.objectUrl}
             preload="auto"
             playsInline
-            onTimeUpdate={(event) => setPlayedSeconds(event.currentTime)}
+            onTimeUpdate={(event) => setPlayedSeconds(event.currentTarget.currentTime)}
             onEnded={() => {
               setPlaying(false);
               setPlayedSeconds(0);
