@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse, after } from "next/server";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
@@ -32,6 +33,19 @@ async function findCommittedSend(
   return { ok: true, message: "Sent.", messageId: data.id };
 }
 
+function acknowledge(request: Request, result: MessagingResult) {
+  if (result.ok) {
+    // The previous Server Action send invalidated Home after first_message_sent
+    // (BETA-011). The composer now uses this API route, so preserve that exact
+    // cache contract rather than reintroducing the stuck "Say hi" card.
+    revalidatePath("/dashboard");
+  }
+  return withCors(
+    NextResponse.json(result, { status: result.ok ? 200 : 400 }),
+    request
+  );
+}
+
 function keepPostCommitWorkAlive(send: Promise<MessagingResult>) {
   after(async () => {
     try {
@@ -62,7 +76,7 @@ export async function POST(request: Request) {
   const parsed = sendMessageSchema.safeParse(input);
   if (!parsed.success) {
     const result = await sendMessage(auth.user.id, input);
-    return withCors(NextResponse.json(result, { status: result.ok ? 200 : 400 }), request);
+    return acknowledge(request, result);
   }
 
   /*
@@ -90,36 +104,26 @@ export async function POST(request: Request) {
     ]);
 
     if (race.kind === "result") {
-      return withCors(
-        NextResponse.json(race.result, { status: race.result.ok ? 200 : 400 }),
-        request
-      );
+      return acknowledge(request, race.result);
     }
 
     if (race.kind === "error") {
       const committed = await findCommittedSend(auth.user.id, parsed.data);
-      if (committed) {
-        return withCors(NextResponse.json(committed, { status: 200 }), request);
-      }
+      if (committed) return acknowledge(request, committed);
       throw race.error;
     }
 
     const committed = await findCommittedSend(auth.user.id, parsed.data);
     if (committed) {
       keepPostCommitWorkAlive(sendPromise);
-      return withCors(NextResponse.json(committed, { status: 200 }), request);
+      return acknowledge(request, committed);
     }
   }
 
   const final = await observed;
-  if (final.kind === "result") {
-    return withCors(
-      NextResponse.json(final.result, { status: final.result.ok ? 200 : 400 }),
-      request
-    );
-  }
+  if (final.kind === "result") return acknowledge(request, final.result);
 
   const committed = await findCommittedSend(auth.user.id, parsed.data);
-  if (committed) return withCors(NextResponse.json(committed, { status: 200 }), request);
+  if (committed) return acknowledge(request, committed);
   throw final.error;
 }
