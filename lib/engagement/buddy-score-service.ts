@@ -106,7 +106,11 @@ export async function readBuddyScoreSnapshot(admin: Admin, userId: string): Prom
     pointsToNext: progress.pointsToNext,
     progressPercent: progress.percent,
     categories: [...categoryMap].map(([label, points]) => ({ label, points })).sort((a, b) => b.points - a.points),
-    recentActivity: activities.slice(0, 12)
+    // 100, not the old 12: this is what feeds My Progress's full activity
+    // history view (progressTimeline() draws from this array), so the
+    // underlying list needs real depth even though every surface that
+    // previews it slices down to a handful of rows.
+    recentActivity: activities.slice(0, 100)
   };
 }
 

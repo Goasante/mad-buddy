@@ -53,7 +53,8 @@ export async function loadMyProgress(admin: Admin, userId: string, now = new Dat
     achievements: {
       unlockedCount: achievements.length,
       featured: featuredAchievements(achievements),
-      recent: achievements.slice(0, 6)
+      recent: achievements.slice(0, 6),
+      all: achievements
     },
     milestones,
     timeline: progressTimeline(score, achievements),

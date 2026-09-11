@@ -56,8 +56,21 @@ describe("profile identity projection", () => {
     expect(profilePage).not.toContain("Recent score activity");
     expect(profilePage).not.toContain("identitySummary.buddyScore.recentActivity");
 
+    /* My Progress IA rebuild (ui/my-progress-ia-rebuild): the old page showed
+     * this same score-event history twice on one page -- a "Recent score
+     * activity" list inside the Buddy Score card, AND a "Recent Activity"
+     * timeline section a few hundred pixels later covering the same ledger.
+     * That in-page duplication is gone; score events now render exactly once,
+     * in the canonical Recent Activity section, which is still built from
+     * score.recentActivity (via progressTimeline() in lib/progress/my-progress.ts)
+     * and still lives only on this owner-only route -- so the privacy
+     * invariant above still holds, just without a second on-page copy. */
     const buddyScorePage = readFileSync("components/buddy-score/buddy-score-page.tsx", "utf8");
-    expect(buddyScorePage).toContain("Recent score activity");
-    expect(buddyScorePage).toContain("score.recentActivity");
+    expect(buddyScorePage).not.toContain("Recent score activity");
+    expect(buddyScorePage).toContain("Recent Activity");
+    expect(buddyScorePage).toContain("timeline");
+
+    const progressProjection = readFileSync("lib/progress/my-progress.ts", "utf8");
+    expect(progressProjection).toContain("score.recentActivity");
   });
 });
