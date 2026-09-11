@@ -311,7 +311,7 @@ export function AttachmentPicker({
         path: intent.path,
         token: intent.token,
         file,
-        contentType: intent.contentType ?? file.type || "application/octet-stream",
+        contentType: intent.contentType || file.type || "application/octet-stream",
         upsert: false,
         onProgress: ({ percent }) => updateProgress(percent)
       });
