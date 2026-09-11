@@ -1,13 +1,14 @@
 "use client";
 
-import { Loader2, Pause, Play } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Loader2, Pause, Play, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getMessageVoicePlaybackAction } from "@/app/(app)/messaging-actions";
 import { updateConversationUserPreferencesAction } from "@/app/(app)/messaging-ultimate-actions";
 import { MessageRetentionV4 } from "@/components/messaging/message-retention-v4";
 import { StaticVoiceWaveform } from "@/components/messaging/voice-waveform-bar";
-import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
+import { getVoiceMessagePlaybackViaApi } from "@/lib/messaging/media-upload-client";
+import type { AuthorizedVoicePlayback, PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
+import { voicePlaybackNeedsRefresh } from "@/lib/messaging/voice-playback";
 import { reportVoiceFailure } from "@/lib/messaging/voice-reliability";
 
 const SPEEDS = [1, 1.5, 2] as const;
@@ -28,13 +29,14 @@ export function VoiceMessageBubbleV4({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressRef = useRef<HTMLButtonElement | null>(null);
   const lastPersistedRef = useRef(0);
-  const [src, setSrc] = useState<string | null>(null);
+  const [playback, setPlayback] = useState<AuthorizedVoicePlayback | null>(null);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(Math.max(0, initialSeconds));
   const [failed, setFailed] = useState(false);
   const [speedIndex, setSpeedIndex] = useState(0);
 
+  const src = playback?.url ?? null;
   const durationSeconds = Math.max(1, Math.round(asset.durationMs / 1000));
   const speed = SPEEDS[speedIndex];
   const mine = senderName === "you";
@@ -53,20 +55,46 @@ export function VoiceMessageBubbleV4({
     };
   }, [conversationId, elapsed, messageId]);
 
-  async function ensurePlayback() {
-    if (src) return src;
-    setLoading(true);
-    setFailed(false);
-    const result = await getMessageVoicePlaybackAction({ conversationId, messageId });
-    setLoading(false);
+  const loadPlayback = useCallback(async (showLoading: boolean) => {
+    if (showLoading) setLoading(true);
+    const result = await getVoiceMessagePlaybackViaApi({ conversationId, messageId });
+    if (showLoading) setLoading(false);
     if (!result.ok || !result.playback) {
       reportVoiceFailure("playback_authorization_failed");
       setFailed(true);
       return null;
     }
-    setSrc(result.playback.url);
-    return result.playback.url;
-  }
+    setPlayback(result.playback);
+    setFailed(false);
+    return result.playback;
+  }, [conversationId, messageId]);
+
+  // Prefetch the signed playback URL while the bubble is visible, so the
+  // <audio> element is already mounted (and audioRef populated) by the time
+  // someone taps play. This does NOT call play() itself.
+  useEffect(() => {
+    let disposed = false;
+    void getVoiceMessagePlaybackViaApi({ conversationId, messageId }).then((result) => {
+      if (disposed) return;
+      if (result.ok && result.playback) {
+        setPlayback(result.playback);
+        setFailed(false);
+      }
+    });
+    return () => {
+      disposed = true;
+      audioRef.current?.pause();
+    };
+  }, [conversationId, messageId]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !playback) return;
+      if (voicePlaybackNeedsRefresh(playback.expiresAt)) void loadPlayback(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loadPlayback, playback]);
 
   async function toggle() {
     const audio = audioRef.current;
@@ -74,27 +102,31 @@ export function VoiceMessageBubbleV4({
       audio.pause();
       return;
     }
-    const url = await ensurePlayback();
-    if (!url) return;
-    if (!audioRef.current) return;
-    audioRef.current.playbackRate = speed;
-    await audioRef.current.play().catch(() => {
-      reportVoiceFailure("playback_failed");
-      setFailed(true);
-    });
-  }
 
-  useEffect(() => {
-    if (!src) return;
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.playbackRate = speed;
-    if (initialSeconds > 0 && initialSeconds < durationSeconds) {
-      audio.currentTime = initialSeconds;
-      setElapsed(initialSeconds);
+    // Never reuse an expired URL, and never try to autoplay once an async
+    // fetch resolves: on iOS/WebKit that later audio.play() call is no
+    // longer inside this tap's user-activation window and gets silently
+    // blocked, which is exactly what made sent voice notes look like they
+    // "cut off" instead of playing. A second explicit tap (now almost always
+    // unnecessary thanks to the prefetch above) keeps the play() call inside
+    // its own real gesture.
+    if (!playback || voicePlaybackNeedsRefresh(playback.expiresAt)) {
+      await loadPlayback(true);
+      return;
     }
-    void audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-  }, [durationSeconds, initialSeconds, speed, src]);
+
+    if (!audio) return;
+    setFailed(false);
+    try {
+      audio.playbackRate = speed;
+      await audio.play();
+      setPlaying(true);
+    } catch {
+      reportVoiceFailure("playback_failed");
+      setPlaying(false);
+      setFailed(true);
+    }
+  }
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -148,11 +180,37 @@ export function VoiceMessageBubbleV4({
               lastPersistedRef.current = 0;
               void updateConversationUserPreferencesAction({ conversationId, voicePlaybackMessageId: null, voicePlaybackSeconds: 0 });
             }}
+            onError={() => {
+              reportVoiceFailure("playback_failed");
+              setPlaying(false);
+              setFailed(true);
+              if (playback && voicePlaybackNeedsRefresh(playback.expiresAt)) setPlayback(null);
+            }}
           />
         ) : null}
 
-        <button type="button" onClick={() => void toggle()} disabled={loading} aria-label={playing ? `Pause voice message from ${senderName}` : `Play voice message from ${senderName}`} className="voice-bubble-play transition-transform active:scale-90">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        <button
+          type="button"
+          onClick={() => void toggle()}
+          disabled={loading}
+          aria-label={
+            failed
+              ? `Retry voice message from ${senderName}`
+              : playing
+                ? `Pause voice message from ${senderName}`
+                : `Play voice message from ${senderName}`
+          }
+          className="voice-bubble-play transition-transform active:scale-90"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+          ) : failed ? (
+            <RotateCcw className="h-4 w-4" />
+          ) : playing ? (
+            <Pause className="h-4 w-4" />
+          ) : (
+            <Play className="h-4 w-4" />
+          )}
         </button>
 
         <button
@@ -179,7 +237,7 @@ export function VoiceMessageBubbleV4({
           {speed}×
         </button>
 
-        {failed ? <span className="sr-only" role="alert">This voice message could not be played.</span> : null}
+        {failed ? <span className="sr-only" role="alert">This voice message could not be played. Tap retry.</span> : null}
       </div>
       <MessageRetentionV4 conversationId={conversationId} messageId={messageId} mine={mine} />
     </div>
