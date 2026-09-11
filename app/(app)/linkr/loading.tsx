@@ -4,7 +4,7 @@ export default function LinkrLoading() {
   return (
     <div className="linkr-safe-screen" data-linkr-safe-area>
       <section
-        className="mx-auto flex min-h-[calc(100svh-var(--mobile-nav-height)-env(safe-area-inset-bottom,0px))] w-full max-w-[32rem] flex-col items-center justify-center px-5 py-8 text-center"
+        className="mx-auto flex min-h-[calc(100svh-var(--mobile-nav-height))] w-full max-w-[32rem] flex-col items-center justify-center px-5 py-8 text-center"
         role="status"
         aria-live="polite"
       >
