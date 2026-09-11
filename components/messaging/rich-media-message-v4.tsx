@@ -1,10 +1,10 @@
 "use client";
 
-import { Download, ExternalLink, FileText, Loader2, PlaySquare } from "lucide-react";
+import { Download, ExternalLink, FileText, Loader2, PlaySquare, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { getRichMediaMessageAction } from "@/app/(app)/messaging-rich-media-actions";
 import { MessageRetentionV4 } from "@/components/messaging/message-retention-v4";
+import { getRichMediaMessageViaApi } from "@/lib/messaging/media-upload-client";
 import type { RichMediaMessageView } from "@/lib/messaging/rich-media-v4-types";
 
 function formatBytes(bytes: number) {
@@ -42,17 +42,28 @@ export function RichMediaMessageV4({
   mine: boolean;
 }) {
   const [media, setMedia] = useState<RichMediaMessageView | null | undefined>(undefined);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const refresh = useCallback(async () => {
-    const next = await getRichMediaMessageAction({ conversationId, messageId });
-    setMedia(next);
-    return next;
+    setLoadFailed(false);
+    const result = await getRichMediaMessageViaApi({ conversationId, messageId });
+    if (!result.ok) {
+      setLoadFailed(true);
+      return null;
+    }
+    setMedia(result.media);
+    return result.media;
   }, [conversationId, messageId]);
 
   useEffect(() => {
     let disposed = false;
-    void getRichMediaMessageAction({ conversationId, messageId }).then((next) => {
-      if (!disposed) setMedia(next);
+    void getRichMediaMessageViaApi({ conversationId, messageId }).then((result) => {
+      if (disposed) return;
+      if (!result.ok) {
+        setLoadFailed(true);
+        return;
+      }
+      setMedia(result.media);
     });
     return () => {
       disposed = true;
@@ -67,6 +78,28 @@ export function RichMediaMessageV4({
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [media, refresh]);
+
+  if (loadFailed) {
+    return (
+      <div className="mb-2 w-[min(68vw,300px)] max-w-full">
+        <button
+          type="button"
+          onClick={() => {
+            setMedia(undefined);
+            void refresh();
+          }}
+          className="focus-ring flex min-h-20 w-full items-center gap-3 rounded-[18px] border border-current/10 px-3 py-3 text-left text-xs opacity-80 transition active:scale-[.99]"
+        >
+          <RefreshCw className="h-5 w-5 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1">
+            <strong className="block text-foreground">Attachment didn’t load</strong>
+            <span className="mt-0.5 block opacity-70">Tap to try again.</span>
+          </span>
+        </button>
+        <MessageRetentionV4 conversationId={conversationId} messageId={messageId} mine={mine} />
+      </div>
+    );
+  }
 
   if (media === undefined) {
     return (

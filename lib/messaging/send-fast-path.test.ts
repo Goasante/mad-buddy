@@ -56,12 +56,14 @@ describe("post-send reconciliation", () => {
     expect(handleSent).not.toContain("refreshMessages");
   });
 
-  it("still clears the local draft and typing state immediately", () => {
+  it("clears the local/server draft and typing state immediately", () => {
     const handleSent = shell.slice(
       shell.indexOf("function handleSent()"),
       shell.indexOf("return (", shell.indexOf("function handleSent()"))
     );
-    expect(handleSent).toContain('persistDraft("")');
+    expect(handleSent).toContain('lastDraftRef.current = ""');
+    expect(handleSent).toContain('void syncDraftToServer("")');
+    expect(handleSent).toContain("onDraftCleared?.()");
     expect(handleSent).toContain("publishTyping(false)");
   });
 });

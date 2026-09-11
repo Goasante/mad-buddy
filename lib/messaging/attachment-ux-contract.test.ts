@@ -36,11 +36,11 @@ describe("chat attachment menu", () => {
 
 describe("document identity and downloads", () => {
   it("persists and returns the original document name", () => {
-    const service = read("lib/media/chat-v4-rich-upload-service.ts");
-    const action = read("app/(app)/messaging-rich-media-actions.ts");
-    expect(service).toContain("original_file_name: fileName");
-    expect(action).toContain("asset.original_file_name");
-    expect(action).toContain("download: fileName");
+    const upload = read("lib/media/chat-v4-rich-upload-service.ts");
+    const projection = read("lib/messaging/rich-media-service.ts");
+    expect(upload).toContain("original_file_name: fileName");
+    expect(projection).toContain("asset.original_file_name");
+    expect(projection).toContain("download: fileName");
   });
 
   it("uses the provider filename-preserving URL for Save", () => {

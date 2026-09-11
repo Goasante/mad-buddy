@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { discardMessageAttachmentAction } from "@/app/(app)/messaging-actions";
 import {
-  createVoiceMessageUploadIntentAction,
-  discardMessageAttachmentAction,
-  finalizeVoiceMessageUploadAction
-} from "@/app/(app)/messaging-actions";
+  createVoiceUploadIntentViaApi,
+  finalizeVoiceUploadViaApi
+} from "@/lib/messaging/media-upload-client";
 import type { LocalVoiceRecording } from "@/lib/messaging/voice-recording";
 import { browserIsOnline, reportVoiceFailure } from "@/lib/messaging/voice-reliability";
 import type { PreparedVoiceAsset } from "@/lib/messaging/voice-playback";
@@ -14,16 +14,15 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 /**
  * The voice upload lifecycle, without any presentation.
  *
- * Lifted verbatim in behaviour from the previous VoiceRecordingPreview: the
- * intent/upload/finalize sequence, the operation-id guard against stale
- * async work, the discard-on-failure cleanup, and the rule that a READY
- * asset is no longer an in-flight intent. Only the UI around it changed, so
- * none of that logic was rewritten.
+ * Raw audio bytes continue to use the proven direct browser -> private
+ * Supabase Storage upload. Only the latency-sensitive control steps around it
+ * moved away from React Server Actions: intent and finalize now use the
+ * independent messaging media JSON lane while retaining the same server-side
+ * authorization, entitlement and byte/container validation services.
  *
- * ONE ERROR AT A TIME. Every failure path sets exactly one message. The old
- * implementation could show a recorder error and a player error together,
- * describing the same problem twice; a hook that owns a single `error`
- * string cannot do that.
+ * ONE ERROR AT A TIME. Every failure path sets exactly one message. A local
+ * recording survives retryable network failure; only an invalid recording is
+ * abandoned and requires a new take.
  */
 
 export type VoiceUploadState =
@@ -53,35 +52,24 @@ export function useVoiceUpload(conversationId: string) {
       const operation = ++operationRef.current;
       let mediaId = intentRef.current;
 
-      // A retry after a finalize failure reuses the existing intent rather
-      // than uploading the same bytes twice.
+      // A retry after a finalize failure reuses the existing uploaded asset
+      // rather than sending the same audio bytes twice.
       if (!mediaId) {
         setState({ kind: "uploading" });
-        let created: Awaited<ReturnType<typeof createVoiceMessageUploadIntentAction>>;
-        try {
-          created = await createVoiceMessageUploadIntentAction({
-            conversationId,
-            // The ACTUAL recorded type, not the requested one. MediaRecorder
-            // may honour a different container than the one asked for, and
-            // the server sniffs the real bytes -- declaring the requested
-            // type makes a perfectly good recording fail as a content
-            // mismatch. `blobMimeType` is captured for exactly this reason.
-            contentType: recording.blobMimeType || recording.mimeType,
-            sizeBytes: recording.blob.size
-          });
-        } catch {
-          reportVoiceFailure("upload_intent_failed");
-          if (operation === operationRef.current) {
-            setState({ kind: "failed", message: "Couldn't send that voice message. Try again.", retryable: true });
-          }
-          return null;
-        }
+        const created = await createVoiceUploadIntentViaApi({
+          conversationId,
+          // MediaRecorder may emit a different supported container than the one
+          // requested. The recorder's actual Blob type is the authority.
+          contentType: recording.blobMimeType || recording.mimeType,
+          sizeBytes: recording.blob.size
+        });
         if (operation !== operationRef.current) return null;
         if (!created.ok || !created.mediaId || !created.path || !created.token) {
           reportVoiceFailure("upload_intent_failed");
           setState({ kind: "failed", message: created.message, retryable: true });
           return null;
         }
+
         mediaId = created.mediaId;
         intentRef.current = mediaId;
 
@@ -90,7 +78,6 @@ export function useVoiceUpload(conversationId: string) {
           const { error } = await supabase.storage
             .from("media")
             .uploadToSignedUrl(created.path, created.token, recording.blob, {
-              // Must match the intent above and the bytes themselves.
               contentType: recording.blobMimeType || recording.mimeType,
               upsert: true
             });
@@ -100,8 +87,6 @@ export function useVoiceUpload(conversationId: string) {
           reportVoiceFailure("upload_failed");
           void discardMessageAttachmentAction(mediaId);
           intentRef.current = null;
-          // The RECORDING survives a network failure -- only the upload is
-          // discarded, so Retry does not mean "record it again".
           setState({
             kind: "failed",
             message: browserIsOnline()
@@ -115,40 +100,28 @@ export function useVoiceUpload(conversationId: string) {
 
       if (operation !== operationRef.current) return null;
       setState({ kind: "finalizing" });
-      let finalized: Awaited<ReturnType<typeof finalizeVoiceMessageUploadAction>>;
-      try {
-        finalized = await finalizeVoiceMessageUploadAction({
-          conversationId,
-          mediaId,
-          waveform: recording.waveform,
-          // MediaRecorder webm carries no duration in its header, so the
-          // server cannot always derive one from the bytes. Sent as a
-          // fallback only -- the server prefers the container's own value
-          // and bounds this one.
-          clientDurationMs: Math.round(recording.durationSeconds * 1000)
-        });
-      } catch {
-        if (operation !== operationRef.current) return null;
-        reportVoiceFailure("finalize_failed");
-        setState({ kind: "failed", message: "Couldn't send that voice message. Try again.", retryable: true });
-        return null;
-      }
+      const finalized = await finalizeVoiceUploadViaApi({
+        conversationId,
+        mediaId,
+        waveform: recording.waveform,
+        // WebM MediaRecorder output does not always carry a usable duration in
+        // its header. This remains a bounded fallback; the server verifies the
+        // container/codec and enforces the account duration limit.
+        clientDurationMs: Math.round(recording.durationSeconds * 1000)
+      });
       if (operation !== operationRef.current) return null;
+
       if (!finalized.ok || !finalized.mediaId || !finalized.durationMs) {
         reportVoiceFailure("validation_failed");
-        void discardMessageAttachmentAction(mediaId);
-        intentRef.current = null;
-        // The audio itself is unusable, so this is NOT retryable with the
-        // same take -- the caller returns to recording.
-        //
-        // The SERVER's reason is preserved: it distinguishes an unverifiable
-        // container from an unverifiable duration from an entitlement limit,
-        // and collapsing those into one line makes the failure undiagnosable
-        // for the person hitting it and for anyone debugging it.
+        // A transport collision such as "already being processed" is safe to
+        // retry against the same uploaded object. Only an authoritative invalid
+        // take / duration rejection requires a new recording.
+        const retryable = !/record it again|can be up to/i.test(finalized.message);
+        if (!retryable) intentRef.current = null;
         setState({
           kind: "failed",
           message: finalized.message || "Couldn't record that voice message. Try again.",
-          retryable: false
+          retryable
         });
         return null;
       }
@@ -158,8 +131,8 @@ export function useVoiceUpload(conversationId: string) {
         durationMs: finalized.durationMs,
         waveform: recording.waveform
       };
-      // READY is no longer an in-flight intent: a successful send must not
-      // let cleanup discard the now-attached asset.
+      // READY is no longer an in-flight intent: a successful send must not let
+      // cleanup discard the now-attached asset.
       intentRef.current = null;
       setState({ kind: "ready", attachment });
       return attachment;

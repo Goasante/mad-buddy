@@ -15,17 +15,32 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * the world and must stay until the world changes. This only ever auto-clears
  * the first kind, so RSVP state, pin state and mute state are untouched by it.
  *
- * ERRORS ARE NOT AUTO-CLEARED. A message that tells someone what went wrong
- * has to outlive their reading speed, so anything classified as an error stays
- * until the next action replaces it. Hiding "The message could not be sent"
- * after three seconds would be worse than never showing it.
+ * Delivery failure is different again: V4 owns it on the failed message row,
+ * where the person can Retry or Delete. A second floating "took too long"
+ * banner describes transport internals, obscures the chat, and competes with
+ * the actionable state directly beneath the message.
  */
 
 /** Matches the interval the two hand-rolled implementations already used. */
 export const TRANSIENT_FEEDBACK_MS = 4000;
 
 /**
- * Does this message report a failure?
+ * Delivery/refresh failures that have a better local home than the page banner.
+ * Keep this deliberately exact: account, moderation, permission and destructive
+ * action errors still need the global surface and must never be hidden merely
+ * because they contain generic words like "failed" or "try again".
+ */
+export function suppressGlobalMessagingFeedback(message: string): boolean {
+  const text = message.trim().toLowerCase();
+  return text === "chats took too long to respond. try again."
+    || text === "messages took too long to respond. try again."
+    || text === "could not retry."
+    || text === "the message could not be sent. try again."
+    || text === "couldn't send that voice message. try again.";
+}
+
+/**
+ * Does this message report a transient confirmation?
  *
  * Server actions here return a human sentence rather than a severity, so tone
  * is what there is to go on. Deliberately generous: an unrecognised message is
@@ -127,6 +142,10 @@ export function useTransientFeedback(
    * invalidate those memos and re-run effects on every keystroke.
    */
   const setFeedback = useCallback((message: string) => {
+    if (suppressGlobalMessagingFeedback(message)) {
+      setRawFeedback("");
+      return;
+    }
     setRawFeedback(message);
   }, []);
 

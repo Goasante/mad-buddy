@@ -2,19 +2,17 @@
 
 import { CalendarDays, Camera, FileText, Image as ImageIcon, ImagePlus, Plus, RotateCcw, Video, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import {
-  createMessageAttachmentUploadIntentAction,
-  discardMessageAttachmentAction,
-  finalizeMessageAttachmentUploadAction
-} from "@/app/(app)/messaging-actions";
-import {
-  createChatRichMediaUploadIntentAction,
-  finalizeChatRichMediaUploadAction
-} from "@/app/(app)/messaging-rich-media-actions";
+import { discardMessageAttachmentAction } from "@/app/(app)/messaging-actions";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { StructuredShareV4, type StructuredShareMode } from "@/components/messaging/structured-share-v4";
 import { uploadMediaToSignedUrlWithProgress } from "@/lib/media/signed-upload-progress";
 import { validateImageSelection } from "@/lib/media/validation";
+import {
+  createImageUploadIntentViaApi as createMessageAttachmentUploadIntentAction,
+  createRichMediaUploadIntentViaApi as createChatRichMediaUploadIntentAction,
+  finalizeImageUploadViaApi as finalizeMessageAttachmentUploadAction,
+  finalizeRichMediaUploadViaApi as finalizeChatRichMediaUploadAction
+} from "@/lib/messaging/media-upload-client";
 import { cn } from "@/lib/utils";
 
 export type SelectedAttachment = {
@@ -313,7 +311,7 @@ export function AttachmentPicker({
         path: intent.path,
         token: intent.token,
         file,
-        contentType: intent.contentType,
+        contentType: intent.contentType || file.type || "application/octet-stream",
         upsert: false,
         onProgress: ({ percent }) => updateProgress(percent)
       });
@@ -334,7 +332,7 @@ export function AttachmentPicker({
       mediaId: intent.mediaId,
       expectedMediaKind: kind
     });
-    if (!finalized.ok) {
+    if (!finalized.ok || !finalized.mediaId || !finalized.mediaKind) {
       clearCurrentIntent(true);
       clearQueues();
       transition({ status: "failed", message: finalized.message });

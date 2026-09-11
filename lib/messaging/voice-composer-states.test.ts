@@ -144,9 +144,12 @@ describe("send lifecycle", () => {
   });
 
   it("uploads through the canonical pipeline, never an ad-hoc path", () => {
-    expect(upload).toContain("createVoiceMessageUploadIntentAction");
-    expect(upload).toContain("finalizeVoiceMessageUploadAction");
+    expect(upload).toContain("createVoiceUploadIntentViaApi");
+    expect(upload).toContain("finalizeVoiceUploadViaApi");
+    expect(upload).toContain("createSupabaseBrowserClient");
     expect(upload).toContain("uploadToSignedUrl");
+    expect(upload).not.toContain("createVoiceMessageUploadIntentAction");
+    expect(upload).not.toContain("finalizeVoiceMessageUploadAction");
   });
 });
 
@@ -162,11 +165,12 @@ describe("failure handling", () => {
     expect((composer.match(/voice-bar-error/g) ?? []).length).toBeLessThanOrEqual(2);
   });
 
-  it("distinguishes a broken recording from a failed upload", () => {
-    // Network failure keeps the take and offers retry; unusable audio does
-    // not, because retrying the same bytes would fail identically.
+  it("distinguishes a broken recording from a retryable finalize failure", () => {
+    // Network/transport collisions keep the take and offer retry. An
+    // authoritative invalid/over-limit result abandons the intent instead.
     expect(upload).toContain("retryable: true");
-    expect(upload).toContain("retryable: false");
+    expect(upload).toContain("const retryable = !/record it again|can be up to/i.test(finalized.message);");
+    expect(upload).toContain("if (!retryable) intentRef.current = null;");
   });
 
   it("keeps the recording when the network fails", () => {
@@ -186,13 +190,15 @@ describe("failure handling", () => {
 // ---------------------------------------------------------------------------
 
 describe("a sent voice message", () => {
-  it("mints its playback URL lazily, on first play", () => {
-    expect(bubble).toContain("if (!src)");
-    expect(bubble).toContain("getMessageVoicePlaybackAction");
+  it("prefetches playback authority but only plays from an explicit tap", () => {
+    expect(bubble).toContain("getVoiceMessagePlaybackViaApi");
+    expect(bubble).not.toContain("getMessageVoicePlaybackAction");
+    expect(bubble).toContain("if (!playback || voicePlaybackNeedsRefresh(playback.expiresAt)) {");
+    expect(bubble).toContain("await audio.play()");
   });
 
   it("stops playing if the message unmounts", () => {
-    expect(bubble).toContain("return () => audio?.pause()");
+    expect(bubble).toContain("audioRef.current?.pause();");
   });
 
   it("stays a message rather than becoming a media player", () => {
