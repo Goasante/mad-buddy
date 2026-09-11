@@ -51,7 +51,6 @@ export function useVoiceUpload(conversationId: string) {
 
       const operation = ++operationRef.current;
       let mediaId = intentRef.current;
-      const contentType = recording.blobMimeType || recording.mimeType;
 
       // A retry after a finalize failure reuses the existing uploaded asset
       // rather than sending the same audio bytes twice.
@@ -61,7 +60,7 @@ export function useVoiceUpload(conversationId: string) {
           conversationId,
           // MediaRecorder may emit a different supported container than the one
           // requested. The recorder's actual Blob type is the authority.
-          contentType,
+          contentType: recording.blobMimeType || recording.mimeType,
           sizeBytes: recording.blob.size
         });
         if (operation !== operationRef.current) return null;
@@ -79,7 +78,7 @@ export function useVoiceUpload(conversationId: string) {
           const { error } = await supabase.storage
             .from("media")
             .uploadToSignedUrl(created.path, created.token, recording.blob, {
-              contentType,
+              contentType: recording.blobMimeType || recording.mimeType,
               upsert: true
             });
           if (error) throw error;
