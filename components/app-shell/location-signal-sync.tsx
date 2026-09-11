@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { appCache, cacheKeys } from "@/lib/cache/entity-cache";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 
 // Foreground-only web cadence. This keeps a moving device's broad proximity
@@ -58,6 +59,12 @@ export function LocationSignalSync({ initiallyEnabled }: LocationSignalSyncProps
         }, 15_000, "update proximity signal");
 
         if (response.ok) {
+          // A successful location write changes the authority behind Home's
+          // proximity rail. Its in-memory cache may still be inside the 30s
+          // fresh window, so drop only that entry before telling Home to
+          // reload. Otherwise `mad-buddy:location-updated` can immediately
+          // re-render the old band even though the server has newer truth.
+          appCache.invalidate(cacheKeys.homeNearby());
           window.dispatchEvent(new Event("mad-buddy:location-updated"));
           return;
         }
