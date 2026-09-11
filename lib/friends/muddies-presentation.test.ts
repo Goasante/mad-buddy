@@ -124,23 +124,23 @@ describe("the closest rail orders by distance", () => {
 });
 
 describe("distance wording matches the glow it sits under", () => {
-  it("uses the six approved Glow state names when a band is present", () => {
+  it("uses the corrected public Glow state names when a band is present", () => {
     // The rail says exactly what the Glow means -- both read the same band
     // table -- rather than inventing a second scale beside it.
-    expect(railDistanceLabel({ ...at("close"), proximityBand: "right_here" })).toBe("Right Here");
-    expect(railDistanceLabel({ ...at("close"), proximityBand: "around_you" })).toBe("Just Around");
-    expect(railDistanceLabel({ ...at("near"), proximityBand: "close_by" })).toBe("Close By");
-    expect(railDistanceLabel({ ...at("near"), proximityBand: "nearby" })).toBe("In Your Area");
-    expect(railDistanceLabel({ ...at("far"), proximityBand: "around_town" })).toBe("Around Town");
-    expect(railDistanceLabel({ ...at("far"), proximityBand: "further_away" })).toBe("Across Town");
+    expect(railDistanceLabel({ ...at("close"), proximityBand: "right_here" })).toBe("Just Around");
+    expect(railDistanceLabel({ ...at("close"), proximityBand: "around_you" })).toBe("Very Close");
+    expect(railDistanceLabel({ ...at("near"), proximityBand: "close_by" })).toBe("Close");
+    expect(railDistanceLabel({ ...at("near"), proximityBand: "nearby" })).toBe("In Area");
+    expect(railDistanceLabel({ ...at("far"), proximityBand: "around_town" })).toBe("Nearby");
+    expect(railDistanceLabel({ ...at("far"), proximityBand: "further_away" })).toBe("Nearby");
   });
 
   it("falls back to the widest state a bare level can honestly claim", () => {
     // Without a band there is no evidence for a tight state, so the fallback
     // widens rather than guessing -- it can never overstate closeness.
-    expect(railDistanceLabel(at("close"))).toBe("Just Around");
-    expect(railDistanceLabel(at("near"))).toBe("In Your Area");
-    expect(railDistanceLabel(at("far"))).toBe("Across Town");
+    expect(railDistanceLabel(at("close"))).toBe("Very Close");
+    expect(railDistanceLabel(at("near"))).toBe("In Area");
+    expect(railDistanceLabel(at("far"))).toBe("Nearby");
   });
 
   it("never renders a distance", () => {
@@ -230,9 +230,8 @@ describe("every filter answers from data the page already holds", () => {
   });
 
   it("keeps every band with a live signal under Nearby", () => {
-    // Nearby means "showing a proximity signal", not "close". Someone across
-    // town is still telling you roughly where they are, and a second hidden
-    // threshold would make the chip lie about what it filters.
+    // The filter's Nearby means "showing a live proximity signal". The
+    // per-person label underneath the avatar communicates the actual stage.
     for (const band of ["right_here", "around_you", "close_by", "nearby", "around_town", "further_away"] as const) {
       expect(matchesMuddiesFilter("nearby", { ...at("close"), proximityBand: band }), band).toBe(true);
     }
@@ -254,14 +253,11 @@ describe("every filter answers from data the page already holds", () => {
     expect(MUDDIES_FILTERS.map((filter) => filter.id)).toEqual(["all", "nearby"]);
   });
 
-  it("never labels a chip with a canonical band name", () => {
-    // "Very Close" and "Nearby" both now mean specific, different things in the
-    // approved six-state language. A chip wearing a state's name would read as
-    // a state filter that it is not.
-    const RESERVED = ["Right Here", "Just Around", "Close By", "In Your Area", "Around Town", "Across Town"];
-    for (const filter of MUDDIES_FILTERS) {
-      expect(RESERVED, filter.label).not.toContain(filter.label);
-    }
+  it("keeps the broad Nearby filter separate from per-person stage resolution", () => {
+    // The filter is a set selector; the row label is resolved from the person's
+    // band. Sharing the everyday word Nearby does not make the chip a 5–15 km
+    // stage-only filter.
+    expect(MUDDIES_FILTERS.find((filter) => filter.id === "nearby")?.label).toBe("Nearby");
   });
 });
 
