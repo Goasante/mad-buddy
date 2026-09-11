@@ -1,0 +1,191 @@
+.root {
+  --glow-brand: 232 140 43;
+  --glow-highlight: 255 224 142;
+  --glow-maroon: 78 4 1;
+  --glow-paper: 254 251 243;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  overflow: visible;
+  isolation: isolate;
+  border-radius: 9999px;
+  vertical-align: middle;
+}
+
+.layer {
+  position: absolute;
+  place-self: center;
+  border-radius: 9999px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.halo {
+  z-index: 1;
+  width: calc(var(--glow-avatar) + 8px);
+  height: calc(var(--glow-avatar) + 8px);
+  border: var(--glow-ring-width) solid rgba(var(--glow-brand), var(--glow-halo-alpha));
+  box-shadow:
+    0 0 0 1px rgba(var(--glow-maroon), 0.035),
+    0 0 var(--glow-blur) rgba(var(--glow-brand), var(--glow-halo-shadow)),
+    0 8px 22px rgba(var(--glow-maroon), 0.08);
+}
+
+.pulse {
+  --pulse-alpha: 0;
+  --pulse-shadow: 0;
+  --pulse-delay: 0s;
+  --pulse-rest-scale: 1.05;
+  z-index: 0;
+  width: var(--glow-core);
+  height: var(--glow-core);
+  border: var(--glow-ring-width) solid rgba(var(--glow-brand), 0.86);
+  box-shadow: 0 0 var(--glow-blur) rgba(var(--glow-brand), var(--pulse-shadow));
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.sweep {
+  z-index: 2;
+  width: calc(var(--glow-avatar) + 12px);
+  height: calc(var(--glow-avatar) + 12px);
+  opacity: var(--glow-sweep-opacity);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 43%,
+    rgba(var(--glow-paper), 0.04) 46%,
+    rgba(var(--glow-highlight), 0.96) 50%,
+    rgba(var(--glow-brand), 0.86) 53.5%,
+    transparent 59% 100%
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 4px),
+    #000 calc(100% - 3px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 4px),
+    #000 calc(100% - 3px)
+  );
+}
+
+.subject {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border-radius: inherit;
+}
+
+.root[data-animate="true"] .pulse,
+.root[data-animate="true"] .sweep {
+  will-change: transform, opacity;
+}
+
+.root[data-animate="true"][data-pulse-mode="breathe"] .pulse {
+  animation: magnetic-breathe var(--glow-pulse) ease-in-out var(--pulse-delay) infinite;
+}
+
+.root[data-animate="true"][data-pulse-mode="pulse"] .pulse {
+  animation: magnetic-pulse var(--glow-pulse) cubic-bezier(0.2, 0.68, 0.2, 1)
+    var(--pulse-delay) infinite;
+}
+
+.root[data-animate="true"][data-pulse-mode="pulse-hot"] .pulse {
+  animation: magnetic-pulse-hot var(--glow-pulse) cubic-bezier(0.17, 0.67, 0.24, 1)
+    var(--pulse-delay) infinite;
+}
+
+.root[data-animate="true"] .sweep {
+  animation: magnetic-sweep var(--glow-sweep) linear infinite;
+}
+
+.root[data-animate="false"] .pulse {
+  opacity: var(--pulse-alpha);
+  transform: scale(var(--pulse-rest-scale));
+}
+
+.root[data-animate="false"] .sweep {
+  transform: rotate(32deg);
+}
+
+@keyframes magnetic-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  15% {
+    opacity: var(--pulse-alpha);
+  }
+  72% {
+    opacity: 0.08;
+  }
+  100% {
+    transform: scale(var(--glow-pulse-scale));
+    opacity: 0;
+  }
+}
+
+@keyframes magnetic-pulse-hot {
+  0% {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  12% {
+    opacity: var(--pulse-alpha);
+  }
+  66% {
+    opacity: 0.1;
+  }
+  100% {
+    transform: scale(var(--glow-pulse-scale));
+    opacity: 0;
+  }
+}
+
+@keyframes magnetic-breathe {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.08;
+  }
+  50% {
+    transform: scale(var(--glow-pulse-scale));
+    opacity: var(--pulse-alpha);
+  }
+}
+
+@keyframes magnetic-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse,
+  .sweep {
+    animation: none !important;
+    will-change: auto !important;
+  }
+
+  .pulse {
+    opacity: var(--pulse-alpha);
+    transform: scale(var(--pulse-rest-scale));
+  }
+
+  .sweep {
+    transform: rotate(32deg);
+  }
+}
+
+/* Dark mode keeps the same brand warmth while preventing the halo from
+   blooming into a neon edge against the darker canvas. */
+:global(.dark) .halo {
+  box-shadow:
+    0 0 0 1px rgba(var(--glow-paper), 0.035),
+    0 0 var(--glow-blur) rgba(var(--glow-brand), var(--glow-halo-shadow)),
+    0 8px 24px rgba(0, 0, 0, 0.2);
+}
