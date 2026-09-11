@@ -20,6 +20,17 @@ import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 
 const SERVER_DRAFT_DEBOUNCE_MS = 650;
 const TYPING_IDLE_MS = 1800;
+const LOCAL_DRAFT_CLEAR_GRACE_MS = 30_000;
+/**
+ * A short-lived optimistic tombstone for a draft that was just sent.
+ *
+ * The page can remount the same conversation from its warm controls cache
+ * before the ordered server clear round-trip has returned. Without this, that
+ * stale cached draft can repaint the text that was already sent. Thirty seconds
+ * is only a convergence window, not durable draft state; any new typing clears
+ * it immediately and the server remains canonical.
+ */
+const locallyClearedDraftUntil = new Map<string, number>();
 
 function setControlledTextareaValue(textarea: HTMLTextAreaElement, value: string) {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -131,7 +142,10 @@ export function MessageComposerV4Shell({
     if (hydratedConversationRef.current === conversationId) return;
     const textarea = shellRef.current?.querySelector("textarea");
     if (!textarea) return;
-    const value = initialDraft || "";
+    const clearUntil = locallyClearedDraftUntil.get(conversationId) ?? 0;
+    const suppressStaleDraft = clearUntil > Date.now();
+    if (!suppressStaleDraft && clearUntil) locallyClearedDraftUntil.delete(conversationId);
+    const value = suppressStaleDraft ? "" : initialDraft || "";
     lastDraftRef.current = value;
     hydratedConversationRef.current = conversationId;
     if (value && !textarea.value) setControlledTextareaValue(textarea, value);
@@ -184,6 +198,8 @@ export function MessageComposerV4Shell({
     const target = event.target;
     if (!(target instanceof HTMLTextAreaElement)) return;
     const value = target.value;
+    // New user input supersedes a prior sent-draft tombstone immediately.
+    locallyClearedDraftUntil.delete(conversationId);
     const typing = Boolean(value.trim());
     persistDraft(value);
     publishTyping(typing);
@@ -223,6 +239,7 @@ export function MessageComposerV4Shell({
       serverTimerRef.current = null;
     }
     lastDraftRef.current = "";
+    locallyClearedDraftUntil.set(conversationId, Date.now() + LOCAL_DRAFT_CLEAR_GRACE_MS);
     void syncDraftToServer("");
     onDraftCleared?.();
     publishTyping(false);
