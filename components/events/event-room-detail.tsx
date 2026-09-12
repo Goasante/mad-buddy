@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import type { Route } from "next";
+import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { Loader2, Pencil, Send, Share2 } from "lucide-react";
+import { ExternalLink, Loader2, Pencil, Send, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EventArtwork } from "@/components/events/event-artwork";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
@@ -82,6 +84,7 @@ export function EventRoomDetail({
   onOpenQr: () => void;
   onLeave: () => void;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<RoomTab>("chat");
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [members, setMembers] = useState<RoomMemberView[]>([]);
@@ -311,6 +314,16 @@ export function EventRoomDetail({
       {/* ---------------------------------------------------------------- CHAT */}
       {tab === "chat" ? (
         <div className="flex min-h-0 flex-1 flex-col">
+          {room.isMember && room.conversationId ? (
+            <button
+              type="button"
+              onClick={() => router.push(`/messages?conversation=${room.conversationId}` as Route)}
+              className="flex items-center justify-center gap-1.5 border-b border-border/60 py-2 text-xs font-medium text-primary hover:underline focus-ring"
+            >
+              Open in Messages
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
           <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3">
             {!room.isMember ? (
               <p className="py-8 text-center text-sm text-muted-foreground">

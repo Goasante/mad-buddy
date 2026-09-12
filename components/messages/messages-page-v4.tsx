@@ -648,8 +648,19 @@ export function MessagesPageV4({
         byMessage.set(projected.id, projected);
         realtimePatchesRef.current.set(selectedId, byMessage);
         setMessages((current) => {
+          const wasPresent = current.some((row) => row.id === projected.id);
+          // A tombstone (delete-for-everyone) that is not currently in the
+          // list means THIS client already removed it optimistically when it
+          // initiated the delete. Re-appending it here would undo that: the
+          // message would visibly pop back a moment later as "deleted", which
+          // read as a glitch and made the next delete attempt look like it
+          // did nothing. The other participant's client still has the row
+          // (wasPresent is true there), so it correctly turns into a
+          // tombstone in place -- only the re-add of an absent tombstone is
+          // skipped.
+          if (projected.deleted && !wasPresent) return current;
           const next = mergeThreadMessage(current, projected);
-          if (!nearBottomRef.current && !current.some((row) => row.id === projected.id) && !projected.isMine) {
+          if (!nearBottomRef.current && !wasPresent && !projected.isMine) {
             setUnseenIncoming((count) => count + 1);
           }
           return next;
