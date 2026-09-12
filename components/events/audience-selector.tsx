@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { PeoplePicker, type PickerRow } from "@/components/events/people-picker";
 import { AUDIENCE_EXPLANATION } from "@/lib/events/presentation";
 import { cn } from "@/lib/utils";
-import { getAudienceOptionsAction } from "@/app/(app)/event-actions";
 import type { CommunityOption, InviteeOption } from "@/lib/events/audience-options";
 
 /**
@@ -76,12 +75,34 @@ function AudienceExplanation({ visibility }: { visibility: "link" | "public" }) 
   );
 }
 
+export type AudienceOptionsLoader = () => Promise<{
+  invitees: InviteeOption[];
+  communities: CommunityOption[];
+}>;
+
 export function AudienceSelector({
   value,
-  onChange
+  onChange,
+  loadOptions
 }: {
   value: AudienceValue;
   onChange: (next: AudienceValue) => void;
+  /**
+   * How to fetch the picker's options. REQUIRED -- there is deliberately no
+   * default.
+   *
+   * A default would have to reference the Server Action at module scope, and
+   * a static import of a "use server" module is exactly what broke the mobile
+   * build: it drags the whole server graph behind it -- the events services,
+   * the rate limiter, and `lib/supabase/admin` (the service-role client) --
+   * none of which can exist in a browser bundle. Vite cannot tree-shake that
+   * away, because the import is what pulls it in, not the call.
+   *
+   * Web passes `getAudienceOptionsAction`; the Capacitor SPA passes a loader
+   * that calls GET /api/events/audience-options, which runs the same two
+   * service functions behind `resolveApiUser`.
+   */
+  loadOptions: AudienceOptionsLoader;
 }) {
   const [invitees, setInvitees] = useState<InviteeOption[]>([]);
   const [communities, setCommunities] = useState<CommunityOption[]>([]);
@@ -94,12 +115,12 @@ export function AudienceSelector({
     // Loaded once for the whole selector rather than per audience, so switching
     // between Invited and Community does not re-query.
     startTransition(async () => {
-      const options = await getAudienceOptionsAction();
+      const options = await loadOptions();
       setInvitees(options.invitees);
       setCommunities(options.communities);
       setLoaded(true);
     });
-  }, []);
+  }, [loadOptions]);
 
   function setVisibility(visibility: EventAudience) {
     // Targets belong to the audience that asked for them. Carrying an invite

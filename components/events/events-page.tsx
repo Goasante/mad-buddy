@@ -26,6 +26,7 @@ import {
   getEventByIdAction,
   getEventDraftAction,
   updateEventDraftAction,
+  getAudienceOptionsAction,
 } from "@/app/(app)/event-actions";
 import { eventPhase, type EventPhase } from "@/lib/events/rules";
 import type { EventRsvpStatus } from "@/lib/supabase/database.types";
@@ -1866,7 +1867,7 @@ function CreateEventModal({
             flow means. Its sub-flow (invitees, community, location) renders
             inside the selector, so this stage asks one question at a time. */}
         {stage === "audience" ? (
-          <AudienceSelector value={audience} onChange={setAudience} />
+          <AudienceSelector value={audience} onChange={setAudience} loadOptions={getAudienceOptionsAction} />
         ) : null}
 
         {/* STAGE 2 -- BASICS: cover, name, description. */}

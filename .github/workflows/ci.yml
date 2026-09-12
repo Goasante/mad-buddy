@@ -94,3 +94,62 @@ jobs:
           # Build must succeed without real secrets; routes degrade to their
           # "not configured" responses when Supabase/Paystack env is absent.
           NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+  # The Capacitor/Android SPA. Separate package, separate lockfile, separate
+  # node_modules -- and until now, no CI at all: mobile/ could break on any
+  # commit and nothing would say so until someone built it by hand.
+  #
+  # It runs as its own job rather than extra steps in `quality` so a mobile
+  # break is attributable at a glance and cannot mask a web failure.
+  mobile:
+    name: Mobile SPA (types, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
+
+      # BOTH installs are required, and the root one is not optional.
+      # mobile/tsconfig.json pins react/react-dom types to
+      # ../node_modules/@types/* so the whole graph has ONE React type
+      # identity (see the comment there). Without a root install those pins
+      # resolve to nothing and the type check fails with the very
+      # "Two different types with this name exist" error the pin prevents.
+      - name: Install root dependencies (mobile's tsconfig resolves types here)
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
+      # mobile/tsconfig.json maps "@/*" to the repo root, so this also
+      # type-checks every root module the SPA imports -- against mobile's own
+      # @types/react. That cross-project check is the one the root typecheck
+      # cannot perform (root tsconfig excludes mobile/), and it is exactly
+      # where shared-code regressions will surface.
+      - name: Type check
+        working-directory: mobile
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: mobile
+        run: npm test
+
+      # All VITE_* values are public and inlined at build time. Placeholders
+      # are correct here: lib/env.ts falls back to empty strings and defers
+      # the real check to assertEnv() at runtime, so the bundle builds without
+      # secrets -- matching how the web job builds without Supabase configured.
+      - name: Production build
+        working-directory: mobile
+        run: npx vite build
+        env:
+          VITE_API_BASE_URL: https://example.invalid
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+          VITE_TURNSTILE_SITE_KEY: placeholder
