@@ -4,15 +4,18 @@ import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const shell = read("components/app-shell/app-shell.tsx");
+/* The mobile bottom bar and its tab list moved to their own module so the
+   Capacitor SPA renders the SAME navigation. Assertions unchanged. */
+const navSource = read("components/app-shell/mobile-nav.tsx");
 const homeControl = read("components/app-shell/mad-buddy-orb.tsx");
 const registry = read("lib/tours/registry.ts");
 
 /** The mobile bar only, so desktop chrome cannot satisfy an assertion. */
-const mobileNav = shell.slice(shell.indexOf("function MobileNav("), shell.indexOf("function MobileNavTab"));
+const mobileNav = navSource.slice(navSource.indexOf("export function MobileNav("), navSource.indexOf("function MobileNavTab"));
 
 describe("bottom navigation order", () => {
   it("keeps Messages, Muddies, Home, Linkr, UpFor", () => {
-    const tabs = shell.slice(shell.indexOf("const MOBILE_TABS"), shell.indexOf("function MobileNav("));
+    const tabs = navSource.slice(navSource.indexOf("export const MOBILE_TABS"), navSource.indexOf("export function MobileNav("));
     const order = [...tabs.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
     expect(order).toEqual(["Messages", "Muddies", "Linkr", "UpFor"]);
     expect(mobileNav).toContain("MOBILE_TABS.slice(0, 2)");
@@ -26,7 +29,7 @@ describe("bottom navigation order", () => {
   });
 
   it("keeps Home as the dedicated centre control rather than duplicating it in MOBILE_TABS", () => {
-    const tabs = shell.slice(shell.indexOf("const MOBILE_TABS"), shell.indexOf("function MobileNav("));
+    const tabs = navSource.slice(navSource.indexOf("export const MOBILE_TABS"), navSource.indexOf("export function MobileNav("));
     expect(tabs).not.toContain('label: "Home"');
     expect(tabs).not.toContain('href: "/dashboard"');
   });

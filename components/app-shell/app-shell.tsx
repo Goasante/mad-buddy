@@ -41,6 +41,11 @@ import { CountBadge } from "@/components/ui/count-badge";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { cn } from "@/lib/utils";
 import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
+/* The mobile bottom bar now lives in its own module so the Capacitor SPA can
+   render the SAME navigation instead of maintaining a second one. Web imports
+   it back here and passes no `isDestinationAvailable`, so every destination
+   stays enabled and web behaviour is unchanged. */
+import { MobileNav, isNavigationItemActive } from "@/components/app-shell/mobile-nav";
 import { QuickActionsLauncher } from "@/components/app-shell/quick-actions-launcher";
 import { showsQuickActions } from "@/lib/navigation/quick-actions";
 import { ImmersiveModeProvider, useImmersiveMode } from "@/components/app-shell/immersive-mode";
@@ -611,14 +616,6 @@ function AppShellInner({
 }
 
 type NavigationItem = (typeof navigationItems)[number];
-
-function isNavigationItemActive(item: NavigationItem, pathname: string) {
-  return (
-    pathname === item.href ||
-    pathname.startsWith(`${item.href}/`) ||
-    (item.href === "/settings" && pathname === "/upgrade")
-  );
-}
 
 function isModifiedNavigationClick(event: {
   metaKey: boolean;
@@ -1261,227 +1258,6 @@ const createActionDefinitions: Array<{
    * shortcut -- and this one also carried the decorative Sparkles the product
    * is removing. */
 ];
-
-/**
- * The app's single mobile bottom bar. Five fixed slots, identical for every
- * user — Messages, Muddies, the Mad Buddy Orb, Plans, Me:
- *
- *  - One nav, no variants. There used to be a separate "first-time" bar with
- *    a different tab set, which meant the bar a user learned on day one was
- *    not the bar they had on day thirty. Position is now stable for life.
- *  - The centre is the Mad Buddy Orb, and the Orb IS Home. It replaced the
- *    raised Create button: a "+" that opened a menu duplicated actions that
- *    already have homes (a plan starts on /plans, a Moment on /moments, a
- *    ping in a conversation), so the menu was a second route to places the
- *    app already had. Home moved into it because Home is the centre of the
- *    experience, not one tab among five.
- *  - Messages takes the left-most slot. It is where a conversation actually
- *    continues, and it is the destination people return to most.
- *  - "Me" is the personal hub entry. It points at the existing /profile
- *    route; no new or unsupported destination is introduced here.
- *
- * Lucide icons only, one size (26px) and one stroke weight, so the bar reads
- * as a single system. The active tab gets a filled pill plus its label; the
- * rest stay icon-only, which keeps the bar quiet and the current location
- * unmistakable. The Orb carries no glyph at all — see MadBuddyOrb.
- */
-/**
- * The four bottom-bar destinations, split two either side of the Orb.
- *
- * Plans and Profile were removed rather than demoted: Plans already has a
- * section on Home, and Profile is reachable from the account sheet the header
- * menu opens — so both were paying for a permanent tab they did not need.
- * Linkr and UpFor have no other persistent entry point, which is what earns
- * them the slot.
- *
- * Typed to accept a custom brand mark alongside a Lucide icon: both honour the
- * same props contract, so the tab renderer needs no branch.
- */
-/** A Lucide icon or a brand mark: both take className and render an svg. */
-type MobileTab = {
-  href: Route;
-  label: string;
-  icon: LucideIcon;
-  brandIcon?: BrandNavigationIconName;
-};
-
-const MOBILE_TABS: MobileTab[] = [
-  { href: "/messages", label: "Messages", icon: MessageCircle },
-  { href: "/friends", label: "Muddies", icon: Users },
-  { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
-  { href: "/hangout-mode", label: "UpFor", icon: Hand, brandIcon: "upfor" }
-];
-
-function MobileNav({
-  immersive = false,
-  onHomeReselect,
-  messageUnreadCount = 0,
-  muddyRequestCount = 0
-}: {
-  immersive?: boolean;
-  onHomeReselect: () => void;
-  messageUnreadCount?: number;
-  muddyRequestCount?: number;
-}) {
-  const pathname = usePathname();
-
-  // The Orb sits in the middle; the four destinations split around it.
-  const leftTabs = MOBILE_TABS.slice(0, 2);
-  const rightTabs = MOBILE_TABS.slice(2);
-  const homeActive = isNavigationItemActive(
-    { href: ORB_HOME_HREF, label: "Home", icon: Home } as NavigationItem,
-    pathname
-  );
-
-  return (
-    // Attached to the bottom of the app, not floating above it: full width,
-    // no outer horizontal padding, no bottom gap, and the safe-area inset
-    // applied as padding INSIDE the bar so its surface reaches the screen
-    // edge on a device with a home indicator rather than leaving a strip of
-    // page showing beneath it.
-    <nav
-      className={cn(
-        "fixed inset-x-0 bottom-0 z-50 border-t border-border/70 bg-background/95 pb-[min(env(safe-area-inset-bottom,0px),0.75rem)] backdrop-blur-xl dark:border-white/10 dark:bg-[#151517]/95 md:hidden",
-        // Immersive: slide down and fade rather than disappearing, so opening
-        // a conversation reads as the bar stepping aside. Hidden from
-        // assistive tech and taken out of the tab order at the same time —
-        // an off-screen bar must not be focusable.
-        "transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none",
-        immersive ? "pointer-events-none translate-y-full opacity-0" : "translate-y-0 opacity-100"
-      )}
-      // Genuinely gone while immersive, not merely invisible.
-      aria-hidden={immersive || undefined}
-      inert={immersive || undefined}
-      aria-label="Mobile navigation"
-    >
-      {/* `min(30rem, 100%)`, not `30rem` (MB-GOD-047).
-        *
-        * A rem-only cap is measured against the ROOT FONT SIZE, so a user who
-        * scales text to 200% turns this 30rem bar into 960px inside a 360px
-        * screen -- and the fifth tab ("UpFor") ended up at x=310..390, thirty
-        * pixels past the edge of a bar that does not scroll. Primary
-        * navigation became unreachable for exactly the user who most needs the
-        * larger text.
-        *
-        * `100%` re-anchors the cap to the viewport, so the bar can never grow
-        * wider than the screen no matter what the root font size is. The
-        * labels below shrink-wrap and the icons stay 44px. */}
-      <ul className="mx-auto flex w-full max-w-[min(30rem,100%)] items-stretch justify-between px-1.5">
-        {leftTabs.map((tab) => (
-          <MobileNavTab
-            key={tab.href}
-            tab={tab}
-            pathname={pathname}
-            messageUnreadCount={tab.href === "/messages" ? messageUnreadCount : 0}
-            muddyRequestCount={tab.href === "/friends" ? muddyRequestCount : 0}
-          />
-        ))}
-
-        {/* `min-w-0` matters (MB-GOD-047).
-      *
-      * A flex item defaults to `min-width: auto`, which refuses to shrink below
-      * its content -- so at 200% text the five tabs demanded 390px inside a
-      * 360px bar and "UpFor" sat thirty pixels past the edge of a nav that does
-      * not scroll. Capping the <ul> did nothing because the OVERFLOW IS IN THE
-      * CHILDREN. `min-w-0` lets each tab shrink; the label truncates and the
-      * 44px icon target is unaffected. */}
-    <li className="min-w-0 flex-1 pb-0 pt-4">
-          <MadBuddyOrb
-            isActive={homeActive}
-            onHomeReselect={onHomeReselect}
-          />
-        </li>
-
-        {rightTabs.map((tab) => (
-          <MobileNavTab
-            key={tab.href}
-            tab={tab}
-            pathname={pathname}
-            messageUnreadCount={tab.href === "/messages" ? messageUnreadCount : 0}
-            muddyRequestCount={tab.href === "/friends" ? muddyRequestCount : 0}
-          />
-        ))}
-      </ul>
-    </nav>
-  );
-}
-
-function MobileNavTab({
-  tab,
-  pathname,
-  messageUnreadCount = 0,
-  muddyRequestCount = 0
-}: {
-  tab: MobileTab;
-  pathname: string;
-  messageUnreadCount?: number;
-  muddyRequestCount?: number;
-}) {
-  // Reuses the shared route-matching rule so a tab stays lit on nested
-  // routes (/friends/someone, /plans/123) exactly like the desktop sidebar.
-  const isActive = isNavigationItemActive({ href: tab.href, label: tab.label, icon: tab.icon } as NavigationItem, pathname);
-  const Icon = tab.icon;
-
-  /* `min-w-0` matters (MB-GOD-047).
-   *
-   * A flex item defaults to `min-width: auto`, which refuses to shrink below
-   * its content -- so at 200% text the five tabs demanded 390px inside a 360px
-   * bar and "UpFor" sat thirty pixels past the edge of a nav that does not
-   * scroll. Capping the <ul> did nothing because the OVERFLOW IS IN THE
-   * CHILDREN. `min-w-0` lets each tab shrink; the label truncates and the icon
-   * target is unaffected. */
-  return (
-    <li className="min-w-0 flex-1 pb-0 pt-4">
-      <Link
-        href={tab.href}
-        prefetch={false}
-        // Stable targeting contract for guided tours. Derived from the route,
-        // so a tour step never depends on a fragile positional selector.
-        data-tour-id={`nav-${tab.href.slice(1)}`}
-        aria-label={tab.label}
-        aria-current={isActive ? "page" : undefined}
-        className={cn(
-          "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-          "active:scale-95 motion-reduce:active:scale-100"
-        )}
-      >
-        <span
-          className={cn(
-            /* A FIXED 40px TARGET, not 2.5rem (MB-GOD-047).
-             *
-             * `h-10 w-10` is rem-based, so at 200% text this circle became
-             * 80px and five of them demanded 390px inside a 360px bar --
-             * pushing "UpFor" off a nav that does not scroll. An icon is not
-             * text: scaling text up should not scale the chrome around it,
-             * and 40px keeps the row's proportions identical at every text
-             * size while the 56px row height preserves the touch target. */
-            "relative grid h-[40px] w-[40px] shrink-0 place-items-center rounded-full transition-colors duration-200 ease-out motion-reduce:transition-none",
-            isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
-          )}
-        >
-          {tab.brandIcon ? (
-            <BrandNavigationIcon name={tab.brandIcon} active={isActive} size={26} />
-          ) : (
-            <Icon
-              className="h-[26px] w-[26px]"
-              strokeWidth={isActive ? 2.25 : 1.75}
-              aria-hidden="true"
-            />
-          )}
-          {tab.href === "/messages" && messageUnreadCount > 0 ? <UnreadBadge count={messageUnreadCount} /> : null}
-          {tab.href === "/friends" && muddyRequestCount > 0 ? <UnreadBadge count={muddyRequestCount} /> : null}
-        </span>
-        {isActive ? (
-          // max-w-full + truncate: the label must be allowed to give way, or it
-          // re-imposes the width `min-w-0` just removed (MB-GOD-047). The
-          // accessible name is on the Link's aria-label, so a visually
-          // truncated label costs a screen-reader user nothing.
-          <span className="max-w-full truncate text-[10px] font-medium leading-none tracking-wide text-primary">{tab.label}</span>
-        ) : null}
-      </Link>
-    </li>
-  );
-}
 
 /**
  * Unwraps the wallpaper promise with use(), inside its own Suspense boundary

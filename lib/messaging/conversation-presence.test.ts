@@ -311,7 +311,11 @@ describe("branded canvas", () => {
 // ---------------------------------------------------------------------------
 
 describe("Conversation Mode", () => {
-  const shell = read("components/app-shell/app-shell.tsx");
+  /* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
+   the Capacitor SPA can render the SAME navigation. The shell source is read
+   as both files together: these assertions are unchanged, only the bar's
+   home moved. */
+const shell = read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx");
   const immersive = read("components/app-shell/immersive-mode.tsx");
 
   it("turns on exactly while a conversation is open", () => {

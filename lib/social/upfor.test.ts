@@ -135,7 +135,11 @@ describe("the card never claims more than the server said", () => {
 });
 
 describe("the safe area is reserved exactly once", () => {
-  const shell = stripComments(read("components/app-shell/app-shell.tsx"));
+  /* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
+   the Capacitor SPA can render the SAME navigation. The shell source is read
+   as both files together: these assertions are unchanged, only the bar's
+   home moved. */
+const shell = stripComments(read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx"));
   const css = read("app/globals.css");
 
   it("declares UpFor as drawing its own inline header", () => {
@@ -201,7 +205,11 @@ describe("the rename is UI-only", () => {
   });
 
   it("says UpFor everywhere a person reads it", () => {
-    const shell = stripComments(read("components/app-shell/app-shell.tsx"));
+    /* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
+   the Capacitor SPA can render the SAME navigation. The shell source is read
+   as both files together: these assertions are unchanged, only the bar's
+   home moved. */
+const shell = stripComments(read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx"));
     expect(shell).toContain('label: "UpFor"');
     expect(page).toContain("UpFor");
     // The old product name must not survive in visible copy.

@@ -7,7 +7,11 @@ function read(path: string) {
 }
 
 const experience = read("components/messages/messages-experience-v5.tsx");
-const shell = read("components/app-shell/app-shell.tsx");
+/* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
+   the Capacitor SPA can render the SAME navigation. The shell source is read
+   as both files together: these assertions are unchanged, only the bar's
+   home moved. */
+const shell = read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx");
 
 describe("Messages V5 follow-up polish", () => {
   it("keeps the mobile top row to Messages, notifications and profile, with New Chat beside Search", () => {

@@ -13,7 +13,11 @@ function pngSize(absolutePath: string): { width: number; height: number } {
   return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
 }
 
-const appShell = read("components/app-shell/app-shell.tsx");
+/* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
+   the Capacitor SPA can render the SAME navigation. The shell source is read
+   as both files together: these assertions are unchanged, only the bar's
+   home moved. */
+const appShell = read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx");
 const brandMark = read("components/brand/brand-mark.tsx");
 const brandNavigationIcon = read("components/brand/brand-navigation-icon.tsx");
 

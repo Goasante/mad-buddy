@@ -54,7 +54,9 @@ describe("the shell owns the reservation, not the pages", () => {
 
   it("keeps using the shared nav and safe-area tokens", () => {
     expect(shell).toContain("var(--mobile-nav-height)");
-    expect(shell).toContain("env(safe-area-inset-bottom,0px)");
+    // The bar moved to its own module so mobile can share it; the invariant
+    // is unchanged, only its home.
+    expect(stripComments(readFileSync("components/app-shell/mobile-nav.tsx", "utf8"))).toContain("env(safe-area-inset-bottom,0px)");
   });
 
   it("hard-codes no device dimensions in the reservation", () => {

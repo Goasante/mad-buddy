@@ -26,6 +26,19 @@ export default defineConfig({
         find: /^@\/lib\/platform$/,
         replacement: path.resolve(__dirname, "../lib/platform/index.mobile.ts")
       },
+      // react-router-dom is a MOBILE-ONLY dependency, but the adapter's
+      // .mobile files that import it live at the repo ROOT (they are shared
+      // code, not mobile app code). Rollup resolves a bare import relative to
+      // the importing file, so from ../lib/platform it looks in the root
+      // node_modules and finds nothing.
+      //
+      // This mirrors the `paths` entry in mobile/tsconfig.json, keeping
+      // TypeScript and Vite resolving the same package to the same place --
+      // the agreement lib/platform/resolution-contract.test.ts exists to pin.
+      {
+        find: /^react-router-dom$/,
+        replacement: path.resolve(__dirname, "node_modules/react-router-dom")
+      },
       {
         find: "@",
         replacement: path.resolve(__dirname, "..")

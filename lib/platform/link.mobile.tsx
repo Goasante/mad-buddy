@@ -64,4 +64,16 @@ export const Link = forwardRef<HTMLAnchorElement, PlatformLinkProps>(function Li
   );
 });
 
-export type LinkProps = PlatformLinkProps;
+/**
+ * GENERIC to match next/link's LinkProps<Href> shape.
+ *
+ * Shared components read the destination type off this
+ * (`LinkProps<string>["href"]`) so each platform contributes its own: Next's
+ * typed-route union on web, a plain string here. If this were not generic,
+ * the same shared file would compile on web and fail on mobile with
+ * "Type 'LinkProps' is not generic" -- which is exactly what happened.
+ *
+ * The parameter is unused here because mobile has no route table to check
+ * against; it exists to keep the two signatures interchangeable.
+ */
+export type LinkProps<_Href extends string = string> = PlatformLinkProps;
