@@ -1,4 +1,8 @@
-import Image from "next/image";
+/* Through the platform adapter, NOT next/image directly: this renders inside
+   the shared bottom navigation, so a direct import puts Next's image runtime
+   in the Capacitor bundle. Web is unaffected -- the adapter re-exports the
+   real next/image verbatim. */
+import { Image } from "@/lib/platform";
 import { brandNavigationIcons, type BrandNavigationIconName } from "@/lib/brand/assets";
 import { cn } from "@/lib/utils";
 

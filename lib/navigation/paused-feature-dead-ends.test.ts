@@ -13,7 +13,13 @@ import { stripComments } from "@/lib/content/strip-comments";
  * straight back out.
  */
 
-const shell = stripComments(readFileSync("components/app-shell/app-shell.tsx", "utf8"));
+/* The header moved to its own module so the Capacitor SPA renders the SAME
+   one. This assertion is unchanged -- the Create menu it checks simply lives
+   in app-header.tsx now, so the shell source is read as both files. */
+const shell = stripComments(
+  readFileSync("components/app-shell/app-shell.tsx", "utf8") +
+    readFileSync("components/app-shell/app-header.tsx", "utf8")
+);
 const layout = stripComments(readFileSync("app/(app)/layout.tsx", "utf8"));
 const groupPage = stripComments(readFileSync("components/groups/group-detail-page.tsx", "utf8"));
 

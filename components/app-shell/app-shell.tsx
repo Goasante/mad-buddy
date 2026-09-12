@@ -46,6 +46,11 @@ import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb
    it back here and passes no `isDestinationAvailable`, so every destination
    stays enabled and web behaviour is unchanged. */
 import { MobileNav, isNavigationItemActive } from "@/components/app-shell/mobile-nav";
+/* The header moved out for the same reason: the native app had its own
+   hand-written Create menu, bell and account menu. Web imports it back and
+   supplies its own logout, so web behaviour is unchanged. */
+import { AppHeader, CREATE_ACTIONS } from "@/components/app-shell/app-header";
+import { useWebAvatarSource } from "@/components/app-shell/use-web-avatar-source";
 import { QuickActionsLauncher } from "@/components/app-shell/quick-actions-launcher";
 import { showsQuickActions } from "@/lib/navigation/quick-actions";
 import { ImmersiveModeProvider, useImmersiveMode } from "@/components/app-shell/immersive-mode";
@@ -364,6 +369,10 @@ function AppShellInner({
   // rendering a previous account's metadata.
   useEffect(() => bindCachesToSession(), []);
   const pathname = usePathname();
+  /* Hoisted out of the header, which is now shared with the native app and
+     therefore cannot call a web-only hook. Web supplies its Server-Action
+     logout here; Android supplies AuthProvider.signOut at its own call site. */
+  const { logout, isPending: logoutPending } = useSecureLogout();
   const openCameraFromHome = useCallback(() => {
     // Mad Cam paused: the home-tab reselect gesture does nothing rather than
     // opening a feature that is switched off.
@@ -420,7 +429,7 @@ function AppShellInner({
    * from one list means pausing a feature closes every door to it, not just
    * the one in the sidebar.
    */
-  const visibleCreateActions = createActionDefinitions.filter(
+  const visibleCreateActions = CREATE_ACTIONS.filter(
     (action) => !hiddenNavigationHrefs.some((href) => String(action.href).startsWith(href))
   );
   // Whether the shared AppHeader renders for this route — decides how much
@@ -486,6 +495,18 @@ function AppShellInner({
           currentAvatarUrl={currentAvatarUrl}
           showAdminLink={showAdminLink}
           createActions={visibleCreateActions}
+          /* Logout is injected rather than shared: web clears the session
+             through a Server Action, Android removes the device push token
+             first. Each platform keeps its own real lifecycle. */
+          onLogout={logout}
+          logoutPending={logoutPending}
+          /* Routes that render their own header. Web-only knowledge, so the
+             shell answers it rather than the shared component. */
+          hidden={hasOwnHeader(pathname)}
+          /* Web-only: resolves Mad Buddy uploads through /api/profile/avatar and
+             refreshes on madbuddy:avatar-updated, so a newly saved photo is not
+             stale. Mobile omits this and uses its URL directly. */
+          useAvatarSource={useWebAvatarSource}
         />
           <main
           id="app-main-content"
@@ -990,221 +1011,6 @@ function AccountMenuItem({
   );
 }
 
-function AppHeader({
-  currentUsername,
-  currentAvatarUrl,
-  showAdminLink,
-  createActions: visibleCreateActions
-}: {
-  currentUsername: string | null;
-  currentAvatarUrl: string | null;
-  showAdminLink: boolean;
-  /**
-   * Already filtered by the shell's pause list, so a paused feature cannot be
-   * offered here. Passed in rather than read from the module constant: the
-   * flags live on the shell, and a second copy of that logic in this component
-   * is exactly how the nav and the Create menu drifted apart in the first
-   * place.
-   */
-  createActions: typeof createActionDefinitions;
-}) {
-  const pathname = usePathname();
-  // NO useDismissOnBack here either — same reason as MobileAccountMenu below:
-  // this menu's actions are <Link>s, so closing it is itself part of starting
-  // a navigation, and the hook's history.back() cleanup would cancel it.
-  const [createOpen, setCreateOpen] = useState(false);
-
-  if (hasOwnHeader(pathname)) {
-    return null;
-  }
-
-  return (
-    // `fixed`, not `sticky`: sticky's "stuck" offset depends on the nearest
-    // scrolling ancestor and a definite `top` value — fragile in a deeply
-    // nested flex shell, and any ancestor coupling overflow-x with an implicit
-    // overflow-y (or a non-supporting env()) silently drops it back to static,
-    // which is exactly how page content ends up scrolling up over the header.
-    // Fixed positioning has no such dependency: it always anchors to the true
-    // viewport and (with an explicit z-index) always paints above in-flow
-    // content, on every browser. <main>'s top offset is the corresponding
-    // --app-header-height (see globals.css) — one shared value instead of a
-    // per-page padding guess. Desktop reverts to a normal in-flow row (the
-    // header never needs to "float" there — it already sits permanently above
-    // the independently-scrolling desktop panel).
-    <header
-      className="fixed inset-x-0 top-0 z-30 border-b border-border/70 bg-background/90 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111112]/90 md:static md:pt-0"
-    >
-      <div className="mx-auto flex h-[var(--app-header-content-height)] w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        {/* Mobile: logo only, the greeting below establishes the page, so no
-            "Home" title competes with it. Desktop keeps the in-panel page
-            title (the sidebar carries the logo there). */}
-        <Link
-          href="/dashboard"
-          prefetch={false}
-          aria-label="Mad Buddy home"
-          title="Mad Buddy home"
-          className="focus-ring shrink-0 md:hidden"
-        >
-          <BrandMark className="h-9 w-9" priority />
-        </Link>
-        {/* Home and Friends get a header title here; every other page carries
-            its own H1 in its content, so the generic "App / Mad Buddy" fallback
-            is omitted rather than duplicated on top of the page's real title. */}
-        <div className="mr-auto hidden min-w-0 md:block">
-          {pathname === "/dashboard" || pathname === "/friends" ? (
-            <h1 className="truncate text-lg font-semibold sm:text-xl">
-              {pathname === "/dashboard" ? "Home" : "Friends"}
-            </h1>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <DropdownMenu.Root open={createOpen} onOpenChange={setCreateOpen}>
-            <DropdownMenu.Trigger asChild>
-              <Button type="button" variant="outline" size="icon" aria-label="Create" title="Create">
-                <Plus className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} className={FLYOUT_CONTENT_CLASSNAME}>
-                {visibleCreateActions.map((action) => (
-                  <DropdownMenu.Item
-                    key={action.title}
-                    asChild
-                    className="focus-ring safe-motion flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 text-left outline-none data-[highlighted]:bg-secondary"
-                  >
-                    <Link href={action.href} prefetch={false}>
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                        <FeatureIcon feature={action.featureIcon} size={20} decorative />
-                      </span>
-                      <span className="text-left">
-                        <span className="block text-sm font-semibold">{action.title}</span>
-                        <span className="block text-xs text-muted-foreground">{action.description}</span>
-                      </span>
-                    </Link>
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-          {/* Notifications + account are mobile-only here (md:hidden); on
-              desktop the sidebar already provides both, so surfacing them in
-              the header too would duplicate destinations in one viewport. */}
-          {/* No unread badge here on purpose: the bell and the Pulse tab both
-              open /notifications from the same unread source, so badging both
-              would show the same count twice. The badge stays on the Pulse
-              tab (the labelled destination). */}
-          <div className="md:hidden">
-            <MobileAccountMenu
-              currentUsername={currentUsername}
-              currentAvatarUrl={currentAvatarUrl}
-              showAdminLink={showAdminLink}
-              pathname={pathname}
-            />
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-export function MobileAccountMenu({
-  currentUsername,
-  currentAvatarUrl,
-  showAdminLink,
-  pathname,
-  trigger,
-  align = "end"
-}: {
-  currentUsername: string | null;
-  currentAvatarUrl: string | null;
-  showAdminLink: boolean;
-  pathname: string;
-  /** Overrides the default avatar-circle trigger (e.g. a hamburger icon). */
-  trigger?: ReactNode;
-  align?: "start" | "end";
-}) {
-  const [open, setOpen] = useState(false);
-  // NO useDismissOnBack here. This menu's items are <Link>s, and that hook's
-  // cleanup calls history.back() when the menu closes — which, because the
-  // menu closes as part of the click that starts the navigation, reverses the
-  // in-flight App Router transition before it can commit. See the warning in
-  // hooks/use-dismiss-on-back.ts. Radix still closes this on Escape and on
-  // outside tap; Android Back leaving the page is the correct, expected
-  // behaviour for a small anchored menu.
-  const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
-  const { logout, isPending: logoutPending } = useSecureLogout();
-
-  return (
-    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
-      <DropdownMenu.Trigger asChild>
-        {trigger ?? (
-          <button
-            type="button"
-            aria-label="Account"
-            title="Account"
-            className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70"
-          >
-            <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold text-foreground dark:bg-white/[0.06]">
-              <AccountAvatar src={currentAvatarUrl} initial={initial} />
-            </span>
-          </button>
-        )}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          side="bottom"
-          align={align}
-          sideOffset={8}
-          collisionPadding={8}
-          className={FLYOUT_CONTENT_CLASSNAME}
-        >
-          {currentUsername ? (
-            <p className="truncate px-3 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">
-              @{currentUsername}
-            </p>
-          ) : null}
-          <AccountMenuItem href="/profile" label="Profile" icon={UserRound} isActive={pathname === "/profile"} />
-          <AccountMenuItem
-            href="/settings"
-            label="Settings"
-            icon={Settings}
-            isActive={pathname === "/settings" || pathname.startsWith("/settings/")}
-          />
-          <AccountMenuItem
-            href="/billing"
-            label="Membership"
-            icon={CircleDollarSign}
-            isActive={pathname === "/billing"}
-          />
-          <AccountMenuItem
-            href="/help"
-            label="Help and support"
-            icon={HelpCircle}
-            isActive={pathname === "/help"}
-          />
-          {showAdminLink ? (
-            <AccountMenuItem
-              href="/admin"
-              label="Admin"
-              icon={Gauge}
-              isActive={pathname === "/admin" || pathname.startsWith("/admin/")}
-            />
-          ) : null}
-          <DropdownMenu.Separator className="my-2 h-px bg-border/70 dark:bg-white/10" />
-          <DropdownMenu.Item
-            className={cn(flyoutItemClassName(false), "text-destructive")}
-            disabled={logoutPending}
-            onSelect={logout}
-          >
-            <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            Log out
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
 function AccountAvatar({ src, initial }: { src: string | null; initial: string }) {
   const [avatarRevision, setAvatarRevision] = useState(0);
 
@@ -1228,36 +1034,6 @@ function AccountAvatar({ src, initial }: { src: string | null; initial: string }
   return <UserAvatar src={resolvedSrc} name={initial} size="sm" decorative className="h-full w-full" />;
 }
 
-const createActionDefinitions: Array<{
-  href: ComponentProps<typeof Link>["href"];
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  featureIcon: FeatureIconKey;
-}> = [
-  {
-    href: "/plans?create=1",
-    title: "New plan",
-    description: "Create a hangout and invite Muddies",
-    icon: CalendarCheck2,
-    featureIcon: "plans"
-  },
-  {
-    href: "/meeting-pings",
-    title: "Meeting ping",
-    description: "Ask a Muddy to meet up nearby",
-    icon: Hand,
-    featureIcon: "ping"
-  },
-  /* "Share a Moment" REMOVED.
-   *
-   * Moments is paused: app/(app)/moments/page.tsx redirects to /dashboard when
-   * isMomentsEnabled is false, so this Quick Action promised a destination
-   * that bounces the person straight back to Home. A menu item whose only
-   * outcome is landing where you already were is a dead action, not a
-   * shortcut -- and this one also carried the decorative Sparkles the product
-   * is removing. */
-];
 
 /**
  * Unwraps the wallpaper promise with use(), inside its own Suspense boundary
