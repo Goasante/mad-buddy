@@ -188,3 +188,7 @@ jobs:
         run: node scripts/verify-mobile-api-origin.mjs --offline
         env:
           MOBILE_API_ORIGIN_OFFLINE: "1"
+          # The same value the build above inlines. .env.local is gitignored and
+          # absent here, so the check has to read the environment or it would be
+          # checking nothing at all.
+          VITE_API_BASE_URL: https://example.invalid

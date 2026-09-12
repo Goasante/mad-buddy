@@ -23,6 +23,13 @@ const ENV_FILES = ["mobile/.env.local", "mobile/.env"];
 const PROBE_PATH = "/api/notifications?limit=1";
 
 function readBaseUrl() {
+  // The environment wins: CI has no .env.local (it is gitignored) and passes
+  // the value the build will actually inline as a variable instead. Checking
+  // only a file that is not there would either fail a correct build or,
+  // worse, silently check nothing.
+  const fromEnv = process.env.VITE_API_BASE_URL;
+  if (fromEnv) return { value: fromEnv.trim(), file: "the environment" };
+
   for (const file of ENV_FILES) {
     if (!existsSync(file)) continue;
     const line = readFileSync(file, "utf8")
@@ -35,7 +42,10 @@ function readBaseUrl() {
 
 const found = readBaseUrl();
 if (!found) {
-  console.error("FAIL: VITE_API_BASE_URL is not set in", ENV_FILES.join(" or "));
+  console.error(
+    "FAIL: VITE_API_BASE_URL is not set -- checked the environment and " +
+      ENV_FILES.join(", ") + "."
+  );
   process.exit(1);
 }
 
