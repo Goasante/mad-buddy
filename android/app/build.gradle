@@ -78,11 +78,35 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
+// FIREBASE / FCM CONFIG.
+//
+// google-services.json is gitignored (it is per-project config, not source),
+// so a fresh clone or worktree does not have it until someone copies it in.
+//
+// The stock Capacitor template swallowed that case at `logger.info` level --
+// invisible in a normal build -- and produced an APK anyway. The result was
+// not merely "push is disabled": FirebaseApp never initialises, and the push
+// plugin's register() then throws a NATIVE exception that killed the app
+// moments after sign-in. A silent warning bought a crash on device.
+//
+// mobile/src/lib/push.ts now catches that failure so the app degrades
+// gracefully instead of dying. This makes the missing config impossible to
+// miss at build time as well:
+//   - a RELEASE build FAILS, because shipping a store build with push
+//     silently disabled is never what anyone intended;
+//   - a debug build continues, but warns loudly rather than at info level.
+def servicesJSON = file('google-services.json')
+if (servicesJSON.exists() && servicesJSON.length() > 0) {
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    def isReleaseBuild = gradle.startParameter.taskNames.any {
+        it.toLowerCase().contains('release')
     }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+    def message = "android/app/google-services.json is missing. Firebase will not " +
+        "initialise, so push notifications cannot work. Copy it from a checkout " +
+        "that has it (it is gitignored) before building."
+    if (isReleaseBuild) {
+        throw new GradleException(message)
+    }
+    logger.warn("WARNING: ${message} Continuing because this is a debug build.")
 }
