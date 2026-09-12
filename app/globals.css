@@ -1066,6 +1066,9 @@ html.dark .home-ambient-bg {
   --bg-secondary: #fdf3e4;
   --warm-grad-1: #fdf0dd;
   --warm-grad-2: #f9e0c2;
+  /* Matches the floating mobile-nav pill's own surface (mobile-nav-polish.css
+     rgba(254, 251, 243, 0.82)) for the same reason as the dark-mode token. */
+  --nav-safe-area-floor: #fefbf3;
   --blue-electric: #3b82f6;
   --green-neon: #58c88f;
   --lime-glow: #eaff6a;
@@ -1152,6 +1155,10 @@ html.dark {
   --bg-secondary: #1c1411;
   --warm-grad-1: #33190c;
   --warm-grad-2: #40200e;
+  /* Matches the floating mobile-nav pill's own surface (mobile-nav-polish.css
+     rgba(18, 18, 19, 0.84)): a near-neutral dark gray, deliberately without
+     the warm hue the rest of this palette carries. */
+  --nav-safe-area-floor: #121213;
   --glass-bg: rgba(255, 255, 255, 0.045);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-highlight: rgba(255, 255, 255, 0.08);
@@ -1390,9 +1397,18 @@ body {
    * the safe assumption, because it never over-reports the visible area. */
   min-height: 100svh;
   min-height: 100dvh;
+  /* The floating bottom-nav pill (mobile-nav-polish.css) sits inside a
+     transparent frame so page content can continue behind and around it --
+     but that means the safe-area strip below the pill has nothing else
+     painted over it, and this gradient's warm brown tones (bg-primary,
+     warm-grad-1, bg-secondary all carry real orange hue/saturation) read as
+     a visibly discoloured band right above the home indicator. The pill's
+     own surface is a near-neutral dark gray; fading to that same neutral
+     tone only in the final stretch keeps the warm look everywhere the pill
+     isn't, without inventing a new color for the app to track. */
   background:
     radial-gradient(circle at top, var(--body-radial), transparent 32rem),
-    linear-gradient(180deg, var(--bg-primary), var(--warm-grad-1) 46%, var(--bg-secondary));
+    linear-gradient(180deg, var(--bg-primary), var(--warm-grad-1) 46%, var(--bg-secondary) 88%, var(--nav-safe-area-floor, var(--bg-secondary)) 100%);
   color: hsl(var(--foreground));
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   transition: background-color 300ms ease, color 300ms ease;
