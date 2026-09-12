@@ -1,31 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { Link, Outlet, useNavigate } from "react-router-dom";
-import {
-  Bell,
-  Plus,
-  UserRound,
-  Settings,
-  CircleDollarSign,
-  LifeBuoy,
-  LogOut,
-  type LucideIcon
-} from "lucide-react";
-import { FeatureIcon } from "@/components/ui/feature-icon";
-import type { FeatureIconKey } from "@/lib/icons/feature-icons";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Outlet, useNavigate } from "react-router-dom";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
+import { AppHeader } from "@/components/app-shell/app-header";
 import { isBuiltForMobile } from "@/lib/platform";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
-import { dismissAllOverlays, useOverlayDismiss } from "../lib/overlay";
-import { BrandMark } from "./BrandMark";
-
-const createActions: { to: string; title: string; description: string; feature: FeatureIconKey }[] = [
-  { to: "/plans", title: "New plan", description: "Create a hangout and invite Muddies", feature: "plans" },
-  { to: "/pings", title: "Meeting ping", description: "Ask a Muddy to meet up nearby", feature: "ping" },
-  { to: "/moments", title: "Share a Moment", description: "Post a moment for your Muddies", feature: "moments" }
-];
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -58,92 +38,30 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#111112]/90 py-3 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-lg items-center justify-between gap-3 px-4">
-          <Link to="/home" aria-label="Mad Buddy home" className="focus-ring shrink-0">
-            <BrandMark className="h-9 w-9" />
-          </Link>
-          <div className="flex items-center gap-1.5">
-            {/* Create dropdown */}
-            <Dropdown
-              label="Create"
-              trigger={
-                <span className="grid h-10 w-10 place-items-center rounded-full border border-border bg-card/60 text-foreground">
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                </span>
-              }
-            >
-              {(close) =>
-                createActions.map((action) => (
-                  <button
-                    key={action.title}
-                    type="button"
-                    onClick={() => {
-                      close();
-                      navigate(action.to);
-                    }}
-                    className="focus-ring flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left active:bg-secondary"
-                  >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                      <FeatureIcon feature={action.feature} size={20} />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold">{action.title}</span>
-                      <span className="block text-xs text-muted-foreground">{action.description}</span>
-                    </span>
-                  </button>
-                ))
-              }
-            </Dropdown>
+      {/* THE SHARED HEADER.
+          This was a hand-written header with its own Create dropdown, bell
+          and account menu, none of which tracked the web app. It now renders
+          the SAME component the web shell uses.
 
-            {/* Bell — navigates */}
-            <Link
-              to="/notifications"
-              aria-label="Notifications"
-              className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-            </Link>
+          Two props carry everything platform-specific:
+          - onLogout is AuthProvider.signOut, which removes this device's
+            push token BEFORE clearing the Supabase session. Web passes its
+            own Server-Action logout. Neither platform borrows the other's
+            lifecycle.
+          - isBuiltForMobile omits menu entries pointing at destinations this
+            app does not have (Admin), rather than offering a dead item.
 
-            {/* Account dropdown */}
-            <Dropdown
-              label="Account"
-              trigger={
-                <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-full border border-border/70">
-                  <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold">
-                    {avatarUrl ? (
-                      <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      (username ?? user?.email ?? "?").slice(0, 1).toUpperCase()
-                    )}
-                  </span>
-                </span>
-              }
-            >
-              {(close) => (
-                <>
-                  {username ? (
-                    <p className="truncate px-3 pb-1.5 pt-1 text-xs font-medium text-muted-foreground">@{username}</p>
-                  ) : null}
-                  <AccountItem icon={UserRound} label="Profile" onClick={() => { close(); navigate("/profile"); }} />
-                  <AccountItem icon={Settings} label="Settings" onClick={() => { close(); navigate("/settings"); }} />
-                  <AccountItem icon={CircleDollarSign} label="Plan and billing" onClick={() => { close(); navigate("/subscription"); }} />
-                  <AccountItem icon={LifeBuoy} label="Help and support" onClick={() => { close(); navigate("/help"); }} />
-                  <div className="my-2 h-px bg-white/10" />
-                  <button
-                    type="button"
-                    onClick={() => { close(); void signOut(); }}
-                    className="focus-ring flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-destructive active:bg-secondary"
-                  >
-                    <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                    Log out
-                  </button>
-                </>
-              )}
-            </Dropdown>
-          </div>
-        </div>
-      </header>
+          showNotificationsBell is on here and off on web: web pages render
+          their own MobilePageHeader which already carries a bell, and this
+          app has no per-page header. */}
+      <AppHeader
+        currentUsername={username}
+        currentAvatarUrl={avatarUrl}
+        onLogout={() => { void signOut(); }}
+        isDestinationAvailable={isBuiltForMobile}
+        homeHref="/home"
+        showNotificationsBell
+      />
 
       <main className="flex-1 overflow-y-auto pb-24">
         <Outlet />
@@ -166,81 +84,6 @@ export function AppShell() {
         isDestinationAvailable={isBuiltForMobile}
       />
     </div>
-  );
-}
-
-function Dropdown({
-  label,
-  trigger,
-  children
-}: {
-  label: string;
-  trigger: ReactNode;
-  children: (close: () => void) => ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState({ top: 0, right: 0 });
-  const close = () => setOpen(false);
-  // Register with the shared overlay stack so outside-press, Escape, and the
-  // Android back button all dismiss it via one handler.
-  useOverlayDismiss(open, close);
-
-  function toggle() {
-    setOpen((current) => {
-      if (current) return false;
-      dismissAllOverlays(); // only one dropdown open at a time
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (rect) setPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-      return true;
-    });
-  }
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label={label}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={toggle}
-        className="focus-ring block rounded-full transition-colors hover:opacity-90"
-      >
-        {trigger}
-      </button>
-      {open
-        ? // Portal to <body> so the backdrop escapes the header's stacking
-          // context (sticky + backdrop-blur) and actually covers the page —
-          // that's what makes tap-outside-to-close work.
-          createPortal(
-            <>
-              <div className="fixed inset-0 z-[90]" onClick={close} aria-hidden="true" />
-              <div
-                role="menu"
-                style={{ top: pos.top, right: pos.right }}
-                className="fixed z-[100] w-64 rounded-xl border border-border bg-card p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)]"
-              >
-                {children(close)}
-              </div>
-            </>,
-            document.body
-          )
-        : null}
-    </>
-  );
-}
-
-function AccountItem({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="focus-ring flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-sm font-medium active:bg-secondary"
-    >
-      <Icon className="h-5 w-5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
-      {label}
-    </button>
   );
 }
 

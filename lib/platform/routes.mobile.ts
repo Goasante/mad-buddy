@@ -65,7 +65,14 @@ export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
   "/drops",
   "/moments/new",
   "/chats-lab",
-  "/profile-lab"
+  "/profile-lab",
+  /* Admin is web-only and deliberately so -- it is an operator console, not a
+     product surface, and there is no mobile route for it. The shared account
+     menu also gates it behind showAdminLink, but that flag answers "may this
+     person see Admin", not "does this platform have it". Both questions need
+     answering, or an owner signing in on Android would tap through to the
+     unavailable screen. */
+  "/admin"
 ];
 
 /**
