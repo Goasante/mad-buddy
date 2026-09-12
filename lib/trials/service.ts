@@ -196,11 +196,6 @@ export async function processTrialLifecycle(_admin: Admin) {
   return 0;
 }
 
-async function deliverPendingTrialNotifications(_admin: Admin) {
-  // Do not claim or deliver historical premium-trial notifications.
-  return 0;
-}
-
 async function deliverPendingBestEffort(_admin: Admin) {
   return;
 }

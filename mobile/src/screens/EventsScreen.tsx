@@ -8,8 +8,34 @@ import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
 import { AudienceSelector, type AudienceValue } from "@/components/events/audience-selector";
+import type { CommunityOption, InviteeOption } from "@/lib/events/audience-options";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
+
+/**
+ * The mobile half of AudienceSelector's `loadOptions` contract.
+ *
+ * Web hands that component `getAudienceOptionsAction` directly. A Vite bundle
+ * cannot import a "use server" module -- it would pull the whole server graph
+ * (events services, rate limiter, the service-role Supabase client) into the
+ * browser bundle -- so this calls the endpoint that runs the same two service
+ * functions behind `resolveApiUser` instead.
+ *
+ * Module scope, not inline: the component keeps it in a useEffect dependency
+ * array, so a new function identity per render would re-fetch on every paint.
+ */
+async function loadAudienceOptions(): Promise<{
+  invitees: InviteeOption[];
+  communities: CommunityOption[];
+}> {
+  const result = await api.get<{ invitees: InviteeOption[]; communities: CommunityOption[] }>(
+    "/api/events/audience-options"
+  );
+  // The picker renders with nothing to choose rather than failing the whole
+  // create-event form, matching how the web action returns empty lists.
+  if (!result.ok || !result.data) return { invitees: [], communities: [] };
+  return result.data;
+}
 
 type Event = {
   id: string;
@@ -285,7 +311,7 @@ function CreateEvent({ onCreated }: { onCreated: () => void }) {
         <label htmlFor="ends" className="text-xs font-medium text-muted-foreground">Ends</label>
         <Input id="ends" type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} />
       </div>
-      <AudienceSelector value={audience} onChange={setAudience} />
+      <AudienceSelector value={audience} onChange={setAudience} loadOptions={loadAudienceOptions} />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button className="w-full" onClick={create} disabled={busy}>
         {busy ? "Creating…" : "Create event"}
