@@ -62,6 +62,43 @@ describe("web implementations stay verbatim re-exports", () => {
   });
 });
 
+/**
+ * REGRESSION: the mobile Image must not impose an object-fit.
+ *
+ * next/image's `fill` sets position/inset/size and deliberately leaves
+ * object-fit to the caller's className. An earlier draft added
+ * objectFit:"cover" inline, and because an inline style beats a class it
+ * silently overrode every shared component asking for object-contain
+ * (badges-page, brand-mark, brand-symbol, progress-rows), cropping their
+ * artwork on mobile only.
+ */
+describe("mobile Image does not override the caller's object-fit", () => {
+  const source = read("lib/platform/image.mobile.tsx");
+  /* Comments are stripped before asserting: the file explains the regression
+     in prose, and prose describing the bug must not read as the bug. */
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/)
+    .map((line) => (line.indexOf("//") === -1 ? line : line.slice(0, line.indexOf("//"))))
+    .join("\n");
+
+  it("sets no objectFit in the fill style", () => {
+    expect(code).not.toMatch(/objectFit\s*:/);
+  });
+
+  it("still reproduces what next/image fill actually does", () => {
+    expect(source).toContain('position: "absolute"');
+    expect(source).toContain("inset: 0");
+    expect(source).toContain('width: "100%"');
+    expect(source).toContain('height: "100%"');
+  });
+
+  it("lets a caller's style win over the fill defaults", () => {
+    // The spread order decides this: fillStyle first, caller's style last.
+    expect(source).toContain("{ ...fillStyle, ...style }");
+  });
+});
+
 describe("the two barrels expose the same surface", () => {
   // A component that compiles on web must compile for mobile. Divergence here
   // is caught by the mobile CI job, but failing in this suite names the cause.
@@ -72,13 +109,25 @@ describe("the two barrels expose the same surface", () => {
       .filter(Boolean)
       .sort();
 
-  it("exports the same names from index.ts and index.mobile.ts", () => {
+  /**
+   * The rule is one-directional: everything web exports MUST exist on mobile,
+   * or a shared component that compiles on web fails to build for mobile.
+   * Mobile-only extras are fine -- they are tools for the mobile app itself
+   * (route translation, the built-for-mobile guard) that web has no need of.
+   */
+  it("every web export exists on mobile", () => {
     const web = named(read("lib/platform/index.ts"));
-    const mobile = named(read("lib/platform/index.mobile.ts")).filter(
-      // Mobile additionally exposes the translation helper for its own use.
-      (name) => name !== "toMobilePath"
-    );
-    expect(mobile).toEqual(web);
+    const mobile = named(read("lib/platform/index.mobile.ts"));
+    for (const name of web) {
+      expect(mobile).toContain(name);
+    }
+  });
+
+  it("mobile's extras are only the mobile-specific helpers", () => {
+    const web = named(read("lib/platform/index.ts"));
+    const mobile = named(read("lib/platform/index.mobile.ts"));
+    const extras = mobile.filter((name) => !web.includes(name));
+    expect(extras.sort()).toEqual(["MOBILE_ROUTES_NOT_BUILT", "isBuiltForMobile", "toMobilePath"].sort());
   });
 });
 

@@ -37,7 +37,16 @@
       // ../lib/platform cannot resolve it by walking up from its own location.
       // Pinning the path lets those files be type-checked here, which is the
       // only place that can check them.
-      "react-router-dom": ["./node_modules/react-router-dom"]
+      "react-router-dom": ["./node_modules/react-router-dom"],
+      // MUST MIRROR THE VITE ALIAS in vite.config.ts.
+      //
+      // Without this, "@/*" falls through to "../*" and TypeScript resolves
+      // @/lib/platform to index.ts -- the WEB barrel, typed against Next --
+      // while Vite bundles index.mobile.ts. The types checked and the code
+      // shipped would be different files, so a mobile-only signature gap
+      // (a missing options argument, a narrower href type) would pass the
+      // typecheck and only surface at runtime on a device.
+      "@/lib/platform": ["../lib/platform/index.mobile.ts"]
     }
   },
   // "src" is the app itself. The platform adapter's mobile implementations are

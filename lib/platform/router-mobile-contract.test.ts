@@ -15,11 +15,14 @@ import { toMobilePath } from "./routes.mobile";
  * on a device rather than a build error.
  */
 
+type NavigateOptions = { scroll?: boolean };
+
 /** Mirrors the useRouter() body in router.mobile.ts. */
 function makeRouter(navigate: (to: string | number, opts?: { replace?: boolean }) => void) {
   return {
-    push: (href: string) => navigate(toMobilePath(href)),
-    replace: (href: string) => navigate(toMobilePath(href), { replace: true }),
+    push: (href: string, _options?: NavigateOptions) => navigate(toMobilePath(href)),
+    replace: (href: string, _options?: NavigateOptions) =>
+      navigate(toMobilePath(href), { replace: true }),
     back: () => navigate(-1),
     forward: () => navigate(1),
     prefetch: () => {},
@@ -58,6 +61,35 @@ describe("replace does not add a history entry", () => {
     const navigate = vi.fn();
     makeRouter(navigate).replace("/friends");
     expect(navigate).toHaveBeenCalledWith("/muddies", { replace: true });
+  });
+});
+
+/**
+ * REGRESSION: Next's optional second argument must be accepted.
+ * components/moments calls router.replace(..., { scroll: false }); a
+ * one-argument mobile signature makes that a type error on migration.
+ */
+describe("navigation options are accepted and safely ignored", () => {
+  it("accepts { scroll: false } on replace and still navigates", () => {
+    const navigate = vi.fn();
+    makeRouter(navigate).replace("/moments?tab=live", { scroll: false });
+    expect(navigate).toHaveBeenCalledWith("/moments?tab=live", { replace: true });
+  });
+
+  it("accepts { scroll: false } on push and still navigates", () => {
+    const navigate = vi.fn();
+    makeRouter(navigate).push("/plans", { scroll: false });
+    expect(navigate).toHaveBeenCalledWith("/plans");
+  });
+
+  it("does not forward scroll to react-router", () => {
+    // Ignoring it is correct rather than lossy: `scroll` suppresses Next's
+    // restore-scroll-on-navigate, which the SPA does not do anyway, so the
+    // observable result is what the caller asked for.
+    const navigate = vi.fn();
+    makeRouter(navigate).push("/plans", { scroll: false });
+    const [, options] = navigate.mock.calls[0]!;
+    expect(options).toBeUndefined();
   });
 });
 

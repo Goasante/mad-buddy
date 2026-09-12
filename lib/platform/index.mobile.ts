@@ -13,4 +13,4 @@
 export { Link, type LinkProps } from "./link.mobile";
 export { Image, type ImageProps } from "./image.mobile";
 export { useRouter, usePathname, useSearchParams, useRevalidate } from "./router.mobile";
-export { toMobilePath } from "./routes.mobile";
+export { toMobilePath, isBuiltForMobile, MOBILE_ROUTES_NOT_BUILT } from "./routes.mobile";

@@ -10,9 +10,24 @@ import { toMobilePath } from "./routes.mobile";
  * same reason as Link: shared components are authored against web routes.
  */
 
+/**
+ * Next's optional second argument to push/replace. Shared pages really do use
+ * it -- components/moments calls
+ * `router.replace(..., { scroll: false })` -- so the mobile signature must
+ * accept it or those call sites become type errors the moment they migrate.
+ *
+ * The options are accepted and ignored, which is honest here rather than
+ * lossy: `scroll` suppresses Next's restore-scroll-on-navigate, and the SPA
+ * does not do that in the first place, so ignoring it produces the SAME
+ * observable behaviour the caller asked for.
+ */
+type NavigateOptions = {
+  scroll?: boolean;
+};
+
 type PlatformRouter = {
-  push: (href: string) => void;
-  replace: (href: string) => void;
+  push: (href: string, options?: NavigateOptions) => void;
+  replace: (href: string, options?: NavigateOptions) => void;
   back: () => void;
   forward: () => void;
   prefetch: (href: string) => void;
@@ -24,8 +39,11 @@ export function useRouter(): PlatformRouter {
 
   return useMemo(
     () => ({
-      push: (href: string) => navigate(toMobilePath(href)),
-      replace: (href: string) => navigate(toMobilePath(href), { replace: true }),
+      // The options argument is accepted for signature compatibility and
+      // intentionally not forwarded -- see NavigateOptions above.
+      push: (href: string, _options?: NavigateOptions) => navigate(toMobilePath(href)),
+      replace: (href: string, _options?: NavigateOptions) =>
+        navigate(toMobilePath(href), { replace: true }),
       back: () => navigate(-1),
       forward: () => navigate(1),
       // A Next router hint with no meaning in a bundled webview.

@@ -46,13 +46,20 @@ export const Image = forwardRef<HTMLImageElement, PlatformImageProps>(function I
   },
   ref
 ) {
+  /* Mirrors what next/image's `fill` actually does: absolutely fill the
+     positioned parent. It notably does NOT set object-fit -- that is left to
+     the caller, normally via a className like "object-contain".
+     An earlier draft added objectFit:"cover" here. Because an inline style
+     beats a class, that silently overrode every shared component asking for
+     object-contain (badges, brand marks, buddy-score rows) and squashed or
+     cropped their artwork on mobile only -- precisely the kind of quiet visual
+     drift this adapter exists to prevent. */
   const fillStyle = fill
     ? ({
         position: "absolute" as const,
         inset: 0,
         width: "100%",
-        height: "100%",
-        objectFit: "cover" as const
+        height: "100%"
       })
     : undefined;
 

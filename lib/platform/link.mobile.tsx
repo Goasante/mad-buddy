@@ -1,6 +1,6 @@
 import { forwardRef, type AnchorHTMLAttributes, type MouseEvent } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import { toMobilePath } from "./routes.mobile";
+import { toMobilePath, urlObjectToPath, type UrlObject } from "./routes.mobile";
 
 /**
  * Platform Link — Capacitor/Vite implementation.
@@ -22,7 +22,12 @@ import { toMobilePath } from "./routes.mobile";
  */
 
 type PlatformLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
-  href: string;
+  /**
+   * A path, or Next's object form `{ pathname, query }`. The object form is
+   * not hypothetical: components/scan/scan-page.tsx uses it to carry event and
+   * room ids, so it must work before Scan can be shared.
+   */
+  href: string | UrlObject;
   prefetch?: boolean;
   replace?: boolean;
 };
@@ -31,15 +36,16 @@ export const Link = forwardRef<HTMLAnchorElement, PlatformLinkProps>(function Li
   { href, prefetch: _prefetch, replace, children, onClick, ...rest },
   ref
 ) {
-  const target = toMobilePath(href);
+  const rawHref = typeof href === "string" ? href : urlObjectToPath(href);
+  const target = toMobilePath(rawHref);
 
   // An absolute URL is a genuine external link (mailto:, tel:, https://...).
   // Routing those through the SPA router would produce a dead in-app
   // navigation, so they stay plain anchors and the webview hands them off.
-  const isExternal = /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//");
+  const isExternal = /^[a-z][a-z0-9+.-]*:/i.test(rawHref) || rawHref.startsWith("//");
   if (isExternal) {
     return (
-      <a ref={ref} href={href} onClick={onClick} {...rest}>
+      <a ref={ref} href={rawHref} onClick={onClick} {...rest}>
         {children}
       </a>
     );

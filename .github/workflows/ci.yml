@@ -153,3 +153,13 @@ jobs:
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key
           VITE_TURNSTILE_SITE_KEY: placeholder
+
+      # Inspects the BUILT bundle for Next.js runtime markers and service-role
+      # symbols. Source-level rules state intent; this asserts what actually
+      # shipped -- the distinction that mattered when a single Server Action
+      # import pulled 12 server-only modules, including the service-role
+      # Supabase client, into the mobile graph (PR #84).
+      #
+      # Runs AFTER the build, from the repo root, because it reads mobile/dist.
+      - name: Verify no Next.js or server-only code in the mobile bundle
+        run: node scripts/verify-mobile-bundle.mjs
