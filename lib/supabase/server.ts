@@ -3,12 +3,14 @@ import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/lib/supabase/database.types";
 import { supabaseCookieOptions } from "@/lib/supabase/cookie-options";
 import { assertSupabaseBrowserEnv } from "@/lib/supabase/env";
+import type { FetchImplementation } from "@/lib/network/resilience";
 
-export async function createSupabaseServerClient() {
+export async function createSupabaseServerClient(options: { fetch?: FetchImplementation } = {}) {
   const { url, anonKey } = assertSupabaseBrowserEnv();
   const cookieStore = await cookies();
 
   return createServerClient<Database>(url, anonKey, {
+    ...(options.fetch ? { global: { fetch: options.fetch } } : {}),
     cookieOptions: supabaseCookieOptions(),
     cookies: {
       getAll() {

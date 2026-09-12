@@ -8,6 +8,9 @@ type SafeLogFields = {
   requestId?: string;
   route?: string;
   action?: string;
+  stage?: string;
+  outcome?: string;
+  attempt?: number;
   statusCode?: number;
   latencyMs?: number;
   userId?: string | null;
@@ -46,6 +49,9 @@ export function logBackendEvent(level: LogLevel, event: SafeLogFields) {
     requestId: event.requestId,
     route: event.route,
     action: event.action,
+    stage: event.stage,
+    outcome: event.outcome,
+    attempt: event.attempt,
     statusCode: event.statusCode,
     latencyMs: event.latencyMs,
     userIdHash: hashLogSubject(event.userId),

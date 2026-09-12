@@ -6,6 +6,11 @@ type TimeoutOptions = {
   slowAfterMs?: number;
 };
 
+export type FetchImplementation = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
 export class RequestTimeoutError extends Error {
   readonly operation: string;
   readonly timeoutMs: number;
@@ -24,6 +29,18 @@ function now() {
 
 export function isRequestTimeoutError(error: unknown): error is RequestTimeoutError {
   return error instanceof RequestTimeoutError;
+}
+
+/**
+ * Supabase wraps fetch failures in its own error types. Keep timeout
+ * classification deterministic without depending on a provider error class or
+ * logging the provider's raw message.
+ */
+export function isOperationTimeoutError(error: unknown, operation: string): boolean {
+  if (isRequestTimeoutError(error)) return error.operation === operation;
+  if (!error || typeof error !== "object" || !("message" in error)) return false;
+
+  return String(error.message).includes(`${operation} timed out after`);
 }
 
 export async function withTimeout<T>(
@@ -76,6 +93,7 @@ export async function fetchWithTimeout(
   init: RequestInit = {},
   timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   operation = "network request",
+  fetchImplementation: FetchImplementation = fetch,
 ) {
   const controller = new AbortController();
   const callerSignal = init.signal;
@@ -96,7 +114,7 @@ export async function fetchWithTimeout(
   let timedOut = false;
 
   try {
-    return await fetch(input, {
+    return await fetchImplementation(input, {
       ...init,
       signal: controller.signal,
     });
@@ -119,4 +137,14 @@ export async function fetchWithTimeout(
       }
     }
   }
+}
+
+/** A Supabase-compatible fetch whose underlying request is actually aborted. */
+export function createTimeoutFetch(
+  timeoutMs: number,
+  operation: string,
+  fetchImplementation: FetchImplementation = fetch,
+): FetchImplementation {
+  return (input, init) =>
+    fetchWithTimeout(input, init, timeoutMs, operation, fetchImplementation);
 }
