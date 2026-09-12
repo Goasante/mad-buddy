@@ -141,6 +141,19 @@ jobs:
         working-directory: mobile
         run: npm test
 
+      # Runs HERE, not in the Quality job, because it shells out to tsc inside
+      # mobile/ and therefore needs mobile's own dependencies
+      # (react-router-dom). The Quality job installs root dependencies only, so
+      # the same test would fail there with "Cannot find module" -- a missing
+      # install rather than a real resolution problem.
+      #
+      # It asserts that TypeScript and Vite resolve @/lib/platform to the SAME
+      # file. Without that agreement the mobile typecheck validates the web
+      # barrel while Vite bundles the mobile one, and no mobile-only signature
+      # gap can ever fail a check.
+      - name: Platform resolution contract
+        run: npx vitest run lib/platform/resolution-contract.test.ts
+
       # All VITE_* values are public and inlined at build time. Placeholders
       # are correct here: lib/env.ts falls back to empty strings and defers
       # the real check to assertEnv() at runtime, so the bundle builds without

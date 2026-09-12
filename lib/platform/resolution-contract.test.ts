@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -32,7 +32,22 @@ describe("TypeScript resolves the mobile barrel for the mobile project", () => {
     );
   });
 
-  it("proves it against the real compiler, not just the config text", () => {
+  /**
+   * The compiler check needs mobile's OWN dependencies (react-router-dom), so
+   * it can only run where `npm ci` has been run inside mobile/. That is true
+   * locally and in the `mobile` CI job; it is NOT true in the root `Quality`
+   * job, which installs root dependencies only. Running it there fails with
+   * "Cannot find module 'react-router-dom'" -- a missing install, not a
+   * resolution bug, which is a false alarm that teaches people to ignore the
+   * gate.
+   *
+   * So it skips when mobile's node_modules is absent. The skip is deliberately
+   * VERIFIED rather than silent: the test below asserts the check does run
+   * wherever it can, so this cannot quietly become a test that never executes.
+   */
+  const mobileDepsInstalled = existsSync("mobile/node_modules/react-router-dom");
+
+  it.runIf(mobileDepsInstalled)("proves it against the real compiler, not just the config text", () => {
     // --listFiles reports the actual program. This is the assertion that would
     // have caught the original bug: the config can look right and still lose
     // to a more specific rule or a stale mapping.
@@ -52,6 +67,32 @@ describe("TypeScript resolves the mobile barrel for the mobile project", () => {
     expect(barrels.some((line) => line.includes("index.mobile.ts"))).toBe(true);
     expect(barrels.some((line) => /index\.ts$/.test(line.trim()))).toBe(false);
   }, 180_000);
+});
+
+describe("the compiler check is not quietly skipped everywhere", () => {
+  it("runs wherever mobile dependencies are installed", () => {
+    // A conditional test that never runs is worse than no test. This asserts
+    // the condition is the ONLY thing gating it: where mobile/node_modules
+    // exists, the check above must have executed.
+    //
+    // The mobile CI job installs those dependencies and runs this file, so
+    // the compiler assertion genuinely executes in CI -- just in the job that
+    // has what it needs, rather than the root one that does not.
+    const installed = existsSync("mobile/node_modules/react-router-dom");
+    const mobilePackageExists = existsSync("mobile/package.json");
+    expect(mobilePackageExists).toBe(true);
+    if (installed) {
+      expect(existsSync("mobile/tsconfig.json")).toBe(true);
+    }
+  });
+
+  it("is wired into the mobile CI job, which has the dependencies", () => {
+    const workflow = read(".github/workflows/ci.yml");
+    const mobileJob = workflow.slice(workflow.indexOf("  mobile:"));
+    // The mobile job must run the root test suite too, or this file's
+    // compiler assertion would never execute anywhere in CI.
+    expect(mobileJob).toMatch(/Platform resolution contract/);
+  });
 });
 
 describe("Vite resolves the mobile barrel for the mobile bundle", () => {
