@@ -109,6 +109,33 @@ describe("visible upload progress", () => {
   });
 });
 
+/**
+ * Reported: sending a 1min+ video "was just stuck" with no sign of loading.
+ *
+ * A video over the 15 MB chat cap is rejected instantly by
+ * validateRichSelection, but the resulting failure message only ever reached
+ * an `sr-only` span next to a small retry icon replacing the whole "+"
+ * button -- invisible to a sighted user. A rejected upload and a genuinely
+ * stuck one looked identical. Every failure path funnels through the single
+ * `transition` function, so the fix routes it through the same visible
+ * feedback banner every other composer error already uses.
+ */
+describe("a failed or rejected upload is visibly reported", () => {
+  it("forwards the failure message through onFeedback from the single transition point", () => {
+    const picker = read("components/messaging/attachment-picker.tsx");
+    const fn = picker.slice(picker.indexOf("function transition("), picker.indexOf("function clearCurrentIntent"));
+
+    expect(fn).toContain('if (next.status === "failed") onFeedback?.(next.message);');
+  });
+
+  it("does not rely on the sr-only span as the only surface for the reason", () => {
+    const picker = read("components/messaging/attachment-picker.tsx");
+    // The sr-only span may still exist for assistive tech, but a sighted user
+    // must not depend on it: onFeedback firing from transition() covers that.
+    expect(picker).toContain("function transition(next: UploadState) {");
+  });
+});
+
 describe("mobile bottom safe-area convergence", () => {
   it("absorbs the safe-area allowance inside one fixed navigation footprint", () => {
     const css = read("app/mobile-shell-stability.css");

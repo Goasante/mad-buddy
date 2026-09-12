@@ -323,7 +323,7 @@ export function MessageBubbleV4({
             <Action icon={Forward} label="Forward" onClick={() => { onForward(); setActionsOpen(false); }} />
             {message.isMine ? <Action icon={Info} label="Info" onClick={() => { setInfoOpen(true); setActionsOpen(false); }} /> : null}
             {message.isMine && message.text && !message.deleted ? <Action icon={Pencil} label="Edit" onClick={() => { onEdit(); setActionsOpen(false); }} /> : null}
-            <Action icon={Trash2} label="Delete" destructive onClick={() => { onDelete(); setActionsOpen(false); }} />
+            {!message.deleted ? <Action icon={Trash2} label="Delete" destructive onClick={() => { onDelete(); setActionsOpen(false); }} /> : null}
           </div>
         ) : null}
       </div>

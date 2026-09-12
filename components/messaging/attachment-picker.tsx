@@ -151,6 +151,11 @@ export function AttachmentPicker({
   function transition(next: UploadState) {
     setState(next);
     onLifecycleChange?.(next.status);
+    // The failure reason previously only reached an sr-only span next to the
+    // tiny retry icon, so a rejected upload (e.g. a video over the size cap)
+    // looked identical to one silently stuck. Route it through the same
+    // visible feedback banner every other composer error already uses.
+    if (next.status === "failed") onFeedback?.(next.message);
   }
 
   function clearCurrentIntent(discard = false) {

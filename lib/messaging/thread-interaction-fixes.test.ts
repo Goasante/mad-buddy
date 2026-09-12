@@ -108,3 +108,57 @@ describe("a hide that fails is reported as a failure", () => {
     expect(body).toContain("if (hideError) return { ok: false");
   });
 });
+
+/**
+ * Reported: "I deleted one video sent from everyone and I couldn't delete
+ * anything else again... there was a bit of a glitch."
+ *
+ * "Delete for everyone" is a soft delete (UPDATE status='deleted'), not a row
+ * DELETE. The realtime subscription reacts to that UPDATE by fetching the
+ * single message and merging it into `messages`. The deleter's own client
+ * had ALREADY removed the row optimistically the moment it clicked delete,
+ * so the merge's "not found -> append" branch re-inserted the tombstone a
+ * moment later: the message visibly popped back as "deleted" (the glitch),
+ * and it still carried a working Delete action that reported success on an
+ * already-deleted row for every click after -- reading as "nothing happens".
+ */
+describe("a deleted-for-everyone tombstone does not reappear for the deleter", () => {
+  it("skips re-adding an absent tombstone instead of appending it", () => {
+    const source = page();
+    const handler = source.slice(source.indexOf("const patchMessage = "));
+    const body = handler.slice(0, handler.indexOf("const channel = supabase"));
+
+    expect(body).toContain("const wasPresent = current.some((row) => row.id === projected.id)");
+    expect(body).toContain("if (projected.deleted && !wasPresent) return current;");
+    // The guard must run before the merge that would otherwise re-append it.
+    expect(body.indexOf("if (projected.deleted && !wasPresent)")).toBeLessThan(
+      body.indexOf("mergeThreadMessage(current, projected)")
+    );
+  });
+
+  it("still turns an in-place row into a tombstone for the other participant", () => {
+    // The guard is scoped to the missing-row case only -- an already-present
+    // row (the other participant's view, which never removed anything) must
+    // still be replaced by the merge, or a real delete would stop updating.
+    const source = page();
+    const handler = source.slice(source.indexOf("const patchMessage = "));
+    const body = handler.slice(0, handler.indexOf("const channel = supabase"));
+
+    expect(body).toContain("const next = mergeThreadMessage(current, projected);");
+    expect(body).not.toContain("if (projected.deleted) return current;");
+  });
+});
+
+describe("an already-deleted message offers no Delete action", () => {
+  it("no longer renders Delete unconditionally", () => {
+    // Deleting a tombstone was a no-op that still reported "Message deleted.",
+    // which read as broken when a person tried it after the reappearance bug.
+    expect(bubble()).not.toMatch(/^\s*<Action icon=\{Trash2\} label="Delete"/m);
+  });
+
+  it("gates Delete on the message not already being deleted", () => {
+    expect(bubble()).toContain(
+      '{!message.deleted ? <Action icon={Trash2} label="Delete" destructive onClick={() => { onDelete(); setActionsOpen(false); }} /> : null}'
+    );
+  });
+});
