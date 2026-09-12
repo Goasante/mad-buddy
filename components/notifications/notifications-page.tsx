@@ -221,24 +221,6 @@ export function NotificationsPageContent({
   const [quietMode, setQuietMode] = useState(initialPreferences.quietNearby ?? false);
   const [planAlerts, setPlanAlerts] = useState(initialPreferences.planAlerts ?? true);
 
-  /**
-   * Saves a toggle, and puts it back if the save fails.
-   *
-   * These three switches used to be local state on web: flipping one and
-   * reloading silently reverted it, while the native app had been persisting
-   * them correctly. The screen now saves on both platforms, and only sends the
-   * keys that changed, because the service merges a partial patch.
-   */
-  const savePreferences = useCallback(
-    (patch: NotificationPreferences, revert: () => void) => {
-      void client.saveNotificationPreferences(patch).then((result) => {
-        if (result.ok) return;
-        revert();
-        setFeedback(result.message ?? "Could not save that setting.");
-      });
-    },
-    [client]
-  );
   // Two separate surfaces, deliberately: `optionsOpen` is the lightweight
   // Pulse-management popover (Mark all as read / Select updates), `settingsOpen`
   // is the dedicated Notification settings sheet. Keeping them apart is the
@@ -261,6 +243,42 @@ export function NotificationsPageContent({
   const [actionsOpen, setActionsOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; error: boolean; onUndo?: () => void } | null>(null);
   const [feedback, setFeedback] = useState("");
+
+  /* The polling effect below must run exactly once: it installs an interval
+     plus focus and visibility listeners, and listing `client` as a dependency
+     would tear all of that down and rebuild it if the client identity ever
+     changed. A ref keeps that effect single-run while still reading the
+     current client.
+
+     Both platforms pass a stable client -- web memoises it, the native app
+     uses a module constant -- so this only ever matters if that changes. */
+  const clientRef = useRef(client);
+  useEffect(() => {
+    clientRef.current = client;
+  }, [client]);
+
+  /**
+   * Saves a toggle, and puts it back if the save fails.
+   *
+   * These three switches used to be local state on web: flipping one and
+   * reloading silently reverted it, while the native app had been persisting
+   * them correctly. The screen now saves on both platforms, and only sends the
+   * keys that changed, because the service merges a partial patch.
+   *
+   * Declared here rather than beside the toggle state above because it calls
+   * setFeedback, and a closure that captures a `const` before its declaration
+   * would not see later updates.
+   */
+  const savePreferences = useCallback(
+    (patch: NotificationPreferences, revert: () => void) => {
+      void client.saveNotificationPreferences(patch).then((result) => {
+        if (result.ok) return;
+        revert();
+        setFeedback(result.message ?? "Could not save that setting.");
+      });
+    },
+    [client]
+  );
   const [isPending, startTransition] = useTransition();
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unreadCount = notifications.filter((notification) => notification.unread).length;
@@ -304,7 +322,7 @@ export function NotificationsPageContent({
 
       loadInFlight = (async () => {
         try {
-          const loaded = await client.load();
+          const loaded = await clientRef.current.load();
 
           if (!loaded) {
             if (isMounted) setFeedback("Could not load notifications.");

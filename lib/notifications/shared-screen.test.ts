@@ -60,7 +60,9 @@ describe("the shared component reaches no web-only module", () => {
     // bundled asset origin, which serves no API at all.
     expect(shared).not.toContain("fetchWithTimeout(");
     expect(shared).not.toMatch(/\bfetch\(/);
-    expect(shared).toContain("client.load()");
+    // Reached through a ref inside the polling effect, which must stay
+    // single-run; either spelling satisfies the rule that matters here.
+    expect(shared).toMatch(/client(Ref\.current)?\.load\(\)/);
   });
 });
 
