@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "../lib/supabase";
 import { assertEnv } from "../lib/env";
 import { LoginHero } from "../components/LoginHero";
+import { describeSignInError } from "./sign-in-error";
 
 export function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -24,7 +25,13 @@ export function LoginScreen() {
     setError("");
     const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
-    if (signInError) setError("Email address or password is incorrect.");
+    /* REPORT WHAT ACTUALLY FAILED.
+       Every failure used to become "Email address or password is incorrect" --
+       including network errors, rate limits and provider outages. That sends
+       someone to reset a password that was never wrong, and it cost real time
+       diagnosing a sign-in problem that had nothing to do with credentials.
+       Only a genuine credential rejection now says so. */
+    if (signInError) setError(describeSignInError(signInError));
     // On success the AuthProvider redirects.
   }
 
