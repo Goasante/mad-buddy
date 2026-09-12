@@ -30,8 +30,32 @@
       // unrelated" on any shared component that takes a ref.
       "react": ["../node_modules/@types/react"],
       "react-dom": ["../node_modules/@types/react-dom"],
-      "react/jsx-runtime": ["../node_modules/@types/react/jsx-runtime"]
+      "react/jsx-runtime": ["../node_modules/@types/react/jsx-runtime"],
+      // Same cross-directory problem, opposite direction. The platform
+      // adapter's mobile files live at the repo ROOT but are this project's
+      // code, and react-router-dom is a mobile-only dependency -- so a file in
+      // ../lib/platform cannot resolve it by walking up from its own location.
+      // Pinning the path lets those files be type-checked here, which is the
+      // only place that can check them.
+      "react-router-dom": ["./node_modules/react-router-dom"],
+      // MUST MIRROR THE VITE ALIAS in vite.config.ts.
+      //
+      // Without this, "@/*" falls through to "../*" and TypeScript resolves
+      // @/lib/platform to index.ts -- the WEB barrel, typed against Next --
+      // while Vite bundles index.mobile.ts. The types checked and the code
+      // shipped would be different files, so a mobile-only signature gap
+      // (a missing options argument, a narrower href type) would pass the
+      // typecheck and only surface at runtime on a device.
+      "@/lib/platform": ["../lib/platform/index.mobile.ts"]
     }
   },
-  "include": ["src"]
+  // "src" is the app itself. The platform adapter's mobile implementations are
+  // listed explicitly because they live at the repo root (they are shared
+  // code, not mobile app code) and the ROOT tsconfig deliberately excludes
+  // them -- they import react-router-dom, which only this project depends on.
+  //
+  // Without this entry they would be type-checked by neither project until
+  // some component happened to import them, which is exactly how shared code
+  // rots. This project owns their types; mobile CI (PR #84) runs the check.
+  "include": ["src", "../lib/platform/*.mobile.ts", "../lib/platform/*.mobile.tsx"]
 }

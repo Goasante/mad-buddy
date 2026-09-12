@@ -37,6 +37,8 @@
   ],
   "exclude": [
     "node_modules",
-    "mobile"
+    "mobile",
+    "lib/platform/*.mobile.ts",
+    "lib/platform/*.mobile.tsx"
   ]
 }
