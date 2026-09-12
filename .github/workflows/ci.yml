@@ -176,3 +176,19 @@ jobs:
       # Runs AFTER the build, from the repo root, because it reads mobile/dist.
       - name: Verify no Next.js or server-only code in the mobile bundle
         run: node scripts/verify-mobile-bundle.mjs
+
+      # The API base URL only has to be a URL for the build to succeed -- it
+      # does not have to be one that WORKS. When the production domain moved to
+      # mad-buddy.com, the old host began answering /api/* with a 307, and a
+      # browser will not replay an Authorization header across a cross-origin
+      # redirect: every authenticated call in the shipped APK failed. CI builds
+      # with a placeholder host, so only the static checks run here; the network
+      # probe runs against the real .env.local when building an actual APK.
+      - name: Verify the mobile API origin is well-formed
+        run: node scripts/verify-mobile-api-origin.mjs --offline
+        env:
+          MOBILE_API_ORIGIN_OFFLINE: "1"
+          # The same value the build above inlines. .env.local is gitignored and
+          # absent here, so the check has to read the environment or it would be
+          # checking nothing at all.
+          VITE_API_BASE_URL: https://example.invalid
