@@ -50,6 +50,7 @@ import { MobileNav, isNavigationItemActive } from "@/components/app-shell/mobile
    hand-written Create menu, bell and account menu. Web imports it back and
    supplies its own logout, so web behaviour is unchanged. */
 import { AppHeader, CREATE_ACTIONS } from "@/components/app-shell/app-header";
+import { useWebAvatarSource } from "@/components/app-shell/use-web-avatar-source";
 import { QuickActionsLauncher } from "@/components/app-shell/quick-actions-launcher";
 import { showsQuickActions } from "@/lib/navigation/quick-actions";
 import { ImmersiveModeProvider, useImmersiveMode } from "@/components/app-shell/immersive-mode";
@@ -502,6 +503,10 @@ function AppShellInner({
           /* Routes that render their own header. Web-only knowledge, so the
              shell answers it rather than the shared component. */
           hidden={hasOwnHeader(pathname)}
+          /* Web-only: resolves Mad Buddy uploads through /api/profile/avatar and
+             refreshes on madbuddy:avatar-updated, so a newly saved photo is not
+             stale. Mobile omits this and uses its URL directly. */
+          useAvatarSource={useWebAvatarSource}
         />
           <main
           id="app-main-content"

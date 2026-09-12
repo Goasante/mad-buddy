@@ -3,6 +3,11 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { AppHeader } from "@/components/app-shell/app-header";
 import { isBuiltForMobile } from "@/lib/platform";
+/* Registers the header's menus with the native overlay stack so the hardware
+   Back button CLOSES an open menu instead of leaving the screen. Web passes
+   nothing: its equivalent hook calls history.back(), which would cancel the
+   navigation a menu item just started. */
+import { useOverlayDismiss } from "../lib/overlay";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
@@ -61,9 +66,24 @@ export function AppShell() {
         isDestinationAvailable={isBuiltForMobile}
         homeHref="/home"
         showNotificationsBell
+        useOverlayDismiss={useOverlayDismiss}
       />
 
-      <main className="flex-1 overflow-y-auto pb-24">
+      {/* The shared header is FIXED, so it is out of flow and reserves no
+          space of its own -- <main> has to.
+
+          CONTENT-HEIGHT, NOT THE FULL HEADER HEIGHT. This app's `body` already
+          carries `padding: env(safe-area-inset-top) ...` (mobile/src/index.css),
+          so the notch is paid for once before <main> is laid out at all.
+          --app-header-height bundles that same inset, so using it here would
+          count the notch twice and open a visible gap beneath the header.
+          The header itself still needs its own inset padding because `fixed`
+          positions against the viewport and ignores body padding entirely --
+          which is exactly why the two values exist separately. */}
+      <main
+        className="flex-1 overflow-y-auto pb-24"
+        style={{ paddingTop: "var(--app-header-content-height)" }}
+      >
         <Outlet />
       </main>
 

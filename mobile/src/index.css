@@ -6,6 +6,29 @@
  * primitives (@/components/ui/*) render identically. Dark mode is class-based
  * (html.dark) to match darkMode: ["class"]. */
 :root {
+  /* THE SHARED HEADER'S FOOTPRINT, mirrored from the web app's globals.css.
+   *
+   * The shared AppHeader is `fixed` and sizes itself with
+   * --app-header-content-height. Without these, that resolves to nothing on
+   * Android: the header collapses and page content renders underneath it.
+   *
+   *   --app-header-content-height  the header's own row, notch-independent
+   *   --app-header-height          that PLUS the safe-area inset
+   *
+   * WHICH ONE <main> USES DEPENDS ON WHO ELSE PAYS FOR THE INSET, and this app
+   * differs from web. Here `body` already has
+   * `padding: env(safe-area-inset-top) ...` (see the body rule below), so the
+   * notch is ALREADY accounted for once. <main> must therefore offset by
+   * --app-header-content-height ONLY; using the full --app-header-height would
+   * count the notch twice and leave a visible gap under the header.
+   *
+   * --app-header-height is still defined because it is the correct offset for
+   * anything that positions against the VIEWPORT rather than sitting inside
+   * the padded body -- a page-local sticky control, for instance, which like
+   * the fixed header is unaffected by body padding. */
+  --app-header-content-height: 4.25rem;
+  --app-header-height: calc(env(safe-area-inset-top, 0px) + var(--app-header-content-height));
+
   --color-brand-orange: #f97316;
   --color-brand-amber: #fb923c;
   --color-brand-ember: #ea580c;

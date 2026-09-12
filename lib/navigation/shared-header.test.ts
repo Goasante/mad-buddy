@@ -141,3 +141,92 @@ describe("the paused Moments shortcut stays gone", () => {
     expect(mobileShell).not.toContain('title: "Share a Moment"');
   });
 });
+
+/**
+ * The four defects found in the PR #88 artifact review. Each is pinned here
+ * because all of them passed the test suite and both production builds --
+ * they were runtime and artifact-boundary problems, not type or logic errors.
+ */
+describe("PR #88 review blockers stay fixed", () => {
+  it("mobile defines the header-height variables the shared header needs", () => {
+    // The header is `fixed` and sizes itself with
+    // --app-header-content-height. Undefined on mobile, it collapsed and page
+    // content rendered underneath it.
+    const mobileCss = read("mobile/src/index.css");
+    expect(mobileCss).toContain("--app-header-content-height");
+    expect(mobileCss).toContain("--app-header-height");
+  });
+
+  /**
+   * THE SAFE-AREA CONTRACT, which has three participants on mobile:
+   *
+   *   1. `body`   pays env(safe-area-inset-top) once, for everything in flow.
+   *   2. header   pays it AGAIN for itself -- correctly, because `fixed`
+   *               positions against the viewport and ignores body padding.
+   *   3. <main>   is in flow, so body already covered its notch. It must
+   *               offset by the header's CONTENT height only.
+   *
+   * Using --app-header-height (content + inset) at step 3 counts the notch
+   * twice and opens a visible gap under the header. Each participant is
+   * asserted separately so a change to any one of them fails here rather than
+   * on a device.
+   */
+  it("mobile body pays the top inset once, for in-flow content", () => {
+    const mobileCss = read("mobile/src/index.css");
+    const bodyRule = mobileCss.slice(mobileCss.indexOf("\nbody {"), mobileCss.indexOf("@layer utilities"));
+    expect(bodyRule).toContain("env(safe-area-inset-top)");
+  });
+
+  it("mobile <main> offsets by CONTENT height, not the inset-inclusive height", () => {
+    /* JSX comments are stripped first. The code above <main> EXPLAINS this
+       contract and names both variables, so searching the raw source finds
+       "<main>" inside that prose rather than the element -- the assertion
+       would then read the comment and fail on correct code. */
+    const jsx = mobileShell.replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+    const mainStart = jsx.indexOf("<main");
+    const mainAttributes = jsx.slice(mainStart, jsx.indexOf(">", mainStart + "<main".length));
+    expect(mainAttributes).toContain('paddingTop: "var(--app-header-content-height)"');
+    // The two failure modes, named explicitly:
+    expect(mainAttributes).not.toContain("var(--app-header-height)");
+    expect(mainAttributes).not.toContain("safe-area-inset-top");
+  });
+
+  it("the fixed header still pays its own inset, being outside body padding", () => {
+    const headerTag = header.slice(header.indexOf("<header"), header.indexOf(">", header.indexOf("<header")));
+    expect(headerTag).toContain("pt-[env(safe-area-inset-top,0px)]");
+    expect(headerTag).toContain("fixed");
+  });
+
+  it("the two height variables stay distinct, so the choice remains available", () => {
+    const mobileCss = read("mobile/src/index.css");
+    // content-height must NOT bundle the inset; header-height must.
+    expect(mobileCss).toMatch(/--app-header-content-height:\s*4\.25rem;/);
+    expect(mobileCss).toMatch(
+      /--app-header-height:\s*calc\(env\(safe-area-inset-top, 0px\) \+ var\(--app-header-content-height\)\)/
+    );
+  });
+
+  it("web resolves the avatar through its own source hook", () => {
+    // The shared header rendering currentAvatarUrl directly lost both the
+    // /api/profile/avatar resolution and the madbuddy:avatar-updated
+    // listener, so a newly saved photo could stay stale.
+    expect(webShell).toContain("useAvatarSource={useWebAvatarSource}");
+    const resolver = read("components/app-shell/use-web-avatar-source.ts");
+    expect(resolver).toContain("madbuddy:avatar-updated");
+    expect(resolver).toContain("/api/profile/avatar");
+  });
+
+  it("mobile registers the menus so Back closes them", () => {
+    // The old native header registered its dropdowns with the overlay stack,
+    // so hardware Back closed them instead of leaving the screen.
+    expect(mobileShell).toContain("useOverlayDismiss={useOverlayDismiss}");
+    expect(mobileShell).toContain('from "../lib/overlay"');
+  });
+
+  it("web does NOT register them, which would cancel navigation", () => {
+    // Web's equivalent hook calls history.back() on cleanup, reversing the
+    // in-flight App Router transition a menu item just started.
+    const headerUsage = webShell.slice(webShell.indexOf("<AppHeader"), webShell.indexOf("<AppHeader") + 700);
+    expect(headerUsage).not.toContain("useOverlayDismiss");
+  });
+});

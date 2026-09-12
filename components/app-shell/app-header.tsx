@@ -119,7 +119,9 @@ export function AppHeader({
   hidden = false,
   homeHref = "/dashboard" as PlatformHref,
   showNotificationsBell = false,
-  notificationsHref = "/notifications" as PlatformHref
+  notificationsHref = "/notifications" as PlatformHref,
+  useAvatarSource,
+  useOverlayDismiss
 }: {
   currentUsername: string | null;
   currentAvatarUrl: string | null;
@@ -160,12 +162,20 @@ export function AppHeader({
    */
   showNotificationsBell?: boolean;
   notificationsHref?: PlatformHref;
+  /** See AvatarSourceHook. Web injects its resolver; mobile omits it. */
+  useAvatarSource?: AvatarSourceHook;
+  /** See OverlayDismissHook. Mobile injects it so Back closes the menu. */
+  useOverlayDismiss?: OverlayDismissHook;
 }) {
   const pathname = usePathname();
   /* NO useDismissOnBack: this menu's items are Links, so closing it is part of
      starting a navigation, and that hook's history.back() cleanup would cancel
      the in-flight transition. */
   const [createOpen, setCreateOpen] = useState(false);
+
+  /* Identity is fixed for the app's lifetime (web never passes one, mobile
+     always does), so calling it through a prop keeps a stable hook order. */
+  (useOverlayDismiss ?? useNoOverlayRegistration)(createOpen, () => setCreateOpen(false));
 
   if (hidden) return null;
 
@@ -257,6 +267,8 @@ export function AppHeader({
               onLogout={onLogout}
               logoutPending={logoutPending}
               isDestinationAvailable={isDestinationAvailable}
+              useAvatarSource={useAvatarSource}
+              useOverlayDismiss={useOverlayDismiss}
             />
           </div>
         </div>
@@ -272,6 +284,8 @@ export function AccountMenu({
   onLogout,
   logoutPending = false,
   isDestinationAvailable,
+  useAvatarSource,
+  useOverlayDismiss,
   trigger,
   align = "end"
 }: {
@@ -281,11 +295,14 @@ export function AccountMenu({
   onLogout: () => void;
   logoutPending?: boolean;
   isDestinationAvailable?: (href: string) => boolean;
+  useAvatarSource?: AvatarSourceHook;
+  useOverlayDismiss?: OverlayDismissHook;
   /** Overrides the default avatar-circle trigger (e.g. a hamburger). */
   trigger?: ReactNode;
   align?: "start" | "end";
 }) {
   const [open, setOpen] = useState(false);
+  (useOverlayDismiss ?? useNoOverlayRegistration)(open, () => setOpen(false));
   const initial = currentUsername?.[0]?.toUpperCase() ?? "?";
 
   const entries = ACCOUNT_MENU_ENTRIES.filter((entry) => {
@@ -303,7 +320,7 @@ export function AccountMenu({
             title="Account"
             className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-border/70"
           >
-            <AccountAvatar src={currentAvatarUrl} initial={initial} />
+            <AccountAvatar src={currentAvatarUrl} initial={initial} useAvatarSource={useAvatarSource} />
           </button>
         )}
       </DropdownMenu.Trigger>
@@ -350,14 +367,63 @@ export function AccountMenu({
   );
 }
 
-function AccountAvatar({ src, initial }: { src: string | null; initial: string }) {
+function AccountAvatar({
+  src,
+  initial,
+  useAvatarSource
+}: {
+  src: string | null;
+  initial: string;
+  useAvatarSource?: AvatarSourceHook;
+}) {
+  /* Calling a hook through a prop is safe HERE and only here: the identity is
+     fixed for the lifetime of the app (web always passes its resolver, mobile
+     always passes none), so the hook order never changes between renders.
+     The fallback is a stable module-level function for the same reason. */
+  const resolvedSrc = (useAvatarSource ?? usePassthroughAvatarSource)(src);
+
   return (
     <span className={cn("grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-secondary")}>
-      {src ? (
-        <UserAvatar src={src} name={initial} size="sm" decorative />
+      {resolvedSrc ? (
+        <UserAvatar src={resolvedSrc} name={initial} size="sm" decorative />
       ) : (
         <span className="text-sm font-semibold">{initial}</span>
       )}
     </span>
   );
 }
+
+/**
+ * How the header turns a stored avatar URL into the one it should display.
+ *
+ * Web needs more than the raw URL: a Mad Buddy upload is served through
+ * /api/profile/avatar (a web-only endpoint), and the header listens for a
+ * `madbuddy:avatar-updated` event so a newly saved photo appears immediately
+ * rather than staying stale until the next navigation. Sharing the header
+ * naively dropped both, so a changed avatar could keep showing the old image.
+ *
+ * Android has no such endpoint and its avatar URL is already canonical, so it
+ * passes nothing and the raw value is used.
+ */
+export type AvatarSourceHook = (src: string | null) => string | null;
+
+const usePassthroughAvatarSource: AvatarSourceHook = (src) => src;
+
+/**
+ * Registers an open menu with the platform's dismissal stack.
+ *
+ * Android needs this: the hardware Back button should CLOSE an open menu, not
+ * navigate away from the screen. The native app's overlay registry
+ * (mobile/src/lib/overlay.ts) already drives back, Escape and outside-press
+ * through one handler; these Radix menus have to join it.
+ *
+ * Injected rather than shared, and that is not incidental. Web deliberately
+ * does NOT register these menus: its equivalent hook's cleanup calls
+ * history.back(), which cancels the in-flight App Router navigation a menu
+ * item starts -- the exact bug lib/performance/navigation-cancellation.test.ts
+ * exists to prevent. So web passes nothing and keeps Radix's own Escape and
+ * outside-press handling.
+ */
+export type OverlayDismissHook = (open: boolean, dismiss: () => void) => void;
+
+const useNoOverlayRegistration: OverlayDismissHook = () => {};
