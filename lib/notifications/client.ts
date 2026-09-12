@@ -75,4 +75,29 @@ export type NotificationsClient = {
 
   /** Sends a birthday wish. Web uses its Server Action; Android POSTs /api/birthdays/wish. */
   sendBirthdayWish(targetUserId: string, wish: string): Promise<NotificationWriteResult>;
+
+  /**
+   * Saves one or more quick-settings toggles.
+   *
+   * Both platforms reach lib/settings/service.ts, which merges only the keys
+   * present -- so a partial patch never clears the others. The web screen used
+   * to hold these three switches in local state alone: flipping one and
+   * reloading silently reverted it, while the native app had been persisting
+   * them correctly all along. Sharing the screen is what makes that
+   * discrepancy impossible to keep.
+   */
+  saveNotificationPreferences(patch: NotificationPreferences): Promise<NotificationWriteResult>;
+};
+
+/**
+ * The three quick-settings toggles, as stored.
+ *
+ * Partial by design: the service merges what it is given, so a single flipped
+ * switch sends one key rather than restating the other two and risking
+ * clobbering a change made elsewhere.
+ */
+export type NotificationPreferences = {
+  nearbyAlerts?: boolean;
+  quietNearby?: boolean;
+  planAlerts?: boolean;
 };

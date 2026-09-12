@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { sendBirthdayWishAction } from "@/app/(app)/birthday-actions";
+import { updateNotificationPreferenceAction } from "@/app/(app)/settings-actions";
 import { NotificationsPageContent } from "@/components/notifications/notifications-page";
 import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { createWebNotificationsClient } from "@/lib/notifications/web-client";
@@ -33,6 +34,10 @@ export function WebNotificationsPage(props: Props) {
       createWebNotificationsClient({
         async respondToPing(requestId, message) {
           const result = await respondToMeetupRequestAction({ requestId, message });
+          return { ok: result.ok, message: result.message };
+        },
+        async saveNotificationPreferences(patch) {
+          const result = await updateNotificationPreferenceAction(patch);
           return { ok: result.ok, message: result.message };
         },
         async sendBirthdayWish(targetUserId, wish) {

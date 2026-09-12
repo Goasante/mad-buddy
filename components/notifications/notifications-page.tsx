@@ -41,7 +41,6 @@ import { AppMenu } from "@/components/ui/app-dropdown";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
-import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { connectionResponsesFor } from "@/lib/meetups/connection-prompts";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import {
@@ -54,7 +53,7 @@ import {
   notificationSourceLabel,
   notificationTimestampLabel
 } from "@/lib/notifications/detail";
-import type { NotificationsClient } from "@/lib/notifications/client";
+import type { NotificationPreferences, NotificationsClient } from "@/lib/notifications/client";
 import { cn } from "@/lib/utils";
 import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
 import { PageHeader } from "@/components/app-shell/page-header";
@@ -113,6 +112,15 @@ type NotificationsPageContentProps = {
    * button to close a sheet instead of leaving the screen.
    */
   useOverlayDismiss?: OverlayDismissHook;
+  /**
+   * The saved quick-settings toggles.
+   *
+   * Passed in rather than fetched here because the two apps read them
+   * differently — web from its server render, Android from Supabase directly —
+   * and there is no GET endpoint that would serve both. Same reasoning as
+   * initialNotifications.
+   */
+  initialPreferences?: NotificationPreferences;
 };
 
 /** Matches the signature of both platforms' dismiss hooks. */
@@ -200,7 +208,8 @@ export function NotificationsPageContent({
   initialNotifications = [],
   initialNowMs,
   client,
-  useOverlayDismiss = noOverlayDismiss
+  useOverlayDismiss = noOverlayDismiss,
+  initialPreferences = {}
 }: NotificationsPageContentProps) {
   const [initialClockMs] = useState(() => initialNowMs ?? Date.now());
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
@@ -208,9 +217,28 @@ export function NotificationsPageContent({
       .filter((notification) => !isConversationMessageNotificationType(notification.type))
       .map((notification) => toNotificationItem(notification, initialClockMs))
   );
-  const [nearbyAlerts, setNearbyAlerts] = useState(true);
-  const [quietMode, setQuietMode] = useState(false);
-  const [planAlerts, setPlanAlerts] = useState(true);
+  const [nearbyAlerts, setNearbyAlerts] = useState(initialPreferences.nearbyAlerts ?? true);
+  const [quietMode, setQuietMode] = useState(initialPreferences.quietNearby ?? false);
+  const [planAlerts, setPlanAlerts] = useState(initialPreferences.planAlerts ?? true);
+
+  /**
+   * Saves a toggle, and puts it back if the save fails.
+   *
+   * These three switches used to be local state on web: flipping one and
+   * reloading silently reverted it, while the native app had been persisting
+   * them correctly. The screen now saves on both platforms, and only sends the
+   * keys that changed, because the service merges a partial patch.
+   */
+  const savePreferences = useCallback(
+    (patch: NotificationPreferences, revert: () => void) => {
+      void client.saveNotificationPreferences(patch).then((result) => {
+        if (result.ok) return;
+        revert();
+        setFeedback(result.message ?? "Could not save that setting.");
+      });
+    },
+    [client]
+  );
   // Two separate surfaces, deliberately: `optionsOpen` is the lightweight
   // Pulse-management popover (Mark all as read / Select updates), `settingsOpen`
   // is the dedicated Notification settings sheet. Keeping them apart is the
@@ -671,10 +699,20 @@ export function NotificationsPageContent({
                   description="Get occasional alerts when approved Muddies are nearby."
                   checked={nearbyAlerts}
                   onCheckedChange={(checked) => {
+                    const previousQuiet = quietMode;
                     setNearbyAlerts(checked);
                     // Nothing to quiet once nearby alerts are off; clear it
-                    // so the two can never sit in a contradictory state.
+                    // so the two can never sit in a contradictory state. Both
+                    // keys go in one patch, or a reload could show the
+                    // contradiction this exists to prevent.
                     if (!checked) setQuietMode(false);
+                    savePreferences(
+                      checked ? { nearbyAlerts: true } : { nearbyAlerts: false, quietNearby: false },
+                      () => {
+                        setNearbyAlerts(!checked);
+                        if (!checked) setQuietMode(previousQuiet);
+                      }
+                    );
                   }}
                 />
                 <PrivacyToggle
@@ -683,14 +721,20 @@ export function NotificationsPageContent({
                   description="Temporarily silence nearby alerts."
                   checked={quietMode}
                   disabled={!nearbyAlerts}
-                  onCheckedChange={setQuietMode}
+                  onCheckedChange={(checked) => {
+                    setQuietMode(checked);
+                    savePreferences({ quietNearby: checked }, () => setQuietMode(!checked));
+                  }}
                 />
                 <PrivacyToggle
                   icon={CalendarCheck2}
                   title="Plan alerts"
                   description="Get updates about plans and invitations."
                   checked={planAlerts}
-                  onCheckedChange={setPlanAlerts}
+                  onCheckedChange={(checked) => {
+                    setPlanAlerts(checked);
+                    savePreferences({ planAlerts: checked }, () => setPlanAlerts(!checked));
+                  }}
                 />
               </div>
             </Modal>

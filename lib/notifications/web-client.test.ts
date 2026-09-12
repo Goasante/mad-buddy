@@ -16,7 +16,8 @@ import { createWebNotificationsClient } from "./web-client";
 
 const actions = {
   respondToPing: vi.fn(async () => ({ ok: true })),
-  sendBirthdayWish: vi.fn(async () => ({ ok: true }))
+  sendBirthdayWish: vi.fn(async () => ({ ok: true })),
+  saveNotificationPreferences: vi.fn(async () => ({ ok: true }))
 };
 
 const client = createWebNotificationsClient(actions);
@@ -124,5 +125,9 @@ describe("actions stay injected", () => {
     expect(actions.respondToPing).toHaveBeenCalledWith("req-1", "See you at six");
     await client.sendBirthdayWish("user-1", "Happy birthday!");
     expect(actions.sendBirthdayWish).toHaveBeenCalledWith("user-1", "Happy birthday!");
+    // Preferences persist through a Server Action too: the web screen used to
+    // hold these three switches in local state and silently lose them.
+    await client.saveNotificationPreferences({ nearbyAlerts: false });
+    expect(actions.saveNotificationPreferences).toHaveBeenCalledWith({ nearbyAlerts: false });
   });
 });

@@ -58,6 +58,16 @@ export const mobileNotificationsClient: NotificationsClient = {
       : { ok: false, message: result.error };
   },
 
+  async saveNotificationPreferences(patch) {
+    // The same route the web Server Action shares (lib/settings/service.ts),
+    // which merges only the keys present -- so one flipped switch cannot
+    // clobber the other two.
+    const result = await api.post<{ ok: boolean; message: string }>("/api/settings/notifications", patch);
+    return result.ok
+      ? { ok: result.data.ok, message: result.data.message }
+      : { ok: false, message: result.error };
+  },
+
   async sendBirthdayWish(targetUserId, wish) {
     const result = await api.post<{ ok: boolean; message: string }>("/api/birthdays/wish", {
       targetUserId,

@@ -20,7 +20,10 @@ const TIMEOUT_MS = 12_000;
 const json = { "Content-Type": "application/json" } as const;
 
 export function createWebNotificationsClient(
-  actions: Pick<NotificationsClient, "respondToPing" | "sendBirthdayWish">
+  actions: Pick<
+    NotificationsClient,
+    "respondToPing" | "sendBirthdayWish" | "saveNotificationPreferences"
+  >
 ): NotificationsClient {
   return {
     async load() {
@@ -102,7 +105,8 @@ export function createWebNotificationsClient(
     // Server Actions, injected by the page: importing them here would drag
     // "use server" modules into any bundle that touches this file.
     respondToPing: actions.respondToPing,
-    sendBirthdayWish: actions.sendBirthdayWish
+    sendBirthdayWish: actions.sendBirthdayWish,
+    saveNotificationPreferences: actions.saveNotificationPreferences
   } satisfies NotificationsClient;
 }
 
