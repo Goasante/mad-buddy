@@ -265,7 +265,9 @@ describe("positioning clears the navigation and the safe area", () => {
     // launcher's own --quick-actions-size, kept in sync in the stylesheet.
     expect(shell).toContain("--quick-actions-reserve");
     expect(shell).toContain("var(--mobile-nav-height)");
-    expect(shell).toContain("env(safe-area-inset-bottom,0px)");
+    // The bar moved to its own module so mobile can share it; the invariant
+    // is unchanged, only its home.
+    expect(stripComments(read("components/app-shell/mobile-nav.tsx"))).toContain("env(safe-area-inset-bottom,0px)");
   });
 
   it("computes its own vertical band clear of the header and the nav", () => {

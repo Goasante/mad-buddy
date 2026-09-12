@@ -7,7 +7,11 @@ import { stripComments } from "@/lib/content/strip-comments";
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const deck = stripComments(read("components/socialize/swipe-deck.tsx"));
 const page = stripComments(read("components/socialize/socialize-page.tsx"));
-const shell = stripComments(read("components/app-shell/app-shell.tsx"));
+/* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
+   the Capacitor SPA can render the SAME navigation. The shell source is read
+   as both files together: these assertions are unchanged, only the bar's
+   home moved. */
+const shell = stripComments(read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx"));
 const friendsPage = stripComments(read("components/friends/friends-page.tsx"));
 const hook = stripComments(read("hooks/use-incoming-request-count.ts"));
 const route = stripComments(read("app/api/friends/request-count/route.ts"));

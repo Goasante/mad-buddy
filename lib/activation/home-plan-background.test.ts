@@ -6,7 +6,10 @@ import { stripComments } from "@/lib/content/strip-comments";
 import { homeCardABackground, homeCardBBackground } from "@/lib/visuals/registry";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
-const shell = read("components/app-shell/app-shell.tsx");
+/* The mobile bottom bar moved to its own module so the Capacitor SPA can
+   render the SAME navigation. This assertion COUNTS nav slots, so it reads
+   only the file that now owns them -- concatenating would double-count. */
+const shell = read("components/app-shell/mobile-nav.tsx");
 
 /* CODE, NOT COMMENTARY. These assertions are about what the components DO, and
    both files explain in prose why the old atlas and the old hardcoded path were
@@ -17,7 +20,11 @@ const smartCard = stripComments(read("components/journey/smart-card-v2.tsx"));
 
 describe("quick Home polish follow-up", () => {
   it("moves mobile nav graphics another step down without increasing the bar", () => {
-    expect(shell.match(/min-w-0 flex-1 pb-0 pt-4/g) ?? []).toHaveLength(2);
+    // Three slots now, not two: the tab renderer gained a disabled branch for
+    // destinations that exist on web but not in the native app (Linkr, UpFor).
+    // The point of the assertion is unchanged -- every slot uses the SAME
+    // spacing, so the bar cannot grow.
+    expect(shell.match(/min-w-0 flex-1 pb-0 pt-4/g) ?? []).toHaveLength(3);
     expect(shell).not.toContain('className="min-w-0 flex-1 pb-1 pt-3"');
   });
 });

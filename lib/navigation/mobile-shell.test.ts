@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const shell = read("components/app-shell/app-shell.tsx");
+/* The mobile bottom bar moved to its own module so the Capacitor SPA can
+   render the SAME navigation. These assertions are unchanged -- only the
+   file they read moved. */
+const mobileNav = read("components/app-shell/mobile-nav.tsx");
 const header = read("components/app-shell/mobile-page-header.tsx");
 const css = read("app/globals.css");
 const ptr = read("components/ui/pull-to-refresh.tsx");
@@ -88,7 +92,7 @@ describe("mobile header behaviour", () => {
 // ---------------------------------------------------------------------------
 
 describe("mobile bottom navigation", () => {
-  const nav = shell.slice(shell.indexOf("function MobileNav"), shell.indexOf("function MobileNavTab"));
+  const nav = mobileNav.slice(mobileNav.indexOf("export function MobileNav"), mobileNav.indexOf("function MobileNavTab"));
 
   it("is fixed to the bottom across the full width", () => {
     expect(nav).toContain("fixed inset-x-0 bottom-0");

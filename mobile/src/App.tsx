@@ -23,6 +23,7 @@ import { NotificationPreferencesScreen } from "./screens/NotificationPreferences
 import { EventsScreen } from "./screens/EventsScreen";
 import { GroupsScreen } from "./screens/GroupsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
+import { UnavailableScreen } from "./screens/UnavailableScreen";
 import { SafetyScreen } from "./screens/SafetyScreen";
 import { SubscriptionScreen } from "./screens/SubscriptionScreen";
 import { BuddyScoreScreen } from "./screens/BuddyScoreScreen";
@@ -118,7 +119,14 @@ export default function App() {
       <Route path="/messages/:id" element={<RequireAuth><ChatScreen /></RequireAuth>} />
       <Route path="/u/:id" element={<RequireAuth><UserProfileScreen /></RequireAuth>} />
 
-      <Route path="*" element={<Navigate to="/home" replace />} />
+      {/* An unknown route EXPLAINS itself rather than silently redirecting.
+          This was `<Navigate to="/home" replace />`, which bounced anyone
+          reaching a route the app does not have straight to Home with no
+          message -- and `replace` discarded the history entry, so the back
+          button could not undo it. That reads as a broken app rather than an
+          absent feature. Wrapped in RequireAuth so a signed-out person still
+          reaches /login first, matching every other authenticated route. */}
+      <Route path="*" element={<RequireAuth><UnavailableScreen /></RequireAuth>} />
     </Routes>
   );
 }

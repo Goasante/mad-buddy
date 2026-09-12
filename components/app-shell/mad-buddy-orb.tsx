@@ -1,8 +1,7 @@
 "use client";
 
 import { Home } from "lucide-react";
-import Link from "next/link";
-import type { Route } from "next";
+import { Link } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,7 +16,7 @@ import { cn } from "@/lib/utils";
  * Behaviour is unchanged: this remains a real Link to /dashboard, and tapping
  * Home while already on Home keeps the existing reselect action.
  */
-export const ORB_HOME_HREF = "/dashboard" as Route;
+export const ORB_HOME_HREF = "/dashboard";
 
 export function MadBuddyOrb({
   isActive,

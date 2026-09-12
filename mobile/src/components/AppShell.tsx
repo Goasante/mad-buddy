@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import {
-  Home,
-  UsersRound,
   Bell,
-  MessagesSquare,
-  CalendarCheck2,
   Plus,
   UserRound,
   Settings,
@@ -15,22 +11,15 @@ import {
   LogOut,
   type LucideIcon
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
+import { MobileNav } from "@/components/app-shell/mobile-nav";
+import { isBuiltForMobile } from "@/lib/platform";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { api } from "../lib/api";
 import { dismissAllOverlays, useOverlayDismiss } from "../lib/overlay";
 import { BrandMark } from "./BrandMark";
-
-const tabs = [
-  { to: "/home", label: "Home", icon: Home },
-  { to: "/muddies", label: "Muddies", icon: UsersRound },
-  { to: "/notifications", label: "Pulse", icon: Bell, badge: true },
-  { to: "/messages", label: "Messages", icon: MessagesSquare },
-  { to: "/plans", label: "Plans", icon: CalendarCheck2 }
-];
 
 const createActions: { to: string; title: string; description: string; feature: FeatureIconKey }[] = [
   { to: "/plans", title: "New plan", description: "Create a hangout and invite Muddies", feature: "plans" },
@@ -160,37 +149,22 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#111112]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-        <ul className="mx-auto flex w-full max-w-[30rem] items-stretch justify-between px-1">
-          {tabs.map((tab) => (
-            <li key={tab.to} className="flex-1">
-              <NavLink
-                to={tab.to}
-                className={({ isActive }) =>
-                  cn(
-                    "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 py-2",
-                    isActive ? "text-primary" : "text-muted-foreground"
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <span className="relative">
-                      <tab.icon className={cn("h-6 w-6", isActive && "fill-primary/20")} aria-hidden="true" />
-                      {tab.badge && unread > 0 ? (
-                        <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-[#111112] bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
-                          {unread > 99 ? "99+" : unread}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-[11px] font-medium leading-none">{tab.label}</span>
-                  </>
-                )}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {/* THE SHARED NAVIGATION.
+          This was a hand-written bar with its own tabs
+          (Home/Muddies/Pulse/Messages/Plans) that had drifted months behind
+          the web app -- the most visible symptom of maintaining two apps.
+          It now renders the SAME component the web shell uses, so the two
+          cannot diverge again.
+
+          `isBuiltForMobile` is what makes that safe: Linkr and UpFor exist in
+          the shared tab list but not in this app yet, so they keep their slot
+          (the layout matches web) while being dimmed and unable to navigate.
+          Without it they would route to the unavailable screen. */}
+      <MobileNav
+        onHomeReselect={() => navigate("/home")}
+        messageUnreadCount={unread}
+        isDestinationAvailable={isBuiltForMobile}
+      />
     </div>
   );
 }

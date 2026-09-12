@@ -6,8 +6,10 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const css = read("app/mobile-nav-polish.css");
 const layout = read("app/layout.tsx");
 const shell = read("components/app-shell/app-shell.tsx");
+/* The tab list moved to its own module so mobile can share the same nav. */
+const navSource = read("components/app-shell/mobile-nav.tsx");
 
-const mobileTabs = shell.slice(shell.indexOf("const MOBILE_TABS"), shell.indexOf("function MobileNav("));
+const mobileTabs = navSource.slice(navSource.indexOf("export const MOBILE_TABS"), navSource.indexOf("export function MobileNav("));
 
 describe("Dribbble-inspired mobile navigation", () => {
   it("loads after the safe-area geometry layer without redefining the canonical footprint", () => {
