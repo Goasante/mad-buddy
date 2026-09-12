@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NotificationsPageContent } from "@/components/notifications/notifications-page";
 import type { NotificationPreferences } from "@/lib/notifications/client";
+import { resolveMobileNotificationDestination } from "@/lib/notifications/mobile-destination";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
 import { mobileNotificationsClient } from "../lib/notifications-client";
@@ -72,6 +73,10 @@ export function NotificationsScreen() {
       client={mobileNotificationsClient}
       useOverlayDismiss={useOverlayDismiss}
       initialPreferences={preferences}
+      /* No `header`: the shared AppHeader in this app's shell already carries
+         one. Passing the web PageHeader would also drag next/navigation in,
+         and useRouter() has no App Router here -- it throws on render. */
+      adaptDestination={resolveMobileNotificationDestination}
       /* FREE CORE: writing a message to a Muddy is not one of the two paid
          surfaces, so this matches the web app rather than gating on a tier. */
       canSendCustomMessages

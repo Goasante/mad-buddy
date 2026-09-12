@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 /* NO Server Action imports here. This component renders in the native app
    too, and a "use server" import would pull server-only modules -- including
    the service-role Supabase client -- into the mobile bundle. Both actions
@@ -56,7 +56,11 @@ import {
 import type { NotificationPreferences, NotificationsClient } from "@/lib/notifications/client";
 import { cn } from "@/lib/utils";
 import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
-import { PageHeader } from "@/components/app-shell/page-header";
+/* PageHeader is NOT imported here. It reaches next/link and next/navigation
+   through MobilePageHeader, and on Android there is no App Router: useRouter()
+   throws "invariant expected app router to be mounted" the moment Pulse opens.
+   Web passes its header in through the `header` prop; Android passes nothing,
+   because the shared AppHeader in its shell already carries the title. */
 import { isConversationMessageNotificationType } from "@/lib/notifications/conversation-boundary";
 
 type NotificationItem = {
@@ -121,6 +125,27 @@ type NotificationsPageContentProps = {
    * initialNotifications.
    */
   initialPreferences?: NotificationPreferences;
+  /**
+   * The page header, supplied by the platform.
+   *
+   * Web passes <PageHeader title="Pulse" />. Android passes nothing: its shell
+   * already renders a fixed AppHeader above every screen, so a second header
+   * here would both duplicate the title and — far worse — drag next/link and
+   * next/navigation into the native bundle, where useRouter() has no App
+   * Router to attach to and throws on render.
+   */
+  header?: ReactNode;
+  /**
+   * Adjusts a resolved destination for the platform.
+   *
+   * Where a notification points is a product question with one answer, which
+   * `resolveNotificationDestination` gives. Whether it can be REACHED is a
+   * platform question: Android has no Linkr, Drops, Hangout Mode, Badges or
+   * group-detail route, and no screen there reads query parameters yet.
+   *
+   * Web passes nothing, because every destination it resolves exists.
+   */
+  adaptDestination?: (destination: NotificationDestination) => NotificationDestination;
 };
 
 /** Matches the signature of both platforms' dismiss hooks. */
@@ -209,7 +234,9 @@ export function NotificationsPageContent({
   initialNowMs,
   client,
   useOverlayDismiss = noOverlayDismiss,
-  initialPreferences = {}
+  initialPreferences = {},
+  header = null,
+  adaptDestination = (destination) => destination
 }: NotificationsPageContentProps) {
   const [initialClockMs] = useState(() => initialNowMs ?? Date.now());
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
@@ -616,7 +643,7 @@ export function NotificationsPageContent({
     <div className="mx-auto max-w-[1050px] space-y-4 md:pt-6">
       {/* This IS the notifications stream, so the header's own Bell would
           point at the page you are already on. */}
-      <PageHeader title="Pulse" showNotifications={false} />
+      {header}
 
       <section data-tour-id={TOUR_TARGET_IDS.PULSE_OVERVIEW}>
         {/* `justify-between` needs TWO flex items to have anything to space
@@ -852,7 +879,7 @@ export function NotificationsPageContent({
                       <NotificationCard
                         key={notification.id}
                         notification={notification}
-                        destination={resolveNotificationDestination(notification.type)}
+                        destination={adaptDestination(resolveNotificationDestination(notification.type))}
                         selectionMode={selectionMode}
                         selected={selectedIds.has(notification.id)}
                         onToggleSelect={() => toggleSelected(notification.id)}

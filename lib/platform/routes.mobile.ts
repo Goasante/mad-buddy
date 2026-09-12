@@ -66,6 +66,11 @@ export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
   "/moments/new",
   "/chats-lab",
   "/profile-lab",
+  /* Achievement notifications point at /badges, which exists on web
+     (app/(app)/badges) and nowhere in the SPA. Missing from this list, it
+     looked available to isBuiltForMobile, so an achievement row rendered as a
+     tappable link that reached the catch-all. */
+  "/badges",
   /* Admin is web-only and deliberately so -- it is an operator console, not a
      product surface, and there is no mobile route for it. The shared account
      menu also gates it behind showAdminLink, but that flag answers "may this

@@ -89,6 +89,44 @@ describe("each platform supplies its own transport", () => {
   });
 });
 
+describe("the header is injected, never imported", () => {
+  it("the shared component does not import PageHeader", () => {
+    /* PR #90 review caught this: PageHeader reaches next/link and
+       next/navigation through MobilePageHeader, putting the App Router runtime
+       -- including the thrown "invariant expected app router to be mounted" --
+       into the APK. Pulse would have crashed on Android. */
+    expect(importLines(shared)).not.toContain("app-shell/page-header");
+    expect(shared).toContain("{header}");
+  });
+
+  it("web passes its PageHeader", () => {
+    expect(webBoundary).toContain("app-shell/page-header");
+    expect(webBoundary).toContain('header={<PageHeader title="Pulse"');
+  });
+
+  it("Android passes none, because its shell already renders one", () => {
+    // Asserted against imports and JSX rather than the whole file: the screen
+    // deliberately EXPLAINS this rule in a comment, and that prose names
+    // PageHeader.
+    expect(importLines(mobileScreen)).not.toContain("PageHeader");
+    expect(mobileScreen).not.toMatch(/header=\{/);
+  });
+});
+
+describe("notification links only go where Android can arrive", () => {
+  it("the native screen adapts destinations", () => {
+    expect(mobileScreen).toContain("adaptDestination={resolveMobileNotificationDestination}");
+  });
+
+  it("web adapts nothing, because every destination it resolves exists", () => {
+    expect(webBoundary).not.toContain("adaptDestination");
+  });
+
+  it("the shared component applies the adapter to every row", () => {
+    expect(shared).toContain("adaptDestination(resolveNotificationDestination(");
+  });
+});
+
 describe("back behaviour stays platform-specific", () => {
   it("the shared component never imports a dismiss hook", () => {
     // The web hook calls history.back() on cleanup, which cancels an in-flight
