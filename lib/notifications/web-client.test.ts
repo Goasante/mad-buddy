@@ -22,7 +22,7 @@ const actions = {
 const client = createWebNotificationsClient(actions);
 
 function mockFetch(response: Partial<Response> & { json?: () => Promise<unknown> }) {
-  const fetchMock = vi.fn(async () => response as Response);
+  const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response as Response);
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -43,7 +43,7 @@ describe("loading", () => {
   it("sends the session cookie and refuses a cached answer", async () => {
     const fetchMock = mockFetch(okJson({ notifications: [] }));
     await client.load();
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/notifications");
     expect(init.credentials).toBe("include");
     expect(init.cache).toBe("no-store");
@@ -65,7 +65,7 @@ describe("marking read", () => {
   it("marks all read with an empty body", async () => {
     const fetchMock = mockFetch(okJson({}));
     await expect(client.markAllRead()).resolves.toEqual({ ok: true });
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/notifications/read");
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(String(init.body))).toEqual({});
@@ -74,14 +74,14 @@ describe("marking read", () => {
   it("marks one row read by id", async () => {
     const fetchMock = mockFetch(okJson({}));
     await client.markRead("n1");
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({ notificationId: "n1" });
   });
 
   it("carries the read state for a selection, including unread", async () => {
     const fetchMock = mockFetch(okJson({}));
     await client.setReadState(["a", "b"], false);
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({ ids: ["a", "b"], isRead: false });
   });
 

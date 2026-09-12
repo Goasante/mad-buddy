@@ -1,4 +1,4 @@
-import { NotificationsPageContent } from "@/components/notifications/notifications-page";
+import { WebNotificationsPage } from "@/components/notifications/web-notifications-page";
 import { toNotificationResponse } from "@/lib/notifications/server";
 import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -50,7 +50,7 @@ export default async function NotificationsPage({
   const serverNowMs = Date.now();
 
   return (
-    <NotificationsPageContent
+    <WebNotificationsPage
       /* FREE CORE (Monetization Reset). This was `access?.hasPremium`, gating a
          MESSAGING capability on the old tier authority -- and messaging is free
          forever under the access model. The two paid surfaces are Linkr and

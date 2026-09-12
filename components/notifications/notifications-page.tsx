@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import {
   AlertTriangle,
   Bell,
@@ -32,8 +32,10 @@ import {
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
-import { sendBirthdayWishAction } from "@/app/(app)/birthday-actions";
+/* NO Server Action imports here. This component renders in the native app
+   too, and a "use server" import would pull server-only modules -- including
+   the service-role Supabase client -- into the mobile bundle. Both actions
+   arrive through `client`, which each platform supplies. */
 import { Button } from "@/components/ui/button";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Modal } from "@/components/ui/modal";
@@ -52,7 +54,7 @@ import {
   notificationSourceLabel,
   notificationTimestampLabel
 } from "@/lib/notifications/detail";
-import { fetchWithTimeout } from "@/lib/network/resilience";
+import type { NotificationsClient } from "@/lib/notifications/client";
 import { cn } from "@/lib/utils";
 import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
 import { PageHeader } from "@/components/app-shell/page-header";
@@ -91,7 +93,33 @@ type NotificationsPageContentProps = {
   /** One clock for the server render and first client render. Relative-time
    * labels otherwise cross a minute boundary during hydration and disagree. */
   initialNowMs?: number;
+  /**
+   * How this screen reaches the server.
+   *
+   * Injected rather than fetched inline so the SAME component serves the web
+   * app and the native app, which authenticate completely differently: web
+   * sends same-origin relative paths with the session cookie, Android sends
+   * absolute URLs with a Bearer token. A relative path inside this component
+   * would resolve against https://localhost on a phone — the bundled asset
+   * origin, which serves no API.
+   */
+  client: NotificationsClient;
+  /**
+   * Registers a transient overlay with the platform's back gesture.
+   *
+   * Web deliberately passes its own hook here and Android passes a different
+   * one: the web implementation calls history.back() on cleanup, which cancels
+   * an in-flight App Router navigation, while Android needs the hardware Back
+   * button to close a sheet instead of leaving the screen.
+   */
+  useOverlayDismiss?: OverlayDismissHook;
 };
+
+/** Matches the signature of both platforms' dismiss hooks. */
+type OverlayDismissHook = (active: boolean, onDismiss: () => void) => void;
+
+/** A no-op for callers that do not manage back behaviour. */
+const noOverlayDismiss: OverlayDismissHook = () => {};
 
 type PulseCategory = "all" | "nearby" | "social" | "plans" | "safety";
 
@@ -170,7 +198,9 @@ function categoryIconClass(category: ReturnType<typeof categoryForType>): string
 export function NotificationsPageContent({
   canSendCustomMessages = false,
   initialNotifications = [],
-  initialNowMs
+  initialNowMs,
+  client,
+  useOverlayDismiss = noOverlayDismiss
 }: NotificationsPageContentProps) {
   const [initialClockMs] = useState(() => initialNowMs ?? Date.now());
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
@@ -186,7 +216,11 @@ export function NotificationsPageContent({
   // is the dedicated Notification settings sheet. Keeping them apart is the
   // whole point of this screen — actions and preferences never compete.
   const [optionsOpen, setOptionsOpen] = useState(false);
-  useDismissOnBack(optionsOpen, () => setOptionsOpen(false));
+  /* Injected, not imported: web passes useDismissOnBack (whose cleanup calls
+     history.back(), correct for the App Router) and Android passes its native
+     overlay hook, so hardware Back closes this popover rather than leaving the
+     screen. Sharing one implementation would break one platform or the other. */
+  useOverlayDismiss(optionsOpen, () => setOptionsOpen(false));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
   /* The notification being read in full. Informational rows have nowhere to
@@ -242,22 +276,17 @@ export function NotificationsPageContent({
 
       loadInFlight = (async () => {
         try {
-          const response = await fetchWithTimeout("/api/notifications", {
-            credentials: "include",
-            cache: "no-store"
-          }, 12_000, "load notifications");
+          const loaded = await client.load();
 
-          if (!response.ok) {
+          if (!loaded) {
             if (isMounted) setFeedback("Could not load notifications.");
             return;
           }
 
-          const data = (await response.json()) as { notifications: ApiNotification[] };
-
           if (!isMounted) return;
 
           setFeedback("");
-          const pulseNotifications = data.notifications.filter(
+          const pulseNotifications = loaded.filter(
             (notification) => !isConversationMessageNotificationType(notification.type)
           );
           setNotifications(
@@ -318,14 +347,10 @@ export function NotificationsPageContent({
       );
 
       try {
-        const response = await fetchWithTimeout("/api/notifications/read", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({})
-        }, 12_000, "mark all notifications read");
+        const result = await client.markAllRead();
 
         setFeedback(
-          response.ok
+          result.ok
             ? "All updates marked as read"
             : "Could not mark notifications read."
         );
@@ -356,12 +381,8 @@ export function NotificationsPageContent({
       })
     );
 
-    void fetchWithTimeout("/api/notifications/read", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notificationId: notification.id })
-    }, 12_000, "mark notification read").then((response) => {
-      if (response.ok) return;
+    void client.markRead(notification.id).then((result) => {
+      if (result.ok) return;
       setNotifications((current) =>
         current.map((item) => (item.id === notification.id ? { ...item, unread: true } : item))
       );
@@ -426,12 +447,8 @@ export function NotificationsPageContent({
 
     startTransition(async () => {
       try {
-        const response = await fetchWithTimeout("/api/notifications/read", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids, isRead })
-        }, 12_000, "update selected notifications");
-        if (!response.ok) throw new Error("bulk update failed");
+        const result = await client.setReadState(ids, isRead);
+        if (!result.ok) throw new Error("bulk update failed");
         showToast(isRead ? "Updates marked as read" : "Updates marked as unread");
       } catch {
         setNotifications(previous);
@@ -464,14 +481,11 @@ export function NotificationsPageContent({
 
     startTransition(async () => {
       try {
-        const response = await fetchWithTimeout("/api/notifications", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids })
-        }, 12_000, "delete selected notifications");
-        const result = (await response.json().catch(() => null)) as { deletedIds?: string[] } | null;
-        const deletedIds = new Set(result?.deletedIds ?? []);
-        if (!response.ok || ids.some((id) => !deletedIds.has(id))) {
+        const result = await client.remove(ids);
+        const deletedIds = new Set(result.deletedIds);
+        // A partial delete is a failure here: every id asked for must be gone,
+        // or the list would keep showing rows the server still has.
+        if (!result.ok || ids.some((id) => !deletedIds.has(id))) {
           throw new Error("delete failed");
         }
         showToast(ids.length === 1 ? "Update deleted" : `${ids.length} updates deleted`);
@@ -533,14 +547,8 @@ export function NotificationsPageContent({
       if (undone) return;
       startTransition(async () => {
         try {
-          const response = await fetchWithTimeout("/api/notifications", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: [notification.id] })
-          }, 12_000, "delete notification");
-          const result = (await response.json().catch(() => null)) as { deletedIds?: string[] } | null;
-          const deletedIds = new Set(result?.deletedIds ?? []);
-          if (!response.ok || !deletedIds.has(notification.id)) {
+          const result = await client.remove([notification.id]);
+          if (!result.ok || !result.deletedIds.includes(notification.id)) {
             throw new Error("delete failed");
           }
         } catch {
@@ -840,7 +848,7 @@ export function NotificationsPageContent({
               const requestId = selectedRequest.meetupRequestId;
               if (!requestId) return;
               startTransition(async () => {
-                  const result = await respondToMeetupRequestAction({ requestId, message });
+                  const result = await client.respondToPing(requestId, message);
                   setFeedback(result.ok ? "Reply sent" : "Couldn’t send your reply. Try again.");
                   if (result.ok) setSelectedRequest(null);
               });
@@ -930,8 +938,13 @@ export function NotificationsPageContent({
                     return;
                   }
                   startTransition(async () => {
-                    const result = await sendBirthdayWishAction({ targetUserId, wish });
-                    showToast(result.message, !result.ok);
+                    const result = await client.sendBirthdayWish(targetUserId, wish);
+                    // The server supplies the wording for both outcomes; the
+                    // fallback covers a transport failure that never reached it.
+                    showToast(
+                      result.message ?? (result.ok ? "Birthday wish sent" : "Could not send your birthday wish."),
+                      !result.ok
+                    );
                     if (result.ok) setSelectedBirthday(null);
                   });
                 }}
