@@ -174,6 +174,17 @@ jobs:
       # Supabase client, into the mobile graph (PR #84).
       #
       # Runs AFTER the build, from the repo root, because it reads mobile/dist.
+      # STRUCTURAL, not fingerprint-based. The bundle checker below matches
+      # known markers in built output, which cannot catch a Next module nobody
+      # has seen yet -- and it missed one twice: next/image in #88, and
+      # next/navigation in #90 via the shared PageHeader, which put
+      # "invariant expected app router to be mounted" (a thrown Error) into the
+      # APK. This walks the import graph from the mobile entry points instead,
+      # so ANY new next/* dependency fails, named with its full import chain.
+      # Runs before the build: it needs no bundle and fails faster.
+      - name: Verify the mobile app imports no Next.js
+        run: node scripts/verify-mobile-imports.mjs
+
       - name: Verify no Next.js or server-only code in the mobile bundle
         run: node scripts/verify-mobile-bundle.mjs
 

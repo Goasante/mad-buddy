@@ -1,4 +1,4 @@
-import { NotificationsPageContent } from "@/components/notifications/notifications-page";
+import { WebNotificationsPage } from "@/components/notifications/web-notifications-page";
 import { toNotificationResponse } from "@/lib/notifications/server";
 import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -17,7 +17,7 @@ export default async function NotificationsPage({
      decide `canSendCustomMessages`, which is now free -- so Notifications no
      longer touches the billing system at all, and one page load stopped doing a
      tier resolution it never needed. */
-  const [notificationsResult] = user
+  const [notificationsResult, preferencesResult] = user
     ? await Promise.all([
         supabase
           .from("notifications")
@@ -26,9 +26,28 @@ export default async function NotificationsPage({
           .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[0])
           .not("type", "like", CONVERSATION_NOTIFICATION_TYPE_PATTERNS[1])
           .order("created_at", { ascending: false })
-          .limit(50)
+          .limit(50),
+        /* The quick-settings toggles. These used to be local state that reset
+           on every reload, while the native app had been persisting them all
+           along; the shared screen now saves on both platforms, so the saved
+           values have to be read here too or the switches would still open in
+           their default position. */
+        supabase
+          .from("user_preferences")
+          .select("notification_preferences")
+          .eq("user_id", user.id)
+          .maybeSingle()
       ])
     : [null, null];
+
+  /* Defaults match lib/settings/service.ts: nearby and plan alerts are ON
+     unless explicitly disabled, quiet is OFF unless explicitly enabled. */
+  const storedPreferences = (preferencesResult?.data?.notification_preferences ?? {}) as Record<string, unknown>;
+  const initialPreferences = {
+    nearbyAlerts: storedPreferences.nearbyAlerts !== false,
+    quietNearby: storedPreferences.quietNearby === true,
+    planAlerts: storedPreferences.planAlerts !== false
+  };
 
   const initialNotifications: Array<ReturnType<typeof toNotificationResponse> & { previewOnly?: boolean }> =
     (notificationsResult?.data ?? []).map(toNotificationResponse);
@@ -50,7 +69,7 @@ export default async function NotificationsPage({
   const serverNowMs = Date.now();
 
   return (
-    <NotificationsPageContent
+    <WebNotificationsPage
       /* FREE CORE (Monetization Reset). This was `access?.hasPremium`, gating a
          MESSAGING capability on the old tier authority -- and messaging is free
          forever under the access model. The two paid surfaces are Linkr and
@@ -58,6 +77,7 @@ export default async function NotificationsPage({
       canSendCustomMessages
       initialNotifications={initialNotifications}
       initialNowMs={serverNowMs}
+      initialPreferences={initialPreferences}
     />
   );
 }

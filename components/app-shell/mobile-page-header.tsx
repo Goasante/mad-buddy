@@ -4,7 +4,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { Bell, ChevronLeft, Menu, MoreHorizontal, UserRoundCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useHasScrolled } from "@/hooks/use-has-scrolled";
 import { cameFromInsideApp, resolveBack } from "@/lib/navigation/entry-origin";
 import { cn } from "@/lib/utils";

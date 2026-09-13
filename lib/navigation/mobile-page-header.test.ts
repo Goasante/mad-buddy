@@ -287,7 +287,14 @@ describe("stage 1b rollout", () => {
   });
 
   it("hides the Bell on Pulse, which IS the notifications stream", () => {
-    expect(read("components/notifications/notifications-page.tsx")).toContain("showNotifications={false}");
+    /* Asserted on the WEB boundary, not the shared screen. The header moved
+       out of components/notifications/notifications-page.tsx because that
+       component also renders in the native app, where PageHeader would drag in
+       next/navigation and useRouter() has no App Router to attach to. The Bell
+       rule is unchanged -- it is simply enforced where the header now lives. */
+    expect(read("components/notifications/web-notifications-page.tsx")).toContain(
+      "showNotifications={false}"
+    );
   });
 
   it("keeps the shared header out of an open conversation", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import {
   AlertTriangle,
   Bell,
@@ -31,15 +31,16 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { respondToMeetupRequestAction } from "@/app/(app)/premium-actions";
-import { sendBirthdayWishAction } from "@/app/(app)/birthday-actions";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+/* NO Server Action imports here. This component renders in the native app
+   too, and a "use server" import would pull server-only modules -- including
+   the service-role Supabase client -- into the mobile bundle. Both actions
+   arrive through `client`, which each platform supplies. */
 import { Button } from "@/components/ui/button";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
-import { useDismissOnBack } from "@/hooks/use-dismiss-on-back";
 import { connectionResponsesFor } from "@/lib/meetups/connection-prompts";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import {
@@ -52,10 +53,14 @@ import {
   notificationSourceLabel,
   notificationTimestampLabel
 } from "@/lib/notifications/detail";
-import { fetchWithTimeout } from "@/lib/network/resilience";
+import type { NotificationPreferences, NotificationsClient } from "@/lib/notifications/client";
 import { cn } from "@/lib/utils";
 import { BIRTHDAY_WISHES } from "@/lib/profile/birthday-experience";
-import { PageHeader } from "@/components/app-shell/page-header";
+/* PageHeader is NOT imported here. It reaches next/link and next/navigation
+   through MobilePageHeader, and on Android there is no App Router: useRouter()
+   throws "invariant expected app router to be mounted" the moment Pulse opens.
+   Web passes its header in through the `header` prop; Android passes nothing,
+   because the shared AppHeader in its shell already carries the title. */
 import { isConversationMessageNotificationType } from "@/lib/notifications/conversation-boundary";
 
 type NotificationItem = {
@@ -91,7 +96,63 @@ type NotificationsPageContentProps = {
   /** One clock for the server render and first client render. Relative-time
    * labels otherwise cross a minute boundary during hydration and disagree. */
   initialNowMs?: number;
+  /**
+   * How this screen reaches the server.
+   *
+   * Injected rather than fetched inline so the SAME component serves the web
+   * app and the native app, which authenticate completely differently: web
+   * sends same-origin relative paths with the session cookie, Android sends
+   * absolute URLs with a Bearer token. A relative path inside this component
+   * would resolve against https://localhost on a phone — the bundled asset
+   * origin, which serves no API.
+   */
+  client: NotificationsClient;
+  /**
+   * Registers a transient overlay with the platform's back gesture.
+   *
+   * Web deliberately passes its own hook here and Android passes a different
+   * one: the web implementation calls history.back() on cleanup, which cancels
+   * an in-flight App Router navigation, while Android needs the hardware Back
+   * button to close a sheet instead of leaving the screen.
+   */
+  useOverlayDismiss?: OverlayDismissHook;
+  /**
+   * The saved quick-settings toggles.
+   *
+   * Passed in rather than fetched here because the two apps read them
+   * differently — web from its server render, Android from Supabase directly —
+   * and there is no GET endpoint that would serve both. Same reasoning as
+   * initialNotifications.
+   */
+  initialPreferences?: NotificationPreferences;
+  /**
+   * The page header, supplied by the platform.
+   *
+   * Web passes <PageHeader title="Pulse" />. Android passes nothing: its shell
+   * already renders a fixed AppHeader above every screen, so a second header
+   * here would both duplicate the title and — far worse — drag next/link and
+   * next/navigation into the native bundle, where useRouter() has no App
+   * Router to attach to and throws on render.
+   */
+  header?: ReactNode;
+  /**
+   * Adjusts a resolved destination for the platform.
+   *
+   * Where a notification points is a product question with one answer, which
+   * `resolveNotificationDestination` gives. Whether it can be REACHED is a
+   * platform question: Android has no Linkr, Drops, Hangout Mode, Badges or
+   * group-detail route, and no screen there reads query parameters yet.
+   *
+   * Web passes nothing, because every destination it resolves exists.
+   */
+  adaptDestination?: (destination: NotificationDestination) => NotificationDestination;
 };
+
+/** Matches the signature of both platforms' dismiss hooks. */
+type OverlayDismissHook = (active: boolean, onDismiss: () => void) => void;
+
+/** A no-op for callers that do not manage back behaviour. */
+const noOverlayDismiss: OverlayDismissHook = () => {};
 
 type PulseCategory = "all" | "nearby" | "social" | "plans" | "safety";
 
@@ -170,7 +231,12 @@ function categoryIconClass(category: ReturnType<typeof categoryForType>): string
 export function NotificationsPageContent({
   canSendCustomMessages = false,
   initialNotifications = [],
-  initialNowMs
+  initialNowMs,
+  client,
+  useOverlayDismiss = noOverlayDismiss,
+  initialPreferences = {},
+  header = null,
+  adaptDestination = (destination) => destination
 }: NotificationsPageContentProps) {
   const [initialClockMs] = useState(() => initialNowMs ?? Date.now());
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
@@ -178,15 +244,20 @@ export function NotificationsPageContent({
       .filter((notification) => !isConversationMessageNotificationType(notification.type))
       .map((notification) => toNotificationItem(notification, initialClockMs))
   );
-  const [nearbyAlerts, setNearbyAlerts] = useState(true);
-  const [quietMode, setQuietMode] = useState(false);
-  const [planAlerts, setPlanAlerts] = useState(true);
+  const [nearbyAlerts, setNearbyAlerts] = useState(initialPreferences.nearbyAlerts ?? true);
+  const [quietMode, setQuietMode] = useState(initialPreferences.quietNearby ?? false);
+  const [planAlerts, setPlanAlerts] = useState(initialPreferences.planAlerts ?? true);
+
   // Two separate surfaces, deliberately: `optionsOpen` is the lightweight
   // Pulse-management popover (Mark all as read / Select updates), `settingsOpen`
   // is the dedicated Notification settings sheet. Keeping them apart is the
   // whole point of this screen — actions and preferences never compete.
   const [optionsOpen, setOptionsOpen] = useState(false);
-  useDismissOnBack(optionsOpen, () => setOptionsOpen(false));
+  /* Injected, not imported: web passes useDismissOnBack (whose cleanup calls
+     history.back(), correct for the App Router) and Android passes its native
+     overlay hook, so hardware Back closes this popover rather than leaving the
+     screen. Sharing one implementation would break one platform or the other. */
+  useOverlayDismiss(optionsOpen, () => setOptionsOpen(false));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<NotificationItem | null>(null);
   /* The notification being read in full. Informational rows have nowhere to
@@ -199,6 +270,42 @@ export function NotificationsPageContent({
   const [actionsOpen, setActionsOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; error: boolean; onUndo?: () => void } | null>(null);
   const [feedback, setFeedback] = useState("");
+
+  /* The polling effect below must run exactly once: it installs an interval
+     plus focus and visibility listeners, and listing `client` as a dependency
+     would tear all of that down and rebuild it if the client identity ever
+     changed. A ref keeps that effect single-run while still reading the
+     current client.
+
+     Both platforms pass a stable client -- web memoises it, the native app
+     uses a module constant -- so this only ever matters if that changes. */
+  const clientRef = useRef(client);
+  useEffect(() => {
+    clientRef.current = client;
+  }, [client]);
+
+  /**
+   * Saves a toggle, and puts it back if the save fails.
+   *
+   * These three switches used to be local state on web: flipping one and
+   * reloading silently reverted it, while the native app had been persisting
+   * them correctly. The screen now saves on both platforms, and only sends the
+   * keys that changed, because the service merges a partial patch.
+   *
+   * Declared here rather than beside the toggle state above because it calls
+   * setFeedback, and a closure that captures a `const` before its declaration
+   * would not see later updates.
+   */
+  const savePreferences = useCallback(
+    (patch: NotificationPreferences, revert: () => void) => {
+      void client.saveNotificationPreferences(patch).then((result) => {
+        if (result.ok) return;
+        revert();
+        setFeedback(result.message ?? "Could not save that setting.");
+      });
+    },
+    [client]
+  );
   const [isPending, startTransition] = useTransition();
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unreadCount = notifications.filter((notification) => notification.unread).length;
@@ -242,22 +349,17 @@ export function NotificationsPageContent({
 
       loadInFlight = (async () => {
         try {
-          const response = await fetchWithTimeout("/api/notifications", {
-            credentials: "include",
-            cache: "no-store"
-          }, 12_000, "load notifications");
+          const loaded = await clientRef.current.load();
 
-          if (!response.ok) {
+          if (!loaded) {
             if (isMounted) setFeedback("Could not load notifications.");
             return;
           }
 
-          const data = (await response.json()) as { notifications: ApiNotification[] };
-
           if (!isMounted) return;
 
           setFeedback("");
-          const pulseNotifications = data.notifications.filter(
+          const pulseNotifications = loaded.filter(
             (notification) => !isConversationMessageNotificationType(notification.type)
           );
           setNotifications(
@@ -318,14 +420,10 @@ export function NotificationsPageContent({
       );
 
       try {
-        const response = await fetchWithTimeout("/api/notifications/read", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({})
-        }, 12_000, "mark all notifications read");
+        const result = await client.markAllRead();
 
         setFeedback(
-          response.ok
+          result.ok
             ? "All updates marked as read"
             : "Could not mark notifications read."
         );
@@ -356,12 +454,8 @@ export function NotificationsPageContent({
       })
     );
 
-    void fetchWithTimeout("/api/notifications/read", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notificationId: notification.id })
-    }, 12_000, "mark notification read").then((response) => {
-      if (response.ok) return;
+    void client.markRead(notification.id).then((result) => {
+      if (result.ok) return;
       setNotifications((current) =>
         current.map((item) => (item.id === notification.id ? { ...item, unread: true } : item))
       );
@@ -426,12 +520,8 @@ export function NotificationsPageContent({
 
     startTransition(async () => {
       try {
-        const response = await fetchWithTimeout("/api/notifications/read", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids, isRead })
-        }, 12_000, "update selected notifications");
-        if (!response.ok) throw new Error("bulk update failed");
+        const result = await client.setReadState(ids, isRead);
+        if (!result.ok) throw new Error("bulk update failed");
         showToast(isRead ? "Updates marked as read" : "Updates marked as unread");
       } catch {
         setNotifications(previous);
@@ -464,14 +554,11 @@ export function NotificationsPageContent({
 
     startTransition(async () => {
       try {
-        const response = await fetchWithTimeout("/api/notifications", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids })
-        }, 12_000, "delete selected notifications");
-        const result = (await response.json().catch(() => null)) as { deletedIds?: string[] } | null;
-        const deletedIds = new Set(result?.deletedIds ?? []);
-        if (!response.ok || ids.some((id) => !deletedIds.has(id))) {
+        const result = await client.remove(ids);
+        const deletedIds = new Set(result.deletedIds);
+        // A partial delete is a failure here: every id asked for must be gone,
+        // or the list would keep showing rows the server still has.
+        if (!result.ok || ids.some((id) => !deletedIds.has(id))) {
           throw new Error("delete failed");
         }
         showToast(ids.length === 1 ? "Update deleted" : `${ids.length} updates deleted`);
@@ -533,14 +620,8 @@ export function NotificationsPageContent({
       if (undone) return;
       startTransition(async () => {
         try {
-          const response = await fetchWithTimeout("/api/notifications", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: [notification.id] })
-          }, 12_000, "delete notification");
-          const result = (await response.json().catch(() => null)) as { deletedIds?: string[] } | null;
-          const deletedIds = new Set(result?.deletedIds ?? []);
-          if (!response.ok || !deletedIds.has(notification.id)) {
+          const result = await client.remove([notification.id]);
+          if (!result.ok || !result.deletedIds.includes(notification.id)) {
             throw new Error("delete failed");
           }
         } catch {
@@ -562,7 +643,7 @@ export function NotificationsPageContent({
     <div className="mx-auto max-w-[1050px] space-y-4 md:pt-6">
       {/* This IS the notifications stream, so the header's own Bell would
           point at the page you are already on. */}
-      <PageHeader title="Pulse" showNotifications={false} />
+      {header}
 
       <section data-tour-id={TOUR_TARGET_IDS.PULSE_OVERVIEW}>
         {/* `justify-between` needs TWO flex items to have anything to space
@@ -663,10 +744,20 @@ export function NotificationsPageContent({
                   description="Get occasional alerts when approved Muddies are nearby."
                   checked={nearbyAlerts}
                   onCheckedChange={(checked) => {
+                    const previousQuiet = quietMode;
                     setNearbyAlerts(checked);
                     // Nothing to quiet once nearby alerts are off; clear it
-                    // so the two can never sit in a contradictory state.
+                    // so the two can never sit in a contradictory state. Both
+                    // keys go in one patch, or a reload could show the
+                    // contradiction this exists to prevent.
                     if (!checked) setQuietMode(false);
+                    savePreferences(
+                      checked ? { nearbyAlerts: true } : { nearbyAlerts: false, quietNearby: false },
+                      () => {
+                        setNearbyAlerts(!checked);
+                        if (!checked) setQuietMode(previousQuiet);
+                      }
+                    );
                   }}
                 />
                 <PrivacyToggle
@@ -675,14 +766,20 @@ export function NotificationsPageContent({
                   description="Temporarily silence nearby alerts."
                   checked={quietMode}
                   disabled={!nearbyAlerts}
-                  onCheckedChange={setQuietMode}
+                  onCheckedChange={(checked) => {
+                    setQuietMode(checked);
+                    savePreferences({ quietNearby: checked }, () => setQuietMode(!checked));
+                  }}
                 />
                 <PrivacyToggle
                   icon={CalendarCheck2}
                   title="Plan alerts"
                   description="Get updates about plans and invitations."
                   checked={planAlerts}
-                  onCheckedChange={setPlanAlerts}
+                  onCheckedChange={(checked) => {
+                    setPlanAlerts(checked);
+                    savePreferences({ planAlerts: checked }, () => setPlanAlerts(!checked));
+                  }}
                 />
               </div>
             </Modal>
@@ -782,7 +879,7 @@ export function NotificationsPageContent({
                       <NotificationCard
                         key={notification.id}
                         notification={notification}
-                        destination={resolveNotificationDestination(notification.type)}
+                        destination={adaptDestination(resolveNotificationDestination(notification.type))}
                         selectionMode={selectionMode}
                         selected={selectedIds.has(notification.id)}
                         onToggleSelect={() => toggleSelected(notification.id)}
@@ -840,7 +937,7 @@ export function NotificationsPageContent({
               const requestId = selectedRequest.meetupRequestId;
               if (!requestId) return;
               startTransition(async () => {
-                  const result = await respondToMeetupRequestAction({ requestId, message });
+                  const result = await client.respondToPing(requestId, message);
                   setFeedback(result.ok ? "Reply sent" : "Couldn’t send your reply. Try again.");
                   if (result.ok) setSelectedRequest(null);
               });
@@ -930,8 +1027,13 @@ export function NotificationsPageContent({
                     return;
                   }
                   startTransition(async () => {
-                    const result = await sendBirthdayWishAction({ targetUserId, wish });
-                    showToast(result.message, !result.ok);
+                    const result = await client.sendBirthdayWish(targetUserId, wish);
+                    // The server supplies the wording for both outcomes; the
+                    // fallback covers a transport failure that never reached it.
+                    showToast(
+                      result.message ?? (result.ok ? "Birthday wish sent" : "Could not send your birthday wish."),
+                      !result.ok
+                    );
                     if (result.ok) setSelectedBirthday(null);
                   });
                 }}

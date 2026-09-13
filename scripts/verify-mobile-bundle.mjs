@@ -51,6 +51,18 @@ const FORBIDDEN = [
   { pattern: /__NEXT_DATA__/, why: "the Next.js data payload" },
   { pattern: /next-route-announcer/, why: "the Next.js route announcer" },
 
+  /* next/navigation. Confirmed present in the PR #90 bundle, reached through
+     the shared PageHeader -> MobilePageHeader, which imports useRouter. The
+     App Router context is never mounted in the native app, so opening that
+     screen would have thrown. The error string is matched too because it is
+     the most specific evidence available in minified output. */
+  { pattern: /AppRouterContext/, why: "the Next.js App Router context" },
+  {
+    pattern: /invariant expected app router to be mounted/,
+    why: "next/navigation's useRouter (it throws this in the native app)"
+  },
+  { pattern: /GlobalLayoutRouterContext/, why: "the Next.js layout router context" },
+
   // Server-only credentials. These must never be near a browser bundle.
   { pattern: /SUPABASE_SERVICE_ROLE_KEY/, why: "the service-role key name" },
   { pattern: /createSupabaseAdminClient/, why: "the service-role Supabase client" }
