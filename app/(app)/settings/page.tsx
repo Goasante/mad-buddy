@@ -1,4 +1,4 @@
-import { SettingsPageContent } from "@/components/settings/settings-page";
+import { WebSettingsPage } from "@/components/settings/web-settings-page";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentIdentity } from "@/lib/supabase/auth";
 import type { Json, VisibilityStatus } from "@/lib/supabase/database.types";
@@ -17,7 +17,7 @@ export default async function SettingsPage() {
   const user = await getCurrentIdentity();
 
   if (!user) {
-    return <SettingsPageContent />;
+    return <WebSettingsPage />;
   }
 
   const [profileResult, preferencesResult] = await Promise.all([
@@ -26,7 +26,7 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <SettingsPageContent
+    <WebSettingsPage
       initialVisibilityStatus={(profileResult.data?.visibility_status ?? "visible") as VisibilityStatus}
       initialNearbyAlerts={nearbyAlertsFromPreferences(preferencesResult.data?.notification_preferences)}
     />

@@ -51,10 +51,23 @@ describe("deletion is available inside the native app", () => {
   });
 
   it("signs out after a successful deletion", () => {
-    // The local session points at an account that no longer exists, and the
-    // push token would otherwise stay registered to a deleted user.
+    /* The local session points at an account that no longer exists, and the
+       push token would otherwise stay registered to a deleted user.
+
+       Asserted across the indirection the shared-Settings migration
+       introduced: handleDelete calls onDeleted(), and the screen supplies an
+       onDeleted that awaits signOut() BEFORE navigating away. Checking the
+       handler alone would now miss the sign-out entirely. */
     const handler = settingsScreen.slice(settingsScreen.indexOf("async function handleDelete"));
-    expect(handler.slice(0, 600)).toContain("await signOut()");
+    expect(handler.slice(0, 600)).toContain("await onDeleted()");
+
+    const onDeleted = settingsScreen.slice(
+      settingsScreen.indexOf("onDeleted={"),
+      settingsScreen.indexOf("onDeleted={") + 400
+    );
+    expect(onDeleted).toContain("await signOut()");
+    // Order matters: navigating first would unmount before the token is gone.
+    expect(onDeleted.indexOf("await signOut()")).toBeLessThan(onDeleted.indexOf("navigate("));
   });
 });
 
