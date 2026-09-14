@@ -1,7 +1,9 @@
 import "server-only";
 
+import { guardAction } from "@/lib/admin/enforcement";
 import { sniffImageKind, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
 import { createRequestId, errorType, logBackendEvent } from "@/lib/observability/logger";
+import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { User } from "@supabase/supabase-js";
 
@@ -34,6 +36,30 @@ export async function uploadProfileAvatar(
   formData: FormData
 ): Promise<AvatarUploadResult> {
   const userId = user.id;
+
+  /* BOTH GATES RUN BEFORE ANY EXPENSIVE WORK, and before anything is read out
+     of the request body.
+
+     This upload decodes an image through Sharp and writes to a PUBLIC bucket.
+     Until /api/profile/avatar/upload existed it was reachable only by driving
+     the web UI, which made the missing gates a latent gap; a REST endpoint
+     makes the same path scriptable, so the gap became one worth closing.
+
+     They sit here rather than in the callers so web and Android are covered by
+     one implementation — the same arrangement as the photo gallery, and for
+     the same reason: two copies of a rate limit is one copy that gets
+     forgotten. */
+  const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
+  /* Surface "messaging" with the media_uploads control, matching
+     lib/profile/photo-gallery-service.ts. There is no "profile" surface in
+     GuardedSurface, and inventing one to look tidier would add a moderation
+     concept the product does not have; media_uploads is the control that
+     actually governs "photo/moment/drop uploads", which this is. */
+  const guard = await guardAction(admin, { userId, surface: "messaging", control: "media_uploads" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
   const file = formData.get("avatar");
 
   if (!(file instanceof File) || file.size === 0) {

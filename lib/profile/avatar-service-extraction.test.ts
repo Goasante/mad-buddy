@@ -37,6 +37,33 @@ describe("there is one implementation, not two", () => {
 });
 
 describe("the upload protections moved intact", () => {
+  it("rate limits, on the same budget as gallery photos", () => {
+    /* Added in review, not moved: the original Server Action never had this.
+       It was latent while the only way in was driving the web UI; the REST
+       route made the same path scriptable. See avatar-upload-guards.test.ts
+       for the behavioural proof that it actually blocks. */
+    expect(service).toContain('consumeRateLimit({ action: "media.upload", userId })');
+  });
+
+  it("applies the media_uploads enforcement guard", () => {
+    // Same surface and control as the photo gallery: an avatar is a photo
+    // upload, and there is no "profile" GuardedSurface to use instead.
+    expect(service).toContain('guardAction(admin, { userId, surface: "messaging", control: "media_uploads" })');
+  });
+
+  it("gates BOTH platforms, because they live in the shared service", () => {
+    /* In the callers they would be two copies, and one of them would rot.
+       Scoped to the avatar action rather than the whole module: actions.ts
+       also holds reportUserAction, which legitimately rate-limits its own
+       thing. */
+    const start = action.indexOf("export async function uploadAvatarAction");
+    const uploadAction = action.slice(start, action.indexOf("\nexport async function", start + 10));
+    expect(uploadAction).not.toContain("consumeRateLimit");
+    expect(uploadAction).not.toContain("guardAction");
+    expect(route).not.toContain("consumeRateLimit");
+    expect(route).not.toContain("guardAction");
+  });
+
   it("validates by MAGIC BYTES, not the filename or claimed type", () => {
     expect(service).toContain("file.slice(0, 32).arrayBuffer()");
     expect(service).toContain("validateImageUpload({");
