@@ -212,11 +212,24 @@ describe("navigation happens only after a confirmed success", () => {
 
 describe("profile actions isolate native avatar processing", () => {
   it("does not load Sharp while saving profile fields or DOB", () => {
+    /* The upload body moved to lib/profile/avatar-service.ts so the native app
+       can reach it through /api/profile/avatar/upload. The property is
+       unchanged and asserted in both places: the action module must not pull
+       Sharp in at all, and the service must still import it LAZILY.
+
+       Why it matters: a profile or date-of-birth save must not fail merely
+       because the deployment cannot load Sharp's native runtime. A static
+       import anywhere in this graph would make that happen. */
     const actions = read("app/(app)/actions.ts");
-    const beforeUpload = actions.slice(0, actions.indexOf("export async function uploadAvatarAction"));
-    expect(beforeUpload).not.toContain("@/lib/media/processing");
-    const upload = actions.slice(actions.indexOf("export async function uploadAvatarAction"));
-    expect(upload).toContain('await import("@/lib/media/processing")');
+    expect(actions).not.toContain("@/lib/media/processing");
+
+    const service = read("lib/profile/avatar-service.ts");
+    const staticImports = service
+      .split(/\r?\n/)
+      .filter((line) => line.trimStart().startsWith("import "))
+      .join("\n");
+    expect(staticImports).not.toContain("@/lib/media/processing");
+    expect(service).toContain('await import("@/lib/media/processing")');
   });
 
   it("traces Sharp and its Linux libvips runtime into production functions", () => {

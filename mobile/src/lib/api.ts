@@ -17,7 +17,12 @@ async function request<T>(
   const { auth = true, headers, ...rest } = init;
 
   const finalHeaders = new Headers(headers);
-  if (rest.body && !finalHeaders.has("content-type")) {
+  /* FormData sets its OWN content-type, including the multipart boundary the
+     server needs to split the parts. Forcing application/json here would make
+     the body unparseable -- and silently so: the request succeeds, the server
+     reads binary labelled as JSON, and the upload fails for no visible reason.
+     So only default the header for bodies that are not FormData. */
+  if (rest.body && !(rest.body instanceof FormData) && !finalHeaders.has("content-type")) {
     finalHeaders.set("content-type", "application/json");
   }
   if (auth) {
@@ -66,6 +71,17 @@ export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown, opts: { auth?: boolean } = {}) =>
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined, auth: opts.auth }),
+  /**
+   * Uploads a file.
+   *
+   * Separate from `post` because that JSON-stringifies its body, which would
+   * turn a FormData into the string "[object FormData]". This passes the
+   * FormData through untouched so the browser can set multipart/form-data
+   * WITH its generated boundary — omitting the boundary, or setting the header
+   * by hand, leaves the server unable to split the parts.
+   */
+  postForm: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: "POST", body: form }),
   /** Replaces a whole resource — /api/profile/interests takes the full selection. */
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
