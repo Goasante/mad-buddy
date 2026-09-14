@@ -179,6 +179,11 @@ describe("reorder moves a slot, never the photo identity", () => {
   const reorder = photoActions.slice(
     photoActions.indexOf("export async function reorderProfilePhoto")
   );
+  /* The swap itself moved into SQL. It used to be three un-transacted writes
+     in TypeScript, with the error on the middle one ignored; it is now one
+     transactional RPC, so the assertions about parking, idempotence and
+     ownership follow it into the migration. */
+  const reorderRpc = read("supabase/migrations/20260914120000_reorder_profile_photo_rpc.sql");
 
   it("never touches visibility", () => {
     // Visibility belongs to the PHOTO, not the slot: moving a private picture
@@ -192,7 +197,11 @@ describe("reorder moves a slot, never the photo identity", () => {
   });
 
   it("scopes every write to the caller's own rows", () => {
-    expect((reorder.match(/\.eq\("user_id", userId\)/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    // The caller scopes its ownership lookup; the RPC scopes all three writes
+    // inside the transaction, so a valid photo id from anywhere is still not
+    // movable by anyone.
+    expect(reorder).toContain('.eq("user_id", userId)');
+    expect((reorderRpc.match(/and user_id = v_owner_id/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 
   it("verifies ownership before moving anything", () => {
@@ -200,7 +209,8 @@ describe("reorder moves a slot, never the photo identity", () => {
   });
 
   it("is idempotent when the photo is already there", () => {
-    expect(reorder).toContain("photo.position === parsed.data.newPosition");
+    expect(reorderRpc).toContain("if v_current_position = p_new_position then");
+    expect(reorderRpc).toContain("return query select true, 'Updated.'::text;");
   });
 
   it("rejects a position outside the gallery cap", () => {
@@ -210,7 +220,7 @@ describe("reorder moves a slot, never the photo identity", () => {
   it("parks at -1 so the swap cannot collide on the slot constraint", () => {
     // Two direct updates would violate unique (user_id, position) whichever
     // order they ran in.
-    expect(reorder).toContain("position: -1");
+    expect(reorderRpc).toContain("set position = -1");
     expect(reorderMigration).toContain("check (position between -1 and 2)");
   });
 

@@ -297,76 +297,44 @@ export async function reorderProfilePhoto(
   const parsed = reorderSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Not available." };
 
-  // admin client is supplied by the caller
-
   /**
    * Ownership is checked HERE as well as inside the function.
    *
-   * The function authorises on auth.uid(), but this action calls it through
-   * the service role, where auth.uid() is null. So the ownership check that
-   * actually protects this path is the one below — the function's own check
-   * is the second line of defence for any future caller using a user client.
+   * The function resolves the owner from the row, but it runs through the
+   * service role where auth.uid() is null. So the check that actually
+   * protects this path is the one below -- without it, a valid photo id from
+   * anywhere would be movable by anyone.
    */
   const { data: photo } = await admin
     .from("profile_photos")
-    .select("id, position")
+    .select("id")
     .eq("id", parsed.data.photoId)
     .eq("user_id", userId)
     .maybeSingle();
   if (!photo) return { ok: false, message: "Not available." };
 
-  if (photo.position === parsed.data.newPosition) {
-    // Idempotent: moving a photo where it already is is not a failure.
-    return { ok: true, message: "Updated." };
-  }
+  /* ONE TRANSACTION, not three writes.
 
-  // Swap through two scoped updates inside the deferred-constraint window.
-  const nowIso = new Date().toISOString();
-  const { data: displaced } = await admin
-    .from("profile_photos")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("position", parsed.data.newPosition)
-    .maybeSingle();
+     This used to park the mover at -1, step the displaced row into the
+     vacated slot and land the mover, as three separate un-transacted
+     updates -- and it ignored the error on the middle one entirely. A
+     failure there silently lost the displaced photo's slot, and a crash
+     between writes stranded the mover at -1, outside the 0..2 the carousel
+     renders, so it vanished with no way to recover it from the UI.
 
-  /**
-   * Three writes, not two.
-   *
-   * The moving photo parks at -1 first, so the row holding the target slot can
-   * step into the vacated one before the mover takes its place. Two direct
-   * updates would collide on the unique slot constraint whichever order they
-   * ran in.
-   *
-   * -1 is outside the 0..2 range the column allows, which is exactly why it
-   * works as a parking spot: no real photo can ever occupy it, so a partially
-   * applied swap is visibly wrong rather than silently plausible.
-   *
-   * Every write is scoped to the caller's own rows, and this action already
-   * verified ownership above.
-   */
-  {
-    const { error: moveError } = await admin
-      .from("profile_photos")
-      .update({ position: -1, updated_at: nowIso })
-      .eq("id", parsed.data.photoId)
-      .eq("user_id", userId);
-    if (moveError) return { ok: false, message: "Couldn't move that photo. Try again." };
+     The swap still needs the -1 parking value, because the unique
+     (user_id, position) constraint makes two direct updates collide
+     whichever order they run in. The difference is that all three writes now
+     commit or roll back together, so -1 is never observable and no photo is
+     ever left without a slot. */
+  const { data, error } = await admin.rpc("reorder_profile_photo", {
+    p_photo_id: parsed.data.photoId,
+    p_new_position: parsed.data.newPosition
+  });
+  if (error) return { ok: false, message: "Couldn't move that photo. Try again." };
 
-    if (displaced) {
-      await admin
-        .from("profile_photos")
-        .update({ position: photo.position, updated_at: nowIso })
-        .eq("id", displaced.id)
-        .eq("user_id", userId);
-    }
-
-    const { error: finalError } = await admin
-      .from("profile_photos")
-      .update({ position: parsed.data.newPosition, updated_at: nowIso })
-      .eq("id", parsed.data.photoId)
-      .eq("user_id", userId);
-    if (finalError) return { ok: false, message: "Couldn't move that photo. Try again." };
-  }
-
-  return { ok: true, message: "Updated." };
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.ok
+    ? { ok: true, message: result.message ?? "Updated." }
+    : { ok: false, message: result?.message ?? "Couldn't move that photo. Try again." };
 }

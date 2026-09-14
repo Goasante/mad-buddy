@@ -92,14 +92,74 @@ describe("the security properties moved intact", () => {
 
   it("scopes every write to the caller's own rows", () => {
     // Without this a valid id from anywhere would be editable by anyone.
-    expect(service.match(/\.eq\("user_id", userId\)/g)?.length ?? 0).toBeGreaterThanOrEqual(8);
+    expect(service.match(/\.eq\("user_id", userId\)/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
     expect(service.match(/\.eq\("owner_id", userId\)/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
   });
+});
 
-  it("parks a moving photo at -1 so a swap cannot collide", () => {
-    // -1 is outside the 0..2 the column allows, so a half-applied swap is
-    // visibly wrong rather than silently plausible.
-    expect(service).toContain("position: -1");
+/**
+ * Reordering is ATOMIC, which it was not before this PR's review.
+ *
+ * The service used to issue three separate un-transacted writes -- park the
+ * mover at -1, step the displaced row into the vacated slot, land the mover --
+ * and IGNORED the error on the middle one. A failure there silently lost the
+ * displaced photo's slot; a crash between writes stranded the mover at -1,
+ * outside the 0..2 the carousel renders, so it vanished with no way to recover
+ * it from the UI.
+ *
+ * Worse, the doc comment claimed it "goes through the reorder_profile_photo
+ * function". No such function existed: the comment described a design that was
+ * never built, and the migration that widened the position check to allow -1
+ * promised in its column comment that "no photo is ever left there".
+ *
+ * These tests hold the promise that migration made.
+ */
+describe("a photo reorder is one transaction", () => {
+  const rpc = read("supabase/migrations/20260914120000_reorder_profile_photo_rpc.sql");
+
+  it("the function the comment always claimed now exists", () => {
+    expect(rpc).toContain("create or replace function public.reorder_profile_photo(");
+  });
+
+  it("the service calls it instead of writing three times", () => {
+    expect(service).toContain('admin.rpc("reorder_profile_photo"');
+    // The un-transacted sequence must be gone from TypeScript entirely.
+    expect(service).not.toContain("position: -1");
+    expect(service).not.toContain("moveError");
+    expect(service).not.toContain("finalError");
+  });
+
+  it("still parks at -1, but inside the transaction", () => {
+    // The unique (user_id, position) constraint makes two direct updates
+    // collide whichever order they run in, so the parking value is still
+    // needed -- it is just never observable now.
+    expect(rpc).toContain("set position = -1");
+  });
+
+  it("scopes all three writes to the owner", () => {
+    expect((rpc.match(/and user_id = v_owner_id/g) ?? []).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("is idempotent when the photo is already in that slot", () => {
+    expect(rpc).toContain("if v_current_position = p_new_position then");
+  });
+
+  it("rejects a position outside the gallery cap", () => {
+    expect(rpc).toContain("p_new_position < 0 or p_new_position > 2");
+  });
+
+  it("is not callable from a browser client", () => {
+    // SECURITY DEFINER, and it resolves ownership from the row rather than
+    // auth.uid() -- only the server may reach it.
+    expect(rpc).toContain("security definer");
+    expect(rpc).toContain("revoke all on function public.reorder_profile_photo(uuid, smallint) from public, anon, authenticated");
+    // service_role is granted back explicitly: a bare REVOKE strips it too,
+    // which would break every server path.
+    expect(rpc).toContain("grant execute on function public.reorder_profile_photo(uuid, smallint) to service_role");
+  });
+
+  it("pins search_path, so it cannot be hijacked by a shadowing schema", () => {
+    expect(rpc).toContain("set search_path = public, pg_temp");
   });
 });
 

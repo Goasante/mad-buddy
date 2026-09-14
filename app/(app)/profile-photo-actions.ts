@@ -102,10 +102,14 @@ export async function deleteProfilePhotoAction(input: unknown): Promise<ActionSt
 /**
  * Move a photo to another slot.
  *
- * Goes through the `reorder_profile_photo` function rather than issuing two
- * updates from here: a swap that half-applied would leave the gallery with a
- * duplicate slot or a hole, and the window between two client-issued writes is
- * exactly where that happens.
+ * Goes through the `reorder_profile_photo` database function rather than
+ * issuing the writes from here: a swap that half-applied would leave the
+ * gallery with a duplicate slot or a hole, and the window between separate
+ * writes is exactly where that happens.
+ *
+ * That function did not exist until 20260914120000 — this comment described a
+ * design that was never built, while the code did three un-transacted updates
+ * and ignored the error on the middle one. It is true now.
  *
  * The photo keeps its id, its media asset and — importantly — its visibility.
  * Visibility belongs to the PHOTO, not the slot, so moving a private picture

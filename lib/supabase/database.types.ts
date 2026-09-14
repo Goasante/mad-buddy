@@ -5146,6 +5146,13 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      /* Atomic photo-slot swap. Three writes in one transaction, so the -1
+         parking value the unique (user_id, position) constraint forces is
+         never observable and no photo is left without a slot. */
+      reorder_profile_photo: {
+        Args: { p_photo_id: string; p_new_position: number };
+        Returns: Array<{ ok: boolean; message: string }>;
+      };
       save_profile_date_of_birth: {
         Args: { p_date: string };
         Returns: Array<{ outcome: "created" | "unchanged" | "corrected"; can_correct: boolean }>;
