@@ -128,7 +128,9 @@ describe("the avatar is left alone", () => {
 
 describe("the carousel", () => {
   const carousel = read("components/profile/profile-photo-carousel.tsx");
-  const actions = read("app/(app)/profile-photo-actions.ts");
+  /* The mutation bodies moved to lib/profile/photo-gallery-service.ts so both
+     platforms run one implementation; the Server Action delegates to it. */
+  const actions = read("lib/profile/photo-gallery-service.ts");
 
   it("is one component for viewing and managing", () => {
     // The owner must see exactly what a visitor sees while managing it; a
@@ -177,10 +179,15 @@ describe("the carousel", () => {
   });
 
   it("scopes every mutation to the caller's own rows", () => {
-    const visibility = actions.slice(actions.indexOf("setProfilePhotoVisibilityAction"));
+    /* Sliced on the SERVICE function names: the bodies moved there, and the
+       Server Actions are now thin delegations. Without the user scope, a valid
+       photo id from anywhere would be editable by anyone. */
+    const visibility = actions.slice(actions.indexOf("export async function setProfilePhotoVisibility"));
     expect(visibility).toContain('.eq("user_id", userId)');
-    const remove = actions.slice(actions.indexOf("deleteProfilePhotoAction"));
+    const remove = actions.slice(actions.indexOf("export async function deleteProfilePhoto"));
     expect(remove).toContain('.eq("user_id", userId)');
+    const reorder = actions.slice(actions.indexOf("export async function reorderProfilePhoto"));
+    expect(reorder).toContain('.eq("user_id", userId)');
   });
 
   it("never renders the avatar inside the EDITABLE gallery", () => {

@@ -13,7 +13,10 @@ const seed = read("scripts/seed-trusted-application.mjs");
 const messaging = stripComments(read("lib/messaging/mobile.ts"));
 const groupPage = stripComments(read("components/groups/group-detail-page.tsx"));
 const groupActions = stripComments(read("app/(app)/group-actions.ts"));
-const photoActions = stripComments(read("app/(app)/profile-photo-actions.ts"));
+/* The photo mutation bodies moved to lib/profile/photo-gallery-service.ts so
+   the native app can reach them through /api/profile/photos; the Server Action
+   now delegates. These assertions follow the behaviour rather than relaxing. */
+const photoActions = stripComments(read("lib/profile/photo-gallery-service.ts"));
 const carousel = stripComments(read("components/profile/profile-photo-carousel.tsx"));
 const reorderMigration = read("supabase/migrations/20260808240000_profile_photo_reorder.sql");
 
@@ -174,7 +177,7 @@ describe("group member lists show standing without reordering", () => {
 
 describe("reorder moves a slot, never the photo identity", () => {
   const reorder = photoActions.slice(
-    photoActions.indexOf("export async function reorderProfilePhotoAction")
+    photoActions.indexOf("export async function reorderProfilePhoto")
   );
 
   it("never touches visibility", () => {
