@@ -55,10 +55,23 @@ async function request<T>(
   return { ok: true, data: (payload ?? {}) as T };
 }
 
+/**
+ * The verbs here must cover every verb the /api routes expose, and every one
+ * must also be in the CORS allow-list in lib/api/cors.ts. Both halves are
+ * required: a missing client helper means the call cannot be written, and a
+ * missing allow-list entry means the preflight fails before the request leaves
+ * the device. Neither failure shows up server-side.
+ */
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown, opts: { auth?: boolean } = {}) =>
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined, auth: opts.auth }),
+  /** Replaces a whole resource — /api/profile/interests takes the full selection. */
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  /** Partial update — /api/profile/photos uses it for visibility and reorder. */
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   del: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "DELETE", body: body ? JSON.stringify(body) : undefined })
 };

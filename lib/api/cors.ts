@@ -28,7 +28,12 @@ export function corsHeaders(origin: string | null | undefined): Record<string, s
   if (!isAllowedOrigin(origin)) return {};
   return {
     "Access-Control-Allow-Origin": origin as string,
-    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+    /* PUT is here because /api/profile/interests takes the whole selection
+       rather than a patch. Omitting it made the preflight fail before the
+       request ever left the device -- an endpoint the native app could not
+       reach at all, and nothing on the server side would have shown why. Keep
+       this list in step with the verbs the routes actually expose. */
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "authorization, content-type",
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400",
