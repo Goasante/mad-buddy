@@ -259,16 +259,23 @@ describe("direct admin recognition", () => {
 });
 
 describe("tenure stops accruing when premium lapses", () => {
+  /* Both bodies moved to lib/trust/application-service.ts so the native app
+     can reach them through /api/trust/apply; the Server Actions now delegate.
+     These assertions follow the behaviour rather than being relaxed. */
   it("counts days only while the subscription is active", () => {
     // Otherwise a cancelled subscriber keeps earning standing they are no
     // longer paying for.
-    const actions = stripComments(read("app/(app)/trusted-member-actions.ts"));
-    expect(actions).toContain('subscription.status === "active"');
+    const service = stripComments(read("lib/trust/application-service.ts"));
+    expect(service).toContain('subscription.status === "active"');
   });
 
   it("recomputes eligibility at submit rather than trusting the client", () => {
-    const actions = stripComments(read("app/(app)/trusted-member-actions.ts"));
-    expect(actions).toContain("const standing = await getTrustedMemberStandingAction()");
+    // The page that offered the Apply button may be an hour stale, so the
+    // answer is computed here and never taken from the request.
+    const service = stripComments(read("lib/trust/application-service.ts"));
+    expect(service).toContain("const standing = await getTrustedMemberStanding(admin, userId)");
+    // And the apply path must not accept a caller-supplied verdict.
+    expect(service).not.toMatch(/input\.(canApply|eligible)|parsed\.data\.(canApply|eligible)/);
   });
 });
 
