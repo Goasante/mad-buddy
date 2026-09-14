@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -12,9 +13,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * turned a latent gap into one worth closing.
  *
  * Source-text assertions would prove the calls EXIST. These prove they BLOCK:
- * that a refusal happens before the request body is read, before Sharp is
- * loaded, and before anything reaches storage. A gate that runs after the
- * expensive work has been done is not a gate.
+ * a refusal loads no Sharp, writes nothing to storage, and touches no table.
+ *
+ * WHAT THEY DO NOT PROVE: that the gates precede multipart PARSING. They
+ * cannot — the service receives an already-parsed FormData, and the REST route
+ * calls `await request.formData()` before `uploadProfileAvatar()`. So a
+ * refused upload has still cost one multipart parse. That is the accepted
+ * cost of keeping both gates in the shared service rather than duplicating
+ * them into each caller; the expensive and irreversible parts — image
+ * decoding, public-bucket writes, profile updates — are all after the gates.
  */
 
 const consumeRateLimit = vi.fn();
@@ -195,10 +202,27 @@ describe("the enforcement guard blocks the upload", () => {
   });
 });
 
-describe("both gates run before the request body is even read", () => {
-  it("refuses a spent limit without inspecting the form", async () => {
-    /* A gate that reads the file first has already paid for parsing a
-       multipart body — which on a phone photo is several megabytes. */
+/**
+ * What these two DO and DO NOT prove.
+ *
+ * They show the gates run before the service inspects the form — so no file is
+ * read out of it, and nothing downstream happens.
+ *
+ * They do NOT show the gates run before the multipart body is PARSED. They
+ * cannot: the service is handed an already-parsed FormData. On the REST path
+ * `app/api/profile/avatar/upload/route.ts` calls `await request.formData()`
+ * before `uploadProfileAvatar()`, so parsing a several-megabyte phone photo has
+ * already happened by the time either gate runs. An earlier version of this
+ * file claimed otherwise, which was wrong.
+ *
+ * Moving the gates ahead of parsing would mean reading the userId in the route
+ * and gating there — which would put the rate limit in two places, the thing
+ * the shared service exists to avoid. The cost of the current arrangement is a
+ * parse; the protections that matter — no Sharp, no storage, no database write
+ * — are above, and they hold.
+ */
+describe("both gates run before the service inspects the form", () => {
+  it("refuses a spent limit without reading the file out of the form", async () => {
     consumeRateLimit.mockResolvedValue({ allowed: false, resetAt: Date.now() + 60_000 });
     const { admin } = makeAdmin();
 
@@ -209,7 +233,7 @@ describe("both gates run before the request body is even read", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
-  it("refuses a blocked account without inspecting the form", async () => {
+  it("refuses a blocked account without reading the file out of the form", async () => {
     guardAction.mockResolvedValue({ allowed: false, message: "Media uploads are paused." });
     const { admin } = makeAdmin();
 
@@ -218,5 +242,16 @@ describe("both gates run before the request body is even read", () => {
     await uploadProfileAvatar(admin, user, form as never);
 
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("documents that the route parses the body BEFORE the gates run", () => {
+    /* Pinned so the limitation stays visible rather than being quietly
+       forgotten. If someone later moves the parse after a gate, this fails and
+       the comment above should be updated to match. */
+    const route = readFileSync("app/api/profile/avatar/upload/route.ts", "utf8");
+    const parse = route.indexOf("await request.formData()");
+    const call = route.indexOf("uploadProfileAvatar(");
+    expect(parse).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(parse);
   });
 });

@@ -37,18 +37,21 @@ export async function uploadProfileAvatar(
 ): Promise<AvatarUploadResult> {
   const userId = user.id;
 
-  /* BOTH GATES RUN BEFORE ANY EXPENSIVE WORK, and before anything is read out
-     of the request body.
+  /* BOTH GATES RUN BEFORE THE EXPENSIVE AND IRREVERSIBLE WORK: no image is
+     decoded, nothing is written to the public bucket, and no profile row is
+     touched unless both pass.
+
+     They do NOT precede multipart parsing. The REST route calls
+     `await request.formData()` before this function, so a refused upload has
+     already cost one parse. Moving the gates earlier would mean gating in the
+     route as well as here -- two copies of a rate limit, which is one copy
+     that gets forgotten. The parse is the accepted cost of a single
+     implementation.
 
      This upload decodes an image through Sharp and writes to a PUBLIC bucket.
      Until /api/profile/avatar/upload existed it was reachable only by driving
      the web UI, which made the missing gates a latent gap; a REST endpoint
-     makes the same path scriptable, so the gap became one worth closing.
-
-     They sit here rather than in the callers so web and Android are covered by
-     one implementation — the same arrangement as the photo gallery, and for
-     the same reason: two copies of a rate limit is one copy that gets
-     forgotten. */
+     makes the same path scriptable, so the gap became one worth closing. */
   const rateLimit = await consumeRateLimit({ action: "media.upload", userId });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
