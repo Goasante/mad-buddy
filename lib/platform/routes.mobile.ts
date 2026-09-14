@@ -71,6 +71,32 @@ export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
      looked available to isBuiltForMobile, so an achievement row rendered as a
      tappable link that reached the catch-all. */
   "/badges",
+
+  /* SETTINGS SUB-PAGES. Every one of these is a real web feature with no
+     native screen yet. They are listed here rather than left out because the
+     shared Settings screen links to all of them: unlisted, each rendered as a
+     tappable row that reached the catch-all -- 13 dead ends on one screen.
+     Listed, they render dimmed and say so.
+
+     When one is built for mobile, delete it here and the routes.mobile test
+     that asserts it is unmapped will fail, which is the reminder to map it. */
+  "/settings/appearance",
+  "/settings/communication",
+  "/settings/data-storage",
+  "/settings/engagement",
+  "/settings/feedback",
+  "/settings/glow-visibility",
+  "/settings/language",
+  "/settings/privacy",
+  "/settings/privacy-setup",
+  "/settings/sessions",
+  "/settings/walkthrough",
+  /* Not settings pages, but linked from Settings and equally absent. */
+  "/invite",
+  "/reminders",
+  /* A marketing page outside the (app) group -- it exists on the website, but
+     the native app has no browser chrome to return from it. */
+  "/about",
   /* Admin is web-only and deliberately so -- it is an operator console, not a
      product surface, and there is no mobile route for it. The shared account
      menu also gates it behind showAdminLink, but that flag answers "may this

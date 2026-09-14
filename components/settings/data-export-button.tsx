@@ -3,9 +3,21 @@
 import { Download } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchWithTimeout } from "@/lib/network/resilience";
+import type { SettingsExportResult } from "@/lib/settings/client";
 
-export function DataExportButton() {
+type DataExportButtonProps = {
+  /**
+   * Fetches the export bundle. Injected because this used to call a relative
+   * path with a session cookie, which on Capacitor resolves against
+   * https://localhost and carries no Bearer token.
+   *
+   * Only rendered where a platform can both fetch AND deliver a file -- see
+   * the caller, which shows an unavailable row otherwise.
+   */
+  onExport: () => Promise<SettingsExportResult>;
+};
+
+export function DataExportButton({ onExport }: DataExportButtonProps) {
   const [status, setStatus] = useState("");
   const [isExporting, setIsExporting] = useState(false);
 
@@ -14,19 +26,14 @@ export function DataExportButton() {
     setStatus("Preparing export...");
 
     try {
-      const response = await fetchWithTimeout("/api/account/export", {
-        method: "GET",
-        credentials: "include"
-      }, 30_000, "export account data");
+      const result = await onExport();
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: "Export failed." }));
-        setStatus(error.error ?? "Export failed.");
+      if (!result.ok || !result.blob) {
+        setStatus(result.message ?? "Export failed.");
         return;
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(result.blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = "mad-buddy-export.json";

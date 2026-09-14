@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import {
   Bell,
   Blocks,
@@ -8,6 +8,7 @@ import {
   CalendarClock,
   ChevronRight,
   Database,
+  Download,
   Gauge,
   Ghost,
   Globe,
@@ -26,12 +27,12 @@ import {
   UserRound
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, useTransition } from "react";
-import {
-  updateNotificationPreferenceAction,
-  updateVisibilityStatusAction
-} from "@/app/(app)/settings-actions";
+import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+/* NO Server Action imports: this renders in the native app too, and a
+   "use server" import drags next/headers, lib/supabase/server and the
+   service-role client into the mobile bundle -- the PR #84 failure. Both
+   writes arrive through `client`, which each platform supplies. */
+import type { SettingsClient } from "@/lib/settings/client";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
@@ -40,22 +41,91 @@ import { LocationForGlowSetting } from "@/components/settings/location-for-glow-
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
-import { PageHeader } from "@/components/app-shell/page-header";
+/* PageHeader is NOT imported: it reaches next/link and next/navigation through
+   MobilePageHeader, and the native app has no App Router for useRouter() to
+   attach to -- it throws on render. Web passes it in through `header`. */
 
-// Deferred: most visits to Settings never open this — no reason to ship its
-// JS on every Settings page load.
-const DeleteAccountModal = dynamic(() =>
-  import("@/components/settings/delete-account-modal").then((mod) => mod.DeleteAccountModal)
-);
+/* The delete modal is INJECTED, not imported. delete-account-modal imports
+   deleteAccountAction, and a lazy() import is still an import: the module stays
+   in the graph and the "use server" chunk would be built for the native bundle
+   too. Deleting an account is also genuinely platform-specific -- Android must
+   clear its push token first, or a deleted user's device keeps receiving
+   notifications. So each platform supplies its own. */
+
+/**
+ * Whether a destination exists on the platform rendering this screen.
+ *
+ * Context rather than a prop on all 24 rows: the answer is the same for every
+ * row, and threading it by hand invites the one row someone forgets — which is
+ * precisely how a dead-end link ships.
+ *
+ * Web provides nothing and every row stays a link, because every destination
+ * here exists on web.
+ */
+const DestinationAvailability = createContext<((href: string) => boolean) | null>(null);
 
 type SettingsPageContentProps = {
   initialVisibilityStatus?: VisibilityStatus;
   initialNearbyAlerts?: boolean;
+  /**
+   * How this screen reaches the server.
+   *
+   * Injected rather than calling Server Actions directly, so the same
+   * component serves both apps: a "use server" import would drag
+   * next/headers, lib/supabase/server and the service-role client into the
+   * mobile bundle — the PR #84 failure. Both platforms end up in
+   * lib/settings/service.ts regardless.
+   */
+  client: SettingsClient;
+  /**
+   * The page header, supplied by the platform.
+   *
+   * Web passes <PageHeader title="Settings" />. Android passes nothing: its
+   * shell already renders a fixed AppHeader, and PageHeader reaches
+   * next/navigation, where useRouter() has no App Router and throws on render.
+   */
+  header?: ReactNode;
+  /**
+   * The delete-account flow, which is platform-specific twice over: the web
+   * modal imports a Server Action, and Android must remove this device's push
+   * token before the account goes, or a deleted user's phone keeps receiving
+   * notifications. Omitted entirely, the row still renders but opens nothing.
+   */
+  renderDeleteAccountModal?: (props: { open: boolean; onOpenChange: (open: boolean) => void }) => ReactNode;
+  /**
+   * Extra rows appended after the shared sections.
+   *
+   * Android puts Sign out and its two-step account deletion here. Both stores
+   * require in-app deletion for apps that create accounts, and the native flow
+   * differs from web's: it signs out afterwards so the device's push token is
+   * unregistered rather than left pointing at a deleted user. Web appends
+   * nothing — it deletes through the modal above and signs out from the
+   * account menu.
+   */
+  footer?: ReactNode;
+  /**
+   * Whether a linked destination exists on this platform.
+   *
+   * Android passes isBuiltForMobile: 17 of the 24 destinations here are
+   * unreachable — 13 settings-related web features with no native screen,
+   * /about, and the pre-existing /hangout-mode, /badges and /safety-center.
+   * Left alone, every one rendered as a tappable row that reached the SPA
+   * catch-all. They now render dimmed and non-navigating, with the reason in
+   * the accessible name.
+   *
+   * Web passes nothing, because every destination here exists on web.
+   */
+  isDestinationAvailable?: (href: string) => boolean;
 };
 
 export function SettingsPageContent({
   initialVisibilityStatus = "visible",
-  initialNearbyAlerts = true
+  initialNearbyAlerts = true,
+  client,
+  header = null,
+  renderDeleteAccountModal,
+  footer = null,
+  isDestinationAvailable
 }: SettingsPageContentProps) {
   const [visibilityStatus, setVisibilityStatus] = useState<VisibilityStatus>(initialVisibilityStatus);
   const [nearbyAlerts, setNearbyAlerts] = useState(initialNearbyAlerts);
@@ -80,7 +150,7 @@ export function SettingsPageContent({
     const previousStatus = visibilityStatus;
     setVisibilityStatus(nextStatus);
     startTransition(async () => {
-      const result = await updateVisibilityStatusAction(nextStatus);
+      const result = await client.setVisibilityStatus(nextStatus);
 
       if (!result.ok) {
         setVisibilityStatus(previousStatus);
@@ -101,7 +171,7 @@ export function SettingsPageContent({
     const previousValue = nearbyAlerts;
     setNearbyAlerts(checked);
     startTransition(async () => {
-      const result = await updateNotificationPreferenceAction({ nearbyAlerts: checked });
+      const result = await client.setNearbyAlerts(checked);
 
       if (!result.ok) {
         setNearbyAlerts(previousValue);
@@ -114,8 +184,9 @@ export function SettingsPageContent({
   }
 
   return (
+    <DestinationAvailability.Provider value={isDestinationAvailable ?? null}>
     <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_OVERVIEW} className="mr-auto max-w-[980px] space-y-6 md:pt-6">
-      <PageHeader title="Settings" />
+      {header}
 
       {/* The divider goes with the desktop title: on mobile the shared
           header draws its own once content scrolls under it. */}
@@ -186,7 +257,7 @@ export function SettingsPageContent({
             href="/hangout-mode"
           />
           <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW}>
-            <LocationForGlowSetting onFeedback={showToast} />
+            <LocationForGlowSetting onFeedback={showToast} onEnable={client.enableLocationForGlow} />
           </div>
           <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_GHOST_MODE}>
             <PrivacyToggle
@@ -284,7 +355,16 @@ export function SettingsPageContent({
 
 
         <SettingsSection title="Data">
-          <DataExportButton />
+          {/* Export needs BOTH a working request and a way to deliver a file.
+              Android has neither: the route is cookie-only, and <a download>
+              does nothing in a WebView. A platform that cannot do it renders
+              the row as unavailable rather than as a button that appears to
+              work and silently delivers nothing. */}
+          {client.exportAccountData ? (
+            <DataExportButton onExport={client.exportAccountData} />
+          ) : (
+            <UnavailableRow icon={Download} title="Export your data" />
+          )}
           <SettingsLinkRow
             icon={Database}
             title="Data & Storage"
@@ -336,6 +416,13 @@ export function SettingsPageContent({
         </SettingsSection>
         </div>
 
+        {/* SUPPRESSED WHEN NO MODAL IS INJECTED.
+            The button only sets `deleteOpen`, so without a modal it does
+            nothing at all -- a dead control sitting directly above Android's
+            working native deletion section, which is both broken and a
+            duplicate. A platform that supplies no modal renders no Danger
+            zone; Android deletes through its footer instead. */}
+        {renderDeleteAccountModal ? (
         <section>
           <h2 className="text-base font-semibold text-red-700 dark:text-red-200">Danger zone</h2>
           <div className="mt-3 flex min-h-[4.25rem] flex-col gap-3 border-y border-red-300/25 px-2 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -349,9 +436,12 @@ export function SettingsPageContent({
             </Button>
           </div>
         </section>
+        ) : null}
       </div>
 
-      <DeleteAccountModal open={deleteOpen} onOpenChange={setDeleteOpen} />
+      {footer}
+
+      {renderDeleteAccountModal?.({ open: deleteOpen, onOpenChange: setDeleteOpen }) ?? null}
 
       {toast ? (
         <div
@@ -367,6 +457,42 @@ export function SettingsPageContent({
         </div>
       ) : null}
     </div>
+    </DestinationAvailability.Provider>
+  );
+}
+
+/**
+ * A control this platform cannot offer, shown rather than hidden.
+ *
+ * Same treatment as a link to a route that does not exist: a real disabled
+ * button, dimmed, with the reason in the accessible name. Hiding it would make
+ * the two platforms look more different than they are; leaving it live would be
+ * a control that appears to work and does nothing.
+ */
+function UnavailableRow({
+  icon: Icon,
+  title
+}: {
+  icon: LucideIcon;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-disabled="true"
+      aria-label={`${title}. Not in the Android app yet.`}
+      title={`${title}. Not in the Android app yet.`}
+      className="flex min-h-[4.25rem] w-full cursor-default items-center justify-between gap-4 px-2 py-3 text-left opacity-55"
+    >
+      <div className="flex gap-3">
+        <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Not in the Android app yet.</p>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -405,6 +531,49 @@ type SettingsLinkRowProps = {
 };
 
 function SettingsLinkRow({ icon: Icon, title, description, href }: SettingsLinkRowProps) {
+  const isAvailable = useContext(DestinationAvailability);
+  const unavailable = isAvailable ? !isAvailable(href) : false;
+  const body = (
+    <>
+      <div className="flex gap-3">
+        <Icon
+          className={cn("mt-0.5 h-5 w-5 shrink-0", unavailable ? "text-muted-foreground" : "text-accent")}
+          aria-hidden="true"
+        />
+        <div>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {unavailable ? "Not in the Android app yet." : description}
+          </p>
+        </div>
+      </div>
+      {unavailable ? null : (
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      )}
+    </>
+  );
+
+  /* A REAL BUTTON, not a dimmed Link. `aria-disabled` on an anchor still lets
+     it be followed -- the row would look unavailable and navigate anyway, to
+     the SPA catch-all. The same reasoning as the disabled bottom-nav tabs.
+
+     The reason goes in the accessible name because the visual dimming alone
+     says nothing to a screen reader. */
+  if (unavailable) {
+    return (
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        aria-label={`${title}. Not in the Android app yet.`}
+        title={`${title}. Not in the Android app yet.`}
+        className="flex min-h-[4.25rem] w-full cursor-default items-center justify-between gap-4 px-2 py-3 text-left opacity-55"
+      >
+        {body}
+      </button>
+    );
+  }
+
   return (
     <Link
       href={href}
@@ -412,14 +581,7 @@ function SettingsLinkRow({ icon: Icon, title, description, href }: SettingsLinkR
       aria-label={title}
       title={title}
     >
-      <div className="flex gap-3">
-        <Icon className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
-        <div>
-          <p className="text-sm font-semibold">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
-        </div>
-      </div>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      {body}
     </Link>
   );
 }

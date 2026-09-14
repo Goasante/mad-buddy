@@ -169,7 +169,14 @@ describe("Settings keeps its controls, and loses the floating pill", () => {
     // This changes how activation USES Settings, not whether it exists.
     const settings = readFileSync("components/settings/settings-page.tsx", "utf8");
     expect(settings).toContain("Ghost Mode");
-    expect(settings).toContain("updateVisibilityStatusAction");
+    /* The control still writes visibility; the Server Action call moved to the
+       web boundary when Settings became shared with Android, because a
+       "use server" import would drag the server graph into the mobile bundle.
+       The shared screen calls it through the injected client instead. */
+    expect(settings).toContain("client.setVisibilityStatus");
+    expect(readFileSync("components/settings/web-settings-page.tsx", "utf8")).toContain(
+      "updateVisibilityStatusAction"
+    );
   });
 
   it("keeps the launcher on ordinary browsing surfaces", () => {

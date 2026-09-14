@@ -1,5 +1,6 @@
 import { FileAudio, FileText, Image as ImageIcon, Video } from "lucide-react";
 import { DataExportButton } from "@/components/settings/data-export-button";
+import { exportAccountDataOnWeb } from "@/lib/settings/web-client";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 
@@ -54,7 +55,7 @@ export function DataStoragePage({ usage }: { usage: StorageUsage }) {
         )}
       </section>
       <SettingsSection title="Your data">
-        <DataExportButton />
+        <DataExportButton onExport={exportAccountDataOnWeb} />
       </SettingsSection>
     </div>
   );
