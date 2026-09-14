@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const action = readFileSync("app/(app)/profile-photo-actions.ts", "utf8");
+/* The behaviour moved to the service so the native app can reach it through
+   /api/profile/photos; the Server Action now delegates. These assertions follow
+   it rather than being relaxed -- the properties they guard are exactly the
+   ones that must not change in the move. */
+const action = readFileSync("lib/profile/photo-gallery-service.ts", "utf8");
 const carousel = readFileSync("components/profile/profile-photo-carousel.tsx", "utf8");
 
 describe("showcase photo replacement", () => {
