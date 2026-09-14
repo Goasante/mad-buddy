@@ -144,15 +144,100 @@ describe("rows only navigate where Android can arrive", () => {
     }
   });
 
-  it("the 13 web-only settings pages are listed as not built", () => {
-    for (const href of [
+  it("all 17 unavailable destinations are listed as not built", () => {
+    /* The full set, counted from the screen rather than from the entries this
+       PR happened to add: 13 settings-related pages, /about, and the three
+       that were already listed. An earlier count said 13 because it looked
+       only at the new additions. */
+    const unavailable = [
       "/settings/appearance", "/settings/communication", "/settings/data-storage",
       "/settings/engagement", "/settings/feedback", "/settings/glow-visibility",
       "/settings/language", "/settings/privacy", "/settings/privacy-setup",
-      "/settings/sessions", "/settings/walkthrough", "/invite", "/reminders"
-    ]) {
+      "/settings/sessions", "/settings/walkthrough", "/invite", "/reminders",
+      "/about",
+      // Pre-existing, listed before this PR.
+      "/hangout-mode", "/badges", "/safety-center"
+    ];
+    expect(unavailable).toHaveLength(17);
+    for (const href of unavailable) {
       expect(isBuiltForMobile(href), `${href} should be marked not built`).toBe(false);
     }
+    // And the count is what the screen actually renders, not a stale constant.
+    const distinct = [...new Set(destinations)];
+    expect(distinct.filter((href) => !isBuiltForMobile(href))).toHaveLength(17);
+    expect(distinct).toHaveLength(24);
+  });
+});
+
+/**
+ * PR #91 review findings. Every one of these passed CI, both production builds
+ * and the existing gates: they are RUNTIME failures on Capacitor, which is the
+ * class those gates do not cover.
+ *
+ * The shape of the mistake was auditing the shared component's own imports and
+ * stopping there. What a component PULLS IN makes requests too.
+ */
+describe("no shared Settings control makes a request Android cannot authenticate", () => {
+  const exportButton = read("components/settings/data-export-button.tsx");
+  const locationSetting = read("components/settings/location-for-glow-setting.tsx");
+
+  it("the export button no longer fetches a relative path itself", () => {
+    // It called "/api/account/export" with credentials: "include". On
+    // Capacitor that resolves against https://localhost -- which serves no API
+    // -- and the cookie is meaningless where the session is a Bearer token.
+    expect(exportButton).not.toContain("/api/account/export");
+    expect(exportButton).not.toContain('credentials: "include"');
+    expect(exportButton).toContain("onExport");
+  });
+
+  it("the location setting no longer fetches a relative path itself", () => {
+    expect(locationSetting).not.toContain("/api/location/update");
+    expect(locationSetting).not.toContain('credentials: "include"');
+    expect(locationSetting).toContain("onEnable");
+  });
+
+  it("web keeps the cookie-authenticated implementations, unchanged", () => {
+    const webClient = read("lib/settings/web-client.ts");
+    expect(webClient).toContain("/api/account/export");
+    expect(webClient).toContain("/api/location/update");
+    expect(webClient).toContain('credentials: "include"');
+  });
+
+  it("Android enables location through its Bearer-token client", () => {
+    const client = read("mobile/src/lib/settings-client.ts");
+    expect(client).toContain("postCurrentLocation");
+    expect(client).toContain("enableLocationForGlow");
+  });
+
+  it("Android supplies NO export, so the row renders unavailable", () => {
+    /* Deliberate: the route is cookie-only (no resolveApiUser, no CORS) AND
+       the web flow delivers the file with <a download>, which a WebView
+       ignores. Wiring only the request would produce a control that appears to
+       work and silently delivers nothing. */
+    const client = read("mobile/src/lib/settings-client.ts");
+    expect(client).not.toContain("exportAccountData:");
+    expect(shared).toContain("client.exportAccountData ?");
+    expect(shared).toContain("<UnavailableRow icon={Download}");
+  });
+});
+
+describe("the Danger zone is suppressed where it would do nothing", () => {
+  it("renders only when a delete modal is injected", () => {
+    /* The button only sets `deleteOpen`. With no modal it did nothing at all
+       -- a dead control sitting directly above Android's working native
+       deletion section, so both broken and a duplicate. */
+    expect(shared).toContain("{renderDeleteAccountModal ? (");
+    const dangerZone = shared.slice(shared.indexOf("Danger zone") - 400, shared.indexOf("Danger zone") + 100);
+    expect(dangerZone).toContain("renderDeleteAccountModal ?");
+  });
+
+  it("Android injects none, and deletes through its footer instead", () => {
+    expect(mobileScreen).not.toContain("renderDeleteAccountModal");
+    expect(mobileScreen).toContain("Delete my account");
+  });
+
+  it("web injects one, so its Danger zone still renders", () => {
+    expect(webBoundary).toContain("renderDeleteAccountModal={");
   });
 });
 

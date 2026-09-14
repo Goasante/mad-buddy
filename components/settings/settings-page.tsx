@@ -8,6 +8,7 @@ import {
   CalendarClock,
   ChevronRight,
   Database,
+  Download,
   Gauge,
   Ghost,
   Globe,
@@ -105,10 +106,12 @@ type SettingsPageContentProps = {
   /**
    * Whether a linked destination exists on this platform.
    *
-   * Android passes isBuiltForMobile: 13 of the 24 destinations here are real
-   * web features with no native screen, and left alone every one rendered as a
-   * tappable row that reached the SPA catch-all. They now render dimmed and
-   * non-navigating, with the reason in the accessible name.
+   * Android passes isBuiltForMobile: 17 of the 24 destinations here are
+   * unreachable — 13 settings-related web features with no native screen,
+   * /about, and the pre-existing /hangout-mode, /badges and /safety-center.
+   * Left alone, every one rendered as a tappable row that reached the SPA
+   * catch-all. They now render dimmed and non-navigating, with the reason in
+   * the accessible name.
    *
    * Web passes nothing, because every destination here exists on web.
    */
@@ -254,7 +257,7 @@ export function SettingsPageContent({
             href="/hangout-mode"
           />
           <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW}>
-            <LocationForGlowSetting onFeedback={showToast} />
+            <LocationForGlowSetting onFeedback={showToast} onEnable={client.enableLocationForGlow} />
           </div>
           <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_GHOST_MODE}>
             <PrivacyToggle
@@ -352,7 +355,16 @@ export function SettingsPageContent({
 
 
         <SettingsSection title="Data">
-          <DataExportButton />
+          {/* Export needs BOTH a working request and a way to deliver a file.
+              Android has neither: the route is cookie-only, and <a download>
+              does nothing in a WebView. A platform that cannot do it renders
+              the row as unavailable rather than as a button that appears to
+              work and silently delivers nothing. */}
+          {client.exportAccountData ? (
+            <DataExportButton onExport={client.exportAccountData} />
+          ) : (
+            <UnavailableRow icon={Download} title="Export your data" />
+          )}
           <SettingsLinkRow
             icon={Database}
             title="Data & Storage"
@@ -404,6 +416,13 @@ export function SettingsPageContent({
         </SettingsSection>
         </div>
 
+        {/* SUPPRESSED WHEN NO MODAL IS INJECTED.
+            The button only sets `deleteOpen`, so without a modal it does
+            nothing at all -- a dead control sitting directly above Android's
+            working native deletion section, which is both broken and a
+            duplicate. A platform that supplies no modal renders no Danger
+            zone; Android deletes through its footer instead. */}
+        {renderDeleteAccountModal ? (
         <section>
           <h2 className="text-base font-semibold text-red-700 dark:text-red-200">Danger zone</h2>
           <div className="mt-3 flex min-h-[4.25rem] flex-col gap-3 border-y border-red-300/25 px-2 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -417,6 +436,7 @@ export function SettingsPageContent({
             </Button>
           </div>
         </section>
+        ) : null}
       </div>
 
       {footer}
@@ -438,6 +458,41 @@ export function SettingsPageContent({
       ) : null}
     </div>
     </DestinationAvailability.Provider>
+  );
+}
+
+/**
+ * A control this platform cannot offer, shown rather than hidden.
+ *
+ * Same treatment as a link to a route that does not exist: a real disabled
+ * button, dimmed, with the reason in the accessible name. Hiding it would make
+ * the two platforms look more different than they are; leaving it live would be
+ * a control that appears to work and does nothing.
+ */
+function UnavailableRow({
+  icon: Icon,
+  title
+}: {
+  icon: LucideIcon;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-disabled="true"
+      aria-label={`${title}. Not in the Android app yet.`}
+      title={`${title}. Not in the Android app yet.`}
+      className="flex min-h-[4.25rem] w-full cursor-default items-center justify-between gap-4 px-2 py-3 text-left opacity-55"
+    >
+      <div className="flex gap-3">
+        <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Not in the Android app yet.</p>
+        </div>
+      </div>
+    </button>
   );
 }
 

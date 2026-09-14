@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { LocationEnableGuide } from "@/components/location/location-enable-guide";
 import { cn } from "@/lib/utils";
-import { fetchWithTimeout } from "@/lib/network/resilience";
 
 type LocationPermissionStatus = "checking" | "enabled" | "needed" | "blocked" | "unavailable";
 
 type LocationForGlowSettingProps = {
   onFeedback: (message: string, error?: boolean) => void;
+  /** Reads the position and posts it. Supplied by the platform. */
+  onEnable: () => Promise<{ ok: boolean; message?: string }>;
 };
 
 const statusLabels: Record<LocationPermissionStatus, string> = {
@@ -22,7 +23,7 @@ const statusLabels: Record<LocationPermissionStatus, string> = {
   unavailable: "Unavailable"
 };
 
-export function LocationForGlowSetting({ onFeedback }: LocationForGlowSettingProps) {
+export function LocationForGlowSetting({ onFeedback, onEnable }: LocationForGlowSettingProps) {
   const [status, setStatus] = useState<LocationPermissionStatus>("checking");
   const [open, setOpen] = useState(false);
   const [requesting, setRequesting] = useState(false);
@@ -75,64 +76,29 @@ export function LocationForGlowSetting({ onFeedback }: LocationForGlowSettingPro
   }, []);
 
   function requestLocation() {
-    if (!("geolocation" in navigator) || !window.isSecureContext) {
-      setStatus("unavailable");
-      setMessage("Location permission requires a supported browser and a secure connection.");
-      return;
-    }
+    /* The WHOLE operation is injected, not just the request.
 
+       This used to read navigator.geolocation here and POST a relative path
+       with a session cookie. On Capacitor that path resolves against
+       https://localhost -- the bundled asset origin, which serves no API --
+       and carries no Bearer token, so enabling location silently failed on
+       Android. Everything around the position read differs by platform:
+       web checks window.isSecureContext, Android is already secure but gates
+       on a native runtime permission. */
     setRequesting(true);
     setMessage("");
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const response = await fetchWithTimeout("/api/location/update", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy
-            })
-          }, 15_000, "enable location for glow");
-
-          if (!response.ok) {
-            const data = (await response.json().catch(() => null)) as { error?: string } | null;
-            setMessage(data?.error ?? "Could not enable location for glow. Try again.");
-            onFeedback("Couldn’t update this setting. Try again.", true);
-            return;
-          }
-
-          setStatus("enabled");
-          setMessage("Location is enabled. Your exact location remains private.");
-          onFeedback("Settings updated");
-        } catch {
-          setMessage("Could not enable location for glow. Check your connection and try again.");
+    void onEnable()
+      .then((result) => {
+        if (!result.ok) {
+          setMessage(result.message ?? "Could not enable location for glow. Try again.");
           onFeedback("Couldn’t update this setting. Try again.", true);
-        } finally {
-          setRequesting(false);
+          return;
         }
-      },
-      (error) => {
-        setRequesting(false);
-        if (error.code === error.PERMISSION_DENIED) {
-          setStatus("blocked");
-          setMessage("Location is blocked. Allow it in this browser’s site settings, then check again.");
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          setStatus("unavailable");
-          setMessage("This browser could not determine your location. Check device location services.");
-        } else {
-          setMessage("The location check timed out. Try again.");
-        }
-        onFeedback("Couldn’t update this setting. Try again.", true);
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 30_000,
-        timeout: 15_000
-      }
-    );
+        setStatus("enabled");
+        setMessage("Location is enabled. Your exact location remains private.");
+        onFeedback("Settings updated");
+      })
+      .finally(() => setRequesting(false));
   }
 
   return (

@@ -184,6 +184,16 @@ jobs:
       # Runs before the build: it needs no bundle and fails faster.
       - name: Verify the mobile app imports no Next.js
         run: node scripts/verify-mobile-imports.mjs
+      # A shared component is only safe if what it PULLS IN is safe too. PR #91
+      # shared Settings, whose own imports looked clean, but two controls it
+      # renders called /api/... relatively with credentials: "include". On
+      # Capacitor that resolves against https://localhost -- which serves no
+      # API -- and a cookie is meaningless where the session is a Bearer token,
+      # so Export and Location for Glow were silently broken on Android. The
+      # import gate asks "does next/* get in"; this asks "can reachable code
+      # make a request the native app cannot authenticate".
+      - name: Verify the mobile app makes no cookie-authenticated API calls
+        run: node scripts/verify-mobile-fetches.mjs
 
       - name: Verify no Next.js or server-only code in the mobile bundle
         run: node scripts/verify-mobile-bundle.mjs

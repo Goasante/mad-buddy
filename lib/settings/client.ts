@@ -36,4 +36,38 @@ export type SettingsClient = {
    * partial patch, so one switch cannot clobber the other preferences.
    */
   setNearbyAlerts(enabled: boolean): Promise<SettingsWriteResult>;
+
+  /**
+   * Reads the device position and posts it, enabling Location for Glow.
+   *
+   * The WHOLE operation is injected, not merely the request. Both platforms
+   * read geolocation from the same WebView API, but everything around it
+   * differs: web checks window.isSecureContext and posts a relative path with
+   * a session cookie, while Android is already in a secure context, gates on a
+   * native runtime permission, and must post an absolute URL with a Bearer
+   * token. Splitting it finer would leave half the flow platform-specific
+   * anyway.
+   */
+  enableLocationForGlow(): Promise<SettingsWriteResult>;
+
+  /**
+   * Downloads a copy of the account's data.
+   *
+   * Optional, and deliberately absent on Android. Two separate reasons: the
+   * route is cookie-only (no resolveApiUser, no CORS preflight), and the web
+   * flow delivers the file with `<a download>` + click(), which does nothing
+   * in an Android WebView. Wiring only the request would produce a control
+   * that looks like it worked and silently delivered nothing.
+   *
+   * When it is absent, the row renders as unavailable rather than broken.
+   */
+  exportAccountData?: () => Promise<SettingsExportResult>;
+};
+
+/** The export either yields a file to save, or explains why it did not. */
+export type SettingsExportResult = {
+  ok: boolean;
+  /** The exported bundle, for a platform that can deliver a file. */
+  blob?: Blob;
+  message?: string;
 };

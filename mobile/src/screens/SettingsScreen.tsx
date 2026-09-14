@@ -23,9 +23,10 @@ import { Spinner } from "../components/Spinner";
  *
  *  - the transport, which uses a Bearer token against the API origin rather
  *    than a Server Action with a session cookie;
- *  - `isBuiltForMobile`, because 13 of the 24 destinations are real web
- *    features with no native screen. Without it each rendered as a tappable
- *    row that reached the SPA catch-all;
+ *  - `isBuiltForMobile`, because 17 of the 24 destinations do not exist here:
+ *    13 settings-related web features with no native screen, /about, and the
+ *    pre-existing /hangout-mode, /badges and /safety-center. Without it each
+ *    rendered as a tappable row that reached the SPA catch-all;
  *  - Sign out and account deletion, in the footer. Both stores require in-app
  *    deletion, and the native flow signs out afterwards so this device's push
  *    token is unregistered rather than left pointing at a deleted user.
