@@ -259,8 +259,8 @@ function FeelingSection() {
             <MuddyAvatar initials="KB" name="Kojo" className="left-[13%] top-[17%]" intensity="medium" />
             <MuddyAvatar initials="NA" name="Nana" className="bottom-[14%] right-[13%]" intensity="soft" />
             <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-[#4E0401]/10 bg-[#FEFBF3]/95 p-3.5 backdrop-blur dark:border-white/10 dark:bg-[#1C0E0B]/95">
-              <p className="text-sm font-bold text-[#4E0401] dark:text-[#FFF8F1]">You know enough to act.</p>
-              <p className="mt-1 text-xs leading-5 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">No coordinates. No route. No “147 metres away.” Just a privacy-safe cue that a real-world moment might be possible.</p>
+              <p className="text-sm font-bold text-[#4E0401] dark:text-[#FFF8F1]">Close enough to connect.</p>
+              <p className="mt-1 text-xs leading-5 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">You’ll see broad proximity ranges such as “Just around,” never coordinates, routes or exact distances. Enough to know a Muddy is nearby without revealing precisely where they are.</p>
             </div>
           </div>
         </div>
