@@ -12,6 +12,8 @@ import { isTransientConfirmation, TRANSIENT_FEEDBACK_MS } from "@/hooks/use-tran
 describe("confirmations expire", () => {
   const confirmations = [
     "Sent",
+    "Forwarded.",
+    "Forwarded to 3 chats.",
     "Saved",
     "Updated",
     "Copied",
@@ -35,6 +37,8 @@ describe("confirmations expire", () => {
 describe("errors stay until the person deals with them", () => {
   const failures = [
     "The message could not be sent. Try again.",
+    "The message could not be forwarded to those chats.",
+    "This message type cannot be forwarded yet.",
     "Sending took too long. Your message was kept so you can try again.",
     "Messages took too long to respond. Try again.",
     "That image couldn't be read. Try another one.",

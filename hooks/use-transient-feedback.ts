@@ -91,6 +91,7 @@ export function isTransientConfirmation(message: string): boolean {
    */
   const confirmationSignals = [
     "sent",
+    "forwarded",
     "saved",
     "updated",
     "copied",
