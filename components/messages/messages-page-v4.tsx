@@ -1400,7 +1400,8 @@ export function MessagesPageV4({
       <ForwardModal target={forwardTarget} conversations={displayConversations.filter((conversation) => !inboxPreferences[conversation.id]?.archivedAt)} pending={isPending} onClose={() => setForwardTarget(null)} onForward={(targetConversationId) => {
         if (!forwardTarget) return;
         startTransition(async () => {
-          const result = await forwardMessageAction({ sourceMessageId: forwardTarget.message.id, targetConversationIds: [targetConversationId] });
+          const result = await forwardMessageAction({ sourceMessageId: forwardTarget.message.id, targetConversationIds: [targetConversationId] })
+            .catch(() => ({ ok: false, message: "Could not forward the message. Try again." }));
           setFeedback(result.message);
           if (result.ok) setForwardTarget(null);
         });

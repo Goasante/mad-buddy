@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, Check, CheckCheck, Copy, Forward, Info, Pin, Reply, Trash2, Pencil, X } from "lucide-react";
+import { Bookmark, Check, CheckCheck, Copy, Forward, Info, Pin, Reply, Trash2, Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ChatPollCard } from "@/components/messaging/chat-poll-card";
@@ -301,21 +301,15 @@ export function MessageBubbleV4({
 
   return (
     <>
-      {actionsOpen ? <button type="button" className="fixed inset-0 z-40 cursor-default bg-black/10 backdrop-blur-[1px] animate-in fade-in duration-150" aria-label="Close message actions" onClick={() => setActionsOpen(false)} /> : null}
-      <div className={cn("relative", actionsOpen && "z-50")}>
-        {actionsOpen ? (
-          <div className={cn("mb-2 flex w-fit max-w-[95vw] items-center gap-0.5 rounded-full border border-border/60 bg-card p-1 shadow-[0_15px_50px_rgba(78,4,1,.18)] animate-in zoom-in-90 slide-in-from-bottom-2 duration-180 ", message.isMine && "ml-auto")}>
-            {REACTIONS.map(([id, emoji], index) => (
-              <button key={id} type="button" onClick={() => { react(id); setActionsOpen(false); }} className="focus-ring grid h-10 w-10 place-items-center rounded-full text-lg transition-transform hover:scale-125 active:scale-90" style={{ animationDelay: `${index * 18}ms` }} aria-label={`React ${emoji}`}>{emoji}</button>
+      {bubble}
+      <Modal open={actionsOpen} onOpenChange={setActionsOpen} title="Message actions" variant="sheet">
+        <div className="space-y-3">
+          <div className="flex flex-wrap justify-center gap-1" aria-label="Reactions">
+            {REACTIONS.map(([id, emoji]) => (
+              <button key={id} type="button" onClick={() => { react(id); setActionsOpen(false); }} className="focus-ring grid h-11 w-11 place-items-center rounded-full text-lg hover:bg-secondary active:scale-90" aria-label={`React ${emoji}`}>{emoji}</button>
             ))}
-            <button type="button" onClick={() => setActionsOpen(false)} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground" aria-label="Close"><X className="h-4 w-4" /></button>
           </div>
-        ) : null}
-
-        {bubble}
-
-        {actionsOpen ? (
-          <div className={cn("mt-2 grid w-[min(330px,92vw)] grid-cols-4 gap-1 rounded-2xl border border-border/60 bg-card p-1.5 shadow-[0_16px_52px_rgba(78,4,1,.18)] animate-in zoom-in-95 slide-in-from-top-1 ", message.isMine && "ml-auto")} role="menu" aria-label="Message actions">
+          <div className="grid w-full grid-cols-4 gap-1" role="menu" aria-label="Message actions">
             <Action icon={Reply} label="Reply" onClick={() => { onReply(); setActionsOpen(false); }} />
             <Action icon={Copy} label="Copy" onClick={() => { onCopy(); setActionsOpen(false); }} disabled={!message.text} />
             <Action icon={Bookmark} label={saved ? "Unsave" : "Save"} onClick={() => { onSave(); setActionsOpen(false); }} active={saved} />
@@ -325,8 +319,8 @@ export function MessageBubbleV4({
             {message.isMine && message.text && !message.deleted ? <Action icon={Pencil} label="Edit" onClick={() => { onEdit(); setActionsOpen(false); }} /> : null}
             {!message.deleted ? <Action icon={Trash2} label="Delete" destructive onClick={() => { onDelete(); setActionsOpen(false); }} /> : null}
           </div>
-        ) : null}
-      </div>
+        </div>
+      </Modal>
 
       {message.isMine ? <MessageInfoV4 messageId={message.id} open={infoOpen} onOpenChange={setInfoOpen} /> : null}
 
