@@ -132,7 +132,7 @@ export function ContactDiscoveryPage() {
   }
 
   return (
-    <div className="mr-auto max-w-[680px] space-y-6 pt-6">
+    <div className="mr-auto w-full min-w-0 max-w-[680px] space-y-6 break-words pt-6">
       <SettingsSubHeader
         title="Contact discovery"
         description="Let people who already have your number find you on Mad Buddy. Off unless you turn it on."
@@ -289,7 +289,7 @@ export function ContactDiscoveryPage() {
               >
                 <span
                   className={cn(
-                    "absolute top-1 h-5 w-5 rounded-full bg-white transition-transform motion-reduce:transition-none",
+                    "absolute left-0 top-1 h-5 w-5 rounded-full bg-white transition-transform motion-reduce:transition-none",
                     discoveryEnabled ? "translate-x-6" : "translate-x-1"
                   )}
                 />

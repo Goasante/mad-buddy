@@ -547,6 +547,7 @@ function AppShellInner({
              * pill's own geometry, and collapses to ordinary spacing on
              * desktop where the pill sits clear of the content column. */
             "relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain scroll-pb-[calc(var(--mobile-nav-height)+1rem)] lg:pb-6 md:scroll-pb-6 md:pt-0",
+            pathname === "/settings/contact-discovery" && "overflow-x-hidden overscroll-none",
             // Ordinary pages keep the shell's page margin; a full-bleed surface
             // gets it back at md+, where there is a content column rather than
             // a screen edge.
