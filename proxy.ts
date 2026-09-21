@@ -3,6 +3,8 @@ import { createServerClient } from "@supabase/ssr";
 import { authenticatedRedirect, requiredLoginRedirect } from "@/lib/security/route-protection";
 import { safeAuthNext } from "@/lib/auth/oauth-redirect";
 import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "@/lib/security/csp";
+import { extendContentSecurityPolicyForGoogleAds } from "@/lib/ads/csp";
+import { webAdsConfigured } from "@/lib/ads/config";
 import { supabaseCookieOptions } from "@/lib/supabase/cookie-options";
 import type { Database } from "@/lib/supabase/database.types";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -36,12 +38,20 @@ export async function proxy(request: NextRequest) {
   // to enforce it. x-nonce lets the app's own inline scripts read it. This is
   // the documented Next.js nonce pattern; every response below carries it.
   const nonce = createNonce();
-  const cspHeader = buildContentSecurityPolicy({
+  const baseCspHeader = buildContentSecurityPolicy({
     supabaseOrigin: supabaseOriginFromEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
     mode: "enforce",
     nonce,
     allowDevEval: process.env.NODE_ENV === "development"
   });
+  // A deployment that does not have BOTH approved AdSense identifiers keeps
+  // the original strict CSP byte-for-byte. Configuration alone only grants
+  // transport permission; Admin flags + Access + route policy still decide
+  // whether any ad request is actually made.
+  const cspHeader = extendContentSecurityPolicyForGoogleAds(
+    baseCspHeader,
+    webAdsConfigured(process.env)
+  );
 
   function withSecurityHeaders(requestHeaders?: Headers): NextResponse {
     const response =
@@ -93,7 +103,7 @@ export async function proxy(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(cookie.name, value));
         response = NextResponse.next({ request: { headers: requestHeaders } });
         response.headers.set("Content-Security-Policy", cspHeader);
         cookiesToSet.forEach(({ name, value, options }) => {
