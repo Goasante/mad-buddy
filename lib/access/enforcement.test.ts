@@ -6,9 +6,10 @@ import { describe, expect, it } from "vitest";
  * ADS-FIRST MONETIZATION INVARIANTS.
  *
  * Linkr and UpFor are now part of the free product. Mad Buddy Access answers a
- * different question: whether advertising may be shown. The compatibility
- * guard may still be called by old Linkr/UpFor code during cleanup, but it must
- * never deny a user who lacks Access.
+ * different question: whether advertising may be shown. A temporary
+ * compatibility guard may still be called by old Server Actions during cleanup,
+ * but route-level paywalls are gone and the guard must never deny a user who
+ * lacks Access.
  */
 
 const ROOT = join(__dirname, "..", "..");
@@ -17,6 +18,8 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 const guard = read("lib/access/guard.ts");
 const linkr = read("app/(app)/linkr-actions.ts");
 const upfor = read("app/(app)/hangout-actions.ts");
+const linkrRoute = read("app/(app)/linkr/page.tsx");
+const upforRoute = read("app/(app)/hangout-mode/page.tsx");
 
 /** A file with comments stripped — assert on code, never on prose. */
 function code(source: string): string {
@@ -33,6 +36,18 @@ function actionBody(source: string, name: string): string {
 }
 
 describe("Linkr and UpFor are not paid surfaces anymore", () => {
+  it("the Linkr route has no Access paywall", () => {
+    const source = code(linkrRoute);
+    expect(source).not.toContain("AccessLocked");
+    expect(source).not.toContain("checkAccess");
+  });
+
+  it("the UpFor route has no Access paywall", () => {
+    const source = code(upforRoute);
+    expect(source).not.toContain("AccessLocked");
+    expect(source).not.toContain("checkAccess");
+  });
+
   it("the compatibility guard always returns ok with the real Access state", () => {
     const body = code(actionBody(guard, "checkAccess"));
     expect(body).toContain("resolveAccessForUser(userId)");
