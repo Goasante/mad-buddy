@@ -34,12 +34,12 @@ export default async function AdminFeaturesPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Feature controls"
-        description="Release optional product features deliberately. Every change applies globally, is rate-limited, and is recorded in the audit log."
+        description="Release optional product features and monetization surfaces deliberately. Every change applies globally, is rate-limited, and is recorded in the audit log."
       />
 
       <AdminSection
-        title="Social discovery"
-        description="Optional discovery surfaces can be paused without affecting core friendships, privacy, or account access."
+        title="Managed controls"
+        description="Global kill switches for optional product surfaces and advertising. Turning advertising off never changes anyone's Mad Buddy Access status."
       >
         <Card className="overflow-hidden p-0">
           <div className="divide-y divide-border/70">
