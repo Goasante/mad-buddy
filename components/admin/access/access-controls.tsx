@@ -177,7 +177,7 @@ export function GlobalAccessForm({ openWindowId }: { openWindowId: string | null
           <Outcome result={result} />
         </div>
         <p className="text-xs text-muted-foreground md:col-span-2">
-          Closing the window returns each person to their own Access sources. The app stays usable; accounts without another Access source simply become ad-eligible again.
+          Closing the window restores each person to their own sources. The app stays usable; accounts without another Access source simply become ad-eligible again.
         </p>
       </form>
     );
