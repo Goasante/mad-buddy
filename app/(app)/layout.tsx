@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { WebAdsProvider } from "@/components/ads/web-ads-provider";
 import { TourHost } from "@/components/tours/tour-host";
 import { EnableNotificationsPrompt } from "@/components/pwa/enable-notifications-prompt";
 import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
+import { resolveAdEntitlementForUser } from "@/lib/access/ad-entitlement";
+import { readWebAdsConfiguration } from "@/lib/ads/config";
 import { ensureMaintenanceWarm } from "@/lib/maintenance/loader";
 import { shouldBlockForMaintenance } from "@/lib/maintenance/state";
 import { getAdminLinkVisibility } from "@/lib/safety/admin";
@@ -13,6 +17,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  ADS_ANCHOR_FLAG,
+  ADS_ENABLED_FLAG,
+  ADS_INLINE_FLAG,
+  ADS_INTERSTITIAL_FLAG,
   MAD_CAM_FLAG,
   MOMENTS_FLAG,
   resolveGlobalFeatureFlag,
@@ -41,11 +49,16 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // below is only for this layout's own queries. ensureMaintenanceWarm() needs
   // no user, so it starts here too instead of waiting behind everything else.
   const env = getSupabaseServerEnv();
-  const [supabase, user, maintenance] = await Promise.all([
+  const [supabase, user, maintenance, requestHeaders] = await Promise.all([
     createSupabaseServerClient(),
     getCurrentIdentity(),
-    env.url && env.serviceRoleKey ? ensureMaintenanceWarm(createSupabaseAdminClient()) : Promise.resolve(null)
+    env.url && env.serviceRoleKey ? ensureMaintenanceWarm(createSupabaseAdminClient()) : Promise.resolve(null),
+    headers()
   ]);
+  // Google documents nonce-based strict CSP for AdSense. proxy.ts minted this
+  // exact value and put it on the request, so the provider script receives the
+  // same trust root as the rest of the Next.js render. Missing nonce => no ad.
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   // Every remaining lookup here only needs `user`/`env`, not each other's
   // results, so they run together instead of one sequential await chain
@@ -54,9 +67,12 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // the slowest one. This was blocking every page behind this layout, which
   // is why unrelated destinations (Profile, Settings, Billing, Help, Admin)
   // were all affected together.
-  // Access retired the subscription read; Account Hub retired the Buddy Score
-  // and profile-completion reads as dead menu consumers. Neither is loaded.
-  const [isStaff, unreadResult, profileResult, shellFlagsResult] = await Promise.all([
+  //
+  // Ads are resolved here for the same reason: every PWA placement consumes
+  // ONE server-owned answer. Failure is intentionally ad-free, so a transient
+  // entitlement/configuration problem can never make an Access account see an
+  // advertisement.
+  const [isStaff, unreadResult, profileResult, shellFlagsResult, adEntitlement] = await Promise.all([
     getAdminLinkVisibility(),
     user
       ? supabase
@@ -86,8 +102,19 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       ? supabase
           .from("feature_flags")
           .select("key, status, default_value")
-          .in("key", [SOCIALIZE_FLAG, MOMENTS_FLAG, MAD_CAM_FLAG])
-      : Promise.resolve({ data: null })
+          .in("key", [
+            SOCIALIZE_FLAG,
+            MOMENTS_FLAG,
+            MAD_CAM_FLAG,
+            ADS_ENABLED_FLAG,
+            ADS_INLINE_FLAG,
+            ADS_ANCHOR_FLAG,
+            ADS_INTERSTITIAL_FLAG
+          ])
+      : Promise.resolve({ data: null }),
+    user && env.url && env.serviceRoleKey
+      ? resolveAdEntitlementForUser(user.id).catch(() => null)
+      : Promise.resolve(null)
   ]);
 
   // Global pause. Staff are exempt so someone can still reach /admin to turn
@@ -149,11 +176,11 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
       : Promise.resolve(defaultResolvedWallpaper());
 
   /**
-   * Flag resolution for the shell.
+   * Flag resolution for the shell and advertising.
    *
    * A missing row means the feature is off: resolveGlobalFeatureFlag fails
-   * closed, which is exactly why pausing Moments and Mad Cam needed no
-   * migration. Seeding a row from Admin -> Features turns either back on.
+   * closed. This is especially important for ads: a migration/configuration
+   * delay produces no request, never an accidental monetization rollout.
    */
   const flagRows = (shellFlagsResult.data ?? []) as Array<{
     key: string;
@@ -166,6 +193,19 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   const socializeEnabled = flagEnabled(SOCIALIZE_FLAG);
   const momentsEnabled = flagEnabled(MOMENTS_FLAG);
   const madCamEnabled = flagEnabled(MAD_CAM_FLAG);
+  const adsEnabled = flagEnabled(ADS_ENABLED_FLAG);
+  const inlineAdsEnabled = flagEnabled(ADS_INLINE_FLAG);
+  const anchorAdsEnabled = flagEnabled(ADS_ANCHOR_FLAG);
+  const interstitialAdsEnabled = flagEnabled(ADS_INTERSTITIAL_FLAG);
+
+  // No provider identifiers are ever fabricated. A build/deployment without
+  // approved AdSense values is structurally incapable of requesting an ad.
+  const webAds = readWebAdsConfiguration(process.env);
+  const webAdsConfig = webAds.ok ? webAds.value : null;
+
+  // Unknown entitlement is deliberately ad-free. Showing fewer ads during a
+  // backend hiccup is preferable to showing one to a person who paid not to.
+  const adFree = adEntitlement?.adFree ?? true;
 
   // A paused feature stops existing in navigation rather than appearing as a
   // dead or "coming soon" entry.
@@ -175,35 +215,47 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   ];
 
   return (
-    <AppShell
-      showAdminLink={isStaff}
-      initialUnreadCount={unreadResult.count ?? 0}
-      locationSyncEnabled={profileResult.data?.visibility_status !== "ghost"}
-      currentUsername={profileResult.data?.username ?? null}
-      currentAvatarUrl={profileResult.data?.avatar_url ?? null}
-      // Identity for the shared menu sheet, resolved once here rather than
-      // per screen.
-      currentDisplayName={profileResult.data?.full_name?.split(" ")[0] || ""}
-      currentUserId={user?.id ?? null}
-      hiddenNavigationHrefs={hiddenNavigationHrefs}
-      // Mad Cam is paused: without this the shell never mounts the camera
-      // launcher or its lazy chunk. The camera code itself is untouched.
-      madCamEnabled={madCamEnabled}
-      wallpaperPromise={wallpaperPromise}
+    <WebAdsProvider
+      config={webAdsConfig}
+      nonce={nonce}
+      features={{
+        adsEnabled,
+        inlineEnabled: inlineAdsEnabled,
+        anchorEnabled: anchorAdsEnabled,
+        interstitialEnabled: interstitialAdsEnabled,
+        adFree
+      }}
     >
-      {children}
-      {/* Only offered once the user is signed in (mounted in the authed layout). */}
-      <InstallAppPrompt />
-      {user ? <EnableNotificationsPrompt userId={user.id} /> : null}
-      {/* Guided tours, behind their own Suspense boundary so tour eligibility
-          can never delay the route committing — the lesson from the wallpaper
-          regression. Renders nothing for anyone who has already resolved the
-          current tour version, which is nearly every load. */}
-      {user ? (
-        <Suspense fallback={null}>
-          <TourHost userId={user.id} />
-        </Suspense>
-      ) : null}
-    </AppShell>
+      <AppShell
+        showAdminLink={isStaff}
+        initialUnreadCount={unreadResult.count ?? 0}
+        locationSyncEnabled={profileResult.data?.visibility_status !== "ghost"}
+        currentUsername={profileResult.data?.username ?? null}
+        currentAvatarUrl={profileResult.data?.avatar_url ?? null}
+        // Identity for the shared menu sheet, resolved once here rather than
+        // per screen.
+        currentDisplayName={profileResult.data?.full_name?.split(" ")[0] || ""}
+        currentUserId={user?.id ?? null}
+        hiddenNavigationHrefs={hiddenNavigationHrefs}
+        // Mad Cam is paused: without this the shell never mounts the camera
+        // launcher or its lazy chunk. The camera code itself is untouched.
+        madCamEnabled={madCamEnabled}
+        wallpaperPromise={wallpaperPromise}
+      >
+        {children}
+        {/* Only offered once the user is signed in (mounted in the authed layout). */}
+        <InstallAppPrompt />
+        {user ? <EnableNotificationsPrompt userId={user.id} /> : null}
+        {/* Guided tours, behind their own Suspense boundary so tour eligibility
+            can never delay the route committing — the lesson from the wallpaper
+            regression. Renders nothing for anyone who has already resolved the
+            current tour version, which is nearly every load. */}
+        {user ? (
+          <Suspense fallback={null}>
+            <TourHost userId={user.id} />
+          </Suspense>
+        ) : null}
+      </AppShell>
+    </WebAdsProvider>
   );
 }

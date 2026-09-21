@@ -35,7 +35,6 @@ import { resolveHangoutAudience } from "@/lib/social/upfor-audience";
 import { validateLaterToday } from "@/lib/time/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { checkAccess } from "@/lib/access/guard";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { HANGOUT_ACTIVITY_LABELS, HANGOUT_ACTIVITY_TYPES } from "@/lib/social/plans";
@@ -238,15 +237,7 @@ const startHangoutSchema = z.object({
   muddyIds: z.array(uuidSchema).max(50).optional()
 });
 
-/**
- * UpFor limits, flat for everybody who has Access.
- *
- * These replace `max_active_hangouts` / `max_hangout_capacity`, which varied by
- * subscription tier. They are anti-abuse ceilings, not a paywall: a limit that
- * can be raised by paying is a quota, and the access model sells one boundary
- * rather than quotas. The values are the old paid-tier ones, so nobody who
- * previously had Access loses capability.
- */
+/** Flat anti-abuse ceilings for everyone; payment never raises these limits. */
 const MAX_ACTIVE_UPFORS = 3;
 /** Fallback when a client sends no zone. Only decides what "today" means. */
 const DEFAULT_UPFOR_TIMEZONE = "Africa/Accra";
@@ -262,11 +253,6 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
-
-  /* GATED: creating an UpFor is the expansion act -- it publishes an
-     invitation, potentially to people you have not met. */
-  const access = await checkAccess(userId, "upfor");
-  if (!access.ok) return { ok: false, message: access.message };
 
   const nowMs = Date.now();
 
@@ -317,21 +303,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
 
   const admin = createSupabaseAdminClient();
 
-  /* THE OLD TIER CAPS ARE GONE FROM HERE.
-   *
-   * This used to read `getCurrentSubscriptionAccess(userId).plan` and cap
-   * active UpFors and capacity per tier (3 / 5 on free), with an
-   * "on your plan" upgrade prompt. That is the three-tier model the access
-   * reset replaces: UpFor is now ONE boundary -- you either have Mad Buddy
-   * Access or you do not -- and the check above already decided that.
-   *
-   * A person with Access gets the full capability rather than a metered
-   * version of it, which is the difference between selling a feature and
-   * selling a quota.
-   *
-   * The concurrency ceiling is NOT monetization: it is the same anti-abuse
-   * limit for everybody with Access, so one account cannot flood the nearby
-   * feed with sessions. Being flat, it cannot be bought past.
+  /* The concurrency ceiling applies to everyone and cannot be bought past.
    *
    * THE CEILING IS NO LONGER CHECKED HERE. It used to be
    * `if (await activeHangoutCount(...) >= MAX) return` followed by a separate
@@ -940,28 +912,10 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
 
   const muddyRows = (muddySessions ?? []) as HangoutDiscoveryRow[];
 
-  /* THE GATE SITS BETWEEN THE TWO HALVES OF THIS FEED, not around it.
-   *
-   * The query above has two branches, and they are different products under
-   * the access model:
-   *
-   *   muddySessions    what your EXISTING Muddies are up for. That is your
-   *                    existing social world, which is free forever. Gating it
-   *                    would paywall seeing your own friends -- exactly the
-   *                    accidental over-gating the constitution warns about.
-   *
-   *   nearbySessions   `discovery_scope: "nearby"` sessions from people who
-   *                    are NOT your Muddies. That is expansion, and it is what
-   *                    Mad Buddy Access pays for.
-   *
-   * So an expired account keeps a working UpFor feed of its own Muddies and
-   * simply stops seeing strangers in it. */
-  const upforAccess = await checkAccess(userId, "upfor");
-  const strangerCandidates = upforAccess.ok
-    ? ((nearbySessions ?? []) as HangoutDiscoveryRow[]).filter(
-        (session) => !friendIds.includes(session.owner_id)
-      )
-    : [];
+  // Both discovery paths are free; their privacy and proximity rules still apply.
+  const strangerCandidates = ((nearbySessions ?? []) as HangoutDiscoveryRow[]).filter(
+    (session) => !friendIds.includes(session.owner_id)
+  );
 
   const visible: HangoutDiscoveryRow[] = [];
 
@@ -1262,19 +1216,6 @@ export async function requestHangoutAction(
 
   if (!viewableAsMuddy && !viewableAsStranger) {
     return { ok: false, message: "This UpFor isn't open to you." };
-  }
-
-  /* GATED ONLY FOR STRANGERS, and the code above already drew that line.
-   *
-   * Joining a MUDDY's UpFor is your existing social world -- free forever, and
-   * gating it would paywall answering your own friend. Joining a STRANGER's is
-   * expansion, which is what Access pays for.
-   *
-   * `viewableAsMuddy` is checked first and short-circuits, so this branch runs
-   * only for people who reached the session through the nearby opt-in. */
-  if (viewableAsStranger) {
-    const access = await checkAccess(userId, "upfor");
-    if (!access.ok) return { ok: false, message: access.message };
   }
 
   const rateLimit = await consumeRateLimit({ action: "hangouts.request", userId });

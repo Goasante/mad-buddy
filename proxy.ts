@@ -3,6 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 import { authenticatedRedirect, requiredLoginRedirect } from "@/lib/security/route-protection";
 import { safeAuthNext } from "@/lib/auth/oauth-redirect";
 import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "@/lib/security/csp";
+import { extendContentSecurityPolicyForGoogleAds } from "@/lib/ads/csp";
+import { webAdsConfigured } from "@/lib/ads/config";
+import { isPwaInlineAdRoute } from "@/lib/ads/policy";
 import { supabaseCookieOptions } from "@/lib/supabase/cookie-options";
 import type { Database } from "@/lib/supabase/database.types";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -36,12 +39,21 @@ export async function proxy(request: NextRequest) {
   // to enforce it. x-nonce lets the app's own inline scripts read it. This is
   // the documented Next.js nonce pattern; every response below carries it.
   const nonce = createNonce();
-  const cspHeader = buildContentSecurityPolicy({
+  const baseCspHeader = buildContentSecurityPolicy({
     supabaseOrigin: supabaseOriginFromEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
     mode: "enforce",
     nonce,
     allowDevEval: process.env.NODE_ENV === "development"
   });
+  // AdSense needs Google's documented nonce-based strict CSP. Do not weaken
+  // every response merely because a publisher id exists: the initial rollout
+  // has one explicitly approved web placement, on Home, so only that route gets
+  // the ad transport extension. Admin flags + Access still decide whether the
+  // page actually requests an ad.
+  const cspHeader = extendContentSecurityPolicyForGoogleAds(
+    baseCspHeader,
+    webAdsConfigured(process.env) && isPwaInlineAdRoute(request.nextUrl.pathname)
+  );
 
   function withSecurityHeaders(requestHeaders?: Headers): NextResponse {
     const response =

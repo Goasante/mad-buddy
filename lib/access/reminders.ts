@@ -6,32 +6,25 @@ import { createNotification } from "@/lib/notifications/server";
 /**
  * WELCOME ACCESS REMINDERS.
  *
- * ── THE RESTRAINT IS THE DESIGN ───────────────────────────────────────────
+ * Welcome Access is a temporary ad-free period, not a feature trial. Mad Buddy
+ * keeps working when it ends; the only product change is that the account may
+ * become eligible for advertising when the Admin advertising switches are on.
  *
- * The brief offers a four-point schedule (days 10, 12, 13, 14) and then asks
- * for "the lightest implementation that informs without harassment". Those
- * pull against each other, and four notifications about a free trial nobody
- * paid for is harassment. This sends TWO:
+ * The reminder schedule stays deliberately light:
  *
- *   day 10 (4 days left)  early enough to be useful, late enough to be news
- *   day 13 (ends tomorrow) the one that actually matters
+ *   4 days left   early enough to make an informed renewal choice
+ *   1 day left    the final useful heads-up
  *
- * Days 12 and 14 are deliberately dropped. Day 12 says nothing day 10 did not,
- * and a notification on the day access ends arrives too late to act on while
- * still feeling like a nag. What day 14 needs is a good LOCKED STATE, which
- * exists, rather than a push notification.
- *
- * The rest of the reminder surface is contextual and costs nothing: Settings →
- * Mad Buddy Access always shows the remaining days to anybody who looks, and
- * the locked state explains itself when the moment comes. Nobody has to be
- * interrupted to find this out.
+ * No expiry-day push is sent. Settings -> Mad Buddy Access always carries the
+ * current state, and two reminders are enough for a benefit that ends without
+ * taking away the app or charging anyone automatically.
  *
  * ── NO DARK PATTERNS ──────────────────────────────────────────────────────
  *
- * The copy never implies that Mad Buddy is ending -- it names the two features
- * involved and lists what stays free. It never invents urgency, never claims
- * people are waiting, and states plainly that no payment method was taken so
- * nothing will be charged.
+ * Copy says exactly what changes: the ad-free period ends. It never suggests
+ * Linkr, UpFor, relationships, conversations or Plans will disappear; never
+ * invents people waiting or false urgency; and states that Welcome Access does
+ * not charge or renew itself.
  *
  * ── IDEMPOTENCY ───────────────────────────────────────────────────────────
  *
@@ -52,14 +45,14 @@ export type ReminderMilestone = (typeof REMINDER_MILESTONES)[number]["key"];
 
 const COPY: Record<ReminderMilestone, { title: string; message: string }> = {
   welcome_t4: {
-    title: "Your Mad Buddy Access ends in 4 days",
+    title: "4 ad-free days left",
     message:
-      "Linkr and UpFor stay available until then. Muddies, Messages, Plans, Events, Glow and Safe Arrival stay free — and nothing will be charged, since you never added a payment method."
+      "Your Welcome Access ends in 4 days. Mad Buddy, including Linkr and UpFor, stays available afterward; ads may appear if advertising is enabled. Nothing will be charged automatically."
   },
   welcome_t1: {
-    title: "Your Mad Buddy Access ends tomorrow",
+    title: "Your ad-free Welcome Access ends tomorrow",
     message:
-      "After that, Linkr and UpFor need Access. Everyone you have already connected with, and every conversation and Plan you have, stays exactly where it is."
+      "Mad Buddy stays available when it ends. Your account may start showing ads if advertising is enabled. Welcome Access does not renew or charge you automatically."
   }
 };
 
@@ -111,13 +104,12 @@ export async function processWelcomeAccessReminders(
     const milestone = REMINDER_MILESTONES.find((m) => m.daysRemaining === remaining);
     if (!milestone) continue;
 
-    /* DO NOT WARN SOMEBODY WHOSE ACCESS IS NOT ACTUALLY ENDING.
+    /* DO NOT WARN SOMEBODY WHOSE AD-FREE ACCESS IS NOT ACTUALLY ENDING.
      *
      * A person may hold a paid subscription, an admin grant, or be covered by
      * a global promotion at the same time as their welcome window. Their
-     * welcome grant expiring changes nothing for them, and telling them
-     * "your access ends tomorrow" would be false. This is the reminder-side
-     * consequence of sources being independent rather than ranked. */
+     * welcome grant expiring changes nothing for them, and telling them their
+     * ad-free period ends would be false. Sources remain independent. */
     const [{ data: otherGrants }, { data: globalWindows }, { data: subscription }] = await Promise.all([
       admin
         .from("access_grants")

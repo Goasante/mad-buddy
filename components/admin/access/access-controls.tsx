@@ -12,15 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /**
- * Admin controls for Mad Buddy Access -- the thing that actually unlocks Linkr
- * and UpFor.
+ * Admin controls for Mad Buddy Access.
  *
- * WHY THIS EXISTS. The server actions have been correct and audited since
- * 20260824, but nothing rendered them, so there was no way to grant Access from
- * Admin at all. An owner looking for one found the legacy premium-trial page
- * instead and granted a tier from it, which does not touch Access -- the
- * resolver reads access_grants, global windows, staff and live subscriptions,
- * and nothing else. The grant appeared to work and changed nothing.
+ * In the ads-first model Access is an ad-free entitlement. It does not unlock
+ * Linkr, UpFor or any other core feature. A timed Admin grant therefore means
+ * "this person sees no Mad Buddy-controlled ads for this period" while leaving
+ * the rest of their account unchanged.
  *
  * The durations offered here come from GRANT_DURATIONS on the server; the
  * server re-validates every one of them, so this list is a convenience and
@@ -83,7 +80,7 @@ export function GrantAccessForm() {
       <Field label="User ID" hint="The account's UUID, from the Users screen.">
         <Input name="userId" required placeholder="00000000-0000-0000-0000-000000000000" />
       </Field>
-      <Field label="Duration">
+      <Field label="Ad-free duration">
         <select name="duration" defaultValue="14d" className="input-shell h-11 w-full px-3">
           {DURATIONS.map((duration) => (
             <option key={duration.value} value={duration.value}>
@@ -94,15 +91,18 @@ export function GrantAccessForm() {
       </Field>
       <div className="md:col-span-2">
         <Field label="Reason" hint="Recorded in the audit log. Say why, not what.">
-          <Input name="reason" required minLength={3} maxLength={500} placeholder="Support: access ended mid-conversation" />
+          <Input name="reason" required minLength={3} maxLength={500} placeholder="Support: complimentary ad-free period" />
         </Field>
       </div>
       <div className="flex items-center gap-3 md:col-span-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Granting…" : "Grant Access"}
+          {pending ? "Granting…" : "Grant ad-free Access"}
         </Button>
         <Outcome result={result} />
       </div>
+      <p className="text-xs text-muted-foreground md:col-span-2">
+        This does not unlock extra features. It removes Mad Buddy-controlled ads while the grant is active.
+      </p>
     </form>
   );
 }
@@ -138,12 +138,8 @@ export function RevokeAccessForm() {
         </Button>
         <Outcome result={result} />
       </div>
-      {/* Says exactly what it touches. Revoking an admin grant does not cancel a
-          subscription, end Welcome Access or remove staff access, and an admin
-          who assumes otherwise will think the revoke failed. */}
       <p className="text-xs text-muted-foreground md:col-span-2">
-        Revokes admin grants only. A live subscription, Welcome Access, staff access or an open
-        global window each keep this person&apos;s access on their own.
+        Revokes admin grants only. A live subscription, Welcome Access, staff access or an open global window can still keep this person ad-free on its own.
       </p>
     </form>
   );
@@ -176,13 +172,12 @@ export function GlobalAccessForm({ openWindowId }: { openWindowId: string | null
         </div>
         <div className="flex items-center gap-3 md:col-span-2">
           <Button type="submit" variant="outline" disabled={pending}>
-            {pending ? "Closing…" : "Close global access"}
+            {pending ? "Closing…" : "Close global ad-free window"}
           </Button>
           <Outcome result={result} />
         </div>
         <p className="text-xs text-muted-foreground md:col-span-2">
-          Closing returns everybody to whatever they hold on their own. Nobody who has a
-          subscription, a grant or Welcome Access loses anything.
+          Closing the window restores each person to their own sources. The app stays usable; accounts without another Access source simply become ad-eligible again.
         </p>
       </form>
     );
@@ -203,7 +198,7 @@ export function GlobalAccessForm({ openWindowId }: { openWindowId: string | null
         });
       }}
     >
-      <Field label="Duration">
+      <Field label="Ad-free duration">
         <select name="duration" defaultValue="7d" className="input-shell h-11 w-full px-3">
           {DURATIONS.map((duration) => (
             <option key={duration.value} value={duration.value}>
@@ -213,17 +208,16 @@ export function GlobalAccessForm({ openWindowId }: { openWindowId: string | null
         </select>
       </Field>
       <Field label="Reason">
-        <Input name="reason" required minLength={3} maxLength={500} placeholder="Launch week promotion" />
+        <Input name="reason" required minLength={3} maxLength={500} placeholder="Launch week ad-free promotion" />
       </Field>
       <div className="flex items-center gap-3 md:col-span-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Opening…" : "Open global access"}
+          {pending ? "Opening…" : "Open global ad-free window"}
         </Button>
         <Outcome result={result} />
       </div>
       <p className="text-xs text-muted-foreground md:col-span-2">
-        Gives Linkr and UpFor to <strong>everyone</strong> for this window. One row — it never
-        touches individual accounts, so closing it restores each person to their own sources.
+        Makes everyone ad-free for this window. One global row — it never edits individual accounts, payments or feature access.
       </p>
     </form>
   );

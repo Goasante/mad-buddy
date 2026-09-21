@@ -547,10 +547,7 @@ function assertLayout(label, r) {
 console.log("=== SMART CARD V2 -- FAMILIES 3-5 RUNTIME PROOF ===\n");
 await clearFixtures();
 await makeHomeMature();
-/* ENTITLEMENT BASELINE. Sections A-H measure states OTHER than entitlement,
-   so the viewer must hold Access -- otherwise the two gated expansions are
-   suppressed for a reason those sections are not testing. Section I varies
-   it deliberately, and the run clears it at the end. */
+/* Start with ad-free Access; section I verifies that expiry changes no cards. */
 await grantAccess();
 
 // ---- A. Linkr mutual WITH Event context, at all three widths.
@@ -850,7 +847,7 @@ console.log("\n--- H2. muddy_request opens the Requests tab ---");
   await admin.from("friend_requests").delete().eq("receiver_id", A);
 }
 
-// ---- I. Entitlement: expansions stop, commitments survive.
+// ---- I. Ad-free entitlement never changes Smart Card eligibility.
 console.log("\n--- I. entitlement (HAS / NO / EXPIRED-WITH-COMMITMENT) ---");
 {
   await clearFixtures();
@@ -867,13 +864,13 @@ console.log("\n--- I. entitlement (HAS / NO / EXPIRED-WITH-COMMITMENT) ---");
     withAccess.cardText.slice(0, 80)
   );
 
-  // NO ACCESS: same fixtures, the expansion disappears.
+  // NO ACCESS: the same eligible Event Linkr offer remains.
   await expireAccess();
   const noAccess = await look("entitlement-no-access-393", { width: 393 });
   assertLayout("no access", noAccess);
   record(
-    "NO ACCESS: the expansion is not offered",
-    !/Meet people at/i.test(noAccess.cardText),
+    "NO ACCESS: Event Linkr is still offered",
+    /Meet people at Acoustic Night\?/i.test(noAccess.cardText),
     noAccess.cardText.slice(0, 80)
   );
   record(
@@ -898,16 +895,8 @@ console.log("\n--- I. entitlement (HAS / NO / EXPIRED-WITH-COMMITMENT) ---");
     commitment.targets.map((t) => t.t).join(" | ")
   );
 
-  /* HOME IS NEVER BLANK FOR AN UNENTITLED VIEWER.
-     Which card fills the slot depends on this account's own state -- this
-     fixture user has a completed Journey, so the tier-5 milestone legitimately
-     wins long before the tier-6 UpFor fallback is ever reached. Asserting the
-     fallback's copy here would be asserting the fixture, not the product, and
-     would flip with the day of the week and the Journey's progress alike.
-     What must hold, and what is checked, is the invariant: a card renders, it
-     is not an expansion, and it neither sells nor claims the product ended.
-     The fallback's own no-Access copy is pinned in the unit tests, where the
-     competing states can be held still. */
+  /* Home always renders a card. Competing Journey and weekend states may
+     outrank the UpFor fallback; its exact copy is covered by unit tests. */
   await admin.from("linkr_connections").delete().or(`user_low.eq.${A},user_high.eq.${A}`);
   const fallback = await look("entitlement-expired-fallback-393", { width: 393 });
   assertLayout("expired fallback", fallback);
@@ -917,8 +906,8 @@ console.log("\n--- I. entitlement (HAS / NO / EXPIRED-WITH-COMMITMENT) ---");
     fallback.cardText.slice(0, 90)
   );
   record(
-    "EXPIRED: whatever renders is not a gated expansion",
-    !/Meet people at/i.test(fallback.cardText) && !/Linkr is on/i.test(fallback.cardText),
+    "EXPIRED: cleared Event check-in does not leave a stale offer",
+    !/Meet people at/i.test(fallback.cardText),
     fallback.cardText.slice(0, 90)
   );
   record(

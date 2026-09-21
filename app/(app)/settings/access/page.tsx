@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AccessSettingsPage, type AccessBillingSummary } from "@/components/access/access-settings-page";
-import { hasEverHadWelcomeAccess } from "@/lib/access/guard";
+import { hasEverHadWelcomeAccess } from "@/lib/access/history";
 import { resolveAccessForUser } from "@/lib/access/resolver";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";

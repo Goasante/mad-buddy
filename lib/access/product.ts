@@ -3,8 +3,9 @@ import "server-only";
 /**
  * THE MAD BUDDY ACCESS PRODUCT.
  *
- * One consumer product, not a tier ladder. It unlocks exactly two surfaces --
- * Linkr and UpFor -- and nothing else in the app is affected by owning it.
+ * One consumer product, not a tier ladder. Mad Buddy itself remains usable
+ * without Access; owning Access makes the experience ad-free wherever Mad
+ * Buddy controls advertising.
  *
  * ── PRICE AUTHORITY IS THE SERVER, ALWAYS ─────────────────────────────────
  *
@@ -22,8 +23,8 @@ import "server-only";
  *
  * Card uses Paystack's monthly plan and auto-renews until cancelled.
  * Ghana Mobile Money is a one-time GHS 4.99 payment that buys 30 days of the
- * exact same Access. It does NOT pretend to be a recurring Paystack plan:
- * Paystack Mobile Money does not support recurring subscription billing.
+ * exact same ad-free Access. It does NOT pretend to be a recurring Paystack
+ * plan: Paystack Mobile Money does not support recurring subscription billing.
  *
  * Both paths therefore share the product/price authority here while differing
  * only in renewal semantics. The entitlement itself remains provider-neutral.

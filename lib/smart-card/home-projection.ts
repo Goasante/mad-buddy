@@ -1,6 +1,5 @@
 import "server-only";
 
-import { resolveAccessForUser } from "@/lib/access/resolver";
 import { normalizePreferences } from "@/lib/notifications/preferences";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { resolveEventLinkrEligibility } from "@/lib/events/linkr-consent";
@@ -12,7 +11,6 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { dateKeyInTimeZone } from "@/lib/profile/birth-date";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
 import type {
-  AccessForCard,
   BlockedFeatureForCard,
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
@@ -393,44 +391,12 @@ export async function loadBlockedFeature(
   };
 }
 
-/**
- * What Access permits, reduced to Home's one question.
- *
- * Reads the SAME `resolveAccessForUser` every gated Linkr and UpFor mutation
- * resolves through, so Home cannot offer an expansion the server would then
- * refuse -- and cannot withhold one the server would allow.
- *
- * FAILS CLOSED FOR EXPANSION. A failed resolve yields `canExpand: false`,
- * because an unknown entitlement cannot honestly support an offer: advertising
- * Event Linkr discovery, or promising that finishing a profile makes somebody
- * discoverable, may simply be untrue while the resolver is unavailable.
- *
- * That is not the same as failing closed for the SCREEN. No continuity provider
- * reads this value at all, so an entitlement outage leaves the viewer's existing
- * mutuals, UpFors, Plans, conversations, birthdays and Safe Arrival exactly as
- * they were, and the guaranteed fallback still renders free-core copy. Only the
- * two expansion-only offers go quiet.
- *
- * ONE READ, not two. `hasEverHadWelcomeAccess` was carried here for copy that
- * could explain what had ended, but no Smart Card ever consumed it -- so Home
- * was paying a historical-grant lookup on every render for an unused field.
- */
-export async function loadAccessForCard(userId: string): Promise<AccessForCard> {
-  try {
-    const access = await resolveAccessForUser(userId);
-    return { canExpand: access.hasAccess };
-  } catch {
-    return { canExpand: false };
-  }
-}
-
 export type HomeSmartCardProjection = {
   eventLinkrOffer: EventLinkrOfferForCard | null;
   muddyBirthdays: MuddyBirthdayForCard[];
   planDecisions: PlanDecisionForCard[];
   planChatDecisions: PlanChatDecisionForCard[];
   blockedFeature: BlockedFeatureForCard | null;
-  access: AccessForCard;
 };
 
 const EMPTY: HomeSmartCardProjection = {
@@ -438,12 +404,7 @@ const EMPTY: HomeSmartCardProjection = {
   muddyBirthdays: [],
   planDecisions: [],
   planChatDecisions: [],
-  blockedFeature: null,
-  /* Expansion suppressed, continuity untouched. An absent projection means the
-     entitlement answer is unknown, which is not permission to make an offer --
-     and no continuity provider consults this, so nobody's existing social life
-     is withheld by it. */
-  access: { canExpand: false }
+  blockedFeature: null
 };
 
 /**
@@ -464,14 +425,13 @@ export async function loadHomeSmartCardProjection(input: {
   const admin = createSupabaseAdminClient();
 
   try {
-    const [eventLinkrOffer, muddyBirthdays, planDecisions, planChatDecisions, blockedFeature, access] =
+    const [eventLinkrOffer, muddyBirthdays, planDecisions, planChatDecisions, blockedFeature] =
       await Promise.all([
         loadEventLinkrOffer(admin, input.userId),
         loadMuddyBirthdays(admin, input.userId, input.now),
         loadPlanDecisions(admin, input.userId, input.planIds, input.planTitleById, input.now),
         loadPlanChatDecisions(admin, input.userId, input.planTitleById),
-        loadBlockedFeature(admin, input.userId),
-        loadAccessForCard(input.userId)
+        loadBlockedFeature(admin, input.userId)
       ]);
 
     return {
@@ -479,8 +439,7 @@ export async function loadHomeSmartCardProjection(input: {
       muddyBirthdays,
       planDecisions,
       planChatDecisions,
-      blockedFeature,
-      access
+      blockedFeature
     };
   } catch {
     return EMPTY;

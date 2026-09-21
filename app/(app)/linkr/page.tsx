@@ -12,8 +12,6 @@ import { loadOwnLinkrProfile } from "@/lib/linkr/profile-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { isLinkrIntent } from "@/lib/linkr/intent";
-import { AccessLocked } from "@/components/access/access-locked";
-import { checkAccess } from "@/lib/access/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +26,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * to affect anything. Hand-typing the link without having checked in gets
  * ordinary Linkr, which is the same guarantee the previous implementation
  * made and is preserved deliberately.
+ *
+ * Linkr is part of the free product. Mad Buddy Access affects advertising,
+ * never whether this route may perform discovery.
  */
 export default async function LinkrRoute({
   searchParams
@@ -36,19 +37,6 @@ export default async function LinkrRoute({
 }) {
   const user = await getCurrentIdentity();
   if (!user) redirect("/login");
-
-  /* THE LOCKED STATE IS DECIDED HERE, BEFORE ANY DISCOVERY WORK.
-   *
-   * Rendering the lock at the top of the route rather than inside the client
-   * component means an account without Access never causes a candidate query
-   * to run at all -- the gate is not decoration over data that was fetched
-   * anyway. The Server Actions are independently gated, so this is the
-   * presentation of a decision the server already enforces, never the
-   * enforcement itself. */
-  const access = await checkAccess(user.id, "linkr");
-  if (!access.ok) {
-    return <AccessLocked surface="linkr" hadWelcomeAccess={access.hadWelcomeAccess} />;
-  }
 
   const admin = createSupabaseAdminClient();
   const params = await searchParams;

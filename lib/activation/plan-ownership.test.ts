@@ -67,7 +67,6 @@ function smartCardInput(over: Partial<SmartCardInput> = {}): SmartCardInput {
     buddyScore: null,
     recentAchievement: null,
     suggestionCount: 0,
-    access: { canExpand: true },
     ...over
   };
 }

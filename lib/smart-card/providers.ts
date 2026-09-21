@@ -9,7 +9,6 @@
 import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
 import type { LinkrMutualForCard } from "@/lib/smart-card/linkr-context";
 import type {
-  AccessForCard,
   BlockedFeatureForCard,
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
@@ -95,17 +94,6 @@ export type SmartCardInput = {
    * from using. Absent means nothing is blocked.
    */
   blockedFeature?: BlockedFeatureForCard | null;
-  /**
-   * Mad Buddy Access, reduced to "may this viewer expand right now".
-   *
-   * Optional so every existing caller and test keeps compiling. ABSENT MEANS
-   * UNKNOWN, and unknown does not grant permission: the two expansion-only
-   * states stay silent rather than advertising a door the server may refuse.
-   * Continuity is unaffected, because no continuity provider reads this field
-   * -- somebody's existing mutuals, UpFors, Plans, messages, birthdays and
-   * Safe Arrival are identical whatever entitlement says or fails to say.
-   */
-  access?: AccessForCard | null;
   /** Count of plans starting inside the current weekend window. */
   weekendPlanCount: number;
   /** Privacy-safe server projection; never coordinates or numerical distance. */
@@ -535,33 +523,10 @@ function suggestionsProvider(input: SmartCardInput): SmartCard | null {
 }
 
 /**
- * Guaranteed fallback: social intent, not progression or product promotion.
- *
- * THIS CARD MUST ALWAYS RETURN SOMETHING. It is the last provider, so a null
- * here blanks Home. That is why entitlement changes the WORDING rather than
- * removing the card: creating an UpFor is an expansion that needs Access, but a
- * viewer without Access is still a person Home has to say something true to.
- *
- * The no-Access copy points at Muddies rather than dressing up a locked door,
- * and never says Mad Buddy has ended -- almost all of it is still free.
+ * Guaranteed fallback: UpFor is available to everyone.
+ * The last provider always returns a card so Home never blanks.
  */
-function upForFallbackProvider(input: SmartCardInput): SmartCard {
-  /* UNKNOWN takes the same branch as NO ACCESS: creating an UpFor is an
-     expansion, so an unresolved entitlement must not present it as available.
-     Home still says something true, and never blanks. */
-  if (!input.access?.canExpand) {
-    return {
-      id: "upfor_fallback",
-      priority: 0,
-      illustration: "people",
-      eyebrow: "TODAY",
-      title: "Catch up with your Muddies",
-      subtitle: "Messages, Plans, Events and Glow are all still yours.",
-      cta: "Open Muddies",
-      destination: "/friends"
-    };
-  }
-
+function upForFallbackProvider(): SmartCard {
   return {
     id: "upfor_fallback",
     priority: 0,
@@ -924,15 +889,6 @@ function eventLinkrReadyProvider(input: SmartCardInput): SmartCard | null {
   const offer = input.eventLinkrOffer;
   if (!offer) return null;
 
-  /* ENTITLEMENT, AND UNKNOWN COUNTS AS NO. Being discovered by new people at an
-     Event is Linkr discovery, one of the two gated expansions, and the server
-     refuses the opt-in without Access anyway. Offering it would send somebody
-     to a door that will not open -- and if entitlement could not be resolved at
-     all, we cannot claim the door opens either. Both cases stay silent.
-     Nothing they already have is touched: their existing mutuals, their
-     conversations and their Plans are all elsewhere in this file and ungated. */
-  if (!input.access?.canExpand) return null;
-
   return {
     id: "event_linkr_ready",
     priority: 0,
@@ -1087,14 +1043,6 @@ function profileBlockingProvider(input: SmartCardInput): SmartCard | null {
   const blocked = input.blockedFeature;
   if (!blocked) return null;
 
-  /* ENTITLEMENT, AND UNKNOWN COUNTS AS NO. This card promises that finishing
-     the profile makes the viewer discoverable. Without Access that promise does
-     not come true -- Access is the nearer blocker, and selling it is not this
-     card's job -- and with entitlement unresolved the promise cannot be made
-     honestly either. Asking somebody to do work that may change nothing is
-     worse than staying quiet. */
-  if (!input.access?.canExpand) return null;
-
   return {
     id: "profile_blocking",
     priority: 0,
@@ -1138,6 +1086,6 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "achievement", build: () => achievementProvider(input) },
     { id: "suggestions", build: () => suggestionsProvider(input) },
     { id: "profile_blocking", build: () => profileBlockingProvider(input) },
-    { id: "upfor_fallback", build: () => upForFallbackProvider(input) }
+    { id: "upfor_fallback", build: () => upForFallbackProvider() }
   ];
 }
