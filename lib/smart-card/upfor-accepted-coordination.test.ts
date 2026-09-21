@@ -66,7 +66,6 @@ function input(over: Partial<SmartCardInput> = {}): SmartCardInput {
     buddyScore: null,
     recentAchievement: null,
     suggestionCount: 0,
-    access: { canExpand: true },
     ...over
   };
 }
@@ -206,40 +205,16 @@ describe("states that are NOT accepted keep their own behaviour", () => {
   });
 });
 
-describe("Access never removes an existing commitment", () => {
-  /**
-   * An accepted UpFor is a commitment that already exists. Expiry stops the
-   * NEXT expansion; it must not strip the coordination the person already
-   * earned, and it must not paywall the message.
-   */
-  const ENTITLEMENTS: Array<[string, SmartCardInput["access"]]> = [
-    ["has access", { canExpand: true }],
-    ["no access", { canExpand: false }],
-    ["unknown entitlement", null],
-    ["absent entitlement", undefined]
-  ];
-
-  for (const [label, access] of ENTITLEMENTS) {
-    it(`${label}: the accepted coordination card is unchanged`, () => {
-      const card = pick({ upFor: context({ joined: [joined()] }), access });
-      expect(card?.id).toBe("upfor_accepted");
-      expect(card?.cta).toBe("Message Jesse");
-      expect(card?.primaryIntent).toEqual({
-        kind: "open_direct_conversation",
-        targetUserId: "owner-jesse"
-      });
-      expect(card?.secondaryAction?.destination).toBe("/hangout-mode?hangout=session-1");
+describe("Accepted UpFor coordination is available without entitlement input", () => {
+  it("keeps the message action and session destination", () => {
+    const card = pick({ upFor: context({ joined: [joined()] }) });
+    expect(card?.id).toBe("upfor_accepted");
+    expect(card?.cta).toBe("Message Jesse");
+    expect(card?.primaryIntent).toEqual({
+      kind: "open_direct_conversation",
+      targetUserId: "owner-jesse"
     });
-  }
-
-  it("is byte-identical whatever entitlement says", () => {
-    const withAccess = JSON.stringify(
-      pick({ upFor: context({ joined: [joined()] }), access: { canExpand: true } })
-    );
-    const withoutAccess = JSON.stringify(
-      pick({ upFor: context({ joined: [joined()] }), access: { canExpand: false } })
-    );
-    expect(withoutAccess).toBe(withAccess);
+    expect(card?.secondaryAction?.destination).toBe("/hangout-mode?hangout=session-1");
   });
 });
 

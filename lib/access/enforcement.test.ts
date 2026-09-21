@@ -6,16 +6,13 @@ import { describe, expect, it } from "vitest";
  * ADS-FIRST MONETIZATION INVARIANTS.
  *
  * Linkr and UpFor are now part of the free product. Mad Buddy Access answers a
- * different question: whether advertising may be shown. A temporary
- * compatibility guard may still be called by old Server Actions during cleanup,
- * but route-level paywalls are gone and the guard must never deny a user who
- * lacks Access.
+ * different question: whether advertising may be shown. Routes and actions
+ * must not consult entitlement to decide feature availability.
  */
 
 const ROOT = join(__dirname, "..", "..");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
-const guard = read("lib/access/guard.ts");
 const linkr = read("app/(app)/linkr-actions.ts");
 const upfor = read("app/(app)/hangout-actions.ts");
 const linkrRoute = read("app/(app)/linkr/page.tsx");
@@ -48,11 +45,9 @@ describe("Linkr and UpFor are not paid surfaces anymore", () => {
     expect(source).not.toContain("checkAccess");
   });
 
-  it("the compatibility guard always returns ok with the real Access state", () => {
-    const body = code(actionBody(guard, "checkAccess"));
-    expect(body).toContain("resolveAccessForUser(userId)");
-    expect(body).toContain("return { ok: true, access }");
-    expect(body).not.toContain("if (access.hasAccess)");
+  it.each([["Linkr", linkr], ["UpFor", upfor]])("%s actions never consult Access", (_label, source) => {
+    expect(code(source)).not.toMatch(/checkAccess|requireAccess|resolveAccessForUser|AccessLocked|access_required/);
+    expect(code(source)).not.toContain("@/lib/access/guard");
   });
 
   it("Linkr does not query entitlement storage directly", () => {
@@ -72,6 +67,7 @@ describe("Linkr and UpFor are not paid surfaces anymore", () => {
 
   it("existing safety and anti-abuse checks still surround UpFor creation", () => {
     const body = code(actionBody(upfor, "startHangoutAction"));
+    expect(body).toContain("getAuthedUserId");
     expect(body).toContain("consumeRateLimit");
     expect(body).toContain("MAX_ACTIVE_UPFORS");
     expect(body).toContain("MAX_UPFOR_CAPACITY");
@@ -81,12 +77,17 @@ describe("Linkr and UpFor are not paid surfaces anymore", () => {
     const body = code(actionBody(upfor, "getVisibleHangoutsAction"));
     expect(body).toContain("filterStrangerDiscoverable");
     expect(body).toContain("canViewHangout");
+    expect(body).toContain("!friendIds.includes(session.owner_id)");
   });
 
   it("joining a stranger still re-checks server-side eligibility", () => {
     const body = code(actionBody(upfor, "requestHangoutAction"));
     expect(body).toContain("canStrangerJoinUpFor");
+    expect(body).toContain("canViewHangout");
+    expect(body).toContain("acceptedCount");
+    expect(body).toContain("session.max_participants");
     expect(body).toContain("isHangoutJoinable");
+    expect(body).toContain("getAuthedUserId");
     expect(body).toContain("consumeRateLimit");
   });
 });
@@ -112,4 +113,19 @@ describe("the core product remains independent of advertising entitlement", () =
       expect(code(source)).not.toContain("@/lib/access/guard");
     });
   }
+});
+
+
+describe("Home inline ad placement", () => {
+  it("places the one slot after Near and before Trending, outside My Plans", () => {
+    const home = read("components/dashboard/dashboard-page.tsx");
+    const near = home.indexOf("{composition.showNearby ? (");
+    const ad = home.indexOf('{composition.showNearby ? <InlineAdSlot placement="home-after-near" /> : null}');
+    const trending = home.indexOf("{composition.showTrending ?");
+    expect(near).toBeGreaterThan(-1);
+    expect(ad).toBeGreaterThan(near);
+    expect(home.slice(near, ad).trimEnd()).toMatch(/\) : null\}$/);
+    expect(trending).toBeGreaterThan(ad);
+    expect(home.match(/<InlineAdSlot/g)).toHaveLength(1);
+  });
 });

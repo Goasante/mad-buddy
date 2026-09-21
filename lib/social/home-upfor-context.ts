@@ -128,11 +128,9 @@ export type HomeUpForContext = {
   /**
    * Live Muddy UpFors the viewer may see and has NOT requested to join.
    *
-   * Muddies only, deliberately. Stranger/"nearby" discovery is the paid
-   * expansion side of UpFor and it is expensive to resolve (per-viewer
-   * proximity, stranger eligibility, an Access check); Home is not the surface
-   * to pay for that on every render. Seeing what your own Muddies are up for is
-   * your existing social world, and free.
+   * Muddies only to keep the Home read bounded. Stranger discovery is also
+   * free, but its per-viewer proximity and eligibility checks belong to the
+   * canonical UpFor feed rather than every Home render.
    */
   opportunities: HomeUpForOpportunity[];
 };
@@ -297,8 +295,8 @@ export async function loadHomeUpForContext(
  * Live UpFors belonging to the viewer's Muddies that they have not acted on.
  *
  * BOUNDED, AND MUDDIES ONLY. `getVisibleHangoutsAction` is the canonical feed
- * and this deliberately does NOT call it: it resolves stranger proximity, runs
- * an Access check and filters two 50-row candidate sets through per-session
+ * and this deliberately does NOT call it: it resolves stranger proximity and
+ * filters two 50-row candidate sets through per-session
  * authorization. That is right for the UpFor screen and far too much for every
  * Home render.
  *

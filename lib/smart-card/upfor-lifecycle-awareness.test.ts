@@ -79,7 +79,6 @@ function input(upFor: HomeUpForContext, over: Partial<SmartCardInput> = {}): Sma
     buddyScore: null,
     recentAchievement: null,
     suggestionCount: 0,
-    access: { canExpand: true },
     upFor,
     ...over
   };

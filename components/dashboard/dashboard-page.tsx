@@ -83,6 +83,7 @@ import {
   isEarlyActivation,
   type NextBestAction
 } from "@/lib/activation/home-composition";
+import { InlineAdSlot } from "@/components/ads/inline-ad-slot";
 import { TopEventsHome } from "@/components/events/top-events-home";
 import type { RankedEvent } from "@/lib/events/ranked-events";
 import { arbitrateHomeCard } from "@/lib/smart-card/home-arbiter";
@@ -1136,6 +1137,8 @@ export function DashboardPageContent({
             resumingVisibility={isPending}
           />
         ) : null}
+
+        {composition.showNearby ? <InlineAdSlot placement="home-after-near" /> : null}
 
         {/* Top Events (Ranked Events Discovery).
 
