@@ -25,26 +25,44 @@
 }
 
 /*
- * iOS installed-PWA bottom-gap correction.
+ * iOS installed-PWA viewport correction.
  *
- * On real iPhones, standalone WebKit can expose the home-indicator safe area
- * OUTSIDE the layout viewport even though viewport-fit=cover is present. In
- * that state `position: fixed; bottom: 0` stops at the top of the safe area,
- * so the floating dock appears to hover roughly one full iPhone inset above
- * the physical bottom edge. The same session can later be recomputed flush,
- * which is why the gap has looked intermittent on-device while headless
- * Chromium (where the inset is 0) never reproduces it.
+ * Standalone WebKit has a long-standing viewport bug with viewport-fit=cover:
+ * `100svh` / `100dvh` can resolve to the usable area MINUS the home-indicator
+ * safe area. The pixels below that shortened viewport are then painted by the
+ * root element. That is the solid strip visible in real-device screenshots.
  *
- * Only the installed standalone WebKit case is corrected. Pull the fixed nav
- * frame down by exactly the reported safe-area inset; the existing internal
- * `--mobile-nav-safe-bottom` padding still keeps the controls clear of the
- * gesture edge. Browser-tab Safari, Android/Chromium and desktop keep their
- * normal bottom:0 geometry.
+ * The previous workaround moved the fixed navigation down with a NEGATIVE
+ * bottom equal to env(safe-area-inset-bottom). On affected iPhones that pushes
+ * the dock into the region WebKit has already clipped out of the visual
+ * viewport, so the lower half of the navigation disappears behind the strip.
+ *
+ * WebKit's established standalone workaround is the opposite: make the root
+ * viewport use 100vh in installed-web-app mode. In standalone mode 100vh
+ * includes the safe-area extent that svh/dvh incorrectly omit. The navigation
+ * can therefore remain at the honest `bottom: 0`, while its existing internal
+ * safe-area padding keeps controls clear of the gesture edge.
+ *
+ * The dark authenticated shell deliberately uses #111112 rather than the
+ * warmer global --background (#181211-ish). Match the standalone root paint to
+ * that shell so even an iOS compositor frame between viewport recalculations
+ * cannot expose a contrasting brown strip.
  */
 @media (max-width: 767px) and (display-mode: standalone) {
   @supports (-webkit-touch-callout: none) {
+    html,
+    body {
+      height: 100vh;
+      min-height: 100vh;
+    }
+
+    html.dark,
+    html.dark body {
+      background: #111112;
+    }
+
     nav[aria-label="Mobile navigation"] {
-      bottom: calc(0px - env(safe-area-inset-bottom, 0px));
+      bottom: 0;
     }
   }
 }
