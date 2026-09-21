@@ -4,12 +4,21 @@ import { describe, expect, it } from "vitest";
 const read=(p:string)=>readFileSync(join(process.cwd(),p),"utf8");
 
 describe("Mad Buddy Access convergence source contract",()=>{
-  it("public pricing has one paid product and the Welcome promises",()=>{
+  it("public pricing has one ad-free paid product and keeps core features free",()=>{
     const p=read("components/premium/pricing-page.tsx");
     expect(p).toContain("Mad Buddy Access");
     expect(p).toContain("GHS 4.99");
+    expect(p).toContain("Mad Buddy is free to use. Access removes the ads.");
+    expect(p).toContain("Do Linkr or UpFor require Access?");
     expect(p).toContain("No card is required");
+    expect(p).not.toMatch(/expanding it is paid|Linkr and UpFor expansion|UpFor expansion/i);
     expect(p).not.toMatch(/Buddy Plus|Buddy Pro|Upgrade to Pro|Choose the plan that fits/i);
+  });
+  it("landing surfaces the free app and ad-free Access model",()=>{
+    const nav=read("components/landing/landing-nav.tsx");
+    expect(nav).toContain("Mad Buddy is free to use.");
+    expect(nav).toContain("Light ads support the free app.");
+    expect(nav).toContain("Access removes ads");
   });
   it("legacy billing routes converge to Access",()=>{
     expect(read("app/(billing)/billing/page.tsx")).toContain('redirect("/settings/access")');
