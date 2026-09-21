@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/app-shell";
@@ -48,11 +49,16 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // below is only for this layout's own queries. ensureMaintenanceWarm() needs
   // no user, so it starts here too instead of waiting behind everything else.
   const env = getSupabaseServerEnv();
-  const [supabase, user, maintenance] = await Promise.all([
+  const [supabase, user, maintenance, requestHeaders] = await Promise.all([
     createSupabaseServerClient(),
     getCurrentIdentity(),
-    env.url && env.serviceRoleKey ? ensureMaintenanceWarm(createSupabaseAdminClient()) : Promise.resolve(null)
+    env.url && env.serviceRoleKey ? ensureMaintenanceWarm(createSupabaseAdminClient()) : Promise.resolve(null),
+    headers()
   ]);
+  // Google documents nonce-based strict CSP for AdSense. proxy.ts minted this
+  // exact value and put it on the request, so the provider script receives the
+  // same trust root as the rest of the Next.js render. Missing nonce => no ad.
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   // Every remaining lookup here only needs `user`/`env`, not each other's
   // results, so they run together instead of one sequential await chain
@@ -211,6 +217,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   return (
     <WebAdsProvider
       config={webAdsConfig}
+      nonce={nonce}
       features={{
         adsEnabled,
         inlineEnabled: inlineAdsEnabled,
