@@ -11,7 +11,7 @@ export function LandingNav() {
         <div className="mx-auto flex min-h-10 w-full max-w-7xl items-center justify-center gap-2 px-4 text-center text-[11px] font-semibold leading-4 text-[#6B2D18] sm:px-6 sm:text-xs lg:px-10 dark:text-[#F6D7BB]">
           <span>Mad Buddy is free to use.</span>
           <span aria-hidden="true" className="text-[#E88C2B]">•</span>
-          <span>Light ads support the free app.</span>
+          <span className="hidden sm:inline">Light ads support the free app.</span>
           <Link
             href="/pricing"
             className="focus-ring rounded-full font-bold text-[#9A4F13] underline decoration-[#E88C2B]/40 underline-offset-2 hover:text-[#6F320E] dark:text-[#F2B16F] dark:hover:text-[#FFD2A4]"
