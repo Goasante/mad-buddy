@@ -1,11 +1,3 @@
-const GOOGLE_AD_SCRIPT = "https://pagead2.googlesyndication.com";
-const GOOGLE_AD_NETWORK = [
-  "https://*.googlesyndication.com",
-  "https://*.doubleclick.net",
-  "https://*.google.com",
-  "https://www.google.com"
-] as const;
-
 function addSources(directive: string, sources: readonly string[]): string {
   const words = new Set(directive.split(/\s+/));
   for (const source of sources) words.add(source);
@@ -13,12 +5,14 @@ function addSources(directive: string, sources: readonly string[]): string {
 }
 
 /**
- * Add only the network permissions needed by the PWA ad transport.
+ * AdSense's documented CSP integration is nonce-based strict CSP, not a rolling
+ * host allowlist. Google's ad-serving domains change over time, so the trusted
+ * nonce on the initial AdSense script must be allowed to propagate trust to
+ * scripts it loads dynamically.
  *
- * The base CSP stays strict on deployments that have no approved AdSense
- * configuration. This function is intentionally transport-only: whether an
- * ad MAY be requested is still decided separately by Admin flags, route policy
- * and the user's Access entitlement.
+ * This extension is applied only on the one currently-wired PWA ad route and
+ * only when validated AdSense configuration exists. Everywhere else retains
+ * Mad Buddy's ordinary stricter CSP unchanged.
  */
 export function extendContentSecurityPolicyForGoogleAds(
   policy: string,
@@ -30,15 +24,24 @@ export function extendContentSecurityPolicyForGoogleAds(
     .split("; ")
     .map((directive) => {
       if (directive.startsWith("script-src ")) {
-        return addSources(directive, [GOOGLE_AD_SCRIPT]);
+        // Google's current strict-CSP guidance for AdSense. In modern browsers
+        // strict-dynamic means the nonce is the trust root; `https:`/`http:`
+        // are compatibility fallbacks rather than a replacement for the nonce.
+        return addSources(directive, ["'unsafe-eval'", "'strict-dynamic'", "https:", "http:"]);
       }
+
+      // The existing application policy constrains these resource classes.
+      // AdSense may source them from changing Google-owned HTTPS origins, so a
+      // fixed domain list is brittle. This relaxation is route-scoped by
+      // proxy.ts to the approved Home ad surface, not app-wide.
       if (
         directive.startsWith("img-src ") ||
         directive.startsWith("connect-src ") ||
         directive.startsWith("frame-src ")
       ) {
-        return addSources(directive, GOOGLE_AD_NETWORK);
+        return addSources(directive, ["https:"]);
       }
+
       return directive;
     })
     .join("; ");
