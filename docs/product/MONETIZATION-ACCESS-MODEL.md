@@ -1,387 +1,236 @@
-# Mad Buddy Access — the monetization model
+# Mad Buddy Access — ads-first monetization
 
-Authoritative. If this document and the code disagree, the code is the bug —
-but the reasoning here is what the code is trying to express.
-
----
+Authoritative product model for web/PWA and the later native clients.
 
 ## The one sentence
 
-> **Your existing social world is free. Expanding your social world is paid.**
+> **Mad Buddy is free to use with ads. Mad Buddy Access removes ads.**
 
-Everything below follows from that. When a question comes up that this document
-does not answer, ask which side of that line the thing falls on.
+Linkr and UpFor are part of the free product. Access must never be used to block
+those features again.
 
----
+## Free product
 
-## Free forever
+A person without Mad Buddy Access can use the same core Mad Buddy experience,
+subject only to the ordinary safety, privacy, abuse-prevention and product
+feature flags that apply to everyone.
 
-Not gated, not metered, not time-limited, on any tier, in any billing state:
+This includes:
 
-| | |
-| --- | --- |
-| Home | Muddies and every existing connection |
-| Glow and proximity with your Muddies | Profile |
-| Messages, and every conversation you already have | Plans and Plan chat |
-| Events | Safe Arrival |
-| Notifications | Circles and Groups |
+- Home and Glow
+- Muddies
+- Linkr
+- UpFor
+- Messages and conversations
+- Plans and Plan Chat
+- Events
+- Safe Arrival
+- Notifications
+- Circles and Groups
+- Profile and account settings
 
-**Safety is never monetized.** The person who needs a third emergency contact is
-the person in more danger. `max_safe_arrival_contacts` and
-`max_active_safe_arrivals` are `UNLIMITED` on every tier and cannot be affected
-by any payment state — asserted in `lib/access/free-core.test.ts`.
+Payment must not bypass or weaken safety rules, proximity rules, blocking,
+reporting, rate limits, age rules, consent or anti-abuse ceilings.
 
-## Paid
+## What Mad Buddy Access buys
 
-Exactly two surfaces:
+Mad Buddy Access is one entitlement, not a tier ladder.
 
-| Surface | What Access buys |
-| --- | --- |
-| **Linkr** | the candidate deck, Connect, discovery filters, starting a session |
-| **UpFor** | creating an UpFor, the *stranger* half of the feed, joining a stranger's |
+While any valid Access source exists:
 
-Nothing else in the product changes when somebody has Access.
+- no Mad Buddy-controlled banner/inline ad may be requested for that account;
+- no Mad Buddy-controlled anchor ad may be requested for that account;
+- no Mad Buddy-controlled interstitial may be prepared or shown for that
+  account;
+- the user's product capabilities otherwise remain the same as the free app.
 
----
+`lib/access/resolver.ts` remains the one entitlement authority.
+`lib/access/ad-entitlement.ts` projects that state into the advertising answer:
 
-## What expiry does, and does not do
+```text
+access.hasAccess === true  -> adFree = true
+access.hasAccess === false -> adFree = false
+```
 
-> **Expiry stops the next expansion. It never destroys an existing commitment.**
+There is no `profiles.isPremium`, `profiles.adFree`, client-owned premium flag,
+or second advertising subscription table.
 
-| Survives expiry, always | Why |
-| --- | --- |
-| an existing mutual Linkr connection | you already matched; that is a relationship, not a feature |
-| the conversation with that person | Messages is free forever |
-| a Plan created from an UpFor | the commitment was already made |
-| Plan chat and participants | same |
-| seeing what your **own Muddies** are up for | your existing social world |
-| leaving, ending, cancelling, blocking, reporting | nobody pays to get out |
-| turning Linkr off | you can always stop being discoverable |
+## Access sources
 
-Nobody ever pays to keep talking to somebody they already connected with.
+The resolver treats currently-valid sources as a union:
 
-The two seams where the obvious gate would have been wrong, both in code today:
+```text
+welcome_access
+web_subscription
+apple_subscription
+google_subscription
+admin_grant
+staff
+global_promo
+```
 
-- **The UpFor feed has two branches.** `muddySessions` (existing Muddies, free)
-  and `nearbySessions` (strangers, paid). The gate sits *between* them, not
-  around the action.
-- **Joining has two paths.** `viewableAsMuddy` short-circuits
-  `viewableAsStranger`, so the gate lives inside the stranger branch only.
+If any source is valid, the account is ad-free. Revoking one source never
+invalidates another source that is still valid.
 
----
+Expiry is evaluated against server time.
 
 ## Welcome Access
 
-| | |
-| --- | --- |
-| Internal name | `WELCOME_ACCESS` |
-| Duration | **14 days** |
-| Starts at | **Account creation, or `first_muddy_added` — whichever is first** |
-| Card required | **No** |
-| Auto-renew | **No** |
-| Payment method taken | **None** |
+Welcome Access is **14 days without ads**.
 
-**It is not a payment trial** and must never be described as one internally or
-to users. No payment instrument exists, nothing renews, and nothing can be
-charged when it ends.
+It is not a payment trial:
 
-### Why it starts at signup
+- no card is required;
+- no payment method is taken;
+- it does not auto-renew;
+- nothing is charged when it ends.
 
-It originally started only at `first_muddy_added`, on the reasoning that a
-friendship is the first moment the product has demonstrably delivered
-something. That produced a result nobody intended and was **changed on
-2026-09-02** after production reports: somebody who signed up and opened UpFor
-or Linkr before adding anyone had no grant, so the first thing a new user saw
-was a payment screen.
+When Welcome Access expires, Mad Buddy keeps working. The account simply becomes
+eligible for advertising if the global advertising controls are enabled.
 
-The window now opens when the account is created. The `first_muddy_added`
-trigger is **kept, not replaced** — the partial unique index means whichever
-fires first wins and the other is a no-op, so accounts created before this
-change still start their window at their first Muddy, and nobody mid-window
-has it moved or shortened.
+## Price and billing
 
-The change is **not retroactive**. Existing accounts were not backfilled:
-handing a fresh 14 days to everyone who signed up months ago, and to people
-whose window has already been spent, is a giveaway decision rather than a
-migration.
+The current consumer price is **GHS 4.99**.
 
-### Why the triggers are in the database
+`lib/access/product.ts` is the server-owned price authority:
 
-Two triggers, same argument. Accounts are created through `lib/auth/bootstrap.ts`
-today and friendships are created inside RPCs; in either case a future path
-would silently fail to start the clock. `profiles` is the one row every account
-has, and `friendships` is the one place every friendship passes through.
+- `499` pesewas;
+- Card: recurring Paystack monthly plan;
+- Ghana Mobile Money: one-time payment for 30 days;
+- cancellation/non-renewal never removes already-paid time;
+- `past_due` keeps Access only through the resolver's valid grace window.
 
-### Why it cannot be reset
+Provider records are inputs to the canonical local subscription state; the
+provider is not the entitlement authority at request time.
 
-A partial unique index allows exactly one `welcome_access` row per user:
+## Admin controls
 
-```sql
-create unique index access_grants_one_welcome_per_user
-  on public.access_grants (user_id)
-  where source = 'welcome_access';
+### Per-user ad-free control
+
+The existing Admin Access-grant system is the per-user control.
+
+Example: granting a member 7 days of Admin Access makes that account ad-free for
+7 days. It does not fabricate a payment record and does not alter any other
+Access source.
+
+### Global advertising controls
+
+Advertising uses the existing feature-flag system and the
+`admin.feature_flags.manage` permission.
+
+Four independent controls exist:
+
+| Key | Purpose | Initial state |
+| --- | --- | --- |
+| `ads_enabled` | master advertising kill switch | OFF |
+| `ads_inline` | responsive in-page PWA units | OFF |
+| `ads_anchor` | future anchor/banner format | OFF |
+| `ads_interstitial` | future natural-break full-screen format | OFF |
+
+A format may run only when both the master flag and that format's flag are on.
+
+Turning advertising off globally does **not** grant Access. It is simply a
+period in which nobody is shown ads.
+
+Missing rows, query failures and missing provider configuration fail closed to
+**no advertising**.
+
+## PWA advertising
+
+PWA is the first advertising client.
+
+Google AdSense configuration is server-owned through:
+
+```text
+ADSENSE_CLIENT_ID
+ADSENSE_HOME_INLINE_SLOT
 ```
 
-Clearing cookies, reinstalling, signing out and switching device cannot delete a
-row keyed on `user_id`. **No device fingerprinting is used or needed** — the
-identity anchor is the account. The database refuses a second welcome grant even
-to `service_role`; verified in `scripts/hardening/welcome-access-trigger.mjs`.
+Both values must pass validation before the app exposes them to the client or
+widens CSP for Google's ad transport. Placeholder values are rejected.
 
-Reactivating an ended friendship does not restart it either: the friendships
-upsert reuses the same row, and `on conflict do nothing` keeps the original
-window.
+`/ads.txt` is generated from the validated publisher id and returns 404 while
+AdSense is not configured.
 
-### 14 days is a default, not a ceiling
+The initial production format is a **responsive inline display ad**. The first
+approved placement is Home, immediately after the Near/Glow section.
 
-Admin grants, subscriptions, global promotions and staff access may all exceed
-it.
+The web provider must not load the AdSense site script merely because anchor or
+interstitial flags are enabled. Initial rollout is inline-only; Google Auto ads
+must remain disabled until Mad Buddy explicitly owns the relevant format policy.
 
----
+## Route policy
 
-## Access sources, and how they combine
+One centralized policy decides whether a placement may request an ad.
 
-```
-welcome_access   web_subscription   apple_subscription   google_subscription
-admin_grant      staff              global_promo
-```
+Ads are blocked on sensitive flows including:
 
-**Access is the UNION of independently valid sources — not a precedence ladder.**
+- login/signup/onboarding;
+- Safe Arrival and emergency/safety workflows;
+- Access/billing/checkout;
+- Admin;
+- camera/call/video-call surfaces;
+- active private/group conversations.
 
-This is the single most important design decision in the model. Under a ladder,
-revoking the top rung destroys access a lower rung legitimately granted: revoke
-somebody's admin grant and their paid subscription stops working. Under a union,
-each source stands on its own.
+The Messages list may be considered later, but an active conversation remains
+clean.
 
-Verified in `scripts/hardening/access-resolver-matrix.mjs`:
+A placement also receives no ad when:
 
-- revoking a **welcome** grant leaves **paid** access intact
-- revoking an **admin grant** leaves **paid** access intact
-- ending a **global promotion** returns everybody to their own source
+- the master flag is off;
+- its format flag is off;
+- the account is ad-free;
+- required provider configuration is absent.
 
-`primarySource` exists only to decide what to *display*. It never decides
-whether access exists.
+## Interstitial rule
 
-### Expiry is resolver-time
+Interstitial support is intentionally not live in the initial PWA rollout.
 
-A grant whose `expires_at` has passed is simply not counted. **No background job
-flips anybody from active to expired** — jobs exist for reminders and
-reconciliation only. Expiry is evaluated against **server time**; a device clock,
-timezone change, reinstall or logout cannot move it, because none of them can
-write to these tables.
+When implemented it must use named natural-break triggers, not random timers or
+navigation interception. It must never show at app launch, chat open, Safe
+Arrival, onboarding, checkout, camera/call flows or immediately after ordinary
+navigation.
 
----
+The initial feature flag remains OFF.
 
-## Data model
+## Consent and Google configuration
 
-| Table | Responsibility |
-| --- | --- |
-| `access_grants` | per-user grants: welcome, admin, staff, promos |
-| `access_global_windows` | one row per "everybody has access" period |
-| `access_reminder_log` | reminder dedupe |
-| `access_launch` | at most one row: when monetization went live |
-| `subscriptions` | *existing* — provider state, already provider-neutral |
+Google privacy/consent configuration is a launch requirement, not a reason to
+fake a local consent state. The production AdSense account must have the
+appropriate Google-certified consent/privacy setup configured before live ads
+are enabled for affected regions.
 
-**There is no `profiles.is_premium`, no `linkr_enabled`, no cached boolean
-anywhere.** Current state is a question asked of these rows at server time.
+Until that setup and real publisher/slot ids are verified, all ad feature flags
+stay OFF.
 
-`access_grants` is **append-mostly**. Revoking sets `revoked_at`; it never
-deletes the row or rewrites `expires_at`, because "who granted this, when, and
-why" is exactly what an audit asks. An extension is a new row, not an edit.
+## CSP and failure behavior
 
-**Global promotions never touch user rows.** One row serves every user. Mass
-updating would make ending a promotion destructive — it would have to guess what
-each person held beforehand.
+The normal application CSP remains unchanged when AdSense configuration is
+missing or invalid. Valid configuration conditionally adds only the Google ad
+transport origins required by the PWA provider.
 
-### RLS
+An ad-provider failure must never break navigation or core product behavior.
+Ad blockers, an unfilled unit, a blocked network request, or a provider script
+failure result in no ad and no replacement paywall.
 
-A user may **read** their own access and may **never write it**. There is no
-INSERT, UPDATE or DELETE policy on any access table: with RLS enabled and no
-permissive policy, those commands are denied outright. Self-granting, extending
-one's own expiry and un-revoking are impossible through the RLS client whatever
-the application does.
+## Native clients
 
-`scripts/hardening/access-bypass-matrix.mjs` — **21/21 refused**, with a negative
-control proving the harness detects a real hole. Includes self-inserting a Mad
-Buddy Access subscription, self-upgrading to it, and extending a paid period.
+Android/iOS reuse the same Access/ad-free semantics and Admin controls.
 
----
+Native implementation uses AdMob later; it must not invent another entitlement
+model. `/api/access/status` exposes the minimal server-owned Access projection
+for native clients.
 
-## Existing users at launch
+## Non-negotiable product rules
 
-Both obvious readings are wrong:
-
-- *"their window already elapsed"* — every existing user is expired the instant
-  monetization ships, having never seen the model. Punitive.
-- *"restart everyone"* — silently re-grants dormant accounts, repeatedly.
-
-**The mechanism:** `access_launch` holds at most one row, set by the owner. Until
-it exists, `launch_welcome_access_for_existing_users()` does nothing. When set,
-every existing account with a Muddy gets a full 14-day window **dated from
-launch** — the same 14 days everybody else gets, because the window exists so
-somebody can try the features before deciding, and they have not had that chance
-yet. Idempotent: rehearsed locally, 6 granted then 0 on a second run.
-
-**The launch date is an owner decision and was not invented.**
-
----
-
-## Reminders
-
-Two, not four:
-
-| When | Message |
-| --- | --- |
-| 4 days remaining | ends in 4 days; what stays free; nothing will be charged |
-| 1 day remaining | ends tomorrow; existing connections and Plans are unaffected |
-
-Days 12 and 14 were deliberately dropped. Day 12 adds nothing day 10 did not,
-and a notification on the day access ends arrives too late to act on while still
-nagging. What day 14 needs is a good locked state, which exists. Settings shows
-the remaining days to anyone who looks — nobody has to be interrupted.
-
-**Nobody is warned whose access is not actually ending.** A person holding a
-subscription, an admin grant, or covered by a global promotion is skipped.
-
-Idempotency is a unique constraint on `(grant_id, milestone)`, claimed *before*
-sending — so the worst case is a missed reminder, never a duplicate.
-`scripts/hardening/access-reminders.mjs` — 9/9, including three concurrent runs
-producing exactly one notification.
-
----
-
-## Product language
-
-Use **Mad Buddy Access**. Never *Plus*, *Pro*, *Premium*, *Gold*, *VIP*, or
-"upgrade your account" — there is one boundary, not a ladder, and the free part
-of the account is not being upgraded away.
-
-### No dark patterns
-
-Prohibited, and asserted at runtime in `access-visual-matrix.mjs`:
-
-fake countdowns · "N people are waiting" · fake scarcity · guilt copy · hidden
-dismissal · misleading "free" wording · forcing a payment method · repeated
-modal spam.
-
-The locked state answers four questions in the order people ask them: what the
-feature does, why it stopped, **what still works**, how to get it back. The
-third is not padding — without it, "your access has ended" reads as "Mad Buddy
-has ended".
-
----
-
-## Admin
-
-Reuses the existing capability system. Grants map to `admin.entitlements.manage`.
-
-| Action | Permission |
-| --- | --- |
-| Grant up to 30 days | `admin.entitlements.manage` |
-| Grant 3 months, 1 year, indefinite, or a custom expiry | `+ admin.access.global.manage` |
-| Open or end a global promotion | `+ admin.access.global.manage` |
-
-`admin.access.global.manage` is a **new, dedicated permission** held only by
-`super_administrator`. The first implementation borrowed `admin.roles.manage`
-and called it owner-only; that is false — `trust_safety_administrator` holds it,
-so a T&S admin could have given the entire user base a paid product. Caught by
-`lib/access/admin-privilege.test.ts` on its first run.
-
-**Admins never fake payment records.** Nothing writes to `subscriptions`. A
-grant is the honest record of what happened; a fake subscription would corrupt
-revenue reporting and lie about provenance. Revocation is scoped to
-`admin_grant` only — revoking "access" wholesale would cancel a paid
-subscription from a support screen, a different decision with a refund attached.
-
-Every action is audit-before-mutate: if the audit write fails, nothing changes.
-
----
-
-## Payments
-
-```
-provider event → verified server processing → canonical subscription row
-               → entitlement resolver → access
-```
-
-**The provider is never the authority.** The resolver reads the local
-`subscriptions` row that verified webhook processing wrote — never Paystack's
-API at request time. A forged callback cannot reach it, and a provider outage
-cannot revoke a paying customer mid-request.
-
-**Price is server-owned.** `accessCheckoutAmount()` takes no parameters, so
-"client sets the price" cannot be written against it. The client sends a product
-identifier; the amount comes from configuration. `lib/paystack/sync.ts` rejects
-any transaction whose amount differs.
-
-**The consumer price is set: GHS 5.00 / month, Paystack plan
-`PLN_pbpn6h7vprirvlu`, monthly interval.**
-
-Both live in `lib/access/product.ts` as defaults IN SOURCE, not as required
-environment variables. An env-only price fails in the worst direction: a missing
-or fat-fingered variable in one environment silently disables checkout, or
-disagrees with what Paystack actually charges. `MAD_BUDDY_ACCESS_AMOUNT_MINOR`
-and `MAD_BUDDY_ACCESS_PLAN_CODE` remain as overrides for test and staging.
-
-The amount is **500** — minor units (pesewas), not 5 cedis. A value in cedis
-would charge one hundredth of the price while every amount check still passed,
-because both sides would agree on the wrong number.
-
-### What the webhook verifies, and why each matters
-
-Every field is compared against server configuration; nothing is trusted from
-the payload.
-
-| Check | Why |
-| --- | --- |
-| **plan code** — must equal `PLN_pbpn6h7vprirvlu`, and is REQUIRED | An amount alone is non-specific: GHS 5.00 is an unremarkable sum that could arrive from any transaction. The plan code ties a payment to *this* recurring product. |
-| **amount** — exactly 500, when present | Stops a tampered checkout for GHS 0.01 activating access. Absent on lifecycle events like `subscription.disable`, which is why it is conditional. |
-| **currency** — GHS | GHS 5.00 paid in another currency is a different, smaller payment. |
-| **metadata product** — when present, must not contradict | Set at checkout so the webhook can confirm the product independently of the plan code. |
-
-A single mismatch rejects the whole event. The route still returns 200 (so
-Paystack stops retrying) but **writes nothing**.
-
-### The subscription record
-
-Access rows are written as `plan = "mad_buddy_access"`, never as a legacy tier.
-A tier label would have "worked" — the resolver only asks whether a subscription
-is live — while attributing this product's revenue to one nobody can buy and
-breaking reconciliation against the Paystack plan code.
-
-`SubscriptionPlan` (the retired ladder) and `SubscriptionProduct` (what a row
-may hold) are separate types for this reason. Ladder-shaped consumers —
-wallpaper tiers, tour gating, buddy-score rewards, MRR movement — call
-`legacyTierOf()`, which maps Access to `"free"`. That is the honest answer:
-Access grants nothing *through* the ladder.
-
-### Cancellation keeps the paid period
-
-`subscription.not_renew` sets `cancel_at_period_end` and status `non_renewing`.
-It does **not** revoke access — the customer has paid for time they have not
-used. The resolver counts `non_renewing` as live and lets `current_period_end`
-end it.
-
-This was a real bug, caught by `scripts/hardening/access-payment-matrix.mjs`:
-the resolver's status filter omitted `non_renewing`, so cancelling instantly
-revoked a paid period and punished people for cancelling early.
-
-**Apple and Google are provider-ready only.** They exist as source types with no
-integration behind them — no receipt verification is faked. Store policy will be
-re-verified at native implementation time.
-
----
-
-## Security invariants
-
-1. A user can read their own access and can never write it.
-2. Welcome Access starts once per account, enforced by the database.
-3. Expiry uses server time only.
-4. Entitlement is never cached past a mutation — the guard resolves against the
-   database on every paid-surface check.
-5. Every Linkr and UpFor decision derives from `lib/access/resolver`. No call
-   site re-implements the decision or queries the access tables directly.
-6. The provider is not the authority; the local subscription row is.
-7. Admins cannot fabricate payment records.
-8. Global access requires a permission only the owner holds.
-9. Free-core entitlements are `UNLIMITED` on every tier.
-10. No paid tier is ever worse than free.
+1. Linkr and UpFor are not paid surfaces.
+2. Mad Buddy Access means ad-free, not more product capability.
+3. A paying/granted/Welcome Access account must never receive a Mad
+   Buddy-controlled ad.
+4. Admin can turn all ads off without modifying anyone's Access.
+5. Missing configuration or uncertain entitlement means no ad.
+6. Ads never cover navigation or safety controls and never masquerade as Mad
+   Buddy content.
+7. No app-open ads, forced video ads, rewarded ads, fake close buttons or ad
+   walls before Linkr/UpFor.
+8. Production ad ids are never replaced with placeholders in source.
