@@ -9,6 +9,14 @@ import { getSafetyAdminContext } from "@/lib/safety/admin";
 
 export const dynamic = "force-dynamic";
 
+const CATEGORY_COPY: Record<string, string> = {
+  Monetization:
+    "Control advertising independently from Mad Buddy Access. Turning ads off globally never grants or revokes anyone's Access.",
+  "Social discovery": "Pause discovery surfaces without affecting core friendships, privacy, or account access.",
+  Media: "Control optional media experiences independently from chat attachments and existing content.",
+  Life: "Release private Life surfaces gradually without deleting the underlying user-owned information."
+};
+
 export default async function AdminFeaturesPage() {
   const context = await getSafetyAdminContext();
   if (!context.ok) redirect("/admin/login");
@@ -30,6 +38,8 @@ export default async function AdminFeaturesPage() {
     (actors ?? []).map((actor) => [actor.user_id, actor.full_name?.trim() || actor.username || "Admin"])
   );
 
+  const categories = [...new Set(MANAGED_FEATURES.map((feature) => feature.category))];
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -37,39 +47,45 @@ export default async function AdminFeaturesPage() {
         description="Release optional product features and monetization surfaces deliberately. Every change applies globally, is rate-limited, and is recorded in the audit log."
       />
 
-      <AdminSection
-        title="Managed controls"
-        description="Global kill switches for optional product surfaces and advertising. Turning advertising off never changes anyone's Mad Buddy Access status."
-      >
-        <Card className="overflow-hidden p-0">
-          <div className="divide-y divide-border/70">
-            {MANAGED_FEATURES.map((feature) => {
-              const flag = flagByKey.get(feature.key);
-              return flag ? (
-                <FeatureFlagControl
-                  key={feature.key}
-                  flagKey={feature.key}
-                  title={feature.title}
-                  description={flag.description ?? feature.description}
-                  enabled={resolveGlobalFeatureFlag(flag)}
-                  status={flag.status}
-                  updatedAt={flag.updated_at}
-                  enabledImpact={feature.enabledImpact}
-                  disabledImpact={feature.disabledImpact}
-                  changedBy={flag.updated_by ? actorById.get(flag.updated_by) ?? "Admin" : "System"}
-                />
-              ) : (
-                <div key={feature.key} className="px-4 py-5 sm:px-5">
-                  <p className="text-sm font-semibold">{feature.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Apply the latest database migration to make this control available.
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </AdminSection>
+      {categories.map((category) => {
+        const features = MANAGED_FEATURES.filter((feature) => feature.category === category);
+        return (
+          <AdminSection
+            key={category}
+            title={category}
+            description={CATEGORY_COPY[category] ?? "Global release controls for this product area."}
+          >
+            <Card className="overflow-hidden p-0">
+              <div className="divide-y divide-border/70">
+                {features.map((feature) => {
+                  const flag = flagByKey.get(feature.key);
+                  return flag ? (
+                    <FeatureFlagControl
+                      key={feature.key}
+                      flagKey={feature.key}
+                      title={feature.title}
+                      description={flag.description ?? feature.description}
+                      enabled={resolveGlobalFeatureFlag(flag)}
+                      status={flag.status}
+                      updatedAt={flag.updated_at}
+                      enabledImpact={feature.enabledImpact}
+                      disabledImpact={feature.disabledImpact}
+                      changedBy={flag.updated_by ? actorById.get(flag.updated_by) ?? "Admin" : "System"}
+                    />
+                  ) : (
+                    <div key={feature.key} className="px-4 py-5 sm:px-5">
+                      <p className="text-sm font-semibold">{feature.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Apply the latest database migration to make this control available.
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </AdminSection>
+        );
+      })}
     </div>
   );
 }
