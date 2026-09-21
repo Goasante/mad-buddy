@@ -5,6 +5,7 @@ import { safeAuthNext } from "@/lib/auth/oauth-redirect";
 import { buildContentSecurityPolicy, supabaseOriginFromEnv } from "@/lib/security/csp";
 import { extendContentSecurityPolicyForGoogleAds } from "@/lib/ads/csp";
 import { webAdsConfigured } from "@/lib/ads/config";
+import { isPwaInlineAdRoute } from "@/lib/ads/policy";
 import { supabaseCookieOptions } from "@/lib/supabase/cookie-options";
 import type { Database } from "@/lib/supabase/database.types";
 import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
@@ -44,13 +45,14 @@ export async function proxy(request: NextRequest) {
     nonce,
     allowDevEval: process.env.NODE_ENV === "development"
   });
-  // A deployment that does not have BOTH approved AdSense identifiers keeps
-  // the original strict CSP byte-for-byte. Configuration alone only grants
-  // transport permission; Admin flags + Access + route policy still decide
-  // whether any ad request is actually made.
+  // AdSense needs Google's documented nonce-based strict CSP. Do not weaken
+  // every response merely because a publisher id exists: the initial rollout
+  // has one explicitly approved web placement, on Home, so only that route gets
+  // the ad transport extension. Admin flags + Access still decide whether the
+  // page actually requests an ad.
   const cspHeader = extendContentSecurityPolicyForGoogleAds(
     baseCspHeader,
-    webAdsConfigured(process.env)
+    webAdsConfigured(process.env) && isPwaInlineAdRoute(request.nextUrl.pathname)
   );
 
   function withSecurityHeaders(requestHeaders?: Headers): NextResponse {
