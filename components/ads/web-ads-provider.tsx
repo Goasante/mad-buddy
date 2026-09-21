@@ -70,7 +70,14 @@ export function WebAdsProvider({
    * override is ignored immediately — no effect-driven synchronisation needed.
    */
   const serverRuntime = useMemo<RuntimeState>(
-    () => ({ ...features, configured: config !== null }),
+    () => ({
+      adsEnabled: features.adsEnabled,
+      inlineEnabled: features.inlineEnabled,
+      anchorEnabled: features.anchorEnabled,
+      interstitialEnabled: features.interstitialEnabled,
+      adFree: features.adFree,
+      configured: config !== null
+    }),
     [
       config,
       features.adFree,
