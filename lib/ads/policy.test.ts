@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldRequestAd, type AdFormat } from "@/lib/ads/policy";
+import {
+  isPwaInlineAdRoute,
+  shouldRequestAd,
+  type AdFormat
+} from "@/lib/ads/policy";
 
 function allowed(pathname = "/dashboard", format: AdFormat = "inline") {
   return shouldRequestAd({
@@ -14,8 +18,16 @@ function allowed(pathname = "/dashboard", format: AdFormat = "inline") {
 }
 
 describe("PWA ad policy", () => {
-  it("allows an ordinary Home inline placement for an ad-eligible account", () => {
+  it("allows the approved Home inline placement for an ad-eligible account", () => {
     expect(allowed()).toBe(true);
+    expect(isPwaInlineAdRoute("/dashboard")).toBe(true);
+  });
+
+  it("does not silently turn ordinary app pages into inline ad surfaces", () => {
+    for (const pathname of ["/friends", "/plans", "/events", "/profile", "/linkr", "/hangout-mode"]) {
+      expect(allowed(pathname)).toBe(false);
+      expect(isPwaInlineAdRoute(pathname)).toBe(false);
+    }
   });
 
   it.each([
@@ -46,17 +58,15 @@ describe("PWA ad policy", () => {
     "/billing",
     "/settings/access",
     "/admin/features",
-    "/camera"
-  ])("blocks sensitive route %s", (pathname) => {
+    "/camera",
+    "/messages",
+    "/messages/123"
+  ])("blocks sensitive/non-monetizable route %s", (pathname) => {
     expect(allowed(pathname)).toBe(false);
   });
 
-  it("keeps the Messages list eligible but blocks an active conversation", () => {
-    expect(allowed("/messages")).toBe(true);
-    expect(allowed("/messages/123")).toBe(false);
-  });
-
-  it("never allows an interstitial inside messaging", () => {
-    expect(allowed("/messages", "interstitial")).toBe(false);
+  it("keeps not-yet-implemented web formats disabled even if their Admin switch is on", () => {
+    expect(allowed("/dashboard", "anchor")).toBe(false);
+    expect(allowed("/dashboard", "interstitial")).toBe(false);
   });
 });
