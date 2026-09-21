@@ -23,3 +23,28 @@
     padding-top: max(0.25rem, calc(1rem - var(--mobile-nav-safe-bottom))) !important;
   }
 }
+
+/*
+ * iOS installed-PWA bottom-gap correction.
+ *
+ * On real iPhones, standalone WebKit can expose the home-indicator safe area
+ * OUTSIDE the layout viewport even though viewport-fit=cover is present. In
+ * that state `position: fixed; bottom: 0` stops at the top of the safe area,
+ * so the floating dock appears to hover roughly one full iPhone inset above
+ * the physical bottom edge. The same session can later be recomputed flush,
+ * which is why the gap has looked intermittent on-device while headless
+ * Chromium (where the inset is 0) never reproduces it.
+ *
+ * Only the installed standalone WebKit case is corrected. Pull the fixed nav
+ * frame down by exactly the reported safe-area inset; the existing internal
+ * `--mobile-nav-safe-bottom` padding still keeps the controls clear of the
+ * gesture edge. Browser-tab Safari, Android/Chromium and desktop keep their
+ * normal bottom:0 geometry.
+ */
+@media (max-width: 767px) and (display-mode: standalone) {
+  @supports (-webkit-touch-callout: none) {
+    nav[aria-label="Mobile navigation"] {
+      bottom: calc(0px - env(safe-area-inset-bottom, 0px));
+    }
+  }
+}
