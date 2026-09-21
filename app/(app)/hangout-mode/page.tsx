@@ -10,11 +10,13 @@ import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { currentActiveHangout, ownedUpForSessions } from "@/lib/social/planning";
 import type { OwnedUpFor } from "@/lib/social/owned-upfors";
-import { AccessLocked } from "@/components/access/access-locked";
-import { checkAccess } from "@/lib/access/guard";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * UpFor is part of the free product. Mad Buddy Access controls advertising,
+ * never whether a member may create, discover, join or manage an UpFor.
+ */
 export default async function HangoutModeRoute() {
   const user = await getCurrentIdentity();
 
@@ -31,19 +33,6 @@ export default async function HangoutModeRoute() {
   const plansPromise = user
     ? loadUpcomingPlans(user.id, 8)
     : Promise.resolve({ plans: [], hasMore: false });
-
-  /* UPFOR LOCKS DIFFERENTLY FROM LINKR, ON PURPOSE.
-   *
-   * Linkr without Access has nothing left to show -- the whole surface is
-   * discovery. UpFor does: an expired account still sees what its OWN MUDDIES
-   * are up for (free forever), and still owns any session and any Plan it
-   * already created.
-   *
-   * So the full-page lock is shown only when there is genuinely nothing left
-   * to do here: no Access AND no active session of their own. Someone with a
-   * running UpFor keeps the page that manages it -- being unable to start a
-   * NEW one must never take away the one they already have. */
-  const access = user ? await checkAccess(user.id, "upfor") : null;
 
   if (user && env.url && env.serviceRoleKey) {
     const admin = createSupabaseAdminClient();
@@ -108,14 +97,6 @@ export default async function HangoutModeRoute() {
   }
 
   const [feed, plansData] = await Promise.all([feedPromise, plansPromise]);
-
-  /* Nothing left to do here: no Access, no session of their own, and no Muddy
-     UpFors in the feed. Anyone who still has ANY of those keeps the real page.
-     Checked after the feed resolves because "are there Muddy UpFors" is a fact
-     about the data, not about entitlement. */
-  if (user && access && !access.ok && !activeHangout && feed.length === 0) {
-    return <AccessLocked surface="upfor" hadWelcomeAccess={access.hadWelcomeAccess} />;
-  }
 
   return (
     <HangoutModePage
