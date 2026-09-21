@@ -159,14 +159,12 @@ export default async function DashboardPage() {
         planDecisions: smartCardProjection?.planDecisions ?? [],
         planChatDecisions: smartCardProjection?.planChatDecisions ?? [],
         blockedFeature: smartCardProjection?.blockedFeature ?? null,
-        /* ENTITLEMENT. Gates only states that would START something new, so an
-           expired viewer keeps every existing Linkr mutual, UpFor commitment,
-           Plan, conversation and safety state exactly as before.
-           Absent means UNKNOWN, and unknown is not permission: the two
-           expansion offers stay quiet rather than advertising something the
-           server may refuse. Continuity is unaffected either way, because no
-           continuity provider reads this. */
-        access: smartCardProjection?.access ?? null,
+        /* Linkr and UpFor are part of the free product. Older Smart Card
+           providers still accept `canExpand` as a compatibility input, but it
+           is no longer an entitlement decision. Keep it TRUE so an expired or
+           never-paying account is offered the same product capabilities as an
+           Access account. Access is consumed only by the ad layer. */
+        access: { canExpand: true },
         /* NearbyHero owns the proximity payoff and the Activation card owns
            cold-start people discovery. Excluding them HERE (rather than after
            resolution) means that when one of them ranks highest the engine
