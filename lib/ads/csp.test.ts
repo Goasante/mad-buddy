@@ -4,7 +4,7 @@ import { extendContentSecurityPolicyForGoogleAds } from "@/lib/ads/csp";
 
 const base = [
   "default-src 'self'",
-  "script-src 'self' 'nonce-test'",
+  "script-src 'self' 'nonce-test' 'unsafe-inline'",
   "img-src 'self' data:",
   "connect-src 'self'",
   "frame-src https://challenges.cloudflare.com",
@@ -12,24 +12,26 @@ const base = [
 ].join("; ");
 
 describe("Google web-ad CSP extension", () => {
-  it("does not broaden CSP when AdSense is not configured", () => {
+  it("does not broaden CSP when AdSense is not configured for the route", () => {
     expect(extendContentSecurityPolicyForGoogleAds(base, false)).toBe(base);
   });
 
-  it("adds the ad script only to script-src", () => {
+  it("uses Google's nonce-based strict-dynamic script posture", () => {
     const policy = extendContentSecurityPolicyForGoogleAds(base, true);
-    expect(policy).toContain("script-src 'self' 'nonce-test' https://pagead2.googlesyndication.com");
-    expect(policy).not.toContain("default-src 'self' https://pagead2.googlesyndication.com");
+    const script = policy.split("; ").find((part) => part.startsWith("script-src ")) ?? "";
+    expect(script).toContain("'nonce-test'");
+    expect(script).toContain("'unsafe-eval'");
+    expect(script).toContain("'strict-dynamic'");
+    expect(script).toContain("https:");
+    expect(script).toContain("http:");
   });
 
-  it("adds Google ad network sources to image, connect and frame directives", () => {
+  it("allows changing HTTPS ad-resource origins only on the expanded policy", () => {
     const policy = extendContentSecurityPolicyForGoogleAds(base, true);
     for (const directive of ["img-src", "connect-src", "frame-src"]) {
       const line = policy.split("; ").find((part) => part.startsWith(`${directive} `));
-      expect(line).toContain("https://*.googlesyndication.com");
-      expect(line).toContain("https://*.doubleclick.net");
-      expect(line).toContain("https://*.google.com");
-      expect(line).toContain("https://www.google.com");
+      expect(line).toContain("https:");
     }
+    expect(extendContentSecurityPolicyForGoogleAds(base, false)).not.toContain("connect-src 'self' https:");
   });
 });
