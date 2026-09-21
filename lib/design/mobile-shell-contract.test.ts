@@ -62,6 +62,12 @@ describe("viewport contract", () => {
     const offenders: string[] = [];
     for (const file of files) {
       const text = readFileSync(file, "utf8");
+      const relative = file.slice(ROOT.length + 1).replaceAll("\\", "/");
+      const isTargetedStandaloneWebkitFix =
+        relative === "app/mobile-shell-stability.css" &&
+        text.includes("@media (max-width: 767px) and (display-mode: standalone)") &&
+        text.includes("@supports (-webkit-touch-callout: none)");
+
       for (const line of text.split("\n")) {
         if (!/100vh/.test(line)) continue;
         // Desktop-only usage is fine: there is no URL bar to collapse there.
@@ -72,6 +78,14 @@ describe("viewport contract", () => {
            self-reporting trap the form-method and hover guards both hit. */
         if (/^\s*(\*|\/\*|\/\/|\{\/\*)/.test(line)) continue;
         if (/not vh|never a bare|100vh is|is capped/.test(line)) continue;
+
+        /* One deliberate exception exists for installed iPhone PWAs. WebKit's
+           standalone viewport can subtract the home-indicator safe area from
+           svh/dvh even with viewport-fit=cover. The fix is intentionally
+           confined to the standalone + WebKit rule in mobile-shell-stability;
+           ordinary mobile surfaces remain forbidden from using bare 100vh. */
+        if (isTargetedStandaloneWebkitFix && /^\s*(height|min-height):\s*100vh;\s*$/.test(line)) continue;
+
         offenders.push(`${file.split(/[\/]/).slice(-2).join("/")}: ${line.trim().slice(0, 70)}`);
       }
     }
