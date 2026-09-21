@@ -78,6 +78,11 @@ Expiry is evaluated against server time.
 
 Welcome Access is **14 days without ads**.
 
+Starts at: **Account creation, or `first_muddy_added`, whichever happens first.**
+The first valid trigger wins; the second does not restart or extend the window.
+The signup-trigger change is **not retroactive** for accounts that already
+existed before that behavior was introduced.
+
 It is not a payment trial:
 
 - no card is required;
