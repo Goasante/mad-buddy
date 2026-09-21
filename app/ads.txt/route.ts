@@ -1,23 +1,24 @@
 import { NextResponse } from "next/server";
 
-import { readWebAdsConfiguration } from "@/lib/ads/config";
+import { readAdsenseClientId } from "@/lib/ads/config";
 
 export const dynamic = "force-dynamic";
 
 /**
- * AdSense seller declaration, derived from the same validated client id used by
- * the PWA provider. No placeholder publisher record is ever exposed.
+ * AdSense seller declaration. Site verification only needs the publisher/client
+ * id; it must not wait for a display ad slot to exist. Full ad serving still
+ * fails closed elsewhere until the complete client + slot configuration is valid.
  */
 export function GET() {
-  const config = readWebAdsConfiguration(process.env);
-  if (!config.ok) {
+  const clientId = readAdsenseClientId(process.env);
+  if (!clientId) {
     return new NextResponse("Not configured\n", {
       status: 404,
       headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
     });
   }
 
-  const publisherId = config.value.clientId.replace(/^ca-/, "");
+  const publisherId = clientId.replace(/^ca-/, "");
   return new NextResponse(`google.com, ${publisherId}, DIRECT, f08c47fec0942fa0\n`, {
     status: 200,
     headers: {
