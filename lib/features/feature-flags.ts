@@ -8,6 +8,12 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 export const OPEN_MOMENTS_FLAG = "open_moments" as const;
 export const SOCIALIZE_FLAG = "socialize" as const;
 
+/** Advertising controls. All four fail closed: no row or an OFF row means no ad request. */
+export const ADS_ENABLED_FLAG = "ads_enabled" as const;
+export const ADS_INLINE_FLAG = "ads_inline" as const;
+export const ADS_ANCHOR_FLAG = "ads_anchor" as const;
+export const ADS_INTERSTITIAL_FLAG = "ads_interstitial" as const;
+
 /**
  * Scope reduction: features paused for the first release.
  *
@@ -55,6 +61,38 @@ export const LIFE_FLAGS = [
 ] as const;
 
 export const MANAGED_FEATURES = [
+  {
+    key: ADS_ENABLED_FLAG,
+    title: "Advertising",
+    category: "Monetization",
+    description: "Master switch for third-party advertising across Mad Buddy.",
+    enabledImpact: "Ad-eligible members may receive ads on formats that are separately enabled.",
+    disabledImpact: "No Mad Buddy surface requests or renders third-party ads. Access ownership is unchanged."
+  },
+  {
+    key: ADS_INLINE_FLAG,
+    title: "Inline ads",
+    category: "Monetization",
+    description: "Responsive ads inserted into approved content breaks such as Home below Near.",
+    enabledImpact: "Approved PWA feed placements may request a responsive web ad when the master switch is also on.",
+    disabledImpact: "Inline ad placements render nothing and reserve no blank space."
+  },
+  {
+    key: ADS_ANCHOR_FLAG,
+    title: "Anchor ads",
+    category: "Monetization",
+    description: "Google-managed anchor/banner advertising on approved PWA surfaces.",
+    enabledImpact: "Eligible PWA pages may allow the configured anchor format when the master switch is also on.",
+    disabledImpact: "No anchor/banner ad is requested. Navigation and content spacing remain unchanged."
+  },
+  {
+    key: ADS_INTERSTITIAL_FLAG,
+    title: "Interstitial ads",
+    category: "Monetization",
+    description: "Occasional full-screen advertising at explicitly approved natural breaks.",
+    enabledImpact: "Eligible clients may use conservative, frequency-capped interstitial opportunities.",
+    disabledImpact: "No full-screen ad is prepared or shown. This should remain off for the initial rollout."
+  },
   {
     key: MOMENTS_FLAG,
     title: "Moments",
