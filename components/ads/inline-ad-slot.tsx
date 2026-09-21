@@ -69,7 +69,6 @@ export function InlineAdSlot({
       className="w-full min-w-0 overflow-hidden"
       data-mad-buddy-ad="inline"
       data-ad-placement={placement}
-      aria-hidden="true"
     >
       <ins
         ref={insRef}
