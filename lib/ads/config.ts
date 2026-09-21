@@ -13,6 +13,19 @@ const ADSENSE_CLIENT_ID = /^ca-pub-\d{16}$/;
 const ADSENSE_SLOT_ID = /^\d{5,20}$/;
 
 /**
+ * Read and validate only the public AdSense client id.
+ *
+ * Site ownership / ads.txt verification happens before a display ad unit has
+ * necessarily been created, so it must not depend on ADSENSE_HOME_INLINE_SLOT.
+ * Full ad serving still uses readWebAdsConfiguration below and therefore still
+ * fails closed until both values are valid.
+ */
+export function readAdsenseClientId(env: Record<string, string | undefined>): string | null {
+  const clientId = env.ADSENSE_CLIENT_ID?.trim() ?? "";
+  return ADSENSE_CLIENT_ID.test(clientId) ? clientId : null;
+}
+
+/**
  * Read the PWA advertising configuration without ever inventing placeholder ids.
  *
  * AdSense ids are public identifiers, not secrets, but they remain server-owned
@@ -23,11 +36,11 @@ const ADSENSE_SLOT_ID = /^\d{5,20}$/;
 export function readWebAdsConfiguration(
   env: Record<string, string | undefined>
 ): WebAdsConfigurationResult {
-  const clientId = env.ADSENSE_CLIENT_ID?.trim() ?? "";
+  const clientId = readAdsenseClientId(env) ?? "";
   const homeInlineSlot = env.ADSENSE_HOME_INLINE_SLOT?.trim() ?? "";
   const missing: Array<"ADSENSE_CLIENT_ID" | "ADSENSE_HOME_INLINE_SLOT"> = [];
 
-  if (!ADSENSE_CLIENT_ID.test(clientId)) missing.push("ADSENSE_CLIENT_ID");
+  if (!clientId) missing.push("ADSENSE_CLIENT_ID");
   if (!ADSENSE_SLOT_ID.test(homeInlineSlot)) missing.push("ADSENSE_HOME_INLINE_SLOT");
 
   if (missing.length > 0) return { ok: false, missing };

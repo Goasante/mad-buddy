@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readWebAdsConfiguration, webAdsConfigured } from "@/lib/ads/config";
+import { readAdsenseClientId, readWebAdsConfiguration, webAdsConfigured } from "@/lib/ads/config";
 
 describe("web advertising configuration", () => {
   const valid = {
@@ -19,13 +19,26 @@ describe("web advertising configuration", () => {
     expect(webAdsConfigured(valid)).toBe(true);
   });
 
+  it("allows site verification with only a valid AdSense client id", () => {
+    expect(readAdsenseClientId({ ADSENSE_CLIENT_ID: valid.ADSENSE_CLIENT_ID })).toBe(valid.ADSENSE_CLIENT_ID);
+    expect(readWebAdsConfiguration({ ADSENSE_CLIENT_ID: valid.ADSENSE_CLIENT_ID }).ok).toBe(false);
+  });
+
+  it.each([
+    ["missing client", { ADSENSE_HOME_INLINE_SLOT: valid.ADSENSE_HOME_INLINE_SLOT }],
+    ["placeholder client", { ...valid, ADSENSE_CLIENT_ID: "ca-pub-xxxxxxxxxxxxxxxx" }],
+    ["bad client shape", { ...valid, ADSENSE_CLIENT_ID: "pub-123" }]
+  ])("rejects %s for client-only verification", (_name, env) => {
+    expect(readAdsenseClientId(env)).toBeNull();
+  });
+
   it.each([
     ["missing client", { ADSENSE_HOME_INLINE_SLOT: valid.ADSENSE_HOME_INLINE_SLOT }],
     ["placeholder client", { ...valid, ADSENSE_CLIENT_ID: "ca-pub-xxxxxxxxxxxxxxxx" }],
     ["bad client shape", { ...valid, ADSENSE_CLIENT_ID: "pub-123" }],
     ["missing slot", { ADSENSE_CLIENT_ID: valid.ADSENSE_CLIENT_ID }],
     ["placeholder slot", { ...valid, ADSENSE_HOME_INLINE_SLOT: "slot-home" }]
-  ])("fails closed for %s", (_name, env) => {
+  ])("fails closed for full ad serving with %s", (_name, env) => {
     expect(readWebAdsConfiguration(env).ok).toBe(false);
     expect(webAdsConfigured(env)).toBe(false);
   });
@@ -43,5 +56,8 @@ describe("web advertising configuration", () => {
         homeInlineSlot: valid.ADSENSE_HOME_INLINE_SLOT
       }
     });
+    expect(readAdsenseClientId({ ADSENSE_CLIENT_ID: `  ${valid.ADSENSE_CLIENT_ID}  ` })).toBe(
+      valid.ADSENSE_CLIENT_ID
+    );
   });
 });

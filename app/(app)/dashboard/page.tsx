@@ -9,7 +9,7 @@ import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isMomentsEnabled, isSocializeEnabled } from "@/lib/features/feature-flags";
+import { isMomentsEnabled } from "@/lib/features/feature-flags";
 import { countIncomingRequests } from "@/lib/friends/service";
 import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
@@ -39,7 +39,7 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 export default async function DashboardPage() {
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUserRecord()]);
   const admin = createSupabaseAdminClient();
-  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, socializeEnabled, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext, linkrMutuals] = user
+  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext, linkrMutuals] = user
     ? await Promise.all([
         ensureProfileForUser(user),
         supabase
@@ -55,7 +55,6 @@ export default async function DashboardPage() {
           .maybeSingle(),
         loadSafeArrivalJourneys(admin, user.id),
         loadFriendGlowColors(admin, user.id),
-        isSocializeEnabled(admin),
         isMomentsEnabled(admin),
         loadJourney(admin, user.id),
         countIncomingRequests(user.id),
@@ -68,7 +67,7 @@ export default async function DashboardPage() {
         loadHomeUpForContext(admin, user.id),
         loadClickedPeople(user.id)
       ])
-    : [null, null, { items: [], hasMore: false }, null, null, {}, false, false, null, 0, null, null, [], [], [], null, null, []];
+    : [null, null, { items: [], hasMore: false }, null, null, {}, false, null, 0, null, null, [], [], [], null, null, []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -226,7 +225,15 @@ export default async function DashboardPage() {
           : null
       }
       hiddenQuickActionHrefs={[
-        ...(socializeEnabled ? [] : ["/discover"]),
+        // Owner decision: Home keeps the focused three-card suggestion rail.
+        // The old viewport gap-filler ("More to explore") is not part of Home.
+        "/plans?create=1",
+        "/events",
+        "/discover",
+        "/safe-arrival",
+        "/groups",
+        "/reminders",
+        "/settings/engagement",
         ...(momentsEnabled ? [] : ["/moments"])
       ]}
       momentsEnabled={Boolean(momentsEnabled)}
