@@ -24,6 +24,7 @@ export type WebAdsFeatureState = {
 };
 
 type RuntimeState = WebAdsFeatureState & { configured: boolean };
+type RuntimeOverride = { signature: string; value: RuntimeState };
 
 type WebAdsContextValue = {
   pathname: string;
@@ -60,10 +61,41 @@ export function WebAdsProvider({
 }) {
   const pathname = usePathname() || "/";
   const [scriptReady, setScriptReady] = useState(false);
-  const [runtime, setRuntime] = useState<RuntimeState>(() => ({
-    ...features,
-    configured: config !== null
-  }));
+  const [runtimeOverride, setRuntimeOverride] = useState<RuntimeOverride | null>(null);
+
+  /*
+   * Server props are the baseline truth after any server navigation/refresh.
+   * A polled value is used only while it belongs to this exact baseline. When
+   * the server supplies newer props, the signature changes and a stale client
+   * override is ignored immediately — no effect-driven synchronisation needed.
+   */
+  const serverRuntime = useMemo<RuntimeState>(
+    () => ({ ...features, configured: config !== null }),
+    [
+      config,
+      features.adFree,
+      features.adsEnabled,
+      features.anchorEnabled,
+      features.inlineEnabled,
+      features.interstitialEnabled
+    ]
+  );
+  const runtimeSignature = useMemo(
+    () =>
+      [
+        config?.clientId ?? "",
+        config?.homeInlineSlot ?? "",
+        serverRuntime.adsEnabled,
+        serverRuntime.inlineEnabled,
+        serverRuntime.anchorEnabled,
+        serverRuntime.interstitialEnabled,
+        serverRuntime.adFree,
+        serverRuntime.configured
+      ].join("|"),
+    [config?.clientId, config?.homeInlineSlot, serverRuntime]
+  );
+  const runtime =
+    runtimeOverride?.signature === runtimeSignature ? runtimeOverride.value : serverRuntime;
 
   // A Next layout can persist for a long PWA session. Refresh the two facts
   // that must take effect without requiring a restart:
@@ -72,10 +104,7 @@ export function WebAdsProvider({
   // Five minutes bounds a background session, while focus/visibility refreshes
   // catch a person returning from checkout or an admin intervention sooner.
   useEffect(() => {
-    if (!config) {
-      setRuntime(safeOffState());
-      return;
-    }
+    if (!config) return;
 
     let cancelled = false;
 
@@ -98,12 +127,14 @@ export function WebAdsProvider({
           typeof next.adFree !== "boolean" ||
           typeof next.configured !== "boolean"
         ) {
-          setRuntime(safeOffState());
+          setRuntimeOverride({ signature: runtimeSignature, value: safeOffState() });
           return;
         }
-        setRuntime(next as RuntimeState);
+        setRuntimeOverride({ signature: runtimeSignature, value: next as RuntimeState });
       } catch {
-        if (!cancelled) setRuntime(safeOffState());
+        if (!cancelled) {
+          setRuntimeOverride({ signature: runtimeSignature, value: safeOffState() });
+        }
       }
     };
 
@@ -124,20 +155,7 @@ export function WebAdsProvider({
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [config]);
-
-  // A server refresh (for example after checkout) remains authoritative and
-  // should update immediately rather than waiting for the client poll.
-  useEffect(() => {
-    setRuntime({ ...features, configured: config !== null });
-  }, [
-    config,
-    features.adFree,
-    features.adsEnabled,
-    features.anchorEnabled,
-    features.inlineEnabled,
-    features.interstitialEnabled
-  ]);
+  }, [config, runtimeSignature]);
 
   const formatEnabled = useCallback(
     (format: AdFormat) => {
