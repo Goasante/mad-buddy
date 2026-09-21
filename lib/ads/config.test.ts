@@ -36,6 +36,12 @@ describe("web advertising configuration", () => {
         ADSENSE_CLIENT_ID: `  ${valid.ADSENSE_CLIENT_ID}  `,
         ADSENSE_HOME_INLINE_SLOT: ` ${valid.ADSENSE_HOME_INLINE_SLOT} `
       })
-    ).toEqual({ ok: true, value: valid });
+    ).toEqual({
+      ok: true,
+      value: {
+        clientId: valid.ADSENSE_CLIENT_ID,
+        homeInlineSlot: valid.ADSENSE_HOME_INLINE_SLOT
+      }
+    });
   });
 });
