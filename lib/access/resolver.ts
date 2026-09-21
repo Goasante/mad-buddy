@@ -5,29 +5,32 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 /**
  * THE ONE ENTITLEMENT AUTHORITY FOR MAD BUDDY ACCESS.
  *
- * Every server-side Linkr and UpFor decision resolves through this module and
- * nothing else. That is the point of it: the model it replaces ranked three
- * tiers (`free < buddy_plus < buddy_pro`) and was consulted ad hoc from a
+ * Mad Buddy Access now answers one product question: is this account ad-free?
+ * Linkr, UpFor and the rest of the core app do not consult this resolver for
+ * feature capability. The advertising layer projects `hasAccess` into
+ * `adFree` through `lib/access/ad-entitlement.ts`.
+ *
+ * Keeping this as one authority still matters. The model it replaced ranked
+ * three tiers (`free < buddy_plus < buddy_pro`) and was consulted ad hoc from a
  * dozen call sites, which is how a product ends up with a scattered
- * `isPremium` architecture that has to be rebuilt every time a new payment
+ * `isPremium` architecture that has to be rebuilt every time a payment
  * provider appears.
  *
  * WHAT IS NOT AUTHORITY, stated because each has been treated as authority in
  * some codebase: the UI, the client, Paystack, Apple, Google, the admin
- * console, a cached boolean on `profiles`. All of them are inputs or consumers.
- * The database rows below, read at server time, are the authority.
+ * console, a cached boolean on `profiles`, or an ad SDK. All are inputs or
+ * consumers. The database rows below, read at server time, are the authority.
  *
  * ── INDEPENDENT SOURCES, NOT A PRECEDENCE LADDER ──────────────────────────
  *
- * A person may hold several access sources at once. Access is the UNION: true
+ * A person may hold several Access sources at once. Access is the UNION: true
  * if any source is currently valid. `primarySource` names the most durable one
  * for display, but it is a label, never the decision.
  *
- * This matters for a specific failure the brief calls out. Under a ladder,
- * revoking the top rung silently destroys access that a lower rung legitimately
- * granted -- revoke someone's admin grant and their paid subscription stops
- * working. Under a union, revoking one source leaves every other source intact,
- * which is the behaviour anybody would expect and the one that survives audit.
+ * This matters for revocation. Removing an admin grant must not erase a paid
+ * subscription, and a Welcome window ending must not make a staff account
+ * ad-eligible. Under a union, revoking one source leaves every other valid
+ * source intact.
  *
  * ── TIME ──────────────────────────────────────────────────────────────────
  *
@@ -51,30 +54,32 @@ export type AccessSource =
   | "staff"
   | "global_promo";
 
-/** One currently-valid reason a person has access. */
+/** One currently-valid reason a person has Access. */
 export type ActiveAccessSource = {
   source: AccessSource;
+  /** When this source began. */
   startsAt: string;
   /** ISO timestamp, or null for indefinite (staff, "until revoked"). */
   expiresAt: string | null;
 };
 
 export type AccessState = {
+  /** True means the account currently owns the ad-free Access benefit. */
   hasAccess: boolean;
   /**
    * The most durable active source, for display. Indefinite beats dated;
-   * among dated sources the one ending last wins. Null when there is no access.
+   * among dated sources the one ending last wins. Null when there is no Access.
    */
   primarySource: AccessSource | null;
-  /** Every independently valid source. Empty when there is no access. */
+  /** Every independently valid source. Empty when there is no Access. */
   sources: ActiveAccessSource[];
   /**
-   * When access ends, across all sources -- the LATEST expiry, because access
-   * survives while any source is valid. Null means indefinite or no access;
+   * When Access ends, across all sources -- the LATEST expiry, because Access
+   * survives while any source is valid. Null means indefinite or no Access;
    * `hasAccess` distinguishes those.
    */
   expiresAt: string | null;
-  /** Whole days remaining, rounded up. Null for indefinite or no access. */
+  /** Whole days remaining, rounded up. Null for indefinite or no Access. */
   daysRemaining: number | null;
 
   isWelcomeAccess: boolean;
@@ -105,9 +110,9 @@ export const NO_ACCESS: AccessState = {
 
 /**
  * How durable a source is, for choosing what to DISPLAY. Not a precedence
- * ladder -- nothing here decides whether access exists, only which of several
- * true things to name first. Paid outranks welcome so a paying customer is
- * never told they are on a trial.
+ * ladder -- nothing here decides whether Access exists, only which of several
+ * true things to name first. Paid outranks Welcome so a paying customer is
+ * never described as relying on their introductory window.
  */
 const DISPLAY_RANK: Record<AccessSource, number> = {
   staff: 6,
@@ -131,10 +136,10 @@ function buildState(sources: ActiveAccessSource[]): AccessState {
     return Date.parse(b.expiresAt) - Date.parse(a.expiresAt);
   })[0];
 
-  /* The LATEST expiry across sources, because access persists while ANY source
-     is valid. Reporting the earliest would tell a paying customer their access
-     ends when their welcome window does. A single indefinite source means
-     access has no end date at all. */
+  /* The LATEST expiry across sources, because Access persists while ANY source
+     is valid. Reporting the earliest would tell a paying customer their Access
+     ends when their Welcome window does. A single indefinite source means
+     Access has no end date at all. */
   const hasIndefinite = sources.some((s) => s.expiresAt === null);
   const expiresAt = hasIndefinite
     ? null
@@ -195,9 +200,9 @@ export async function resolveAccessForUser(userId: string, now: Date = new Date(
       .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
       .limit(1),
 
-    /* Staff access is derived from the admin directory rather than stored as a
-       grant, so it cannot drift: revoking somebody's admin role revokes their
-       access in the same action. `disabled_at` is honoured. */
+    /* Staff Access is derived from the admin directory rather than stored as a
+       grant, so it cannot drift: revoking somebody's admin role removes that
+       ad-free source in the same action. `disabled_at` is honoured. */
     admin
       .from("admin_users")
       .select("role")
@@ -240,12 +245,13 @@ export async function resolveAccessForUser(userId: string, now: Date = new Date(
 /**
  * The provider boundary.
  *
- * A subscription grants access when the provider's canonical state says it is
- * live -- `active` or `trialing`, or `past_due` inside its grace window. The
- * PROVIDER IS NOT THE AUTHORITY: this reads the local `subscriptions` row that
- * verified webhook processing wrote, never Paystack's API at request time. A
- * forged client callback cannot reach it, and a provider outage cannot revoke a
- * paid customer mid-request.
+ * A subscription grants ad-free Access when the canonical local subscription
+ * state says it is live -- `active` or `trialing`, `non_renewing` through the
+ * paid period, or `past_due` inside its grace window. The PROVIDER IS NOT THE
+ * AUTHORITY: this reads the local `subscriptions` row that verified webhook
+ * processing wrote, never Paystack's API at request time. A forged client
+ * callback cannot reach it, and a provider outage cannot revoke a paid benefit
+ * mid-request.
  *
  * `provider` is mapped to a source type so Apple and Google slot in without a
  * schema change or a second code path.
@@ -259,15 +265,15 @@ async function loadPaidSubscription(
     .from("subscriptions")
     .select("provider, status, current_period_start, current_period_end, grace_ends_at")
     .eq("user_id", userId)
-    /* `non_renewing` IS live access.
+    /* `non_renewing` IS live Access.
      *
      * It means "cancelled, but paid through the end of the period" -- the
      * customer has already paid for time they have not used yet. Omitting it
-     * revoked access the instant somebody cancelled, taking back a paid period
-     * and punishing them for cancelling early rather than at the last minute.
-     * Caught by scripts/hardening/access-payment-matrix.mjs.
+     * removed the ad-free benefit the instant somebody cancelled, taking back a
+     * paid period and punishing them for cancelling early rather than at the
+     * last minute. Caught by scripts/hardening/access-payment-matrix.mjs.
      *
-     * `current_period_end` still bounds it, so access ends when the paid period
+     * `current_period_end` still bounds it, so Access ends when the paid period
      * genuinely runs out -- no job required. */
     .in("status", ["active", "trialing", "past_due", "non_renewing"])
     .order("current_period_end", { ascending: false })
@@ -276,8 +282,8 @@ async function loadPaidSubscription(
 
   if (!data) return null;
 
-  /* past_due keeps access only inside the grace window the billing service
-     already maintains -- a failed renewal should not lock somebody out the
+  /* past_due keeps Access only inside the grace window the billing service
+     already maintains -- a failed renewal should not remove a paid benefit the
      instant a card is retried. */
   const periodEnd = data.current_period_end;
   const graceEnd = data.grace_ends_at;
