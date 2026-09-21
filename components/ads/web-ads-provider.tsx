@@ -34,11 +34,14 @@ const WebAdsContext = createContext<WebAdsContextValue | null>(null);
 export function WebAdsProvider({
   children,
   features,
-  config
+  config,
+  nonce
 }: {
   children: ReactNode;
   features: WebAdsFeatureState;
   config: WebAdsConfiguration | null;
+  /** Per-request CSP nonce minted by proxy.ts. */
+  nonce?: string;
 }) {
   const pathname = usePathname() || "/";
   const [scriptReady, setScriptReady] = useState(false);
@@ -82,10 +85,11 @@ export function WebAdsProvider({
   return (
     <WebAdsContext.Provider value={value}>
       {children}
-      {shouldLoadAdSense && config ? (
+      {shouldLoadAdSense && config && nonce ? (
         <Script
           id="mad-buddy-adsense"
           async
+          nonce={nonce}
           strategy="afterInteractive"
           crossOrigin="anonymous"
           src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(config.clientId)}`}
