@@ -19,16 +19,19 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 /**
  * Admin actions for Mad Buddy Access.
  *
+ * Access is the ad-free entitlement. These actions never unlock Linkr, UpFor
+ * or another core feature; they control whether Mad Buddy-controlled ads may be
+ * shown while the resulting source is valid.
+ *
  * NO TYPES ARE EXPORTED FROM THIS FILE. A `"use server"` module that exports a
  * type produces a Turbopack runtime ReferenceError that breaks every action in
  * it, and `tsc` does not catch it -- only a real build does. The result shape
  * is declared inline for that reason.
  *
  * Each action follows the house pattern in ./actions.ts: authorize, rate limit,
- * WRITE THE AUDIT EVENT, and only then mutate. Audit-before-mutate matters here
- * more than almost anywhere else -- these actions give away a paid product, and
- * a grant nobody can attribute is indistinguishable from an abused one. If the
- * audit write fails, the mutation does not happen.
+ * WRITE THE AUDIT EVENT, and only then mutate. A grant is a monetized benefit,
+ * so an unattributed grant is still unacceptable even though it no longer
+ * changes feature capability.
  */
 
 const durationSchema = z.enum(
@@ -71,13 +74,10 @@ export async function grantAccessAction(input: unknown): Promise<{ ok: boolean; 
 
     /* THE ROLE BOUNDARY.
      *
-     * `admin.entitlements.manage` lets somebody grant access. It does not by
-     * itself let them grant a YEAR of it, or grant it forever. Long and
+     * `admin.entitlements.manage` lets somebody grant ad-free Access. It does
+     * not by itself let them grant a YEAR of it, or grant it forever. Long and
      * indefinite grants are an ownership decision, so they additionally require
-     * `admin.access.global.manage`, which super_administrator alone holds.
-     *
-     * Checked here rather than in lib/access/admin so the capability system
-     * stays the single authority on who may do what. */
+     * `admin.access.global.manage`, which super_administrator alone holds. */
     const longGrant = !durationAllowedForSupport(parsed.data.duration) || Boolean(parsed.data.customExpiry);
     if (longGrant) {
       await requireAdminPermission(admin, context, "admin.access.global.manage");
@@ -96,7 +96,7 @@ export async function grantAccessAction(input: unknown): Promise<{ ok: boolean; 
       reason: parsed.data.reason
     });
     if (!logged) {
-      return { ok: false, message: "The audit entry could not be recorded, so no access was granted." };
+      return { ok: false, message: "The audit entry could not be recorded, so no Access was granted." };
     }
 
     const result = await grantAccess(admin, {
@@ -110,7 +110,7 @@ export async function grantAccessAction(input: unknown): Promise<{ ok: boolean; 
 
     revalidatePath("/admin");
     revalidatePath("/admin/entitlements");
-    return { ok: true, message: "Access granted." };
+    return { ok: true, message: "Ad-free Access granted." };
   } catch {
     return { ok: false, message: "Admin access is required." };
   }
@@ -150,15 +150,12 @@ export async function revokeAccessAction(input: unknown): Promise<{ ok: boolean;
     revalidatePath("/admin");
     revalidatePath("/admin/entitlements");
 
-    /* Deliberately precise about what happened. This revokes ADMIN GRANTS
-       only; a paid subscription or a live welcome window is untouched, and an
-       admin who reads "access revoked" and assumes otherwise would be misled. */
     return {
       ok: true,
       message:
         result.revoked === 0
           ? "No active admin grants to revoke."
-          : `Revoked ${result.revoked} admin ${result.revoked === 1 ? "grant" : "grants"}. Any paid subscription or Welcome Access is unaffected.`
+          : `Revoked ${result.revoked} admin ${result.revoked === 1 ? "grant" : "grants"}. A paid subscription, Welcome Access or another live source can still keep this account ad-free.`
     };
   } catch {
     return { ok: false, message: "Admin access is required." };
@@ -173,11 +170,8 @@ export async function openGlobalAccessAction(input: unknown): Promise<{ ok: bool
     const { admin, context } = await requireSafetyAdmin();
     /* OWNER ONLY, via a DEDICATED permission.
      *
-     * The first draft required `admin.roles.manage` and described it as
-     * owner-only. It is not: `trust_safety_administrator` holds it too, so
-     * that check would have let a T&S admin hand the entire user base a paid
-     * product. `admin.access.global.manage` is granted to super_administrator
-     * alone, and a test asserts no other role acquires it. */
+     * A global Access window makes the whole user base ad-free, so it remains
+     * an owner-level monetization decision. */
     await requireAdminPermission(admin, context, "admin.entitlements.manage");
     await requireAdminPermission(admin, context, "admin.access.global.manage");
 
@@ -207,7 +201,7 @@ export async function openGlobalAccessAction(input: unknown): Promise<{ ok: bool
 
     revalidatePath("/admin");
     revalidatePath("/admin/entitlements");
-    return { ok: true, message: "Mad Buddy Access is now open to everyone." };
+    return { ok: true, message: "Everyone now has ad-free Mad Buddy Access for this window." };
   } catch {
     return { ok: false, message: "Owner access is required." };
   }
@@ -247,11 +241,9 @@ export async function closeGlobalAccessAction(input: unknown): Promise<{ ok: boo
 
     revalidatePath("/admin");
     revalidatePath("/admin/entitlements");
-    /* Says what happens next, because "ended" alone sounds like everybody
-       loses access -- most people fall back to a source of their own. */
     return {
       ok: true,
-      message: "Promotion ended. Everyone falls back to their own subscription, grant or Welcome Access."
+      message: "Global ad-free window ended. Each account now follows its own subscription, grant, Welcome Access or other Access source."
     };
   } catch {
     return { ok: false, message: "Owner access is required." };
