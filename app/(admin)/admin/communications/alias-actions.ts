@@ -29,22 +29,18 @@ export async function createEmailAliasAction(input: unknown): Promise<AliasActio
     const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
     if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
 
-    const alias = await createMadBuddyEmailAlias(parsed.data.localPart);
+    const requestedAddress = `${parsed.data.localPart.trim().toLowerCase()}@mad-buddy.com`;
     const logged = await recordAdminAuditEvent(admin, {
       actorId: context.userId,
-      action: "admin_email_alias_created",
+      action: "admin_email_alias_create_requested",
       targetType: "email_alias",
-      targetId: alias.id,
-      newState: { address: alias.address, enabled: alias.enabled },
+      targetId: requestedAddress,
+      newState: { address: requestedAddress },
       reason: "Create Cloudflare Email Routing alias"
     });
+    if (!logged) return { ok: false, message: "The audit entry could not be recorded, so the alias was not created." };
 
-    if (!logged) {
-      // The external rule already exists. Do not delete it automatically here:
-      // an audit outage should never risk removing a valid production route.
-      return { ok: false, message: `${alias.address} was created, but its audit record could not be written.` };
-    }
-
+    const alias = await createMadBuddyEmailAlias(parsed.data.localPart);
     revalidatePath("/admin/communications");
     return { ok: true, message: `${alias.address} is ready to receive forwarded mail.` };
   } catch (error) {
