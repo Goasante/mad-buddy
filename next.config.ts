@@ -5,6 +5,16 @@ import type { NextConfig } from "next";
 // is generated and enforced in proxy.ts (the middleware). The remaining
 // headers below are request-independent and stay here.
 
+// Sharp is automatically externalized by Next.js, but its native Linux runtime
+// still needs to be present in the server traces that actually process images.
+// Keep this list route-scoped: a global `/*` include duplicates libvips into
+// every traced function and can make Vercel Functions Storage grow rapidly.
+const sharpRuntimeFiles = [
+  "./node_modules/sharp/**/*",
+  "./node_modules/@img/sharp-linux-x64/**/*",
+  "./node_modules/@img/sharp-libvips-linux-x64/**/*"
+];
+
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
@@ -17,16 +27,22 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd()
   },
-  // Server Actions load Sharp lazily, but its Linux binary and libvips must
-  // still be copied into Vercel's traced function output. Without these
-  // includes a production action can compile successfully and then fail at
-  // runtime with ERR_DLOPEN_FAILED when it processes an avatar.
+  // Only image-processing surfaces need Sharp's native runtime. These routes
+  // cover the web Server Actions plus the native/mobile upload endpoints.
+  // Everything else relies on normal Next.js output tracing and does not get a
+  // duplicate copy of Sharp/libvips forced into its function bundle.
   outputFileTracingIncludes: {
-    "/*": [
-      "./node_modules/sharp/**/*",
-      "./node_modules/@img/sharp-linux-x64/**/*",
-      "./node_modules/@img/sharp-libvips-linux-x64/**/*"
-    ]
+    "/profile": sharpRuntimeFiles,
+    "/events": sharpRuntimeFiles,
+    "/moments": sharpRuntimeFiles,
+    "/groups": sharpRuntimeFiles,
+    "/groups/**": sharpRuntimeFiles,
+    "/messages": sharpRuntimeFiles,
+    "/messages/**": sharpRuntimeFiles,
+    "/settings/appearance/wallpaper": sharpRuntimeFiles,
+    "/api/profile/avatar/upload": sharpRuntimeFiles,
+    "/api/profile/photos": sharpRuntimeFiles,
+    "/api/messages/media": sharpRuntimeFiles
   },
   typedRoutes: true,
   async headers() {
