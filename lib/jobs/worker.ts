@@ -1,5 +1,6 @@
 import "server-only";
 
+import { handleBroadcastEmailJob, BROADCAST_JOB_TYPE } from "@/lib/communications/broadcast";
 import { JOB_HANDLERS, JobError } from "@/lib/jobs/handlers";
 import {
   MAX_JOBS_PER_TICK,
@@ -138,7 +139,10 @@ export async function runTick(admin: Admin, workerId: string): Promise<TickResul
 
   for (const job of claimed ?? []) {
     result.processed += 1;
-    const handler = JOB_HANDLERS[job.job_type as JobType];
+    const handler =
+      job.job_type === BROADCAST_JOB_TYPE
+        ? handleBroadcastEmailJob
+        : JOB_HANDLERS[job.job_type as JobType];
 
     if (!handler) {
       // An unknown type will never succeed, dead-letter it rather than spin.
