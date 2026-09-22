@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAdminPermission } from "@/lib/admin/access";
 import { recordAdminAuditEvent } from "@/lib/admin/service";
 import { sendMadBuddyEmail } from "@/lib/email/send";
+import { buildMadBuddyAdminEmailHtml } from "@/lib/email/template";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 
@@ -63,13 +64,12 @@ export async function sendAdminUserEmailAction(input: unknown): Promise<AdminUse
     }
 
     const emailText = [
-      "Mad Buddy",
-      "",
       parsed.data.message,
       "",
       "Warmly,",
       "The Mad Buddy Team",
       "hello@mad-buddy.com",
+      "support@mad-buddy.com",
       "mad-buddy.com",
       "",
       "When your friends are close, they glow."
@@ -79,6 +79,7 @@ export async function sendAdminUserEmailAction(input: unknown): Promise<AdminUse
       to: target.user.email,
       subject: parsed.data.subject,
       text: emailText,
+      html: buildMadBuddyAdminEmailHtml(parsed.data.message),
       idempotencyKey: `admin-email/${context.userId}/${parsed.data.requestId}`
     });
 
