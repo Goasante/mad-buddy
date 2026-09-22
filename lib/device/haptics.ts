@@ -4,23 +4,20 @@
  * The Vibration API is unevenly supported and, on iOS Safari in particular,
  * absent entirely -- so every call site would otherwise need the same
  * feature-detection dance, and one that forgot it would throw on a real
- * device. This module is the only thing in the app allowed to touch
- * `navigator.vibrate`.
+ * device. This module is the only NEW code allowed to touch
+ * `navigator.vibrate`; higher-level product semantics live in
+ * lib/feedback/feedback.ts and delegate here.
  *
  * ABSENCE IS NOT AN ERROR. Haptics are decoration on top of an interaction
  * that already works visually; when they are unavailable the interaction is
- * unchanged. Nothing here throws, and nothing reports failure to the caller,
- * because there is nothing a caller could usefully do about it.
- *
- * Durations are deliberately tiny. A vibration long enough to notice as a
- * buzz is a vibration that feels like an error; these are meant to read as a
- * tick under the finger.
+ * unchanged. Nothing here throws.
  */
 
 export type HapticPattern = "tick" | "select" | "close";
+export type WebVibrationPattern = number | readonly number[];
 
 /**
- * Milliseconds per pattern.
+ * Milliseconds per legacy interaction pattern.
  *
  *   tick   -- the menu opened. Light: the user asked for this and can see it.
  *   select -- an action was chosen. Slightly firmer, as a confirmation that
@@ -34,7 +31,7 @@ const PATTERN_MS: Record<HapticPattern, number> = {
   close: 5
 };
 
-/** True when this device can actually produce haptic feedback. */
+/** True when this device can actually produce web vibration feedback. */
 export function hapticsSupported(): boolean {
   return (
     typeof navigator !== "undefined" &&
@@ -43,28 +40,42 @@ export function hapticsSupported(): boolean {
 }
 
 /**
- * Fires one haptic tick, if the device supports it.
+ * Low-level capability-safe vibration primitive.
  *
- * Safe to call unconditionally: on a device without vibration support, or
- * during server rendering, this does nothing at all.
+ * Higher-level product code should not call this directly; it exists so the
+ * semantic feedback layer can keep every raw Vibration API touch in this one
+ * module. Hidden/background documents never vibrate: a buzz without visible
+ * context is noise and can feel like an unrelated system notification.
  */
-export function haptic(pattern: HapticPattern = "tick"): void {
-  if (!hapticsSupported()) return;
+export function vibratePattern(pattern: WebVibrationPattern): boolean {
+  if (!hapticsSupported()) return false;
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
 
   try {
-    navigator.vibrate(PATTERN_MS[pattern]);
+    const value: number | number[] = typeof pattern === "number" ? pattern : [...pattern];
+    return navigator.vibrate(value);
   } catch {
-    // Some browsers throw when vibration is blocked by a permissions policy or
-    // when the document has never been interacted with. That is not a failure
-    // worth surfacing -- the visual interaction already happened.
+    // Some browsers throw when vibration is blocked by policy or when the
+    // document has never been interacted with. Feedback remains decorative.
+    return false;
   }
+}
+
+/**
+ * Fires one legacy haptic tick, if the device supports it.
+ *
+ * Safe to call unconditionally: on a device without vibration support, during
+ * server rendering, or from a hidden document, this does nothing at all.
+ */
+export function haptic(pattern: HapticPattern = "tick"): void {
+  void vibratePattern(PATTERN_MS[pattern]);
 }
 
 /**
  * Stops any vibration in progress.
  *
- * Used when a gesture is abandoned, so a queued tick does not fire after the
- * thing it was describing has gone.
+ * Cancellation is allowed even when the page has just become hidden: stopping
+ * an already-started pattern is safer than leaving it running without context.
  */
 export function cancelHaptics(): void {
   if (!hapticsSupported()) return;
