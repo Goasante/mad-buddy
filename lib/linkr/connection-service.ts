@@ -90,17 +90,10 @@ export async function passCandidate(
     );
   if (error) return { ok: false, message: "Couldn't do that. Try again." };
 
-  // Passing is a consent boundary, not just a feed preference. Quietly retire
-  // an older one-sided Connect from the person who was passed. After the
-  // cooldown they may encounter this user again, but must choose them again.
-  // There is deliberately no notification or observable rejection state.
-  await admin
-    .from("linkr_actions")
-    .delete()
-    .eq("actor_id", targetId)
-    .eq("target_id", viewerId)
-    .eq("action", "connect");
-
+  // Do not mutate the target's own private Connect row here. They are allowed
+  // to see their own choices in `Your clicks`; deleting one in response to a
+  // Pass would make the Pass inferable. The reciprocal cooldown is enforced
+  // without touching their observable history.
   return { ok: true, message: "" };
 }
 

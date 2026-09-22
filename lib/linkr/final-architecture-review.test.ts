@@ -35,7 +35,8 @@ describe("final Linkr architecture review", () => {
     expect(service).toContain("reciprocalPass");
     expect(service).toContain('.eq("actor_id", targetId)');
     expect(service).toContain('.eq("target_id", viewerId)');
-    expect(service).toContain('.eq("action", "connect")');
+    expect(service).toContain("Do not mutate the target's own private Connect row here");
+    expect(service).not.toContain('delete()\n    .eq("actor_id", targetId)\n    .eq("target_id", viewerId)\n    .eq("action", "connect")');
   });
 
   it("keeps Linkr matches separate from Muddy friendships", () => {

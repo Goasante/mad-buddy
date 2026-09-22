@@ -10,8 +10,9 @@ second ones.
 > server-side, decaying ranking nudge (never as client-visible state), and an
 > active temporary Pass suppresses the pair in both discovery directions for
 > the same 30-day window. `connectWithCandidate` re-checks that reciprocal Pass
-> against stale cards, and making a Pass quietly retires any older one-sided
-> Connect from the passed person so a future connection requires a fresh choice.
+> against stale cards. A Pass never deletes the other person's private
+> Connect row, because their own `Your clicks` history is observable to them and
+> must not become a side channel for discovering that they were passed.
 > Ordinary Pass undo is limited to three per server day; after the allowance
 > is exhausted, Undo offers a separate **Ask support** action. A support-review
 > ticket is created only after that explicit second choice and is deduplicated
@@ -44,8 +45,11 @@ Base: `origin/main` @ `4cd05ec`, plus the two approved Linkr commits
   `expires_at = NULL` (the RPC nulls it explicitly), so interest never lapses.
 - **Can an action expire?** Yes — `expires_at`, filtered at read time in
   `candidate-service.ts` rather than trusted to a cleanup job.
-- **How is reciprocity detected?** Only inside `linkr_record_connect`. No
-  application code may read both sides of `linkr_actions`.
+- **How was reciprocity detected at Phase 0?** Only inside
+  `linkr_record_connect`. The final-reviewed architecture keeps actual matching
+  there. Its two narrow server-only exceptions are documented above: a
+  non-rendered ranking nudge and reciprocal temporary-Pass enforcement. Neither
+  exposes the other person's decision to the client.
 - **Is one connection row guaranteed?** Yes — ordered pair + unique constraint
   + advisory lock. Verified by `connect-race-migration.test.ts`.
 - **How does each client learn reciprocity happened?** **This is the gap.** The
