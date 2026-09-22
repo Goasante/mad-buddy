@@ -38,6 +38,7 @@ export type RateLimitAction =
   | "events.linkr_opt_in"
   | "linkr.decide"
   | "linkr.profile"
+  | "linkr.undo"
   | "checkins.create"
   | "event_circles.join"
   | "event_announcements.send"
@@ -116,6 +117,9 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   // and low enough that a script cannot enumerate the pool.
   "linkr.decide": { limit: 200, windowSeconds: 60 * 60 },
   "linkr.profile": { limit: 30, windowSeconds: 60 * 60 },
+  // Rewind is intentionally scarce: enough for genuine mistakes without
+  // turning a private pass history into a second discovery browser.
+  "linkr.undo": { limit: 3, windowSeconds: 24 * 60 * 60 },
   "checkins.create": { limit: 20, windowSeconds: 60 * 60 },
   "event_circles.join": { limit: 20, windowSeconds: 60 * 60 },
   "event_announcements.send": { limit: 10, windowSeconds: 60 * 60 },
