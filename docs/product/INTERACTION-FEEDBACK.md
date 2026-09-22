@@ -19,10 +19,10 @@ feedback.longPress();
 feedback.snap();
 ```
 
-`lib/feedback/feedback.ts` owns the platform adaptation.
+`lib/feedback/feedback.ts` owns the semantic product vocabulary and native-bridge event. `lib/device/haptics.ts` remains the canonical low-level browser Vibration API adapter. New product surfaces should never call `navigator.vibrate` directly.
 
 - **iPhone PWA:** no general browser vibration API. Keep the visual response; the feedback call safely no-ops for vibration.
-- **Android PWA:** use the restrained Vibration API pattern when supported.
+- **Android PWA:** use the restrained Vibration API pattern when supported through the shared device adapter.
 - **Future Capacitor iOS/Android:** listen for the cancelable `mad-buddy:feedback` event, fire the native haptic, then call `preventDefault()` so browser vibration cannot double-fire.
 - Never gate success, navigation, or server state on feedback support. Feedback is an enhancement only.
 - Never vibrate from a hidden/background page.
@@ -55,3 +55,5 @@ The celebration uses the real catalog badge artwork, `Achievement unlocked`, the
 ## Current rollout
 
 This tranche wires the shared feedback layer into live Achievement/Wave celebrations and the Muddy profile Wave action. Additional action surfaces should consume the same semantic API rather than adding their own vibration code.
+
+There are older messaging surfaces in the repository that predate this contract and still contain local vibration helpers. They are existing technical debt, not a pattern to copy; migrate them to the shared adapter/semantic layer when those surfaces are next touched.
