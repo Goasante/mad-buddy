@@ -114,9 +114,11 @@ describe("pull-to-refresh is one reusable system", () => {
     expect(page).not.toContain("<PullToRefresh");
   });
 
-  it("only arms at the top of the page, for a single touch", () => {
+  it("only arms at the top of the active vertical scroll container, for a single touch", () => {
     expect(ptr).toContain('[data-app-scroll-owner]');
-    expect(ptr).toContain("scrollOwner.scrollTop <= 0");
+    expect(ptr).toContain("if (scrollOwner.scrollTop > 0) return false");
+    expect(ptr).toContain("node.scrollHeight > node.clientHeight + 1");
+    expect(ptr).toContain("return node.scrollTop <= 0");
     expect(ptr).toContain("event.touches.length !== 1");
   });
 

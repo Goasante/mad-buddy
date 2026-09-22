@@ -259,11 +259,13 @@ describe("pull to refresh states", () => {
 });
 
 describe("pull to refresh guard rails", () => {
-  it("only arms at the very top of the page", () => {
-    expect(ptr).toContain("const atTop = ()");
+  it("only arms at the top of the active vertical scroll container", () => {
+    expect(ptr).toContain("const atTop = (target: EventTarget | null)");
     expect(ptr).toContain('[data-app-scroll-owner]');
-    expect(ptr).toContain("scrollOwner.scrollTop <= 0");
-    expect(ptr).toContain("if (!atTop()");
+    expect(ptr).toContain("if (scrollOwner.scrollTop > 0) return false");
+    expect(ptr).toContain("node.scrollHeight > node.clientHeight + 1");
+    expect(ptr).toContain("return node.scrollTop <= 0");
+    expect(ptr).toContain("if (!atTop(event.target)");
   });
 
   it("ignores multi-touch so pinch-zoom is never hijacked", () => {
