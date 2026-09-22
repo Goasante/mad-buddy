@@ -416,6 +416,15 @@ export function ProfilePageContent({
     .filter(Boolean)
     .join(" and ");
 
+  const identityHandoffCopy =
+    !savedProfile.dateOfBirth && !avatarUrl
+      ? "Add your date of birth and profile photo, then head back."
+      : !savedProfile.dateOfBirth
+        ? "Add your date of birth, then head back."
+        : !avatarUrl
+          ? "Add a profile photo, then head back."
+          : "Your Linkr profile is ready. Head back when you're done.";
+
   const avatarField = (
     <input
       ref={avatarInputRef}
@@ -449,9 +458,7 @@ export function ProfilePageContent({
       {returnTo ? (
         <div className="profile-handoff-return">
           <p className="profile-handoff-return-text">
-            {section === "identity"
-              ? "Add your date of birth and photo, then head back."
-              : "Finish here, then head back."}
+            {section === "identity" ? identityHandoffCopy : "Finish here, then head back."}
           </p>
           <Button
             type="button"
@@ -504,18 +511,20 @@ export function ProfilePageContent({
 
       {editing ? (
         // Edit form (unchanged flow) — shown in place of the view.
-        <Card className="p-5 sm:p-6">
+        <Card className="p-4 sm:p-6">
           <div ref={identityEditorRef} id="profile-identity" className="scroll-mt-6" />
-          <div className="grid gap-4">
+          <div className="grid gap-3 sm:gap-4">
             {/* The owner's gallery, manageable in place. Sits above the edit
                 form because it is the part of a profile people actually
                 revisit; the name and bio are set once. */}
-            <ProfilePhotoCarousel
-              photos={photos}
-              isOwner
-              avatarUrl={avatarUrl ? avatarSrc : null}
-              onChanged={() => router.refresh()}
-            />
+            {section === "identity" && returnTo ? null : (
+              <ProfilePhotoCarousel
+                photos={photos}
+                isOwner
+                avatarUrl={avatarUrl ? avatarSrc : null}
+                onChanged={() => router.refresh()}
+              />
+            )}
 
             {section === "identity" && !avatarUrl ? (
               <div className="rounded-xl border border-border/70 bg-secondary/25 p-4">
@@ -543,7 +552,9 @@ export function ProfilePageContent({
               </div>
             ) : null}
 
-            <TrustedMemberApplyCard standing={trustedStanding} trustedSince={trustedSince} />
+            {section === "identity" && returnTo ? null : (
+              <TrustedMemberApplyCard standing={trustedStanding} trustedSince={trustedSince} />
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField htmlFor="displayName" label="Display name">
@@ -557,7 +568,7 @@ export function ProfilePageContent({
               <Input id="moodStatus" value={moodStatus} maxLength={80} placeholder="What is your mood?" onChange={(event) => setMoodStatus(event.target.value)} />
             </FormField>
             <FormField htmlFor="bio" label="Bio" hint={`${bio.length}/160`}>
-              <Textarea id="bio" value={bio} maxLength={160} placeholder="Share a little about yourself" onChange={(event) => setBio(event.target.value)} />
+              <Textarea id="bio" value={bio} maxLength={160} rows={3} className="min-h-24" placeholder="Share a little about yourself" onChange={(event) => setBio(event.target.value)} />
             </FormField>
             <FormField htmlFor="dateOfBirth" label="Date of birth" hint="Your full date and birth year stay private.">
               {!savedProfile.dateOfBirth || correctingDateOfBirth ? (
@@ -576,49 +587,58 @@ export function ProfilePageContent({
                   ) : null}
                 </>
               ) : (
-                <div className="rounded-xl border border-border/70 bg-secondary/25 px-4 py-3">
-                  <p className="text-sm font-medium">{savedProfile.dateOfBirth}</p>
-                  {dateOfBirthCanCorrect ? (
-                    <Button type="button" size="sm" variant="ghost" className="mt-2" onClick={() => setCorrectingDateOfBirth(true)}>
-                      Correct date of birth
-                    </Button>
-                  ) : (
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                <div className="rounded-xl border border-border/70 bg-secondary/25 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium">{savedProfile.dateOfBirth}</p>
+                    {dateOfBirthCanCorrect ? (
+                      <Button type="button" size="sm" variant="ghost" className="h-8 shrink-0 px-3" onClick={() => setCorrectingDateOfBirth(true)}>
+                        Correct
+                      </Button>
+                    ) : null}
+                  </div>
+                  {!dateOfBirthCanCorrect ? (
+                    <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
                       Your self-serve correction has been used. <Link href="/help">Contact support</Link> to request another change.
                     </p>
-                  )}
+                  ) : null}
                 </div>
               )}
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Age, zodiac, and birthday status are calculated automatically. You choose what Muddies can see.
+              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
+                Age, birthday and zodiac are calculated automatically.
               </p>
             </FormField>
             {dateOfBirth ? (
-              <div className="grid gap-3 rounded-xl border border-border/70 bg-secondary/25 p-4 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-2 rounded-xl border border-border/70 bg-secondary/25 p-3">
                 <AppSelect
-                  label="Show birthday"
+                  label="Birthday"
                   size="compact"
+                  className="min-w-0"
+                  triggerClassName="px-2"
                   value={birthdayVisibility}
                   options={BIRTH_VISIBILITY_OPTIONS}
                   onChange={setBirthdayVisibility}
                 />
                 <AppSelect
-                  label="Show age"
+                  label="Age"
                   size="compact"
+                  className="min-w-0"
+                  triggerClassName="px-2"
                   value={ageVisibility}
                   options={BIRTH_VISIBILITY_OPTIONS}
                   onChange={setAgeVisibility}
                 />
                 <AppSelect
-                  label="Show zodiac"
+                  label="Zodiac"
                   size="compact"
+                  className="min-w-0"
+                  triggerClassName="px-2"
                   value={zodiacVisibility}
                   options={BIRTH_VISIBILITY_OPTIONS}
                   onChange={setZodiacVisibility}
                 />
               </div>
             ) : null}
-            <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-3">
               <Button type="button" variant="outline" onClick={cancelEditing} disabled={saving || returningToLinkr}>
                 Cancel
               </Button>

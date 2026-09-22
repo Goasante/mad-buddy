@@ -28,7 +28,7 @@ const steps = [
   },
   {
     title: "Make it yours",
-    description: "Add a little personality now, or come back to it later."
+    description: "Add a few optional details, or finish now."
   }
 ] as const;
 
@@ -194,7 +194,7 @@ export function OnboardingFlow({
           />
         </div>
 
-        <section className="mt-5 rounded-2xl border border-border/70 bg-card p-5 shadow-sm sm:p-7">
+        <section className="mt-5 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-6">
           <h1 className="text-2xl font-semibold tracking-tight">{steps[stepIndex].title}</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{steps[stepIndex].description}</p>
 
@@ -251,13 +251,13 @@ export function OnboardingFlow({
               </Button>
             </div>
           ) : (
-            <div className="mt-6 space-y-6">
+            <div className="mt-5 space-y-5">
               <FormField htmlFor="bio" label="Short bio" hint="Optional, up to 160 characters.">
                 <Textarea
                   id="bio"
                   value={bio}
                   maxLength={160}
-                  rows={3}
+                  rows={2}
                   placeholder="A little about you"
                   onChange={(event) => setBio(event.target.value)}
                 />
@@ -266,7 +266,7 @@ export function OnboardingFlow({
               <FormField
                 htmlFor="dateOfBirth"
                 label="Date of birth"
-                hint="Optional and private by default."
+                hint="Optional now. Private by default; Linkr needs it."
               >
                 <Input
                   id="dateOfBirth"
@@ -274,21 +274,18 @@ export function OnboardingFlow({
                   value={dateOfBirth}
                   onChange={(event) => setDateOfBirth(event.target.value)}
                 />
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Used for birthday celebrations, age display, and zodiac. You control what approved Muddies can see.
-                </p>
               </FormField>
 
-              <div className="space-y-2.5">
-                <div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">Mood</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Optional. You can change this anytime.</p>
+                  <p className="text-xs text-muted-foreground">Optional</p>
                 </div>
                 <MoodStatusSelector value={moodStatus} onChange={setMoodStatus} />
               </div>
 
-              <div className="rounded-xl bg-secondary/60 p-3 text-xs leading-5 text-muted-foreground">
-                You can add a photo and more details from Profile after setup. Your visibility starts off.
+              <div className="rounded-xl bg-secondary/60 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+                Photo and more details can be added later. Visibility starts off.
               </div>
 
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -204,7 +204,7 @@ export async function recordAccessSubscription(
     message: input.manualRenewal
       ? `Your Mobile Money payment is confirmed. Mad Buddy Access is active through ${manualEnd}; pay again when you want another period.`
       : input.status === "active"
-        ? "Your Mad Buddy Access is active. Linkr and UpFor are unlocked."
+        ? "Your Mad Buddy Access is active. Mad Buddy is now ad-free."
         : `Your Mad Buddy Access subscription is ${input.status}.`
   });
 }
