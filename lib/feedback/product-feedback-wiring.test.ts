@@ -1,0 +1,71 @@
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+const ROOT = process.cwd();
+const read = (file: string) => fs.readFileSync(path.join(ROOT, file), "utf8");
+
+const plans = read("components/plans/plans-page.tsx");
+const safeArrival = read("components/safety/safe-arrival-page.tsx");
+const upFor = read("components/hangout/hangout-mode-page.tsx");
+const longPress = read("components/ui/long-press-actions.tsx");
+const messageActions = read("components/messaging/message-actions-menu.tsx");
+const quickActions = read("components/app-shell/quick-actions-launcher.tsx");
+
+describe("approved product feedback map", () => {
+  it("acknowledges Plan mutations only after their server result", () => {
+    expect(plans).toContain('from "@/lib/feedback/feedback"');
+    expect(plans).toContain("const result = await rsvpAction(planId, rsvp)");
+    expect(plans).toContain("if (result.ok) interactionFeedback.success()");
+    expect(plans).toContain("interactionFeedback.error()");
+    expect(plans).toContain("interactionFeedback.warning()");
+    expect(plans).toContain("interactionFeedback.selection()");
+
+    const create = plans.slice(plans.indexOf("function createPlan(input"));
+    expect(create.indexOf("const result = await createPlanAction")).toBeGreaterThanOrEqual(0);
+    expect(create.indexOf("interactionFeedback.success()")).toBeGreaterThan(
+      create.indexOf("const result = await createPlanAction")
+    );
+  });
+
+  it("gives Safe Arrival confirmation the strongest success feedback", () => {
+    expect(safeArrival).toContain('from "@/lib/feedback/feedback"');
+    expect(safeArrival).toContain("confirmSafeArrivalAction(activeJourney.id)");
+    expect(safeArrival).toContain("interactionFeedback.importantSuccess()");
+    expect(safeArrival).toContain("interactionFeedback.warning()");
+    expect(safeArrival).toContain("interactionFeedback.error()");
+  });
+
+  it("covers UpFor create/join/accept/end/conversion without vibrating pending state", () => {
+    expect(upFor).toContain('from "@/lib/feedback/feedback"');
+    expect(upFor).toContain("interactionFeedback.light()");
+    expect(upFor).toContain('if (response === "accepted") interactionFeedback.success()');
+    expect(upFor).toContain("interactionFeedback.warning()");
+    expect(upFor).toContain("interactionFeedback.error()");
+
+    const request = upFor.slice(upFor.indexOf("async function requestToJoin"), upFor.indexOf("async function leaveUpFor"));
+    expect(request.indexOf("await requestHangoutAction")).toBeGreaterThanOrEqual(0);
+    expect(request.indexOf("interactionFeedback.light()")).toBeGreaterThan(
+      request.indexOf("await requestHangoutAction")
+    );
+  });
+
+  it("uses semantic long-press feedback on shared and message context menus", () => {
+    expect(longPress).toContain("feedback.longPress()");
+    expect(messageActions).toContain("feedback.longPress()");
+    expect(messageActions).toContain("feedback.warning()");
+    expect(messageActions).toContain("feedback.selection()");
+    expect(longPress).not.toContain("navigator.vibrate");
+    expect(messageActions).not.toContain("navigator.vibrate");
+  });
+
+  it("uses snap feedback only when the draggable quick action settles", () => {
+    const release = quickActions.slice(
+      quickActions.indexOf("function onPointerUp"),
+      quickActions.indexOf("function toggle")
+    );
+    expect(release).toContain("saveQuickActionsPosition");
+    expect(release).toContain("feedback.snap()");
+    expect(release.indexOf("feedback.snap()")).toBeGreaterThan(release.indexOf("saveQuickActionsPosition"));
+  });
+});
