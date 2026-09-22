@@ -28,7 +28,7 @@ Base: `origin/main` @ `4cd05ec`, plus the two approved Linkr commits
 |---|---|---|
 | Decisions (pass/connect) | `public.linkr_actions` — unique `(actor_id, target_id)`, nullable `expires_at` | **Exists, sufficient** |
 | Mutual edge | `public.linkr_connections` — ordered pair `(user_low < user_high)` + unique, carries `conversation_id`, `ended_at` | **Exists, sufficient** |
-| Reciprocity | `public.linkr_record_connect` RPC, SECURITY DEFINER, `service_role` only, advisory-xact-lock on the pair | **Exists, race-safe — do not touch** |
+| Reciprocity | `public.linkr_record_connect` RPC, SECURITY DEFININER, `service_role` only, advisory-xact-lock on the pair | **Exists, race-safe — do not touch** |
 | Candidate suppression | `candidate-service.ts` — one batched query per fact; excludes on blocks (bidirectional), live actions, existing connections | **Exists** |
 | Notifications | `public.notifications` (`user_id,type,title,message,is_read`) — **no payload/entity column** | Exists; destination is encoded in `type` |
 | Destination routing | `lib/notifications/destination.ts` — `"<base>:<id>"` convention | Exists; `linkr_connection` **absent** |
@@ -104,3 +104,22 @@ Base: `origin/main` @ `4cd05ec`, plus the two approved Linkr commits
 - **No new conversation path.** Say hi keeps delegating to messaging.
 - **Migration:** avoided where possible. Nothing here needs a schema change:
   every new state is derivable from existing rows.
+
+## Final validation — 22 September 2026
+
+The historical Phase 0 defects above describe the state before Tranche 2 and are
+kept for traceability. The current canonical `/linkr` implementation has now
+been reviewed end-to-end from card gestures through server actions, discovery,
+mutual resolution, messaging, notifications, recovery, support review, safety
+checks and the database authorities.
+
+The final review specifically confirms that the 30-day Pass is pair-wide without
+making the Pass observable to its subject; inbound one-sided Connect is used only
+as a small server-side decaying ranking hint; one-sided choices remain private;
+mutual Linkr connections remain distinct from Muddy friendships; ordinary Pass
+rewind is capped at three per server-day window; support escalation requires a
+separate explicit **Ask support** action; admin approval cannot bypass a block;
+and legacy Socialize is not used as a second Linkr authority.
+
+`lib/linkr/final-architecture-review.test.ts` is the permanent regression gate
+for these reviewed boundaries.
