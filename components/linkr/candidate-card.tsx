@@ -36,6 +36,8 @@ export type CandidateCardProps = {
   onConnect: () => void;
   onUndo?: () => void;
   canUndo?: boolean;
+  onRequestReview?: () => void;
+  canRequestReview?: boolean;
   busy?: boolean;
 };
 
@@ -53,6 +55,8 @@ export function CandidateCard({
   onConnect,
   onUndo,
   canUndo = false,
+  onRequestReview,
+  canRequestReview = false,
   busy = false
 }: CandidateCardProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -361,6 +365,16 @@ export function CandidateCard({
           >
             <RotateCcw aria-hidden />
             <span>Undo pass</span>
+          </button>
+        ) : canRequestReview ? (
+          <button
+            type="button"
+            className="linkr-action linkr-action--undo"
+            onClick={onRequestReview}
+            disabled={busy || Boolean(leaving)}
+          >
+            <RotateCcw aria-hidden />
+            <span>Ask support</span>
           </button>
         ) : null}
       </div>

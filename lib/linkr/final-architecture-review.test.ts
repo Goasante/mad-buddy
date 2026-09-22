@@ -53,6 +53,23 @@ describe("final Linkr architecture review", () => {
     expect(admin).toContain("isBlockedEitherDirection");
   });
 
+  it("requires an explicit Ask support action after the three self-service rewinds", () => {
+    const service = read("lib/linkr/connection-service.ts");
+    const page = read("components/linkr/linkr-page.tsx");
+    const card = read("components/linkr/candidate-card.tsx");
+    expect(service).toContain('code: "review_available"');
+    expect(service).toContain("requestLinkrPassReversalReview");
+    expect(page).toContain("requestLinkrPassReversalReviewAction");
+    expect(page).toContain("setReviewTargetId(result.reviewTargetId)");
+    expect(card).toContain("Ask support");
+  });
+
+  it("only exposes Undo pass after a Pass, not after a one-sided Connect", () => {
+    const page = read("components/linkr/linkr-page.tsx");
+    expect(page).toContain("advance(true);\n    void passCandidateAction");
+    expect(page).toContain("advance(false);\n    void connectWithCandidateAction");
+  });
+
   it("marks an admin rewind review complete in the client after success", () => {
     const review = read("components/admin/support/linkr-reversal-review.tsx");
     expect(review).toContain("const [isReviewed, setIsReviewed] = useState(reviewed)");

@@ -14,6 +14,7 @@ import {
   loadPendingClicksAction,
   passCandidateAction,
   resolveMutualDestinationAction,
+  requestLinkrPassReversalReviewAction,
   undoLinkrActionAction,
   updateLinkrProfileAction,
   updateLinkrSettingsAction
@@ -133,6 +134,7 @@ function LinkrPageContent({
   const [clicked, setClicked] = useState<ClickedPerson[]>([]);
   const [pendingClicks, setPendingClicks] = useState<PendingClick[]>([]);
   const [canUndo, setCanUndo] = useState(false);
+  const [reviewTargetId, setReviewTargetId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   /**
@@ -196,9 +198,10 @@ function LinkrPageContent({
     });
   }, [enabled, deck.length, index, eventId, startRefill]);
 
-  const advance = useCallback(() => {
+  const advance = useCallback((undoable: boolean) => {
     setIndex((current) => current + 1);
-    setCanUndo(true);
+    setCanUndo(undoable);
+    setReviewTargetId(null);
   }, []);
 
   /**
@@ -214,8 +217,13 @@ function LinkrPageContent({
   const handlePass = useCallback(() => {
     if (!current) return;
     const targetId = current.userId;
-    advance();
-    void passCandidateAction({ targetId, eventId });
+    advance(true);
+    void passCandidateAction({ targetId, eventId }).then((result) => {
+      if (!result.ok) {
+        setCanUndo(false);
+        setNotice(result.message || "That pass didn't save. They may appear again.");
+      }
+    });
   }, [current, advance, eventId]);
 
   const handleConnect = useCallback(() => {
@@ -234,8 +242,9 @@ function LinkrPageContent({
      * connection anyway and learns who is on the other side.
      */
     connectingTargetId.current = targetId;
-    advance();
+    advance(false);
     void connectWithCandidateAction({ targetId, eventId }).then((result) => {
+      if (!result.ok) setNotice(result.message || "Couldn't save that choice. Try again.");
       // `matched` is the ONLY thing the server tells us. A one-sided Connect
       // is indistinguishable from here, which is exactly the intent: there is
       // no state in this component that could render "waiting for them".
@@ -382,14 +391,35 @@ function LinkrPageContent({
         if (result.ok) {
           setIndex((current) => Math.max(0, current - 1));
           setCanUndo(false);
+          setReviewTargetId(null);
+          if (result.message) setNotice(result.message);
         } else {
           setNotice(result.message);
+          if (result.code === "review_available" && result.reviewTargetId) {
+            setCanUndo(false);
+            setReviewTargetId(result.reviewTargetId);
+          }
         }
       } finally {
         setWriting(false);
       }
     })();
   }, []);
+
+  const handleRequestReview = useCallback(() => {
+    const targetId = reviewTargetId;
+    if (!targetId) return;
+    void (async () => {
+      setWriting(true);
+      try {
+        const result = await requestLinkrPassReversalReviewAction(targetId);
+        setNotice(result.message);
+        if (result.ok) setReviewTargetId(null);
+      } finally {
+        setWriting(false);
+      }
+    })();
+  }, [reviewTargetId]);
   /**
    * Identity handlers are GONE.
    *
@@ -738,6 +768,8 @@ function LinkrPageContent({
             onConnect={handleConnect}
             onUndo={handleUndo}
             canUndo={canUndo}
+            onRequestReview={handleRequestReview}
+            canRequestReview={Boolean(reviewTargetId)}
             busy={pending || writing}
           />
           <div className="linkr-safety">
@@ -750,7 +782,7 @@ function LinkrPageContent({
                  * is only made once the server has actually recorded it. */
                 void (async () => {
                   const targetId = current.userId;
-                  advance();
+                  advance(true);
                   const result = await passCandidateAction({ targetId, permanent: true, eventId });
                   setNotice(
                     result.ok

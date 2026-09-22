@@ -1,5 +1,6 @@
 import "server-only";
 
+import { z } from "zod";
 import { LINKR_COPY } from "@/lib/linkr/rules";
 import { isBlockedEitherDirection } from "@/lib/social/permissions";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -19,10 +20,12 @@ import { hasProfilePicture } from "@/lib/linkr/media-projection";
  * observer could read. `connect()` returns `matched: false` and NOTHING is
  * written that the recipient can observe.
  *
- * Reciprocity is resolved by `linkr_record_connect`, a SECURITY DEFINER
- * function which is the only thing permitted to read both sides of
- * linkr_actions. This module never queries the other person's actions itself,
- * so there is no code path here that could leak the answer even by timing.
+ * Reciprocity itself is resolved by `linkr_record_connect`, a SECURITY
+ * DEFINER function. Application code never exposes the other person's action.
+ * The only reviewed server-side exceptions are (1) candidate ranking's
+ * decaying, non-rendered reciprocity nudge and (2) the reciprocal temporary
+ * Pass check that enforces the pair-wide cooldown. Neither fact crosses the
+ * wire or changes the neutral response shown to the other person.
  */
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -365,14 +368,51 @@ async function notifyMutualConnection(
   }
 }
 
-async function requestPassReversalReview(
-  admin: Admin,
+export async function requestLinkrPassReversalReview(
   viewerId: string,
-  targetId: string,
-  passExpiresAt: string
-): Promise<string> {
-  // Dedupe before consuming the support-request limiter. Repeated taps on the
-  // same exhausted rewind must not create a queue of identical tickets.
+  targetId: string
+): Promise<{ ok: boolean; message: string }> {
+  if (!serverReady()) return { ok: false, message: "This action needs the server database configuration." };
+  if (!z.string().uuid().safeParse(targetId).success || viewerId === targetId) {
+    return { ok: false, message: "That pass is no longer available for review." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId: viewerId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
+  // The user may escalate only an ACTIVE ordinary Pass of their own. Permanent
+  // hides are intentionally not turned into a staff-managed recovery queue.
+  const { data: pass, error: passError } = await admin
+    .from("linkr_actions")
+    .select("id, expires_at")
+    .eq("actor_id", viewerId)
+    .eq("target_id", targetId)
+    .eq("action", "pass")
+    .not("expires_at", "is", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (passError || !pass?.expires_at) {
+    return { ok: false, message: "That pass is no longer available for review." };
+  }
+
+  // Server-authoritative quota check. A crafted call cannot skip the three
+  // self-service rewinds and jump straight into the support queue.
+  const { data: rewindWindow } = await admin
+    .from("rate_limits")
+    .select("count, window_end")
+    .eq("user_id", viewerId)
+    .eq("action", "linkr.undo")
+    .gt("window_end", new Date().toISOString())
+    .order("window_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!rewindWindow || rewindWindow.count < DAILY_SELF_SERVICE_PASS_REWINDS) {
+    return { ok: false, message: "Use your available Linkr rewinds first." };
+  }
+
+  // Dedupe before consuming the support limiter. Repeated taps cannot fill the
+  // queue with identical tickets for the same pass.
   const { data: openTickets } = await admin
     .from("support_tickets")
     .select("id, diagnostics, status")
@@ -389,13 +429,11 @@ async function requestPassReversalReview(
     return record.workflow === "linkr_pass_reversal" && record.target_user_id === targetId;
   });
   if (alreadyOpen) {
-    return "You've used today's 3 Linkr rewinds. This pass is already waiting for Mad Buddy support review.";
+    return { ok: true, message: "This pass is already waiting for Mad Buddy support review." };
   }
 
   const supportLimit = await consumeRateLimit({ action: "support.request", userId: viewerId });
-  if (!supportLimit.allowed) {
-    return `You've used today's 3 Linkr rewinds. ${rateLimitMessage(supportLimit.resetAt)}`;
-  }
+  if (!supportLimit.allowed) return { ok: false, message: rateLimitMessage(supportLimit.resetAt) };
 
   const { error } = await admin.from("support_tickets").insert({
     user_id: viewerId,
@@ -408,14 +446,14 @@ async function requestPassReversalReview(
       affected_feature: "linkr",
       workflow: "linkr_pass_reversal",
       target_user_id: targetId,
-      pass_expires_at: passExpiresAt,
+      pass_expires_at: pass.expires_at,
       source: "linkr_v2"
     } as never
   });
 
   return error
-    ? "You've used today's 3 Linkr rewinds. Support review could not be requested just now — try again."
-    : "You've used today's 3 Linkr rewinds. This pass was sent to Mad Buddy support for review.";
+    ? { ok: false, message: "Support review could not be requested just now — try again." }
+    : { ok: true, message: "Sent to Mad Buddy support for review." };
 }
 
 /**
@@ -428,7 +466,14 @@ async function requestPassReversalReview(
  */
 export async function undoLastLinkrAction(
   viewerId: string
-): Promise<{ ok: boolean; message: string; restoredUserId?: string }> {
+): Promise<{
+  ok: boolean;
+  message: string;
+  restoredUserId?: string;
+  remaining?: number;
+  code?: "review_available";
+  reviewTargetId?: string;
+}> {
   if (!serverReady()) return { ok: false, message: "This action needs the server database configuration." };
   const admin = createSupabaseAdminClient();
   const guard = await guardAction(admin, { userId: viewerId, surface: "linkr" });
@@ -476,12 +521,9 @@ export async function undoLastLinkrAction(
     if (!rewind.allowed) {
       return {
         ok: false,
-        message: await requestPassReversalReview(
-          admin,
-          viewerId,
-          last.target_id,
-          last.expires_at as string
-        )
+        message: "You've used today's 3 Linkr rewinds. You can ask Mad Buddy support to review this pass.",
+        code: "review_available",
+        reviewTargetId: last.target_id
       };
     }
     rewindRemaining = rewind.remaining;
@@ -499,7 +541,8 @@ export async function undoLastLinkrAction(
       rewindRemaining === 0
         ? `Undone. You've used all ${DAILY_SELF_SERVICE_PASS_REWINDS} self-service Linkr rewinds for today.`
         : `Undone. ${rewindRemaining} Linkr ${rewindRemaining === 1 ? "rewind" : "rewinds"} left today.`,
-    restoredUserId: last.target_id
+    restoredUserId: last.target_id,
+    remaining: rewindRemaining
   };
 }
 

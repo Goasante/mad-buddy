@@ -7,6 +7,7 @@ import {
   connectWithCandidate,
   endLinkrConnection,
   passCandidate,
+  requestLinkrPassReversalReview,
   undoLastLinkrAction,
   type ConnectResult
 } from "@/lib/linkr/connection-service";
@@ -182,10 +183,19 @@ export async function undoLinkrActionAction(): Promise<{
   ok: boolean;
   message: string;
   restoredUserId?: string;
+  remaining?: number;
+  code?: "review_available";
+  reviewTargetId?: string;
 }> {
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return undoLastLinkrAction(userId);
+}
+
+export async function requestLinkrPassReversalReviewAction(targetId: string): Promise<LinkrActionResult> {
+  const userId = await getAuthedUserId();
+  if (!userId) return NOT_LOGGED_IN;
+  return requestLinkrPassReversalReview(userId, targetId);
 }
 
 export async function endLinkrConnectionAction(otherUserId: string): Promise<LinkrActionResult> {

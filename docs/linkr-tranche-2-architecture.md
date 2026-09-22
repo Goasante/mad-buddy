@@ -12,8 +12,10 @@ second ones.
 > the same 30-day window. `connectWithCandidate` re-checks that reciprocal Pass
 > against stale cards, and making a Pass quietly retires any older one-sided
 > Connect from the passed person so a future connection requires a fresh choice.
-> Ordinary Pass undo is limited to three per server day; further immediate undo
-> attempts create a deduplicated support-review ticket. None of these behaviours
+> Ordinary Pass undo is limited to three per server day; after the allowance
+> is exhausted, Undo offers a separate **Ask support** action. A support-review
+> ticket is created only after that explicit second choice and is deduplicated
+> for the same pass. None of these behaviours
 > turn a Linkr connection into a Muddy friendship.
 
 Base: `origin/main` @ `4cd05ec`, plus the two approved Linkr commits
