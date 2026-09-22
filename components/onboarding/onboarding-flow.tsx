@@ -272,6 +272,7 @@ export function OnboardingFlow({
                   id="dateOfBirth"
                   type="date"
                   value={dateOfBirth}
+                  className="min-w-0 overflow-hidden [inline-size:100%] [min-inline-size:0] [&::-webkit-date-and-time-value]:min-w-0"
                   onChange={(event) => setDateOfBirth(event.target.value)}
                 />
               </FormField>
