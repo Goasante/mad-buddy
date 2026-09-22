@@ -1,5 +1,6 @@
 import "server-only";
 
+import { sendTransactionalUserEmail } from "@/lib/email/transactional";
 import { deliverNotification } from "@/lib/notifications/server";
 import { safeArrivalNotification } from "@/lib/safety/safe-arrival";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -38,5 +39,16 @@ export async function deliverSafeArrivalNotificationIntent(admin: Admin, intent:
     message: copy.message,
     dedupeKey
   });
+
+  // Email is an essential fallback for Safe Arrival lifecycle communication.
+  // Resend idempotency is tied to the same semantic intent as the in-app
+  // notification, so a job retry cannot produce duplicate emails.
+  await sendTransactionalUserEmail(admin, {
+    userId: intent.recipientId,
+    subject: copy.title,
+    message: `${copy.message}\n\nOpen Mad Buddy to view the Safe Arrival details.`,
+    idempotencyKey: `safe-arrival-email/${dedupeKey}`
+  });
+
   return result.inApp ? 1 : 0;
 }
