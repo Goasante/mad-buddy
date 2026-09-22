@@ -1,0 +1,43 @@
+name: Apply interaction feedback wiring
+
+on:
+  push:
+    branches:
+      - feature/interaction-feedback
+    paths:
+      - tools/interaction-feedback-wiring.patch
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/interaction-feedback
+          fetch-depth: 0
+
+      - name: Apply reviewed wiring patch
+        shell: bash
+        run: |
+          if [ ! -f tools/interaction-feedback-wiring.patch ]; then
+            echo "Patch already cleaned up; nothing to apply."
+            exit 0
+          fi
+          git apply --check tools/interaction-feedback-wiring.patch
+          git apply tools/interaction-feedback-wiring.patch
+
+      - name: Commit wiring
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/plans/plans-page.tsx components/safety/safe-arrival-page.tsx components/hangout/hangout-mode-page.tsx
+          git commit -m "wire semantic feedback across core actions"
+          git push origin HEAD:feature/interaction-feedback
