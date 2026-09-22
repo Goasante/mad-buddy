@@ -1,0 +1,74 @@
+name: Patch profile and onboarding mobile overflow
+
+on:
+  push:
+    branches:
+      - fix/profile-onboarding-mobile-field-overflow
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/profile-onboarding-mobile-field-overflow
+          fetch-depth: 0
+      - name: Apply focused mobile overflow fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          profile = Path('components/profile/profile-page.tsx')
+          text = profile.read_text()
+          marker = '<div className="grid grid-cols-3 gap-2 rounded-xl border border-border/70 bg-secondary/25 p-3">'
+          start = text.index(marker)
+          end = text.index('</div>\n            ) : null}', start)
+          block = text[start:end]
+          old = 'triggerClassName="px-2"'
+          if block.count(old) != 3:
+              raise SystemExit(f'expected 3 compact birth visibility triggers, found {block.count(old)}')
+          block = block.replace(old, 'triggerClassName="!w-full !min-w-0 px-2"')
+          profile.write_text(text[:start] + block + text[end:])
+
+          onboarding = Path('components/onboarding/onboarding-flow.tsx')
+          text = onboarding.read_text()
+          old = '''                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(event) => setDateOfBirth(event.target.value)}
+                />'''
+          new = '''                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  value={dateOfBirth}
+                  className="min-w-0 overflow-hidden [inline-size:100%] [min-inline-size:0] [&::-webkit-date-and-time-value]:min-w-0"
+                  onChange={(event) => setDateOfBirth(event.target.value)}
+                />'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one onboarding date input, found {text.count(old)}')
+          onboarding.write_text(text.replace(old, new, 1))
+
+          field = Path('components/auth/form-field.tsx')
+          text = field.read_text()
+          text = text.replace('<div className="space-y-2">', '<div className="min-w-0 space-y-2">', 1)
+          text = text.replace('<div className="flex items-center justify-between gap-3">', '<div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">', 1)
+          text = text.replace('{hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}', '{hint ? <div className="min-w-0 max-w-full text-right text-xs text-muted-foreground">{hint}</div> : null}', 1)
+          field.write_text(text)
+
+          test = Path('lib/design/mobile-field-overflow.test.ts')
+          test.write_text('''import { readFileSync } from "node:fs";\nimport { join } from "node:path";\nimport { describe, expect, it } from "vitest";\n\nconst ROOT = join(__dirname, "..", "..");\nconst read = (path: string) => readFileSync(join(ROOT, path), "utf8");\n\ndescribe("mobile form controls stay inside their cards", () => {\n  it("lets the three Profile birth-privacy selects shrink to their grid columns", () => {\n    const source = read("components/profile/profile-page.tsx");\n    const start = source.indexOf('grid grid-cols-3 gap-2 rounded-xl');\n    const block = source.slice(start, source.indexOf(") : null}", start));\n    expect(block.match(/triggerClassName=\\"!w-full !min-w-0 px-2\\"/g)).toHaveLength(3);\n  });\n\n  it("keeps the onboarding date control shrinkable on WebKit", () => {\n    const source = read("components/onboarding/onboarding-flow.tsx");\n    const start = source.indexOf('id=\\"dateOfBirth\\"');\n    const block = source.slice(start, source.indexOf("/>", start));\n    expect(block).toContain("[min-inline-size:0]");\n    expect(block).toContain("[&::-webkit-date-and-time-value]:min-w-0");\n  });\n\n  it("allows shared form labels and hints to wrap instead of forcing horizontal overflow", () => {\n    const source = read("components/auth/form-field.tsx");\n    expect(source).toContain('className=\\"min-w-0 space-y-2\\"');\n    expect(source).toContain("flex min-w-0 flex-wrap items-start justify-between");\n    expect(source).toContain("min-w-0 max-w-full text-right");\n  });\n});\n''')
+          PY
+      - name: Commit product fix and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/patch-profile-onboarding-overflow.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix profile and onboarding mobile field overflow"
+          git push origin HEAD:fix/profile-onboarding-mobile-field-overflow
