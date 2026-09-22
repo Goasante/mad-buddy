@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AtSign, MailPlus, Megaphone } from "lucide-react";
+import { AdminBroadcastRetry } from "@/components/admin/admin-broadcast-retry";
 import { AdminCommunicationsForm } from "@/components/admin/admin-communications-form";
 import { AdminEmailAliases } from "@/components/admin/admin-email-aliases";
 import { AdminEmptyState, AdminPageHeader, AdminStatus, formatAdminDate } from "@/components/admin/admin-ui";
@@ -14,6 +15,8 @@ import {
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+const BROADCAST_RETRY_WINDOW_MS = 20 * 60 * 60 * 1000;
+
 type CampaignSummary = {
   id: string;
   campaignName: string;
@@ -25,7 +28,10 @@ type CampaignSummary = {
   failed: number;
   skipped: number;
   statuses: Set<string>;
+  canRetry: boolean;
 };
+
+type JobRow = { payload: unknown; status: string; created_at: string };
 
 export default async function AdminCommunicationsPage() {
   const admin = createSupabaseAdminClient();
@@ -90,16 +96,16 @@ export default async function AdminCommunicationsPage() {
               </p>
             </div>
           </div>
-          {aliasLoadFailed ? <AdminStatus label="Cloudflare unavailable" tone="warning" /> : aliasConfig.configured ? <AdminStatus label="Cloudflare connected" tone="success" /> : <AdminStatus label="Setup required" tone="default" />}
+          {aliasLoadFailed ? <AdminStatus label="Cloudflare connection failed" tone="warning" /> : aliasConfig.configured ? <AdminStatus label="Cloudflare connected" tone="success" /> : <AdminStatus label="Setup required" tone="default" />}
         </div>
-        <AdminEmailAliases aliases={aliases} configured={aliasConfig.configured && !aliasLoadFailed} />
+        <AdminEmailAliases aliases={aliases} configStatus={aliasConfig} connectionError={aliasLoadFailed} />
       </Card>
 
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-4">
           <div>
             <h3 className="text-base font-semibold">Recent broadcasts</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Delivery totals are aggregated across each campaign&rsquo;s background batches.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Delivery totals show the latest attempt for each background page, so retries do not double-count previously successful recipients.</p>
           </div>
           {error ? <AdminStatus label="History unavailable" tone="warning" /> : null}
         </div>
@@ -108,14 +114,14 @@ export default async function AdminCommunicationsPage() {
           <AdminEmptyState icon={Megaphone} title="No broadcasts yet" description="Your first queued mass email will appear here." />
         ) : (
           <Card className="overflow-hidden p-0">
-            <div className="hidden grid-cols-[minmax(240px,1.5fr)_150px_150px_100px_100px_120px] gap-4 border-b border-border/70 bg-secondary/25 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[minmax(240px,1.5fr)_150px_150px_100px_100px_140px] gap-4 border-b border-border/70 bg-secondary/25 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
               <span>Campaign</span><span>Audience</span><span>Type</span><span>Sent</span><span>Failed</span><span>Status</span>
             </div>
             <div className="divide-y divide-border/70">
               {campaigns.map((campaign) => {
                 const status = campaignStatus(campaign.statuses);
                 return (
-                  <div key={campaign.id} className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(240px,1.5fr)_150px_150px_100px_100px_120px] md:items-center md:gap-4">
+                  <div key={campaign.id} className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(240px,1.5fr)_150px_150px_100px_100px_140px] md:items-center md:gap-4">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{campaign.campaignName}</p>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{campaign.subject}</p>
@@ -125,7 +131,10 @@ export default async function AdminCommunicationsPage() {
                     <p className="text-xs"><span className="mr-2 font-medium text-muted-foreground md:hidden">Type</span>{kindLabel(campaign.kind)}</p>
                     <p className="text-xs font-semibold"><span className="mr-2 font-medium text-muted-foreground md:hidden">Sent</span>{campaign.sent}</p>
                     <p className="text-xs font-semibold"><span className="mr-2 font-medium text-muted-foreground md:hidden">Failed</span>{campaign.failed}</p>
-                    <AdminStatus label={status.label} tone={status.tone} />
+                    <div>
+                      <AdminStatus label={status.label} tone={status.tone} />
+                      {campaign.canRetry ? <AdminBroadcastRetry campaignId={campaign.id} /> : null}
+                    </div>
                   </div>
                 );
               })}
@@ -137,16 +146,29 @@ export default async function AdminCommunicationsPage() {
   );
 }
 
-function summarizeCampaigns(rows: Array<{ payload: unknown; status: string; created_at: string }>) {
-  const byCampaign = new Map<string, CampaignSummary>();
+function summarizeCampaigns(rows: JobRow[]) {
+  const grouped = new Map<
+    string,
+    {
+      id: string;
+      campaignName: string;
+      subject: string;
+      audience: string;
+      kind: string;
+      createdAt: string;
+      latestByPage: Map<number, JobRow>;
+    }
+  >();
 
+  // Rows arrive newest-first. The first row seen for a campaign/page is the
+  // latest attempt for that page, including a safe retry run.
   for (const row of rows) {
     const payload = objectPayload(row.payload);
     if (!payload) continue;
     const id = text(payload.campaignId);
     if (!id) continue;
 
-    let campaign = byCampaign.get(id);
+    let campaign = grouped.get(id);
     if (!campaign) {
       campaign = {
         id,
@@ -155,22 +177,52 @@ function summarizeCampaigns(rows: Array<{ payload: unknown; status: string; crea
         audience: text(payload.audience) ?? "all_active",
         kind: text(payload.kind) ?? "product_update",
         createdAt: row.created_at,
-        sent: 0,
-        failed: 0,
-        skipped: 0,
-        statuses: new Set()
+        latestByPage: new Map()
       };
-      byCampaign.set(id, campaign);
+      grouped.set(id, campaign);
     }
 
-    campaign.sent += count(payload.sent);
-    campaign.failed += count(payload.failed);
-    campaign.skipped += count(payload.skipped);
-    campaign.statuses.add(row.status);
+    const page = Math.max(1, count(payload.page));
+    if (!campaign.latestByPage.has(page)) campaign.latestByPage.set(page, row);
     if (Date.parse(row.created_at) < Date.parse(campaign.createdAt)) campaign.createdAt = row.created_at;
   }
 
-  return [...byCampaign.values()].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 20);
+  const summaries: CampaignSummary[] = [];
+  for (const campaign of grouped.values()) {
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+    const statuses = new Set<string>();
+
+    for (const row of campaign.latestByPage.values()) {
+      const payload = objectPayload(row.payload);
+      if (!payload) continue;
+      sent += count(payload.sent);
+      failed += count(payload.failed);
+      skipped += count(payload.skipped);
+      statuses.add(row.status);
+    }
+
+    const active = [...statuses].some((status) => ["queued", "scheduled", "processing", "retrying"].includes(status));
+    const createdMs = Date.parse(campaign.createdAt);
+    const withinRetryWindow = Number.isFinite(createdMs) && Date.now() - createdMs <= BROADCAST_RETRY_WINDOW_MS;
+
+    summaries.push({
+      id: campaign.id,
+      campaignName: campaign.campaignName,
+      subject: campaign.subject,
+      audience: campaign.audience,
+      kind: campaign.kind,
+      createdAt: campaign.createdAt,
+      sent,
+      failed,
+      skipped,
+      statuses,
+      canRetry: failed > 0 && !active && withinRetryWindow
+    });
+  }
+
+  return summaries.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 20);
 }
 
 function campaignStatus(statuses: Set<string>): { label: string; tone: "default" | "success" | "warning" | "danger" } {
