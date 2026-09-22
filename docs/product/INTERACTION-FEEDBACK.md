@@ -47,6 +47,8 @@ feedback.snap();
 
 Do **not** add feedback to ordinary page navigation, scrolling, typing, every bottom-navigation tap, back buttons, background refreshes, or passive loading. Mad Buddy should feel responsive, not constantly buzzy.
 
+Linkr's left-swipe **Pass** is intentionally visual-only: repeated dismissals should not buzz the phone. The right-swipe **Wave** keeps the stronger semantic feedback after the server confirms it.
+
 ## Achievement behavior
 
 Achievement granting remains owned by `user_achievements` and the canonical achievement catalog. A new row creates the existing `achievement:<code>` notification once; the live signal layer turns that new notification into the foreground celebration.
