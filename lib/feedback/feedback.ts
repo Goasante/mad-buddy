@@ -73,14 +73,22 @@ export function triggerFeedback(kind: FeedbackKind): FeedbackResult {
     return { kind, vibrated: false, nativeHandled: false };
   }
 
-  const event = new CustomEvent<{ kind: FeedbackKind }>(FEEDBACK_EVENT, {
-    detail: { kind },
-    cancelable: true
-  });
+  let nativeHandled = false;
+  try {
+    const event = new CustomEvent<{ kind: FeedbackKind }>(FEEDBACK_EVENT, {
+      detail: { kind },
+      cancelable: true
+    });
 
-  // dispatchEvent returns false when a listener called preventDefault(). That
-  // is the native bridge's "I handled this" signal.
-  const nativeHandled = !window.dispatchEvent(event);
+    // dispatchEvent returns false when a listener called preventDefault(). That
+    // is the native bridge's "I handled this" signal.
+    nativeHandled = !window.dispatchEvent(event);
+  } catch {
+    // Even the bridge event is optional. A missing/blocked DOM event primitive
+    // must never turn decorative feedback into an application failure.
+    nativeHandled = false;
+  }
+
   if (nativeHandled) return { kind, vibrated: false, nativeHandled: true };
 
   // Keep rapid product moments discrete. Both operations are capability-safe;
