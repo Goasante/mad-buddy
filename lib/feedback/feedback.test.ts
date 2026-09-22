@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -19,6 +21,10 @@ const KINDS: FeedbackKind[] = [
   "long_press",
   "snap"
 ];
+
+const ROOT = process.cwd();
+const semanticSource = fs.readFileSync(path.join(ROOT, "lib/feedback/feedback.ts"), "utf8");
+const deviceSource = fs.readFileSync(path.join(ROOT, "lib/device/haptics.ts"), "utf8");
 
 describe("interaction feedback vocabulary", () => {
   it("defines one bounded Android vibration pattern for every semantic kind", () => {
@@ -56,5 +62,12 @@ describe("interaction feedback vocabulary", () => {
 
   it("exposes one stable event name for a future Capacitor native bridge", () => {
     expect(FEEDBACK_EVENT).toBe("mad-buddy:feedback");
+  });
+
+  it("keeps raw vibration in the canonical device adapter", () => {
+    expect(semanticSource).toContain('from "@/lib/device/haptics"');
+    expect(semanticSource).not.toContain("navigator.vibrate");
+    expect(deviceSource).toContain("navigator.vibrate");
+    expect(deviceSource).toContain("export function vibratePattern");
   });
 });
