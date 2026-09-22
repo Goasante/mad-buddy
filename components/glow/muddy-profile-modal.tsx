@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { ArrowRight, Hand, MessageCircle, MessagesSquare } from "lucide-react";
+import { ArrowRight, Bell, Hand, MapPin, MessagesSquare, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
@@ -10,9 +10,7 @@ import { conversationHref } from "@/lib/messaging/open-conversation";
 import { feedback } from "@/lib/feedback/feedback";
 import { Button } from "@/components/ui/button";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
-import type { ProximityBand } from "@/lib/proximity/bands";
-import { ProximityBadge } from "@/components/glow/proximity-badge";
-import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { PROXIMITY_BAND_LABELS, type ProximityBand } from "@/lib/proximity/bands";
 import { Modal } from "@/components/ui/modal";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
@@ -40,6 +38,38 @@ export type MuddyProfileModalProps = {
   onSendPing?: (message: string) => void;
 };
 
+const PROXIMITY_SUPPORT_COPY: Partial<Record<ProximityBand, string>> = {
+  right_here: "Right here ✨",
+  around_you: "Very close by ✨",
+  close_by: "Close by",
+  nearby: "In your area",
+  around_town: "Around town",
+  further_away: "Nearby"
+};
+
+function proximityLabel(muddy: MuddyProfileSummary): string | null {
+  if (muddy.proximityBand && muddy.proximityBand !== "outside_range") {
+    return PROXIMITY_BAND_LABELS[muddy.proximityBand];
+  }
+
+  if (muddy.proximityLevel === "close") return "Very Close";
+  if (muddy.proximityLevel === "near") return "In Area";
+  if (muddy.proximityLevel === "far") return "Far";
+  return null;
+}
+
+function supportingLine(muddy: MuddyProfileSummary): string | null {
+  const status = muddy.statusText?.trim();
+  if (status && !/glow confidence|\bconfidence\b/i.test(status)) return status;
+  if (muddy.proximityBand && muddy.proximityBand !== "outside_range") {
+    return PROXIMITY_SUPPORT_COPY[muddy.proximityBand] ?? null;
+  }
+  if (muddy.proximityLevel === "close") return "Very close by ✨";
+  if (muddy.proximityLevel === "near") return "In your area";
+  if (muddy.proximityLevel === "far") return "Nearby";
+  return null;
+}
+
 export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProfileModalProps) {
   const [pingOpen, setPingOpen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
@@ -51,10 +81,6 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
   /**
    * Open (or create) the direct conversation and go straight to it.
    *
-   * This used to be a bare <Link href="/messages">, which navigated to the
-   * inbox and left the user to find the person again — the Message button
-   * never resolved a conversation at all.
-   *
    * Identity is the stable friendId, never the username. The server resolves
    * one canonical direct conversation from the user pair, re-checks
    * eligibility, and returns its id.
@@ -65,13 +91,10 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
     startMessageTransition(async () => {
       const result = await openDirectConversationAction(friendId);
       if (result.ok && result.conversationId) {
-        // The exact conversation, never a bare push to the inbox.
         onOpenChange(false);
         router.push(conversationHref(result.conversationId));
         return;
       }
-      // Already-generalised server copy: never a raw database error, and
-      // never a reason that would reveal a block.
       feedback.error();
       setWaveFeedback(result.message);
     });
@@ -79,7 +102,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
 
   function sendWave() {
     const friendId = muddy?.friendId;
-    if (!friendId) return;
+    if (!friendId || isWavePending || waveSent) return;
     startWaveTransition(async () => {
       const result = await sendWaveV2Action(friendId, "profile");
       setWaveFeedback(result.message);
@@ -91,6 +114,9 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
       }
     });
   }
+
+  const label = muddy ? proximityLabel(muddy) : null;
+  const support = muddy ? supportingLine(muddy) : null;
 
   return (
     <Modal
@@ -107,89 +133,95 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
       description={muddy ? `@${muddy.username}` : undefined}
       variant="sheet"
       compact
+      hideTitle
+      owner="MuddyProfileModal"
+      widthClassName="max-w-[30rem]"
     >
       {muddy ? (
-        <div className="space-y-3 pb-0.5">
-          <section className="muddy-profile-preview flex items-center gap-2 rounded-xl bg-secondary/45 px-2 py-1.5 sm:gap-3 sm:px-3">
-            <div className="grid shrink-0 place-items-center p-6 sm:p-7">
+        <div className="relative isolate overflow-hidden rounded-[1.45rem] border border-border/55 bg-[radial-gradient(circle_at_14%_16%,rgba(232,140,43,0.18),transparent_34%),linear-gradient(160deg,hsl(var(--card)/0.98),hsl(var(--card)/0.90))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:p-5">
+          <div
+            className="pointer-events-none absolute -left-10 top-8 -z-10 h-40 w-40 rounded-full bg-[#E88C2B]/10 blur-3xl"
+            aria-hidden="true"
+          />
+
+          <section className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 pb-4 pt-5 sm:gap-5 sm:pb-5 sm:pt-3">
+            <div className="grid shrink-0 place-items-center px-1 sm:px-2">
               <ProximityGlowAvatar
                 src={muddy.avatarUrl}
                 name={muddy.displayName}
                 band={muddy.proximityBand ?? null}
                 glowColorId={muddy.glowColorId}
-                size="lg"
+                size="hero"
+                decorative
               />
             </div>
-            <div className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <PremiumPlanBadge plan={muddy.plan} />
-                <ProximityBadge band={muddy.proximityBand} proximityLevel={muddy.proximityLevel} />
-                {muddy.confidence ? (
-                  <span className="text-xs capitalize text-muted-foreground">{muddy.confidence} confidence</span>
-                ) : null}
-              </div>
-              {muddy.statusText?.trim() && !/^glow confidence/i.test(muddy.statusText) ? (
-                <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">{muddy.statusText}</p>
+
+            <div className="min-w-0 pr-9 sm:pr-10">
+              <h2 className="truncate text-[1.6rem] font-bold leading-tight tracking-[-0.025em] text-foreground sm:text-[2rem]">
+                {muddy.displayName}
+              </h2>
+              <p className="mt-1 truncate text-sm font-medium text-muted-foreground sm:text-base">@{muddy.username}</p>
+
+              {label ? (
+                <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-[#E88C2B]/60 bg-[#E88C2B]/[0.08] px-3 py-2 text-sm font-semibold text-[#D97718] shadow-[0_0_24px_rgba(232,140,43,0.10)] dark:text-[#FFB15B]">
+                  <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{label}</span>
+                </div>
               ) : null}
-              {typeof muddy.mutualMuddies === "number" ? (
-                <p className="text-xs text-muted-foreground">
-                  {muddy.mutualMuddies} mutual {muddy.mutualMuddies === 1 ? "Muddy" : "Muddies"}
-                </p>
+
+              {support ? (
+                <p className="mt-2 line-clamp-2 text-sm leading-5 text-muted-foreground">{support}</p>
               ) : null}
             </div>
           </section>
 
-          <div className="grid grid-cols-3 gap-2">
-            {muddy.friendId ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-w-0 px-2 text-xs shadow-none sm:text-sm"
-                disabled={waveSent || isWavePending}
-                onClick={sendWave}
-              >
-                <Hand className="h-4 w-4" aria-hidden="true" />
-                {isWavePending ? "Waving..." : waveSent ? "Wave sent" : "Wave"}
-              </Button>
-            ) : null}
+          {muddy.friendId ? (
+            <Button
+              type="button"
+              size="lg"
+              className="safe-motion h-14 w-full rounded-full border border-[#FF9B3A]/40 bg-gradient-to-r from-[#F79A32] via-[#F18424] to-[#E96F17] text-base font-bold text-white shadow-[0_10px_30px_rgba(232,140,43,0.22)] hover:brightness-105 active:scale-[0.985]"
+              disabled={waveSent || isWavePending}
+              onClick={sendWave}
+            >
+              <Hand className="h-5 w-5" aria-hidden="true" />
+              {isWavePending ? "Waving..." : waveSent ? "Wave sent" : "Wave"}
+            </Button>
+          ) : null}
+
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-3">
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="min-w-0 px-2 text-xs shadow-none sm:text-sm"
+              size="lg"
+              className="safe-motion h-12 min-w-0 rounded-full border-border/80 bg-background/20 px-3 text-sm font-semibold shadow-none backdrop-blur-sm hover:bg-secondary/45 active:scale-[0.985] sm:text-base"
               onClick={() => setPingOpen((current) => !current)}
+              aria-expanded={pingOpen}
             >
-              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              <Bell className="h-5 w-5 shrink-0" aria-hidden="true" />
               Ping
             </Button>
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="min-w-0 px-2 text-xs shadow-none sm:text-sm"
-              // Guard the double tap: two in-flight opens would race to create
-              // the same conversation. The server de-duplicates on direct_key
-              // regardless, but there is no reason to send the second request.
-              disabled={!muddy?.friendId || isMessagePending}
+              size="lg"
+              className="safe-motion h-12 min-w-0 rounded-full border-border/80 bg-background/20 px-3 text-sm font-semibold shadow-none backdrop-blur-sm hover:bg-secondary/45 active:scale-[0.985] sm:text-base"
+              disabled={!muddy.friendId || isMessagePending}
               onClick={openConversation}
             >
-              <MessagesSquare className="h-4 w-4" aria-hidden="true" />
+              <MessagesSquare className="h-5 w-5 shrink-0" aria-hidden="true" />
               {isMessagePending ? "Opening…" : "Message"}
             </Button>
           </div>
 
           {waveFeedback ? (
-            <p className="text-sm text-muted-foreground" role="status">
+            <p className="mt-3 rounded-xl bg-secondary/35 px-3 py-2 text-sm text-muted-foreground" role="status">
               {waveFeedback}
             </p>
           ) : null}
 
           {pingOpen ? (
-            <div className="rounded-xl border border-border/70 bg-secondary/25 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Send a ping
-              </p>
+            <div className="mt-3 rounded-2xl border border-border/65 bg-background/35 p-3 backdrop-blur-sm">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Send a ping</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {CONNECTION_PROMPTS.map((prompt) => (
                   <Button
@@ -197,7 +229,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="justify-start"
+                    className="justify-start rounded-xl"
                     onClick={() => {
                       feedback.selection();
                       onSendPing?.(prompt.message);
@@ -214,10 +246,12 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
 
           <Link
             href={`/friends/${muddy.username}`}
-            className="focus-ring safe-motion flex min-h-10 items-center justify-between rounded-lg border-t border-border/70 px-1 pt-2 text-sm font-semibold text-primary hover:text-primary/80"
+            onClick={() => onOpenChange(false)}
+            className="focus-ring safe-motion mt-4 flex min-h-14 items-center gap-3 border-t border-border/70 px-1 pt-4 text-sm font-semibold text-foreground hover:text-primary sm:text-base"
           >
-            <span>View full profile</span>
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="min-w-0 flex-1">View full profile</span>
+            <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           </Link>
         </div>
       ) : null}
