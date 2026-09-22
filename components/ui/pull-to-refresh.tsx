@@ -159,17 +159,37 @@ export function PullToRefresh({
       return false;
     };
 
-    const atTop = () => {
+    const atTop = (target: EventTarget | null) => {
       const scrollOwner = document.querySelector<HTMLElement>("[data-app-scroll-owner]");
-      return scrollOwner
-        ? scrollOwner.scrollTop <= 0
-        : window.scrollY <= 0 && document.documentElement.scrollTop <= 0;
+      if (scrollOwner) {
+        if (scrollOwner.scrollTop > 0) return false;
+      } else if (window.scrollY > 0 || document.documentElement.scrollTop > 0) {
+        return false;
+      }
+
+      // Some pages (notably Messages) keep vertical scrolling inside a nested
+      // list while the shell scroll owner stays pinned at 0. Respect the
+      // element that actually owns this gesture, otherwise any downward drag
+      // inside that list is mistaken for a page-level pull-to-refresh.
+      if (!(target instanceof Element)) return true;
+      let node: Element | null = target;
+      while (node && node !== scrollOwner) {
+        if (node instanceof HTMLElement) {
+          const overflowY = window.getComputedStyle(node).overflowY;
+          const isVerticalScroller =
+            (overflowY === "auto" || overflowY === "scroll") &&
+            node.scrollHeight > node.clientHeight + 1;
+          if (isVerticalScroller) return node.scrollTop <= 0;
+        }
+        node = node.parentElement;
+      }
+      return true;
     };
 
     const onTouchStart = (event: TouchEvent) => {
       // Single touch only, so pinch-zoom is never hijacked.
       if (event.touches.length !== 1 || refreshingRef.current) return;
-      if (!atTop() || shouldIgnore(event.target)) return;
+      if (!atTop(event.target) || shouldIgnore(event.target)) return;
       startY.current = event.touches[0].clientY;
       startX.current = event.touches[0].clientX;
       committed.current = false;
@@ -187,7 +207,7 @@ export function PullToRefresh({
       }
       if (deltaY < ARM_PX) return;
       // Scrolled away mid-gesture (momentum): abandon.
-      if (!atTop()) {
+      if (!atTop(event.target)) {
         startY.current = null;
         setPull(0);
         return;
