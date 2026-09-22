@@ -6,6 +6,7 @@ on:
       - feature/interaction-feedback
     paths:
       - tools/interaction-feedback-wiring.patch
+      - .github/workflows/apply-feedback-wiring.yml
 
 permissions:
   contents: write
