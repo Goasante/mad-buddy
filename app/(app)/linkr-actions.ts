@@ -21,7 +21,7 @@ import {
   type LinkrActionResult,
   type LinkrOwnProfile
 } from "@/lib/linkr/profile-service";
-import { loadClickedPeople, loadHiddenProfiles, loadPendingClicks } from "@/lib/linkr/collections-service";
+import { loadClickedPeople, loadHiddenProfiles, loadLinkrRewindRequests, loadPendingClicks } from "@/lib/linkr/collections-service";
 import { resolveMutualDestination } from "@/lib/linkr/mutual-resolution";
 import { resolveViewerEventMode } from "@/lib/linkr/event-mode-adapter";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -246,6 +246,12 @@ export async function loadPendingClicksAction() {
 export async function loadHiddenProfilesAction() {
   const userId = await getAuthedUserId();
   return userId ? loadHiddenProfiles(userId) : [];
+}
+
+/** The signed-in user's own Linkr rewind support requests. */
+export async function loadLinkrRewindRequestsAction() {
+  const userId = await getAuthedUserId();
+  return userId ? loadLinkrRewindRequests(userId) : [];
 }
 
 /**

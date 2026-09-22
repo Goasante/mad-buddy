@@ -480,7 +480,7 @@ export async function requestLinkrPassReversalReview(
 
   return error
     ? { ok: false, message: "Support review could not be requested just now — try again." }
-    : { ok: true, message: "Sent to Mad Buddy support for review." };
+    : { ok: true, message: "Sent to Mad Buddy support for review. You can track it in Linkr settings." };
 }
 
 /**

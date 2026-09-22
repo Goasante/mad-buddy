@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { loadLinkrRewindRequestsAction } from "@/app/(app)/linkr-actions";
 
 import { LINKR_INTENT_LABELS } from "@/lib/linkr/intent";
 import { LINKR_DISTANCE_OPTIONS } from "@/lib/linkr/rules";
 import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
-import type { HiddenProfile } from "@/lib/linkr/collections-service";
+import type { HiddenProfile, LinkrRewindRequest } from "@/lib/linkr/collections-service";
 
 /**
  * Screen 12: Linkr settings.
@@ -46,6 +47,23 @@ export function LinkrSettings({
 }: LinkrSettingsProps) {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [hiddenStatus, setHiddenStatus] = useState<string | null>(null);
+  const [rewindRequests, setRewindRequests] = useState<LinkrRewindRequest[]>([]);
+  const [rewindRequestsLoading, setRewindRequestsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void loadLinkrRewindRequestsAction()
+      .then((requests) => {
+        if (active) setRewindRequests(requests);
+      })
+      .finally(() => {
+        if (active) setRewindRequestsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const distanceLabel =
     LINKR_DISTANCE_OPTIONS.find((option) => option.id === profile.discoveryDistance)?.label ?? "Around you";
 
@@ -127,6 +145,31 @@ export function LinkrSettings({
         )}
         {hiddenStatus ? <p className="linkr-settings__note" role="status">{hiddenStatus}</p> : null}
 
+        <h2 className="linkr-settings__group">Rewind requests</h2>
+        <p className="linkr-settings__note">
+          Requests you sent after using your three self-service rewinds. Admin decisions stay visible here.
+        </p>
+        {rewindRequestsLoading ? (
+          <p className="linkr-collection__empty">Loading rewind requests…</p>
+        ) : rewindRequests.length === 0 ? (
+          <p className="linkr-collection__empty">No rewind requests.</p>
+        ) : (
+          <ul className="linkr-collection">
+            {rewindRequests.map((request) => (
+              <li key={request.id}>
+                <div className="linkr-collection__row linkr-collection__row--static">
+                  <HiddenFace photo={request.targetPhoto} name={request.targetDisplayName} />
+                  <span className="linkr-collection__text">
+                    <strong>{request.targetDisplayName}</strong>
+                    <small>{rewindRequestLabel(request)}</small>
+                    <small>Requested {new Date(request.createdAt).toLocaleDateString()}</small>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <h2 className="linkr-settings__group">Preferences</h2>
         <SettingRow label="Discovery distance" value={distanceLabel} onClick={onOpenFilters} />
         <SettingRow label="Intent" value={LINKR_INTENT_LABELS[profile.intent]} onClick={onOpenFilters} />
@@ -150,6 +193,15 @@ export function LinkrSettings({
       </div>
     </section>
   );
+}
+
+
+function rewindRequestLabel(request: LinkrRewindRequest): string {
+  if (request.decision === "approve") return "Approved — this profile can appear in Linkr again.";
+  if (request.decision === "reject") return "Reviewed — the pass stays until its normal expiry.";
+  if (["open", "waiting_on_internal_team", "escalated"].includes(request.status)) return "In review";
+  if (["resolved", "closed"].includes(request.status)) return "Reviewed";
+  return "Sent to Mad Buddy support";
 }
 
 function SettingSwitch({

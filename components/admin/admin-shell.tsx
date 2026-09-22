@@ -21,6 +21,7 @@ import {
   Megaphone,
   Menu,
   PowerOff,
+  RotateCcw,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -43,6 +44,7 @@ type AdminHref =
   | "/admin/trusted-members"
   | "/admin/reports"
   | "/admin/support"
+  | "/admin/linkr-requests"
   | "/admin/communications"
   | "/admin/repairs"
   | "/admin/billing"
@@ -85,6 +87,7 @@ const adminNavigationGroups: AdminNavigationGroup[] = [
       { href: "/admin/trusted-members", label: "Trusted Members", icon: ShieldCheck, permission: "admin.verification.review" },
       { href: "/admin/reports", label: "Reports", icon: ShieldAlert, permission: "admin.reports.review" },
       { href: "/admin/support", label: "Support", icon: Headphones, permission: "admin.support.manage" },
+      { href: "/admin/linkr-requests", label: "Linkr requests", icon: RotateCcw, permission: "admin.support.manage" },
       { href: "/admin/communications", label: "Communications", icon: Megaphone, permission: "admin.support.manage" },
       { href: "/admin/repairs", label: "Repairs", icon: Wrench, permission: "admin.support.manage" }
     ]
