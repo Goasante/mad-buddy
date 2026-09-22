@@ -3,7 +3,8 @@ name: Final Linkr architecture review
 on:
   push:
     paths:
-      - .github/workflows/linkr-final-architecture-review.yml
+      - ".github/workflows/linkr-final-architecture-review.yml"
+      - ".github/scripts/linkr-final-review.py"
 
 permissions:
   contents: write
@@ -16,310 +17,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore the legacy Socialize boundary
+      - name: Restore legacy Socialize boundary
         shell: bash
         run: |
           set -euo pipefail
           BASE=f30463da9677c8406eaa3f7b1eabf26e332e0c16
-          git checkout "$BASE" -- \
-            'app/(app)/actions.ts' \
-            'app/(app)/social-actions.ts' \
-            'app/api/friends/request/route.ts' \
-            'lib/friends/service.ts' \
-            'lib/social/socialize-mobile.ts' \
-            'components/socialize/socialize-page.tsx'
+          git checkout "$BASE" -- 'app/(app)/actions.ts' 'app/(app)/social-actions.ts' 'app/api/friends/request/route.ts' 'lib/friends/service.ts' 'lib/social/socialize-mobile.ts' 'components/socialize/socialize-page.tsx'
           git rm -f --ignore-unmatch lib/social/linkr-interest.ts
 
       - name: Apply canonical Linkr fixes
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str):
-              p = Path(path)
-              text = p.read_text()
-              if old not in text:
-                  raise SystemExit(f"Expected snippet missing in {path}: {old[:120]!r}")
-              p.write_text(text.replace(old, new, 1))
-
-          # -----------------------------------------------------------------
-          # Canonical Linkr candidate ranking: a private, decaying reciprocity
-          # hint. It never enters LinkrCandidate, so the client cannot inspect
-          # it, and the maximum is deliberately smaller than a proximity-tier
-          # gap so it nudges rather than takes over the deck.
-          # -----------------------------------------------------------------
-          path = "lib/linkr/candidate-service.ts"
-          replace_once(
-              path,
-              'export const CANDIDATE_PAGE_SIZE = 20;\n',
-              '''export const CANDIDATE_PAGE_SIZE = 20;\n\n/**\n * Private reciprocity is a NUDGE, never an eligibility rule. Six points is\n * useful inside an otherwise close ranking, but smaller than the base gap\n * from close -> near (12) and near -> far (10). The signal decays to zero so\n * an old one-sided click cannot permanently pin somebody near the front.\n */\nconst PRIVATE_RECIPROCITY_BOOST_MAX = 6;\nconst PRIVATE_RECIPROCITY_BOOST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;\n\nfunction privateReciprocityBoost(updatedAt: string | undefined, nowMs: number): number {\n  if (!updatedAt) return 0;\n  const ageMs = nowMs - Date.parse(updatedAt);\n  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= PRIVATE_RECIPROCITY_BOOST_WINDOW_MS) return 0;\n  return PRIVATE_RECIPROCITY_BOOST_MAX * (1 - ageMs / PRIVATE_RECIPROCITY_BOOST_WINDOW_MS);\n}\n'''
-          )
-          replace_once(
-              path,
-              '''    { data: actions },\n    { data: connections },\n    photosByUser,''',
-              '''    { data: actions },\n    { data: inboundConnects },\n    { data: connections },\n    photosByUser,'''
-          )
-          replace_once(
-              path,
-              '''    admin\n      .from("linkr_actions")\n      .select("target_id, action, expires_at")\n      .eq("actor_id", viewerId)\n      .in("target_id", candidateIds),\n    admin\n      .from("linkr_connections")''',
-              '''    admin\n      .from("linkr_actions")\n      .select("target_id, action, expires_at")\n      .eq("actor_id", viewerId)\n      .in("target_id", candidateIds),\n    // The ONLY use of incoming one-sided Connects outside reciprocity itself:\n    // a server-side ordering hint. Actor ids/timestamps never enter the\n    // response shape, and no count or badge is exposed to the viewer.\n    admin\n      .from("linkr_actions")\n      .select("actor_id, updated_at")\n      .eq("target_id", viewerId)\n      .eq("action", "connect")\n      .in("actor_id", candidateIds),\n    admin\n      .from("linkr_connections")'''
-          )
-          replace_once(
-              path,
-              '''  const actedOnIds = new Set(\n    (actions ?? [])\n      .filter((row) => !row.expires_at || Date.parse(row.expires_at) > nowMs)\n      .map((row) => row.target_id)\n  );\n\n  const profileByUserId''',
-              '''  const actedOnIds = new Set(\n    (actions ?? [])\n      .filter((row) => !row.expires_at || Date.parse(row.expires_at) > nowMs)\n      .map((row) => row.target_id)\n  );\n  const inboundConnectAt = new Map(\n    (inboundConnects ?? []).map((row) => [row.actor_id, row.updated_at])\n  );\n\n  const profileByUserId'''
-          )
-          replace_once(
-              path,
-              '''        joinedRecently: Date.parse(row.created_at) > dayAgoMs\n      }),\n      candidate: {''',
-              '''        joinedRecently: Date.parse(row.created_at) > dayAgoMs\n      }) + privateReciprocityBoost(inboundConnectAt.get(id), nowMs),\n      candidate: {'''
-          )
-
-          # -----------------------------------------------------------------
-          # Canonical Linkr rewind policy. The existing five-minute Undo stays
-          # the gesture-safety window. Ordinary 30-day Passes get three
-          # self-service reversals per server day. A fourth explicit Undo press
-          # becomes the user's request for human review; Connect undo and\n          # permanent-hide undo keep their existing short-window behaviour and
-          # do not consume the scarce Pass allowance.
-          # -----------------------------------------------------------------
-          path = "lib/linkr/connection-service.ts"
-          replace_once(
-              path,
-              'export const UNDO_WINDOW_MS = 5 * 60 * 1000;\n',
-              'export const UNDO_WINDOW_MS = 5 * 60 * 1000;\nconst DAILY_SELF_SERVICE_PASS_REWINDS = 3;\n'
-          )
-
-          undo_marker = '''/**\n * Undo the most recent decision, within a short window.\n *\n * DELIBERATELY REFUSES once a connection exists. Undo is for "I tapped the'''
-          helper = '''async function requestPassReversalReview(\n  admin: Admin,\n  viewerId: string,\n  targetId: string,\n  passExpiresAt: string\n): Promise<string> {\n  // Dedupe before consuming the support-request limiter. Repeated taps on the\n  // same exhausted rewind should not create a queue of identical tickets.\n  const { data: openTickets } = await admin\n    .from("support_tickets")\n    .select("id, diagnostics, status")\n    .eq("user_id", viewerId)\n    .eq("category", "muddies")\n    .not("status", "in", "(resolved,closed)")\n    .order("created_at", { ascending: false })\n    .limit(20);\n\n  const alreadyOpen = (openTickets ?? []).some((ticket) => {\n    const diagnostics = ticket.diagnostics;\n    if (!diagnostics || typeof diagnostics !== "object" || Array.isArray(diagnostics)) return false;\n    const record = diagnostics as Record<string, unknown>;\n    return record.workflow === "linkr_pass_reversal" && record.target_user_id === targetId;\n  });\n  if (alreadyOpen) {\n    return "You've used today's 3 Linkr rewinds. This pass is already waiting for Mad Buddy support review.";\n  }\n\n  const supportLimit = await consumeRateLimit({ action: "support.request", userId: viewerId });\n  if (!supportLimit.allowed) {\n    return `You've used today's 3 Linkr rewinds. ${rateLimitMessage(supportLimit.resetAt)}`;\n  }\n\n  const { error } = await admin.from("support_tickets").insert({\n    user_id: viewerId,\n    category: "muddies",\n    subject: "Linkr rewind request",\n    description: "I used my three self-service Linkr rewinds and want to restore the most recent profile I passed.",\n    priority: "normal",\n    status: "new",\n    diagnostics: {\n      affected_feature: "linkr",\n      workflow: "linkr_pass_reversal",\n      target_user_id: targetId,\n      pass_expires_at: passExpiresAt,\n      source: "linkr_v2"\n    } as never\n  });\n\n  return error\n    ? "You've used today's 3 Linkr rewinds. Support review could not be requested just now — try again."\n    : "You've used today's 3 Linkr rewinds. This pass was sent to Mad Buddy support for review.";\n}\n\n'''
-          replace_once(path, undo_marker, helper + undo_marker)
-          replace_once(
-              path,
-              '.select("id, target_id, action, created_at, updated_at")',
-              '.select("id, target_id, action, expires_at, created_at, updated_at")'
-          )
-          replace_once(
-              path,
-              '''  const { error } = await admin.from("linkr_actions").delete().eq("id", last.id).eq("actor_id", viewerId);\n  if (error) return { ok: false, message: "Couldn't undo that. Try again." };\n  return { ok: true, message: "Undone.", restoredUserId: last.target_id };''',
-              '''  let rewindRemaining: number | null = null;\n  const ordinaryExpiringPass = last.action === "pass" && Boolean(last.expires_at);\n  if (ordinaryExpiringPass) {\n    const rewind = await consumeRateLimit({ action: "linkr.undo", userId: viewerId });\n    if (!rewind.allowed) {\n      return {\n        ok: false,\n        message: await requestPassReversalReview(\n          admin,\n          viewerId,\n          last.target_id,\n          last.expires_at as string\n        )\n      };\n    }\n    rewindRemaining = rewind.remaining;\n  }\n\n  const { error } = await admin.from("linkr_actions").delete().eq("id", last.id).eq("actor_id", viewerId);\n  if (error) return { ok: false, message: "Couldn't undo that. Try again." };\n\n  if (rewindRemaining === null) {\n    return { ok: true, message: "Undone.", restoredUserId: last.target_id };\n  }\n  return {\n    ok: true,\n    message:\n      rewindRemaining === 0\n        ? `Undone. You've used all ${DAILY_SELF_SERVICE_PASS_REWINDS} self-service Linkr rewinds for today.`\n        : `Undone. ${rewindRemaining} Linkr ${rewindRemaining === 1 ? "rewind" : "rewinds"} left today.`,\n    restoredUserId: last.target_id\n  };'''
-          )
-
-          # -----------------------------------------------------------------
-          # Admin review must operate on canonical linkr_actions, never the old
-          # Socialize discovery_passes/friend_requests tables.
-          # -----------------------------------------------------------------
-          Path("app/(admin)/admin/support/linkr-reversal-actions.ts").write_text(r'''"use server";
-
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { requireAdminPermission } from "@/lib/admin/access";
-import { recordAdminAuditEvent } from "@/lib/admin/service";
-import { deliverNotification } from "@/lib/notifications/server";
-import { requireSafetyAdmin } from "@/lib/safety/admin";
-import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
-import { isBlockedEitherDirection } from "@/lib/social/permissions";
-
-export type LinkrReversalReviewState = { ok: boolean; message: string };
-
-const reviewSchema = z.object({
-  ticketId: z.string().uuid(),
-  decision: z.enum(["approve", "reject"])
-});
-
-function diagnosticsObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-export async function reviewLinkrPassReversalAction(input: unknown): Promise<LinkrReversalReviewState> {
-  const parsed = reviewSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "That rewind request could not be identified." };
-
-  try {
-    const { admin, context } = await requireSafetyAdmin();
-    await requireAdminPermission(admin, context, "admin.support.manage");
-
-    const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
-    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
-
-    const { data: ticket, error: ticketError } = await admin
-      .from("support_tickets")
-      .select("id, user_id, status, diagnostics")
-      .eq("id", parsed.data.ticketId)
-      .maybeSingle();
-
-    if (ticketError || !ticket?.user_id) return { ok: false, message: "That support request is no longer available." };
-    if (ticket.status === "resolved" || ticket.status === "closed") {
-      return { ok: false, message: "This rewind request has already been reviewed." };
-    }
-
-    const diagnostics = diagnosticsObject(ticket.diagnostics);
-    const targetUserId = typeof diagnostics.target_user_id === "string" ? diagnostics.target_user_id : "";
-    if (diagnostics.workflow !== "linkr_pass_reversal" || !z.string().uuid().safeParse(targetUserId).success) {
-      return { ok: false, message: "This support issue is not a Linkr rewind request." };
-    }
-
-    const approved = parsed.data.decision === "approve";
-    let activePassId: string | null = null;
-
-    if (approved) {
-      // Safety always outranks recovery. Admin cannot use a rewind ticket to
-      // route around a block that either person placed after the pass.
-      if (await isBlockedEitherDirection(admin, ticket.user_id, targetUserId)) {
-        return { ok: false, message: "This profile cannot be restored while a block is active." };
-      }
-
-      const { data: pass, error: passError } = await admin
-        .from("linkr_actions")
-        .select("id, expires_at")
-        .eq("actor_id", ticket.user_id)
-        .eq("target_id", targetUserId)
-        .eq("action", "pass")
-        .not("expires_at", "is", null)
-        .gt("expires_at", new Date().toISOString())
-        .maybeSingle();
-      if (passError) return { ok: false, message: "The current Linkr pass could not be verified." };
-      activePassId = pass?.id ?? null;
-    }
-
-    const logged = await recordAdminAuditEvent(admin, {
-      actorId: context.userId,
-      action: approved ? "linkr_pass_reversal_approved" : "linkr_pass_reversal_rejected",
-      targetType: "support_ticket",
-      targetId: ticket.id,
-      newState: { targetUserId, decision: parsed.data.decision, activePass: Boolean(activePassId) },
-      reason: "Admin review of canonical Linkr rewind request"
-    });
-    if (!logged) return { ok: false, message: "The audit entry could not be recorded, so nothing was changed." };
-
-    if (approved && activePassId) {
-      const { error: deleteError } = await admin
-        .from("linkr_actions")
-        .delete()
-        .eq("id", activePassId)
-        .eq("actor_id", ticket.user_id)
-        .eq("action", "pass");
-      if (deleteError) return { ok: false, message: "The Linkr pass could not be restored." };
-    }
-
-    const resolvedAt = new Date().toISOString();
-    const { error: ticketUpdateError } = await admin
-      .from("support_tickets")
-      .update({ status: "resolved", resolved_at: resolvedAt })
-      .eq("id", ticket.id);
-    if (ticketUpdateError) return { ok: false, message: "The review was applied, but the support issue could not be closed." };
-
-    await admin.from("support_ticket_events").insert({
-      ticket_id: ticket.id,
-      actor_id: context.userId,
-      event_type: "status_changed",
-      from_value: ticket.status,
-      to_value: "resolved",
-      note: approved ? "Linkr rewind approved" : "Linkr rewind rejected"
-    });
-
-    await deliverNotification(admin, {
-      userId: ticket.user_id,
-      type: "system_alert",
-      title: approved ? "Your Linkr rewind was approved" : "Your Linkr rewind was reviewed",
-      message: approved
-        ? activePassId
-          ? "That passed profile is eligible to appear in Linkr again. No connection was created automatically."
-          : "That pass had already expired or been cleared, so the profile was already eligible to appear again."
-        : "The pass stays in place for now and will still expire automatically after its normal 30-day window."
-    });
-
-    revalidatePath("/admin/support");
-    revalidatePath(`/admin/support/${ticket.id}`);
-    return {
-      ok: true,
-      message: approved
-        ? activePassId
-          ? "Linkr rewind approved and the pass was removed."
-          : "Linkr rewind approved; the pass was already inactive."
-        : "Linkr rewind request rejected."
-    };
-  } catch {
-    return { ok: false, message: "Admin access is required to review Linkr rewinds." };
-  }
-}
-''')
-
-          # Admin detail page: inspect canonical Linkr pass state.
-          replace_once(
-              "app/(admin)/admin/support/[issueId]/page.tsx",
-              '''      admin\n        .from("discovery_passes")\n        .select("expires_at")\n        .eq("user_id", ticket.user_id)\n        .eq("passed_user_id", linkrTargetUserId)\n        .gt("expires_at", new Date().toISOString())\n        .maybeSingle(),''',
-              '''      admin\n        .from("linkr_actions")\n        .select("expires_at")\n        .eq("actor_id", ticket.user_id)\n        .eq("target_id", linkrTargetUserId)\n        .eq("action", "pass")\n        .not("expires_at", "is", null)\n        .gt("expires_at", new Date().toISOString())\n        .maybeSingle(),'''
-          )
-
-          # Keep the admin explanation aligned with the actual canonical model.
-          replace_once(
-              "components/admin/support/linkr-reversal-review.tsx",
-              'Approval only removes the temporary pass; it never creates a connection or reveals whether the other person showed interest.',
-              'Approval only removes the canonical temporary Linkr pass; it never creates a connection, a Muddy friendship, or reveals whether the other person clicked.'
-          )
-          PY
-
-      - name: Add final-review regression tests
-        shell: bash
-        run: |
-          cat > lib/linkr/final-architecture-review.test.ts <<'EOF'
-          import { readFileSync } from "node:fs";
-          import { join } from "node:path";
-          import { describe, expect, it } from "vitest";
-
-          const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
-
-          describe("final Linkr architecture review", () => {
-            it("keeps the canonical 30-day pass and three-per-day rewind policy", () => {
-              const service = read("lib/linkr/connection-service.ts");
-              expect(service).toContain("PASS_DURATION_MS = 30 * 24 * 60 * 60 * 1000");
-              expect(service).toContain('consumeRateLimit({ action: "linkr.undo"');
-              expect(service).toContain("DAILY_SELF_SERVICE_PASS_REWINDS = 3");
-              expect(service).toContain('workflow: "linkr_pass_reversal"');
-            });
-
-            it("uses incoming one-sided Connect only as a server-side decaying ranking nudge", () => {
-              const candidates = read("lib/linkr/candidate-service.ts");
-              expect(candidates).toContain('.eq("target_id", viewerId)');
-              expect(candidates).toContain('.eq("action", "connect")');
-              expect(candidates).toContain("privateReciprocityBoost(inboundConnectAt.get(id), nowMs)");
-              expect(candidates).toContain("PRIVATE_RECIPROCITY_BOOST_MAX = 6");
-              const typeBlock = candidates.slice(
-                candidates.indexOf("export type LinkrCandidate"),
-                candidates.indexOf("function serverReady")
-              );
-              expect(typeBlock).not.toContain("reciprocity");
-              expect(typeBlock).not.toContain("clickedYou");
-            });
-
-            it("keeps Linkr matches separate from Muddy friendships", () => {
-              const service = read("lib/linkr/connection-service.ts");
-              const foundation = read("supabase/migrations/20260818130000_linkr_2_foundation.sql");
-              expect(service).not.toContain('.from("friendships")');
-              expect(foundation).toContain("This is NOT a friendship");
-            });
-
-            it("makes admin rewind review act on canonical linkr_actions only", () => {
-              const admin = read("app/(admin)/admin/support/linkr-reversal-actions.ts");
-              expect(admin).toContain('.from("linkr_actions")');
-              expect(admin).not.toContain('from("discovery_passes")');
-              expect(admin).not.toContain('from("friend_requests")');
-              expect(admin).toContain("isBlockedEitherDirection");
-            });
-
-            it("does not route the old Socialize friend-request flow through a second Linkr authority", () => {
-              const web = read("app/(app)/actions.ts");
-              const api = read("app/api/friends/request/route.ts");
-              const friends = read("lib/friends/service.ts");
-              const socialize = read("lib/social/socialize-mobile.ts");
-              expect(web).not.toContain("sendLinkrInterest");
-              expect(api).not.toContain("sendLinkrInterest");
-              expect(friends).not.toContain("context_type.neq.socialize");
-              expect(socialize).not.toContain("inboundLinkrInterestBoost");
-            });
-          });
-          EOF
+        run: python3 .github/scripts/linkr-final-review.py
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
@@ -328,26 +35,15 @@ export async function reviewLinkrPassReversalAction(input: unknown): Promise<Lin
         run: npm run typecheck
 
       - name: Run Linkr regression suite
-        run: >-
-          npx vitest run
-          lib/linkr/final-architecture-review.test.ts
-          lib/linkr/connect-block-guard.test.ts
-          lib/linkr/connect-race-migration.test.ts
-          lib/linkr/conversation-ownership.test.ts
-          lib/linkr/age-gate.test.ts
-          lib/linkr/intent.test.ts
+        run: npx vitest run lib/linkr/final-architecture-review.test.ts lib/linkr/connect-block-guard.test.ts lib/linkr/connect-race-migration.test.ts lib/linkr/conversation-ownership.test.ts lib/linkr/age-gate.test.ts lib/linkr/intent.test.ts
 
       - name: Commit reviewed architecture
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/linkr-final-architecture-review.yml
+          git rm .github/workflows/linkr-final-architecture-review.yml .github/scripts/linkr-final-review.py
           git config user.name "Mad Buddy Architecture Review"
           git config user.email "actions@users.noreply.github.com"
           git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
           git commit -m "Finalize canonical Linkr reciprocity and rewind architecture"
           git push origin HEAD:main
