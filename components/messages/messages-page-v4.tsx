@@ -67,6 +67,7 @@ import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useTransientFeedback } from "@/hooks/use-transient-feedback";
 import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { conversationContext, dayLabel, startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
@@ -1029,6 +1030,7 @@ export function MessagesPageV4({
           ? markAwaitingConfirmation(current, clientMessageId)
           : markRetrying(current, clientMessageId)
     );
+    if (outcome === "failed") interactionFeedback.error();
     if (outcome === "pending") scheduleSendConfirmation(conversationId, clientMessageId);
     else cancelSendConfirmation(clientMessageId);
   }
@@ -1056,6 +1058,7 @@ export function MessagesPageV4({
       if (!result.ok) {
         updateOptimistic(conversationId, (current) => markFailed(current, clientMessageId));
         setFeedback(result.message);
+        interactionFeedback.error();
         return;
       }
       updateOptimistic(conversationId, (current) => markRetrying(current, clientMessageId));
@@ -1068,7 +1071,11 @@ export function MessagesPageV4({
     if (!selectedId) return;
     startTransition(async () => {
       const result = await reactToMessageAction(messageId, reaction).catch(() => ({ ok: false, message: "Could not react." }));
-      if (!result.ok) setFeedback(result.message);
+      if (result.ok) interactionFeedback.selection();
+      else {
+        setFeedback(result.message);
+        interactionFeedback.error();
+      }
       await refreshMessages(selectedId, false);
     });
   }

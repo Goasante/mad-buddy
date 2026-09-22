@@ -23,6 +23,7 @@ import {
   type RetryTarget
 } from "@/lib/contacts/find-muddies-machine";
 import { haptic } from "@/lib/device/haptics";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { shareInvite } from "@/lib/device/invite-share";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 
@@ -187,9 +188,10 @@ export function FindMuddiesSheet({
       const result = await sendFriendRequestAction(person.userId);
       setPendingAdd(null);
       if (result.ok) {
-        haptic("select");
+        interactionFeedback.success();
         setRequested((current) => ({ ...current, [person.userId]: true }));
       } else {
+        interactionFeedback.error();
         // Reported beside the list rather than replacing it: one failed add
         // must not throw away everybody else's row.
         setRowError(result.message);

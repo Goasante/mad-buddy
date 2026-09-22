@@ -45,6 +45,7 @@ import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import dynamic from "next/dynamic";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { haptic } from "@/lib/device/haptics";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { announceMuddyRequestsUpdated } from "@/hooks/use-incoming-request-count";
 import { ContactReminderCard } from "@/components/contacts/contact-reminder-card";
 import type { ContactReminderKind } from "@/lib/contacts/reminder-eligibility";
@@ -547,6 +548,7 @@ export function FriendsPageContent({
       }));
       setWriting(false);
       setFeedback(result.message);
+      if (!result.ok) interactionFeedback.error();
 
       if (result.ok) {
         onLocalSuccess();
@@ -1051,7 +1053,10 @@ export function FriendsPageContent({
                 onAccept={(person) =>
                   runFriendAction(
                     () => acceptFriendRequestAction(person.requestId ?? person.id),
-                    () => promoteUserToFriend(person.id, `${person.displayName} is now your Muddy.`)
+                    () => {
+                      interactionFeedback.success();
+                      promoteUserToFriend(person.id, `${person.displayName} is now your Muddy.`);
+                    }
                   )
                 }
                 onIgnore={(person) =>
@@ -1174,7 +1179,10 @@ export function FriendsPageContent({
                   onAccept={() =>
                     runFriendAction(
                       () => acceptFriendRequestAction(user.requestId ?? user.id),
-                      () => promoteUserToFriend(user.id, `${user.displayName} is now your friend.`)
+                      () => {
+                        interactionFeedback.success();
+                        promoteUserToFriend(user.id, `${user.displayName} is now your friend.`);
+                      }
                     )
                   }
                   onDecline={() =>
@@ -1269,6 +1277,7 @@ export function FriendsPageContent({
           runFriendAction(
             () => sendFriendRequestAction(user.id),
             () => {
+              interactionFeedback.success();
               updateUserStatus(user.id, "sent", `Muddy request sent to ${user.displayName}.`);
               setAddOpen(false);
               setAddQuery("");

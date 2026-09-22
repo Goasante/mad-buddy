@@ -57,6 +57,7 @@ import {
 } from "@/lib/social/socialize";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 function capitalize(text: string): string {
@@ -568,12 +569,15 @@ export function SocializePage({
         // to prevent. They are restored with the state that is actually true,
         // so deckCandidates keeps them out and the radar offers Accept.
         if (result.reason === "incoming_request_exists") {
+          interactionFeedback.light();
           setPeople((current) => restoreToDeck(current, { ...person, waveState: "received" }));
         } else {
+          interactionFeedback.error();
           setPeople((current) => restoreToDeck(current, { ...person, waveState: "none" }));
         }
         showToast(result.message, true);
       } else {
+        interactionFeedback.wave();
         showToast(`Muddy request sent to ${capitalize(person.displayName || person.username)}.`);
       }
     });
