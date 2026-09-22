@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AdminUserControls } from "@/components/admin/admin-user-controls";
 import { AdminUserMessage } from "@/components/admin/admin-user-message";
+import { AdminUserEmail } from "@/components/admin/admin-user-email";
 import { OrphanAccountRow } from "@/components/admin/orphan-account-row";
 import { listOrphanAuthAccounts } from "@/lib/admin/orphan-accounts";
 import { getAdminAccess } from "@/lib/admin/access";
@@ -86,10 +87,12 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   // alert rather than a per-page slice.
   const canRepairAccounts = access.permissions.has("admin.support.manage");
   const canMessageUsers = access.permissions.has("admin.support.manage");
+  const canEmailUsers = access.permissions.has("admin.support.manage");
   const canSendPasswordReset = access.permissions.has("admin.users.recovery_link");
   const canManageTrustedMember = access.permissions.has("admin.verification.review");
   // The user's Pulse tag depends on the sender's tier.
   const staffTag = access.role === "support" ? "Support" : "Mad Buddy core team";
+  const emailSenderLabel = process.env.MAD_BUDDY_EMAIL_FROM ?? "Mad Buddy <hello@mad-buddy.com>";
   const orphanAccounts = page === 1 && !search ? await listOrphanAuthAccounts(admin) : [];
 
   return (
@@ -193,6 +196,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                     trustedMember={Boolean(profile.trusted_member_since)}
                   />
                   {canMessageUsers ? <AdminUserMessage userId={profile.user_id} tag={staffTag} /> : null}
+                  {canEmailUsers && !profile.deleted_at ? (
+                    <AdminUserEmail userId={profile.user_id} senderLabel={emailSenderLabel} />
+                  ) : null}
                 </div>
               );
             })}
