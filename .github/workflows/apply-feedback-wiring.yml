@@ -26,8 +26,8 @@ jobs:
             echo "Patch already cleaned up; nothing to apply."
             exit 0
           fi
-          git apply --check tools/interaction-feedback-wiring.patch
-          git apply tools/interaction-feedback-wiring.patch
+          git apply --recount --check tools/interaction-feedback-wiring.patch
+          git apply --recount tools/interaction-feedback-wiring.patch
 
       - name: Commit wiring
         shell: bash
