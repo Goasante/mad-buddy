@@ -762,6 +762,19 @@ export async function requestPassReversalAction(targetUserId: string): Promise<S
   if (passError) return { ok: false, message: "Couldn't prepare that request. Try again." };
   if (!pass) return { ok: true, message: "That profile is already eligible to appear again." };
 
+  const { data: rewindWindow } = await admin
+    .from("rate_limits")
+    .select("count, window_end")
+    .eq("user_id", userId)
+    .eq("action", "linkr.undo")
+    .gt("window_end", new Date().toISOString())
+    .order("window_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!rewindWindow || rewindWindow.count < 3) {
+    return { ok: false, message: "Use your available Linkr rewinds first. Admin review opens after all 3 are used." };
+  }
+
   const supportLimit = await consumeRateLimit({ action: "support.request", userId, requestId });
   if (!supportLimit.allowed) return { ok: false, message: rateLimitMessage(supportLimit.resetAt) };
 

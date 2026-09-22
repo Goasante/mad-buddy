@@ -381,14 +381,22 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
     });
 
     const requestCutoffIso = new Date(Date.parse(nowIso) - LINKR_PASS_COOLDOWN_MS).toISOString();
-    const { data: requests } = await admin
-      .from("friend_requests")
-      .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
-      .in("status", ["pending", "declined"])
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .gte("created_at", requestCutoffIso);
+    const [pendingRequestResult, declinedRequestResult] = await Promise.all([
+      admin
+        .from("friend_requests")
+        .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
+        .eq("status", "pending")
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
+      admin
+        .from("friend_requests")
+        .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
+        .eq("sender_id", userId)
+        .eq("status", "declined")
+        .eq("context_type", "socialize")
+        .gte("responded_at", requestCutoffIso)
+    ]);
 
-    const pendingRequests = (requests ?? []).filter((request) => request.status === "pending");
+    const pendingRequests = pendingRequestResult.data ?? [];
     const sentTo = new Set(
       pendingRequests.filter((request) => request.sender_id === userId).map((request) => request.receiver_id)
     );
@@ -409,13 +417,7 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       }
     }
     const recentDeclinedOutgoing = new Set(
-      (requests ?? [])
-        .filter((request) => {
-          if (request.sender_id !== userId || request.context_type !== "socialize" || request.status !== "declined") return false;
-          const declinedAt = Date.parse(request.responded_at ?? request.created_at);
-          return Number.isFinite(declinedAt) && Date.parse(nowIso) - declinedAt < LINKR_PASS_COOLDOWN_MS;
-        })
-        .map((request) => request.receiver_id)
+      (declinedRequestResult.data ?? []).map((request) => request.receiver_id)
     );
     const plans = await loadEffectivePlansForUsers(admin, safe.map((candidate) => candidate.friend_id));
 
