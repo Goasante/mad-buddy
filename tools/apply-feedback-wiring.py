@@ -1,0 +1,296 @@
+from pathlib import Path
+
+
+def edit(path: str, replacements: list[tuple[str, str]]) -> None:
+    p = Path(path)
+    text = p.read_text()
+    for old, new in replacements:
+        count = text.count(old)
+        if count != 1:
+            raise SystemExit(f"{path}: expected exactly one match, found {count}: {old[:100]!r}")
+        text = text.replace(old, new, 1)
+    p.write_text(text)
+
+
+edit("components/plans/plans-page.tsx", [
+    (
+        'import { useUnreadNotifications } from "@/hooks/unread-notification-context";\n',
+        'import { useUnreadNotifications } from "@/hooks/unread-notification-context";\nimport { feedback as interactionFeedback } from "@/lib/feedback/feedback";\n'
+    ),
+    (
+        '        setFeedback("Couldn\'t save your RSVP. Try again.");\n        return;',
+        '        setFeedback("Couldn\'t save your RSVP. Try again.");\n        interactionFeedback.error();\n        return;'
+    ),
+    (
+        '      setFeedback(result.message);\n      // Authoritative counts, roster statuses, and -- because reconciliation\n',
+        '      if (result.ok) interactionFeedback.success();\n      else interactionFeedback.error();\n      setFeedback(result.message);\n      // Authoritative counts, roster statuses, and -- because reconciliation\n'
+    ),
+    (
+        '      const result = await votePollAction(pollId, [optionId]);\n      setFeedback(result.message);\n      router.refresh();',
+        '      const result = await votePollAction(pollId, [optionId]);\n      setFeedback(result.message);\n      if (result.ok) interactionFeedback.selection();\n      else interactionFeedback.error();\n      router.refresh();'
+    ),
+    (
+        '      });\n      setFeedback(result.message);\n      router.refresh();\n    });\n  }\n\n  function setChatWindow',
+        '      });\n      setFeedback(result.message);\n      if (result.ok) interactionFeedback.success();\n      else interactionFeedback.error();\n      router.refresh();\n    });\n  }\n\n  function setChatWindow'
+    ),
+    (
+        '      const result = await setPlanChatCloseWindowAction({ planId, days });\n      setFeedback(result.message);\n      if (result.ok) router.refresh();',
+        '      const result = await setPlanChatCloseWindowAction({ planId, days });\n      setFeedback(result.message);\n      if (result.ok) interactionFeedback.success();\n      else interactionFeedback.error();\n      if (result.ok) router.refresh();'
+    ),
+    (
+        '      const result = await cancelPlanAction(planId);\n      setFeedback(result.message);\n      if (result.ok) {',
+        '      const result = await cancelPlanAction(planId);\n      setFeedback(result.message);\n      if (result.ok) interactionFeedback.warning();\n      else interactionFeedback.error();\n      if (result.ok) {'
+    ),
+    (
+        '      if (!result.ok) {\n        /* STAY IN THE COMPOSER.',
+        '      if (!result.ok) {\n        interactionFeedback.error();\n        /* STAY IN THE COMPOSER.'
+    ),
+    (
+        '        return;\n      }\n      {\n        createRequestKeyRef.current = null;',
+        '        return;\n      }\n      interactionFeedback.success();\n      {\n        createRequestKeyRef.current = null;'
+    ),
+    (
+        '                onClick={() => setActiveBucket(tab.id)}',
+        '                onClick={() => {\n                  if (!active) interactionFeedback.selection();\n                  setActiveBucket(tab.id);\n                }}'
+    ),
+])
+
+edit("components/safety/safe-arrival-page.tsx", [
+    (
+        'import { conversationHref } from "@/lib/messaging/open-conversation";\n',
+        'import { conversationHref } from "@/lib/messaging/open-conversation";\nimport { feedback as interactionFeedback } from "@/lib/feedback/feedback";\n'
+    ),
+    (
+        '''  function runAction(action: () => Promise<{ ok: boolean; message: string; journey?: SafeArrivalJourney | null }>) {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    startTransition(async () => {
+      try {
+        const result = await action();
+        setToast(result.message);
+        if (!result.ok) return;
+        // Adopt the canonical journey the server returned, then reconcile. `null`
+        // (a cancel) clears the local copy so the Home screen returns at once.
+        setOptimistic(result.journey ?? null);
+        router.refresh();
+      } finally {
+        // Released even on a thrown action, or one failure would strand every
+        // later mutation on this screen.
+        inFlightRef.current = false;
+      }
+    });
+  }''',
+        '''  function runAction(
+    action: () => Promise<{ ok: boolean; message: string; journey?: SafeArrivalJourney | null }>,
+    onSuccessFeedback?: () => void
+  ) {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    startTransition(async () => {
+      try {
+        const result = await action();
+        setToast(result.message);
+        if (!result.ok) {
+          interactionFeedback.error();
+          return;
+        }
+        onSuccessFeedback?.();
+        // Adopt the canonical journey the server returned, then reconcile. `null`
+        // (a cancel) clears the local copy so the Home screen returns at once.
+        setOptimistic(result.journey ?? null);
+        router.refresh();
+      } catch {
+        setToast("Couldn't update Safe Arrival. Check your connection and try again.");
+        interactionFeedback.error();
+      } finally {
+        // Released even on a thrown action, or one failure would strand every
+        // later mutation on this screen.
+        inFlightRef.current = false;
+      }
+    });
+  }'''
+    ),
+    (
+        '''  function handleStart(input: SafeArrivalSetupInput) {
+    setSetupError(null);
+    startTransition(async () => {
+      const result = await createSafeArrivalAction(input);
+      if (!result.ok) {
+        // Keep the sheet open with every field intact so Retry is one tap.
+        setSetupError(result.message);
+        return;
+      }
+      setSetupError(null);
+      setOptimistic(result.journey ?? null);
+      setDismissedArrival(null);
+      // Closed only now that the journey provably exists.
+      setSetupOpen(false);
+      router.refresh();
+    });
+  }''',
+        '''  function handleStart(input: SafeArrivalSetupInput) {
+    setSetupError(null);
+    startTransition(async () => {
+      try {
+        const result = await createSafeArrivalAction(input);
+        if (!result.ok) {
+          // Keep the sheet open with every field intact so Retry is one tap.
+          setSetupError(result.message);
+          interactionFeedback.error();
+          return;
+        }
+        interactionFeedback.success();
+        setSetupError(null);
+        setOptimistic(result.journey ?? null);
+        setDismissedArrival(null);
+        // Closed only now that the journey provably exists.
+        setSetupOpen(false);
+        router.refresh();
+      } catch {
+        interactionFeedback.error();
+        setSetupError("Couldn't start Safe Arrival. Check your connection and try again.");
+      }
+    });
+  }'''
+    ),
+    (
+        '          onRespond={(response) => runAction(() => acknowledgeSafeArrivalAction(watcherFocus.id, response))}',
+        '          onRespond={(response) =>\n            runAction(() => acknowledgeSafeArrivalAction(watcherFocus.id, response), () => interactionFeedback.success())\n          }'
+    ),
+    (
+        '          onConfirm={() => runAction(() => confirmSafeArrivalAction(activeJourney.id))}',
+        '          onConfirm={() =>\n            runAction(() => confirmSafeArrivalAction(activeJourney.id), () => interactionFeedback.importantSuccess())\n          }'
+    ),
+    (
+        '            runAction(() => extendSafeArrivalAction(activeJourney.id, minutes, mutationId));',
+        '            runAction(\n              () => extendSafeArrivalAction(activeJourney.id, minutes, mutationId),\n              () => interactionFeedback.success()\n            );'
+    ),
+    (
+        '          onCancel={() => runAction(() => cancelSafeArrivalAction(activeJourney.id))}',
+        '          onCancel={() =>\n            runAction(() => cancelSafeArrivalAction(activeJourney.id), () => interactionFeedback.warning())\n          }'
+    ),
+])
+
+edit("components/hangout/hangout-mode-page.tsx", [
+    (
+        'import { withTimeout } from "@/lib/network/resilience";\n',
+        'import { withTimeout } from "@/lib/network/resilience";\nimport { feedback as interactionFeedback } from "@/lib/feedback/feedback";\n'
+    ),
+    (
+        '    if (!allowed.ok) {\n      showToast(allowed.message, true);\n      return;',
+        '    if (!allowed.ok) {\n      showToast(allowed.message, true);\n      interactionFeedback.error();\n      return;'
+    ),
+    (
+        '''    showToast(result.message, !result.ok);
+    if (result.ok) {
+      setFeed((current) =>
+        current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
+      );
+    }
+  }''',
+        '''    showToast(result.message, !result.ok);
+    if (result.ok) {
+      interactionFeedback.light();
+      setFeed((current) =>
+        current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
+      );
+    } else {
+      interactionFeedback.error();
+    }
+  }'''
+    ),
+    (
+        '''      if (result.ok) {
+        showToast(result.message);
+      } else {
+        setFeed((current) =>''',
+        '''      if (result.ok) {
+        interactionFeedback.light();
+        showToast(result.message);
+      } else {
+        interactionFeedback.error();
+        setFeed((current) =>'''
+    ),
+    (
+        '''      const result = await rsvpAction(plan.id, "going");
+      showToast(result.message, !result.ok);
+      if (result.ok) router.refresh();''',
+        '''      const result = await rsvpAction(plan.id, "going");
+      showToast(result.message, !result.ok);
+      if (result.ok) {
+        interactionFeedback.success();
+        router.refresh();
+      } else {
+        interactionFeedback.error();
+      }'''
+    ),
+    (
+        '''        if (!ended.ok) {
+          setSetupError(ended.message);
+          showToast(ended.message, true);
+          return;
+        }''',
+        '''        if (!ended.ok) {
+          setSetupError(ended.message);
+          showToast(ended.message, true);
+          interactionFeedback.error();
+          return;
+        }'''
+    ),
+    (
+        '      if (result.ok && result.hangoutId) {\n        setActiveHangout({',
+        '      if (result.ok && result.hangoutId) {\n        interactionFeedback.success();\n        setActiveHangout({'
+    ),
+    (
+        '''        if (editing) setActiveHangout(null);
+        setSetupError(result.message);
+        showToast(result.message, true);
+      }''',
+        '''        if (editing) setActiveHangout(null);
+        setSetupError(result.message);
+        showToast(result.message, true);
+        interactionFeedback.error();
+      }'''
+    ),
+    (
+        '''      if (!result.ok) {
+        showToast(result.message, true);
+        return;
+      }
+      if (activeHangout?.id === hangoutId) {''',
+        '''      if (!result.ok) {
+        showToast(result.message, true);
+        interactionFeedback.error();
+        return;
+      }
+      interactionFeedback.warning();
+      if (activeHangout?.id === hangoutId) {'''
+    ),
+    (
+        '      if (result.ok) await refreshOwnedUpFors();',
+        '      if (result.ok) {\n        if (response === "accepted") interactionFeedback.success();\n        else interactionFeedback.light();\n        await refreshOwnedUpFors();\n      } else {\n        interactionFeedback.error();\n      }'
+    ),
+    (
+        '''    showToast(result.message, !result.ok);
+    if (result.ok) {
+      if (activeHangout?.id === hangoutId) {''',
+        '''    showToast(result.message, !result.ok);
+    if (result.ok) {
+      interactionFeedback.success();
+      if (activeHangout?.id === hangoutId) {'''
+    ),
+    (
+        '''      router.refresh();
+    }
+  }
+
+  /** Back to wherever UpFor was opened from; Home only on a cold entry. */''',
+        '''      router.refresh();
+    } else {
+      interactionFeedback.error();
+    }
+  }
+
+  /** Back to wherever UpFor was opened from; Home only on a cold entry. */'''
+    ),
+])
