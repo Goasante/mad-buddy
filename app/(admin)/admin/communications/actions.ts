@@ -154,7 +154,10 @@ export async function sendCommunicationTestAction(input: unknown): Promise<Admin
       reason: "Admin mass communication test"
     });
 
-    return { ok: true, message: `Test email sent to ${recipient}.` };
+    return {
+      ok: true,
+      message: `Test sent only to ${recipient}. No broadcast was queued.`
+    };
   } catch {
     return { ok: false, message: "You don't have permission to send communication tests." };
   }
