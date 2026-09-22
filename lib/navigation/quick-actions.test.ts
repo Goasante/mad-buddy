@@ -492,8 +492,10 @@ describe("haptics degrade silently", () => {
     expect(component).not.toContain("onScroll");
   });
 
-  it("confirms a completed drag with a tick, distinct from opening the sheet", () => {
+  it("confirms a completed drag with semantic snap feedback, distinct from opening the sheet", () => {
     const pointerUp = component.slice(component.indexOf("function onPointerUp"));
-    expect(pointerUp.slice(0, pointerUp.indexOf("function toggle"))).toContain('haptic("tick")');
+    const release = pointerUp.slice(0, pointerUp.indexOf("function toggle"));
+    expect(release).toContain("feedback.snap()");
+    expect(release.indexOf("feedback.snap()")).toBeGreaterThan(release.indexOf("saveQuickActionsPosition"));
   });
 });

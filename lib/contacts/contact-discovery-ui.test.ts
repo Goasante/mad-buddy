@@ -454,9 +454,15 @@ describe("the flow is usable without sight or a mouse", () => {
     expect(settings).toContain("motion-reduce:transition-none");
   });
 
-  it("uses the shared haptics abstraction rather than raw vibration", () => {
+  it("uses the shared semantic feedback layer rather than raw vibration", () => {
     expect(sheet).toContain('haptic("tick")');
-    expect(sheet).toContain('haptic("select")');
+    expect(sheet).toContain('from "@/lib/feedback/feedback"');
+    const add = sheet.slice(sheet.indexOf("function addMuddy"));
+    expect(add).toContain("interactionFeedback.success()");
+    expect(add).toContain("interactionFeedback.error()");
+    expect(add.indexOf("interactionFeedback.success()")).toBeGreaterThan(
+      add.indexOf("await sendFriendRequestAction(person.userId)")
+    );
     expect(sheet).not.toContain("navigator.vibrate");
     expect(settings).not.toContain("navigator.vibrate");
   });
