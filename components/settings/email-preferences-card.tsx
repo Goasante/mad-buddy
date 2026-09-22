@@ -33,13 +33,29 @@ export function EmailPreferencesCard({ initialPreferences }: { initialPreference
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
 
-  function save() {
+  function persist(next: EmailCommunicationPreferences) {
     setFeedback("");
     startTransition(async () => {
-      const result = await updateEmailCommunicationPreferencesAction(preferences);
+      const result = await updateEmailCommunicationPreferencesAction(next);
       setFeedback(result.message);
     });
   }
+
+  function save() {
+    persist(preferences);
+  }
+
+  function unsubscribeOptional() {
+    const next = {
+      productUpdates: false,
+      featureLaunches: false,
+      communityReminders: false
+    };
+    setPreferences(next);
+    persist(next);
+  }
+
+  const allOptionalOff = !preferences.productUpdates && !preferences.featureLaunches && !preferences.communityReminders;
 
   return (
     <section className="rounded-xl border border-border/70 bg-card/50 p-4">
@@ -75,12 +91,21 @@ export function EmailPreferencesCard({ initialPreferences }: { initialPreference
         </p>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" onClick={save} disabled={pending}>
           {pending ? "Saving…" : "Save email preferences"}
         </Button>
-        {feedback ? <p className="text-xs text-muted-foreground" role="status">{feedback}</p> : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={unsubscribeOptional}
+          disabled={pending || allOptionalOff}
+        >
+          Unsubscribe from optional emails
+        </Button>
       </div>
+      {feedback ? <p className="mt-3 text-xs text-muted-foreground" role="status">{feedback}</p> : null}
     </section>
   );
 }
