@@ -84,7 +84,7 @@ function FieldFrame({
 }) {
   const ids = fieldIds(id, helperText, error);
   return (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("min-w-0 max-w-full space-y-1.5", className)}>
       {label ? (
         <label htmlFor={id} className="block text-sm font-medium text-foreground">
           {label}{required ? <span className="ml-1 text-destructive" aria-hidden="true">*</span> : null}
@@ -151,7 +151,7 @@ function StandardAppSelect<T extends string = string>({
           <button
             id={id}
             type="button"
-            className={cn("app-select-trigger", size === "compact" && "app-select-trigger-compact", error && "app-select-trigger-error", triggerClassName)}
+            className={cn("app-select-trigger min-w-0 max-w-full", size === "compact" && "app-select-trigger-compact", error && "app-select-trigger-error", triggerClassName)}
             aria-describedby={ids.describedBy}
           >
             <TriggerContents option={selected} placeholder={placeholder} open={open} />
@@ -268,7 +268,7 @@ export function AppCombobox<T extends string = string>({
           <button
             id={id}
             type="button"
-            className={cn("app-select-trigger", size === "compact" && "app-select-trigger-compact", error && "app-select-trigger-error", triggerClassName)}
+            className={cn("app-select-trigger min-w-0 max-w-full", size === "compact" && "app-select-trigger-compact", error && "app-select-trigger-error", triggerClassName)}
             aria-haspopup="listbox"
             aria-expanded={open}
             aria-controls={listboxId}
@@ -301,189 +301,45 @@ export function AppCombobox<T extends string = string>({
                 aria-activedescendant={filtered[activeIndex] ? `${listboxId}-${activeIndex}` : undefined}
               />
               {query ? (
-                <button type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }} className="focus-ring absolute right-0.5 top-1/2 grid h-10 w-10 -translate-y-[calc(50%+4px)] place-items-center rounded-full text-muted-foreground hover:bg-secondary" aria-label="Clear search">
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="focus-ring absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-[calc(50%+4px)] place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               ) : null}
             </div>
-            <div id={listboxId} role="listbox" className="mt-1 max-h-[264px] overflow-y-auto overscroll-contain">
-              {filtered.length > 0 ? filtered.map((option, index) => (
-                <button
-                  id={`${listboxId}-${index}`}
-                  key={encodeValue(option.value)}
-                  type="button"
-                  role="option"
-                  aria-selected={option.value === value}
-                  disabled={option.disabled}
-                  onMouseMove={() => !option.disabled && setActiveIndex(index)}
-                  onClick={() => choose(option)}
-                  className={cn("app-dropdown-option w-full", option.description && "app-dropdown-option-described", index === activeIndex && "app-dropdown-option-active", option.value === value && "app-dropdown-option-selected")}
-                >
-                  {option.icon ? <span className="shrink-0 text-muted-foreground" aria-hidden="true">{option.icon}</span> : null}
-                  <span className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-sm font-medium">{option.label}</span>
-                    {option.description ? <span className="mt-0.5 block truncate text-xs text-muted-foreground">{option.description}</span> : null}
-                  </span>
-                  {option.value === value ? <Check className="h-4 w-4 shrink-0 text-[var(--color-brand-orange)]" aria-hidden="true" /> : <span className="h-4 w-4" />}
-                </button>
-              )) : <p className="px-3 py-6 text-center text-sm text-muted-foreground">{emptyText}</p>}
-            </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
-    </FieldFrame>
-  );
-}
-
-export type AppMultiSelectProps<T extends string = string> = Omit<AppSelectProps<T>, "value" | "onChange"> & {
-  value: T[];
-  onChange: (value: T[]) => void;
-  /**
-   * Keep the trigger reading as an action instead of a summary.
-   *
-   * For surfaces that already show their selection as chips beneath: without
-   * this the trigger repeats those same names, so the control describes what
-   * is already on screen rather than what it does next.
-   */
-  alwaysShowPlaceholder?: boolean;
-};
-
-export function AppMultiSelect<T extends string = string>({
-  id: providedId,
-  label,
-  value,
-  options,
-  placeholder = "Choose options",
-  alwaysShowPlaceholder = false,
-  searchable = false,
-  searchPlaceholder = "Search options...",
-  emptyText = "No options found",
-  error,
-  helperText,
-  disabled,
-  required,
-  size = "form",
-  className,
-  triggerClassName,
-  onChange
-}: AppMultiSelectProps<T>) {
-  const generatedId = useId();
-  const id = providedId ?? generatedId;
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const selected = options.filter((option) => value.includes(option.value));
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return options;
-    return options.filter((option) =>
-      [option.label, option.description, ...(option.keywords ?? [])]
-        .filter(Boolean)
-        .some((part) => part!.toLowerCase().includes(term))
-    );
-  }, [options, query]);
-  const enabledIndexes = filtered.map((option, index) => option.disabled ? -1 : index).filter((index) => index >= 0);
-  const ids = fieldIds(id, helperText, error);
-  /* Opt-in: keep the trigger as an ACTION rather than a summary.
-   *
-   * Surfaces that already render their selection as chips beneath end up
-   * saying the same names twice -- once in the trigger, once below -- when the
-   * control's remaining job is adding somebody else. Off by default, so every
-   * existing multi-select keeps summarising as before. */
-  const display = alwaysShowPlaceholder || selected.length === 0
-    ? placeholder
-    : selected.length <= 2
-      ? selected.map((option) => option.label).join(", ")
-      : `${selected[0].label} and ${selected.length - 1} more`;
-  useDismissOnBack(open, () => setOpen(false));
-
-  function toggle(option: AppSelectOption<T>) {
-    if (option.disabled) return;
-    onChange(value.includes(option.value) ? value.filter((item) => item !== option.value) : [...value, option.value]);
-  }
-
-  function moveActive(direction: 1 | -1) {
-    if (enabledIndexes.length === 0) return;
-    const position = enabledIndexes.indexOf(activeIndex);
-    const nextPosition = position < 0 ? 0 : (position + direction + enabledIndexes.length) % enabledIndexes.length;
-    setActiveIndex(enabledIndexes[nextPosition]);
-  }
-
-  function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "ArrowDown") { event.preventDefault(); moveActive(1); }
-    else if (event.key === "ArrowUp") { event.preventDefault(); moveActive(-1); }
-    else if (event.key === "Home") { event.preventDefault(); setActiveIndex(enabledIndexes[0] ?? 0); }
-    else if (event.key === "End") { event.preventDefault(); setActiveIndex(enabledIndexes.at(-1) ?? 0); }
-    else if ((event.key === "Enter" || event.key === " ") && filtered[activeIndex]) {
-      event.preventDefault();
-      toggle(filtered[activeIndex]);
-    }
-  }
-
-  return (
-    <FieldFrame id={id} label={label} required={required} helperText={helperText} error={error} className={className}>
-      <Popover.Root open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) { setQuery(""); setActiveIndex(0); } }}>
-        <Popover.Trigger asChild disabled={disabled}>
-          <button id={id} type="button" className={cn("app-select-trigger", size === "compact" && "app-select-trigger-compact", error && "app-select-trigger-error", triggerClassName)} aria-haspopup="listbox" aria-expanded={open} aria-describedby={ids.describedBy}>
-            <span className={cn("min-w-0 flex-1 truncate text-left", selected.length === 0 && "text-muted-foreground")}>{display}</span>
-            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none", open && "rotate-180")} aria-hidden="true" />
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            sideOffset={7}
-            collisionPadding={12}
-            align="start"
-            className="app-dropdown-content"
-            style={{ width: "var(--radix-popover-trigger-width)", maxWidth: "min(28rem, calc(100vw - 1.5rem))" }}
-            onOpenAutoFocus={searchable ? (event) => { event.preventDefault(); searchRef.current?.focus(); } : undefined}
-          >
-            {searchable ? (
-              <div className="relative mb-1 border-b border-border/60 pb-2">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-[calc(50%+4px)] text-muted-foreground" aria-hidden="true" />
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={searchPlaceholder}
-                  className="focus-ring h-10 w-full rounded-lg bg-transparent pl-9 pr-9 text-sm outline-none placeholder:text-muted-foreground"
-                  aria-label={searchPlaceholder}
-                />
-                {query ? (
-                  <button type="button" onClick={() => { setQuery(""); searchRef.current?.focus(); }} className="focus-ring absolute right-0.5 top-1/2 grid h-10 w-10 -translate-y-[calc(50%+4px)] place-items-center rounded-full text-muted-foreground hover:bg-secondary" aria-label="Clear search">
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            <div
-              role="listbox"
-              aria-multiselectable="true"
-              tabIndex={0}
-              onKeyDown={handleListKeyDown}
-              className="focus-ring max-h-[280px] overflow-y-auto overscroll-contain"
-            >
-              {filtered.map((option, index) => {
-                const checked = value.includes(option.value);
-                return (
+            <div id={listboxId} role="listbox" className="max-h-72 overflow-y-auto pt-2">
+              {filtered.length === 0 ? (
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">{emptyText}</p>
+              ) : (
+                filtered.map((option, index) => (
                   <button
                     key={encodeValue(option.value)}
+                    id={`${listboxId}-${index}`}
                     type="button"
                     role="option"
-                    aria-selected={checked}
+                    aria-selected={option.value === value}
                     disabled={option.disabled}
-                    onMouseMove={() => !option.disabled && setActiveIndex(index)}
-                    onClick={() => toggle(option)}
-                    className={cn("app-dropdown-option w-full", option.description && "app-dropdown-option-described", checked && "app-dropdown-option-selected", index === activeIndex && "app-dropdown-option-active")}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => choose(option)}
+                    className={cn(
+                      "app-dropdown-option w-full",
+                      option.description && "app-dropdown-option-described",
+                      index === activeIndex && "app-dropdown-option-active"
+                    )}
                   >
                     {option.icon ? <span className="shrink-0 text-muted-foreground" aria-hidden="true">{option.icon}</span> : null}
-                    <span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-medium">{option.label}</span>{option.description ? <span className="mt-0.5 block truncate text-xs text-muted-foreground">{option.description}</span> : null}</span>
-                    {checked ? <Check className="h-4 w-4 shrink-0 text-[var(--color-brand-orange)]" aria-hidden="true" /> : <span className="h-4 w-4" />}
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-sm font-medium">{option.label}</span>
+                      {option.description ? <span className="mt-0.5 block truncate text-xs text-muted-foreground">{option.description}</span> : null}
+                    </span>
+                    {option.value === value ? <Check className="h-4 w-4 shrink-0 text-[var(--color-brand-orange)]" aria-hidden="true" /> : null}
                   </button>
-                );
-              })}
-              {filtered.length === 0 ? <p className="px-3 py-6 text-center text-sm text-muted-foreground">{emptyText}</p> : null}
+                ))
+              )}
             </div>
           </Popover.Content>
         </Popover.Portal>
@@ -497,45 +353,49 @@ export type AppMenuItem = {
   label: string;
   description?: string;
   icon?: ReactNode;
-  disabled?: boolean;
   destructive?: boolean;
+  disabled?: boolean;
   separatorBefore?: boolean;
   onSelect: () => void;
 };
 
-export function AppMenu({
-  trigger,
-  items,
-  label,
-  align = "end",
-  side = "bottom",
-  open,
-  onOpenChange
-}: {
+export type AppMenuProps = {
+  label: string;
   trigger: ReactNode;
   items: AppMenuItem[];
-  label: string;
   align?: "start" | "center" | "end";
   side?: "top" | "right" | "bottom" | "left";
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const isOpen = open ?? uncontrolledOpen;
-  const setIsOpen = onOpenChange ?? setUncontrolledOpen;
-  useDismissOnBack(isOpen, () => setIsOpen(false));
+};
 
+export function AppMenu({ label, trigger, items, align = "end", side = "bottom" }: AppMenuProps) {
   return (
-    <DropdownMenu.Root open={isOpen} onOpenChange={setIsOpen} modal={false}>
+    <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content side={side} align={align} sideOffset={7} collisionPadding={12} className="app-dropdown-content min-w-48" aria-label={label}>
+        <DropdownMenu.Content
+          aria-label={label}
+          side={side}
+          align={align}
+          sideOffset={8}
+          collisionPadding={12}
+          className="app-dropdown-content min-w-52"
+        >
           {items.map((item) => (
             <Fragment key={item.id}>
               {item.separatorBefore ? <DropdownMenu.Separator className="my-1 h-px bg-border/70" /> : null}
-              <DropdownMenu.Item disabled={item.disabled} onSelect={item.onSelect} className={cn("app-dropdown-option", item.description && "app-dropdown-option-described", item.destructive && "text-destructive focus:text-destructive")}>
+              <DropdownMenu.Item
+                disabled={item.disabled}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  item.onSelect();
+                }}
+                className={cn("app-dropdown-option cursor-pointer", item.destructive && "text-destructive focus:text-destructive")}
+              >
                 {item.icon ? <span className="shrink-0" aria-hidden="true">{item.icon}</span> : null}
-                <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{item.label}</span>{item.description ? <span className="mt-0.5 block text-xs text-muted-foreground">{item.description}</span> : null}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">{item.label}</span>
+                  {item.description ? <span className="mt-0.5 block text-xs text-muted-foreground">{item.description}</span> : null}
+                </span>
               </DropdownMenu.Item>
             </Fragment>
           ))}
