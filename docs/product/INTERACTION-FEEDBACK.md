@@ -55,16 +55,20 @@ The celebration uses the real catalog badge artwork, `Achievement unlocked`, the
 
 ## Current rollout
 
-The approved feedback map is now wired into the current product surfaces that own these moments:
+The approved feedback map is wired into the current production PWA surfaces that own these moments:
 
 - live Achievement and incoming Wave celebrations;
-- sent Wave, Ping selection, and Wave/message failure feedback from the Muddy profile;
+- sent Waves from both the production Muddy profile and Linkr/Socialize, plus the in-page Muddy profile modal;
+- Muddy request sent from Muddies search, the production profile, and Contact Discovery; accepted Muddy requests on the Requests surfaces; real request failures use `error`;
+- message reaction success uses `selection`; confirmed message-send/retry failures use `error` while ordinary successful message sends stay quiet;
+- Ping selection and Wave/message failures from the Muddy profile modal;
 - Plan creation, RSVP, Plan poll selection, poll creation, chat-window save, Plan cancellation, and Plans tab selection;
 - Safe Arrival start, watcher acknowledgement, extension, cancellation, mutation failure, and **arrival confirmation with `importantSuccess`**;
 - UpFor join request, withdrawal, creation/update, Plan RSVP from UpFor, request accept/decline, end, conversion to Plan, and mutation failure;
 - shared long-press context menus plus message-action long press, safe selection, and destructive selection;
+- destructive profile blocking after the server confirms it;
 - the draggable Quick Actions launcher when it settles onto a screen edge.
 
-All mutation feedback is fired from the confirmed result path, not while a write is merely pending. Background feed refreshes remain quiet.
+All mutation feedback is fired from a confirmed result path, not while a write is merely pending. Linkr's special `incoming_request_exists` case uses a light acknowledgement rather than an error buzz because it represents a real incoming request, not a failed relationship state. Background feed refreshes remain quiet.
 
 There are older messaging surfaces in the repository that predate this contract and still contain local vibration helpers. They are existing technical debt, not a pattern to copy; migrate them to the shared adapter/semantic layer when those surfaces are next touched.
