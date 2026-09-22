@@ -5,7 +5,7 @@ on:
     branches:
       - feature/interaction-feedback
     paths:
-      - tools/apply-feedback-wiring.py
+      - tools/apply-feedback-polish.py
       - .github/workflows/apply-feedback-wiring.yml
 
 permissions:
@@ -20,8 +20,8 @@ jobs:
           ref: feature/interaction-feedback
           fetch-depth: 0
 
-      - name: Apply reviewed wiring edits
-        run: python tools/apply-feedback-wiring.py
+      - name: Apply semantic long-press and snap wiring
+        run: python tools/apply-feedback-polish.py
 
       - name: Commit wiring
         shell: bash
@@ -32,6 +32,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add components/plans/plans-page.tsx components/safety/safe-arrival-page.tsx components/hangout/hangout-mode-page.tsx
-          git commit -m "wire semantic feedback across core actions"
+          git add components/ui/long-press-actions.tsx components/messaging/message-actions-menu.tsx components/app-shell/quick-actions-launcher.tsx lib/navigation/contextual-actions.test.ts lib/messaging/message-actions.test.ts lib/navigation/quick-actions.test.ts
+          git commit -m "wire semantic long-press and snap feedback"
           git push origin HEAD:feature/interaction-feedback
