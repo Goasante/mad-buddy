@@ -1,10 +1,16 @@
 import { redirect } from "next/navigation";
-import { MailPlus, Megaphone } from "lucide-react";
+import { AtSign, MailPlus, Megaphone } from "lucide-react";
 import { AdminCommunicationsForm } from "@/components/admin/admin-communications-form";
+import { AdminEmailAliases } from "@/components/admin/admin-email-aliases";
 import { AdminEmptyState, AdminPageHeader, AdminStatus, formatAdminDate } from "@/components/admin/admin-ui";
 import { Card } from "@/components/ui/card";
 import { getAdminAccess } from "@/lib/admin/access";
 import { BROADCAST_JOB_TYPE } from "@/lib/communications/broadcast";
+import {
+  cloudflareAliasConfigStatus,
+  listMadBuddyEmailAliases,
+  type MadBuddyEmailAlias
+} from "@/lib/email/cloudflare-aliases";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -37,13 +43,23 @@ export default async function AdminCommunicationsPage() {
     .limit(500);
 
   const campaigns = summarizeCampaigns(jobs ?? []);
+  const aliasConfig = cloudflareAliasConfigStatus();
+  let aliases: MadBuddyEmailAlias[] = [];
+  let aliasLoadFailed = false;
+  if (aliasConfig.configured) {
+    try {
+      aliases = await listMadBuddyEmailAliases();
+    } catch {
+      aliasLoadFailed = true;
+    }
+  }
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Communications"
-        description="Send branded email announcements to selected Mad Buddy audiences. Broadcasts are queued and delivered in the background."
-        meta={<AdminStatus label="Email broadcasts" tone="success" />}
+        description="Send branded email announcements to selected Mad Buddy audiences and manage professional forwarding aliases."
+        meta={<AdminStatus label="Email communications" tone="success" />}
       />
 
       <Card className="p-5 sm:p-6">
@@ -54,11 +70,29 @@ export default async function AdminCommunicationsPage() {
           <div>
             <h3 className="text-base font-semibold">Compose broadcast</h3>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Use this for downtime notices, feature launches, product updates, and community reminders. Recipient emails are resolved server-side at delivery time.
+              Use this for downtime notices, feature launches, product updates, and community reminders. Optional campaigns respect each user&rsquo;s email preferences; essential service notices remain deliverable.
             </p>
           </div>
         </div>
         <AdminCommunicationsForm />
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#E88C2B]/20 bg-[#E88C2B]/10 text-[#E88C2B]">
+              <AtSign className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h3 className="text-base font-semibold">Mad Buddy email aliases</h3>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Create professional addresses such as press@mad-buddy.com or legal@mad-buddy.com. They use Cloudflare Email Routing and forward to the verified destination inbox.
+              </p>
+            </div>
+          </div>
+          {aliasLoadFailed ? <AdminStatus label="Cloudflare unavailable" tone="warning" /> : aliasConfig.configured ? <AdminStatus label="Cloudflare connected" tone="success" /> : <AdminStatus label="Setup required" tone="default" />}
+        </div>
+        <AdminEmailAliases aliases={aliases} configured={aliasConfig.configured && !aliasLoadFailed} />
       </Card>
 
       <section className="space-y-3">
