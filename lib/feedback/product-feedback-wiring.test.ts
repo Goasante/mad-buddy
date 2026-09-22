@@ -20,11 +20,22 @@ const socialize = read("components/socialize/socialize-page.tsx");
 describe("approved product feedback map", () => {
   it("acknowledges Plan mutations only after their server result", () => {
     expect(plans).toContain('from "@/lib/feedback/feedback"');
-    expect(plans).toContain("const result = await rsvpAction(planId, rsvp)");
     expect(plans).toContain("if (result.ok) interactionFeedback.success()");
     expect(plans).toContain("interactionFeedback.error()");
     expect(plans).toContain("interactionFeedback.warning()");
     expect(plans).toContain("interactionFeedback.selection()");
+
+    // RSVP deliberately declares `result` before the try/catch so a rejected
+    // Server Action can restore the optimistic state. Assert ordering rather
+    // than requiring a brittle `const result = await ...` spelling.
+    const rsvp = plans.slice(plans.indexOf("function changeRsvp"), plans.indexOf("function vote("));
+    expect(rsvp.indexOf("result = await rsvpAction(planId, rsvp)")).toBeGreaterThanOrEqual(0);
+    expect(rsvp.indexOf("interactionFeedback.success()")).toBeGreaterThan(
+      rsvp.indexOf("result = await rsvpAction(planId, rsvp)")
+    );
+    expect(rsvp.lastIndexOf("interactionFeedback.error()")).toBeGreaterThan(
+      rsvp.indexOf("result = await rsvpAction(planId, rsvp)")
+    );
 
     const create = plans.slice(plans.indexOf("function createPlan(input"));
     expect(create.indexOf("const result = await createPlanAction")).toBeGreaterThanOrEqual(0);
