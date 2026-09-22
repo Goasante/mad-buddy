@@ -1,5 +1,6 @@
 import "server-only";
 
+import { sendTransactionalUserEmail } from "@/lib/email/transactional";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   BillingEventSource,
@@ -56,7 +57,13 @@ export async function loadSubscriptionSnapshot(admin: Admin, userId: string): Pr
 export async function recordBillingEvent(admin: Admin, event: BillingInsert): Promise<boolean> {
   const normalized = normalizePaymentFeeFields(event);
   const { error } = await admin.from("billing_events").insert(normalized);
-  if (!error) return true;
+  if (!error) {
+    // The financial fact is authoritative. Email is an additional delivery
+    // channel, so a provider outage must never roll back or invalidate the
+    // already-recorded billing event.
+    await sendBillingTransactionalEmailBestEffort(admin, normalized);
+    return true;
+  }
   if (error.code === "23505") {
     // A webhook and the verified return page may race. The first delivery owns
     // the immutable financial fact; a later verified response may only enrich
@@ -83,6 +90,70 @@ export async function recordBillingEvent(admin: Admin, event: BillingInsert): Pr
     return true;
   }
   throw new Error(error.message);
+}
+
+async function sendBillingTransactionalEmailBestEffort(admin: Admin, event: BillingInsert) {
+  if (!event.user_id || !event.dedupe_key) return;
+  const copy = billingEmailCopy(event.event_type, event.subscription_plan ?? null);
+  if (!copy) return;
+
+  try {
+    await sendTransactionalUserEmail(admin, {
+      userId: event.user_id,
+      subject: copy.subject,
+      message: copy.message,
+      idempotencyKey: `billing-email/${event.dedupe_key}`
+    });
+  } catch {
+    // Billing state remains the source of truth even if the email provider is
+    // temporarily unavailable. In-app notices and the account UI still show
+    // the canonical status.
+  }
+}
+
+function billingEmailCopy(eventType: BillingEventType, plan: string | null) {
+  const planName = billingPlanName(plan);
+  switch (eventType) {
+    case "subscription_activated":
+      return {
+        subject: `${planName} is active`,
+        message: `Your ${planName} access is now active. You can open Mad Buddy to use your included benefits.`
+      };
+    case "payment_failed":
+      return {
+        subject: "Payment needs attention",
+        message: "Your Mad Buddy renewal did not go through. Please review your payment details to avoid losing paid access."
+      };
+    case "payment_recovered":
+      return {
+        subject: "Payment received",
+        message: `Your payment was received and your ${planName} access is back in good standing.`
+      };
+    case "subscription_cancelled":
+      return {
+        subject: "Subscription update",
+        message: `Your ${planName} subscription has been cancelled. Open Mad Buddy to review your current access and billing status.`
+      };
+    case "plan_upgraded":
+      return {
+        subject: "Your Mad Buddy plan was upgraded",
+        message: `Your account has been upgraded to ${planName}. Your new benefits are available in Mad Buddy.`
+      };
+    case "plan_downgraded":
+      return {
+        subject: "Your Mad Buddy plan changed",
+        message: `Your account is now on ${planName}. Open Mad Buddy to review the benefits included with your current plan.`
+      };
+    default:
+      return null;
+  }
+}
+
+function billingPlanName(plan: string | null) {
+  if (plan === "buddy_plus") return "Buddy Plus";
+  if (plan === "buddy_pro") return "Buddy Pro";
+  if (plan === "mad_buddy_access") return "Mad Buddy Access";
+  return "Mad Buddy subscription";
 }
 
 function normalizePaymentFeeFields(event: BillingInsert): BillingInsert {
