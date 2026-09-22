@@ -19,11 +19,11 @@ feedback.longPress();
 feedback.snap();
 ```
 
-`lib/feedback/feedback.ts` owns the semantic product vocabulary and native-bridge event. `lib/device/haptics.ts` remains the canonical low-level browser Vibration API adapter. New product surfaces should never call `navigator.vibrate` directly.
+`lib/feedback/feedback.ts` owns the semantic product vocabulary. `lib/device/haptics.ts` remains the canonical low-level browser Vibration API adapter. New product surfaces should never call `navigator.vibrate` directly.
 
 - **iPhone PWA:** no general browser vibration API. Keep the visual response; the feedback call safely no-ops for vibration.
 - **Android PWA:** use the restrained Vibration API pattern when supported through the shared device adapter.
-- **Future Capacitor iOS/Android:** listen for the cancelable `mad-buddy:feedback` event, fire the native haptic, then call `preventDefault()` so browser vibration cannot double-fire.
+- **Future Capacitor iOS/Android:** the native bootstrap registers a handler through `registerNativeFeedbackHandler()`. The handler starts the native haptic and returns `true`, so browser vibration does not double-fire. This stays inside application modules rather than broadcasting semantic activity as a global DOM event.
 - Never gate success, navigation, or server state on feedback support. Feedback is an enhancement only.
 - Never vibrate from a hidden/background page.
 
