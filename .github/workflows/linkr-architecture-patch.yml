@@ -25,74 +25,115 @@ jobs:
           def replace_once(path: str, old: str, new: str):
               p = Path(path)
               text = p.read_text()
-              count = text.count(old)
-              if count < 1:
-                  raise SystemExit(f"Expected snippet missing in {path}: {old[:80]!r}")
-              text = text.replace(old, new, 1)
-              p.write_text(text)
+              if old not in text:
+                  raise SystemExit(f"Expected snippet missing in {path}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1))
 
-          # Route Linkr right-swipes through the private reciprocity service.
-          replace_once(
-              "app/(app)/actions.ts",
-              'import { updateProfile } from "@/lib/profile/service";\n',
-              'import { updateProfile } from "@/lib/profile/service";\nimport { sendLinkrInterest } from "@/lib/social/linkr-interest";\n'
-          )
-          replace_once(
-              "app/(app)/actions.ts",
-              '  const result = await sendFriendRequest(userId, targetUserId, source);\n\n  if (result.ok) {',
-              '  const result =\n    source === "socialize"\n      ? await sendLinkrInterest(await createSupabaseServerClient(), userId, targetUserId)\n      : await sendFriendRequest(userId, targetUserId, source);\n\n  if (result.ok) {'
-          )
+          # Keep ALL pending requests visible to the server regardless of age.
+          # Only declined Linkr interest needs the 30-day lookup window.
+          old = '''    const requestCutoffIso = new Date(Date.parse(nowIso) - LINKR_PASS_COOLDOWN_MS).toISOString();
+    const { data: requests } = await admin
+      .from("friend_requests")
+      .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
+      .in("status", ["pending", "declined"])
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .gte("created_at", requestCutoffIso);
 
-          # Hidden Linkr interests must never appear in the ordinary Requests
-          # inbox or its badge. NULL/legacy contexts remain visible.
-          replace_once(
-              "lib/friends/service.ts",
-              '    .eq("receiver_id", userId)\n    .eq("status", "pending");\n\n  return error ? 0 : count ?? 0;',
-              '    .eq("receiver_id", userId)\n    .eq("status", "pending")\n    .or("context_type.is.null,context_type.neq.socialize");\n\n  return error ? 0 : count ?? 0;'
-          )
-          replace_once(
-              "lib/friends/service.ts",
-              '    .eq("receiver_id", userId)\n    .eq("status", "pending")\n    .order("created_at", { ascending: false })\n    .limit(100);',
-              '    .eq("receiver_id", userId)\n    .eq("status", "pending")\n    .or("context_type.is.null,context_type.neq.socialize")\n    .order("created_at", { ascending: false })\n    .limit(100);'
-          )
+    const pendingRequests = (requests ?? []).filter((request) => request.status === "pending");
+    const sentTo = new Set(
+      pendingRequests.filter((request) => request.sender_id === userId).map((request) => request.receiver_id)
+    );
+    // Ordinary incoming requests remain visible through their normal Accept
+    // state. Linkr interest is different: it stays private until reciprocal.
+    const receivedFrom = new Set(
+      pendingRequests
+        .filter((request) => request.receiver_id === userId && request.context_type !== "socialize")
+        .map((request) => request.sender_id)
+    );
+    const inboundLinkrInterest = new Map<string, string>();
+    for (const request of pendingRequests) {
+      if (request.receiver_id === userId && request.context_type === "socialize") {
+        const existing = inboundLinkrInterest.get(request.sender_id);
+        if (!existing || Date.parse(request.created_at) > Date.parse(existing)) {
+          inboundLinkrInterest.set(request.sender_id, request.created_at);
+        }
+      }
+    }
+    const recentDeclinedOutgoing = new Set(
+      (requests ?? [])
+        .filter((request) => {
+          if (request.sender_id !== userId || request.context_type !== "socialize" || request.status !== "declined") return false;
+          const declinedAt = Date.parse(request.responded_at ?? request.created_at);
+          return Number.isFinite(declinedAt) && Date.parse(nowIso) - declinedAt < LINKR_PASS_COOLDOWN_MS;
+        })
+        .map((request) => request.receiver_id)
+    );'''
+          new = '''    const requestCutoffIso = new Date(Date.parse(nowIso) - LINKR_PASS_COOLDOWN_MS).toISOString();
+    const [pendingRequestResult, declinedRequestResult] = await Promise.all([
+      admin
+        .from("friend_requests")
+        .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
+        .eq("status", "pending")
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
+      admin
+        .from("friend_requests")
+        .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
+        .eq("sender_id", userId)
+        .eq("status", "declined")
+        .eq("context_type", "socialize")
+        .gte("responded_at", requestCutoffIso)
+    ]);
 
-          # The prior Linkr integration touched this existing achievement hook;
-          # restore the original first-ping award without changing reply awards.
-          replace_once(
-              "app/(app)/social-actions.ts",
-              '    await grantAchievement(admin, userId, "thoughtful_reply");\n  }\n\n  logBackendEvent("info", { requestId, action: "ping.create",',
-              '    await grantAchievement(admin, userId, "first_ping");\n  }\n\n  logBackendEvent("info", { requestId, action: "ping.create",'
-          )
+    const pendingRequests = pendingRequestResult.data ?? [];
+    const sentTo = new Set(
+      pendingRequests.filter((request) => request.sender_id === userId).map((request) => request.receiver_id)
+    );
+    // Ordinary incoming requests remain visible through their normal Accept
+    // state. Linkr interest is different: it stays private until reciprocal.
+    const receivedFrom = new Set(
+      pendingRequests
+        .filter((request) => request.receiver_id === userId && request.context_type !== "socialize")
+        .map((request) => request.sender_id)
+    );
+    const inboundLinkrInterest = new Map<string, string>();
+    for (const request of pendingRequests) {
+      if (request.receiver_id === userId && request.context_type === "socialize") {
+        const existing = inboundLinkrInterest.get(request.sender_id);
+        if (!existing || Date.parse(request.created_at) > Date.parse(existing)) {
+          inboundLinkrInterest.set(request.sender_id, request.created_at);
+        }
+      }
+    }
+    const recentDeclinedOutgoing = new Set(
+      (declinedRequestResult.data ?? []).map((request) => request.receiver_id)
+    );'''
+          replace_once("lib/social/socialize-mobile.ts", old, new)
 
-          # The toast should reflect either a saved private choice or a mutual
-          # match, rather than always claiming a visible request was sent.
-          replace_once(
-              "components/socialize/socialize-page.tsx",
-              '        interactionFeedback.wave();\n        showToast(`Muddy request sent to ${capitalize(person.displayName || person.username)}.`);',
-              '        interactionFeedback.wave();\n        showToast(result.message || `Choice saved for ${capitalize(person.displayName || person.username)}.`);'
-          )
+          # Server-side enforcement: the admin escalation is available only
+          # after the three-rewind allowance is actually exhausted. A crafted
+          # request cannot skip straight to staff review.
+          old = '''  if (passError) return { ok: false, message: "Couldn't prepare that request. Try again." };
+  if (!pass) return { ok: true, message: "That profile is already eligible to appear again." };
 
-          # Build an entirely server-side inbound-interest signal. It changes
-          # ordering only; no field carrying the signal reaches the client.
-          replace_once(
-              "lib/social/socialize-mobile.ts",
-              'const PROXIMITY_RANK: Record<string, number> = { close: 0, near: 1, far: 2 };',
-              '''const PROXIMITY_RANK: Record<string, number> = { close: 0, near: 1, far: 2 };\nconst LINKR_INTEREST_BOOST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;\nconst LINKR_INTEREST_MAX_BOOST = 0.85;\nconst LINKR_PASS_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;\n\nfunction inboundLinkrInterestBoost(createdAt: string | undefined, nowMs: number) {\n  if (!createdAt) return 0;\n  const ageMs = nowMs - Date.parse(createdAt);\n  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= LINKR_INTEREST_BOOST_WINDOW_MS) return 0;\n  return LINKR_INTEREST_MAX_BOOST * (1 - ageMs / LINKR_INTEREST_BOOST_WINDOW_MS);\n}'''
-          )
+  const supportLimit = await consumeRateLimit({ action: "support.request", userId, requestId });'''
+          new = '''  if (passError) return { ok: false, message: "Couldn't prepare that request. Try again." };
+  if (!pass) return { ok: true, message: "That profile is already eligible to appear again." };
 
-          old_requests = '''    const { data: requests } = await admin\n      .from("friend_requests")\n      .select("sender_id, receiver_id, status")\n      .eq("status", "pending")\n      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);\n    const sentTo = new Set(\n      (requests ?? []).filter((request) => request.sender_id === userId).map((request) => request.receiver_id)\n    );\n    const receivedFrom = new Set(\n      (requests ?? []).filter((request) => request.receiver_id === userId).map((request) => request.sender_id)\n    );'''
-          new_requests = '''    const requestCutoffIso = new Date(Date.parse(nowIso) - LINKR_PASS_COOLDOWN_MS).toISOString();\n    const { data: requests } = await admin\n      .from("friend_requests")\n      .select("sender_id, receiver_id, status, context_type, created_at, responded_at")\n      .in("status", ["pending", "declined"])\n      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)\n      .gte("created_at", requestCutoffIso);\n\n    const pendingRequests = (requests ?? []).filter((request) => request.status === "pending");\n    const sentTo = new Set(\n      pendingRequests.filter((request) => request.sender_id === userId).map((request) => request.receiver_id)\n    );\n    // Ordinary incoming requests remain visible through their normal Accept\n    // state. Linkr interest is different: it stays private until reciprocal.\n    const receivedFrom = new Set(\n      pendingRequests\n        .filter((request) => request.receiver_id === userId && request.context_type !== "socialize")\n        .map((request) => request.sender_id)\n    );\n    const inboundLinkrInterest = new Map<string, string>();\n    for (const request of pendingRequests) {\n      if (request.receiver_id === userId && request.context_type === "socialize") {\n        const existing = inboundLinkrInterest.get(request.sender_id);\n        if (!existing || Date.parse(request.created_at) > Date.parse(existing)) {\n          inboundLinkrInterest.set(request.sender_id, request.created_at);\n        }\n      }\n    }\n    const recentDeclinedOutgoing = new Set(\n      (requests ?? [])\n        .filter((request) => {\n          if (request.sender_id !== userId || request.context_type !== "socialize" || request.status !== "declined") return false;\n          const declinedAt = Date.parse(request.responded_at ?? request.created_at);\n          return Number.isFinite(declinedAt) && Date.parse(nowIso) - declinedAt < LINKR_PASS_COOLDOWN_MS;\n        })\n        .map((request) => request.receiver_id)\n    );'''
-          replace_once("lib/social/socialize-mobile.ts", old_requests, new_requests)
+  const { data: rewindWindow } = await admin
+    .from("rate_limits")
+    .select("count, window_end")
+    .eq("user_id", userId)
+    .eq("action", "linkr.undo")
+    .gt("window_end", new Date().toISOString())
+    .order("window_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!rewindWindow || rewindWindow.count < 3) {
+    return { ok: false, message: "Use your available Linkr rewinds first. Admin review opens after all 3 are used." };
+  }
 
-          replace_once(
-              "lib/social/socialize-mobile.ts",
-              '      const session = sessionByUserId.get(candidate.friend_id);\n      if (!session) continue;',
-              '      const session = sessionByUserId.get(candidate.friend_id);\n      if (!session) continue;\n      // When this viewer\'s earlier Linkr interest was passed on, give the pair\n      // the same 30-day breathing room as the recipient\'s pass.\n      if (recentDeclinedOutgoing.has(candidate.friend_id)) continue;'
-          )
-
-          old_sort = '''    people.sort((a, b) => {\n      const tierDiff = PROXIMITY_RANK[a.proximityTier] - PROXIMITY_RANK[b.proximityTier];\n      if (tierDiff !== 0) return tierDiff;\n      const aStart = Date.parse(sessionByUserId.get(a.userId)?.starts_at ?? "");\n      const bStart = Date.parse(sessionByUserId.get(b.userId)?.starts_at ?? "");\n      if (aStart !== bStart) return bStart - aStart;\n      return a.displayName.localeCompare(b.displayName);\n    });'''
-          new_sort = '''    const sortNowMs = Date.parse(nowIso);\n    people.sort((a, b) => {\n      // Private reciprocity boost: fresh inbound Linkr interest moves someone\n      // forward within the normal discovery order, but never by a whole\n      // proximity tier. The signal remains server-only and decays to zero.\n      const aScore =\n        PROXIMITY_RANK[a.proximityTier] -\n        inboundLinkrInterestBoost(inboundLinkrInterest.get(a.userId), sortNowMs);\n      const bScore =\n        PROXIMITY_RANK[b.proximityTier] -\n        inboundLinkrInterestBoost(inboundLinkrInterest.get(b.userId), sortNowMs);\n      if (aScore !== bScore) return aScore - bScore;\n      const aStart = Date.parse(sessionByUserId.get(a.userId)?.starts_at ?? "");\n      const bStart = Date.parse(sessionByUserId.get(b.userId)?.starts_at ?? "");\n      if (aStart !== bStart) return bStart - aStart;\n      return a.displayName.localeCompare(b.displayName);\n    });'''
-          replace_once("lib/social/socialize-mobile.ts", old_sort, new_sort)
+  const supportLimit = await consumeRateLimit({ action: "support.request", userId, requestId });'''
+          replace_once("app/(app)/social-actions.ts", old, new)
           PY
 
       - name: Install dependencies
@@ -113,6 +154,6 @@ jobs:
           fi
           git config user.name "Mad Buddy Automation"
           git config user.email "actions@users.noreply.github.com"
-          git add app/'(app)'/actions.ts app/'(app)'/social-actions.ts lib/friends/service.ts lib/social/socialize-mobile.ts components/socialize/socialize-page.tsx
-          git commit -m "Integrate private reciprocal Linkr discovery"
+          git add app/'(app)'/social-actions.ts lib/social/socialize-mobile.ts
+          git commit -m "Tighten Linkr reciprocity and rewind review"
           git push origin HEAD:main
