@@ -27,6 +27,17 @@ describe("final Linkr architecture review", () => {
     expect(typeBlock).not.toContain("clickedYou");
   });
 
+  it("makes a temporary pass a private pair-wide 30-day breathing room", () => {
+    const candidates = read("lib/linkr/candidate-service.ts");
+    const service = read("lib/linkr/connection-service.ts");
+    expect(candidates).toContain("inboundPassedIds");
+    expect(candidates).toContain("if (inboundPassedIds.has(id)) continue");
+    expect(service).toContain("reciprocalPass");
+    expect(service).toContain('.eq("actor_id", targetId)');
+    expect(service).toContain('.eq("target_id", viewerId)');
+    expect(service).toContain('.eq("action", "connect")');
+  });
+
   it("keeps Linkr matches separate from Muddy friendships", () => {
     const service = read("lib/linkr/connection-service.ts");
     const foundation = read("supabase/migrations/20260818130000_linkr_2_foundation.sql");
@@ -40,6 +51,13 @@ describe("final Linkr architecture review", () => {
     expect(admin).not.toContain('from("discovery_passes")');
     expect(admin).not.toContain('from("friend_requests")');
     expect(admin).toContain("isBlockedEitherDirection");
+  });
+
+  it("marks an admin rewind review complete in the client after success", () => {
+    const review = read("components/admin/support/linkr-reversal-review.tsx");
+    expect(review).toContain("const [isReviewed, setIsReviewed] = useState(reviewed)");
+    expect(review).toContain("if (result.ok) setIsReviewed(true)");
+    expect(review).toContain("{!isReviewed ? (");
   });
 
   it("does not route old Socialize through a second Linkr authority", () => {

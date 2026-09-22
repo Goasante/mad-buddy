@@ -4,6 +4,18 @@ Written **before** any lifecycle change, per the tranche brief. Records what
 already exists so this work extends single authorities instead of creating
 second ones.
 
+> **22 September 2026 final-review update.** The authorities below remain the
+> authorities. Two privacy-preserving behaviours were subsequently added inside
+> them: `candidate-service.ts` may read incoming one-sided Connects only as a
+> server-side, decaying ranking nudge (never as client-visible state), and an
+> active temporary Pass suppresses the pair in both discovery directions for
+> the same 30-day window. `connectWithCandidate` re-checks that reciprocal Pass
+> against stale cards, and making a Pass quietly retires any older one-sided
+> Connect from the passed person so a future connection requires a fresh choice.
+> Ordinary Pass undo is limited to three per server day; further immediate undo
+> attempts create a deduplicated support-review ticket. None of these behaviours
+> turn a Linkr connection into a Muddy friendship.
+
 Base: `origin/main` @ `4cd05ec`, plus the two approved Linkr commits
 (heart→wave, hide→blocked list).
 

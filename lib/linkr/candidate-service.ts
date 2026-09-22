@@ -190,6 +190,7 @@ export async function discoverLinkrCandidates(
     { data: locations },
     { data: actions },
     { data: inboundConnects },
+    { data: inboundPasses },
     { data: connections },
     photosByUser,
     { data: interestRows },
@@ -226,6 +227,17 @@ export async function discoverLinkrCandidates(
       .eq("target_id", viewerId)
       .eq("action", "connect")
       .in("actor_id", candidateIds),
+    // A temporary Pass gives the PAIR breathing room. The person who was
+    // passed does not learn why the other profile disappeared; they simply
+    // cannot encounter that profile again until the same 30-day window ends.
+    admin
+      .from("linkr_actions")
+      .select("actor_id")
+      .eq("target_id", viewerId)
+      .eq("action", "pass")
+      .not("expires_at", "is", null)
+      .gt("expires_at", new Date(nowMs).toISOString())
+      .in("actor_id", candidateIds),
     admin
       .from("linkr_connections")
       .select("user_low, user_high")
@@ -261,6 +273,7 @@ export async function discoverLinkrCandidates(
   const inboundConnectAt = new Map(
     (inboundConnects ?? []).map((row) => [row.actor_id, row.updated_at])
   );
+  const inboundPassedIds = new Set((inboundPasses ?? []).map((row) => row.actor_id));
 
   const profileByUserId = new Map(
     ((profiles ?? []) as NearbyProfileRow[]).map((profile) => [profile.user_id, profile])
@@ -346,6 +359,10 @@ export async function discoverLinkrCandidates(
       restricted: restrictedIds.has(id),
       deleted: Boolean(profile.deleted_at)
     });
+
+    // Reciprocal 30-day cooldown. This is an eligibility rule, not a
+    // ranking penalty: a profile cannot be boosted around somebody's Pass.
+    if (inboundPassedIds.has(id)) continue;
 
     const verdict = isCandidateEligible({
       isSelf: id === viewerId,

@@ -86,6 +86,18 @@ export async function passCandidate(
       { onConflict: "actor_id,target_id" }
     );
   if (error) return { ok: false, message: "Couldn't do that. Try again." };
+
+  // Passing is a consent boundary, not just a feed preference. Quietly retire
+  // an older one-sided Connect from the person who was passed. After the
+  // cooldown they may encounter this user again, but must choose them again.
+  // There is deliberately no notification or observable rejection state.
+  await admin
+    .from("linkr_actions")
+    .delete()
+    .eq("actor_id", targetId)
+    .eq("target_id", viewerId)
+    .eq("action", "connect");
+
   return { ok: true, message: "" };
 }
 
@@ -119,6 +131,20 @@ export async function connectWithCandidate(
     // caller "you are blocked" would turn Connect into a block detector.
     return { ok: true, matched: false, message: "" };
   }
+
+  // A pass made after this card was loaded must also win. The neutral success
+  // response preserves the same privacy property as blocks: Connect cannot be
+  // used to discover that the other person passed.
+  const { data: reciprocalPass } = await admin
+    .from("linkr_actions")
+    .select("id")
+    .eq("actor_id", targetId)
+    .eq("target_id", viewerId)
+    .eq("action", "pass")
+    .not("expires_at", "is", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (reciprocalPass) return { ok: true, matched: false, message: "" };
 
   // The card is a snapshot. Re-check non-negotiable eligibility immediately
   // before recording interest so a disabled, hidden, deleted, underage, or

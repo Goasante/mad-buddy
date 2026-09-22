@@ -21,12 +21,14 @@ export function LinkrReversalReview({
 }) {
   const [pending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState("");
+  const [isReviewed, setIsReviewed] = useState(reviewed);
 
   function review(decision: "approve" | "reject") {
     setFeedback("");
     startTransition(async () => {
       const result = await reviewLinkrPassReversalAction({ ticketId, decision });
       setFeedback(result.message);
+      if (result.ok) setIsReviewed(true);
     });
   }
 
@@ -51,7 +53,7 @@ export function LinkrReversalReview({
             </p>
           </div>
 
-          {!reviewed ? (
+          {!isReviewed ? (
             <div className="mt-4 flex flex-wrap gap-2">
               <Button type="button" size="sm" disabled={pending} onClick={() => review("approve")}>
                 {pending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
