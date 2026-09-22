@@ -1,7 +1,7 @@
 import "server-only";
 
 import { buildMadBuddyAdminEmailHtml } from "@/lib/email/template";
-import { sendMadBuddyEmail } from "@/lib/email/send";
+import { sendMadBuddyEmail, type SendEmailResult } from "@/lib/email/send";
 import { allowsBroadcastKind, emailPreferencesFromNotificationBlob } from "@/lib/email/preferences";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -9,6 +9,8 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 export const BROADCAST_JOB_TYPE = "communications.broadcast_email" as const;
 export const BROADCAST_PAGE_SIZE = 50;
+const SEND_SPACING_MS = 150;
+const PROVIDER_ATTEMPTS = 3;
 
 export type BroadcastAudience = "all_active" | "free" | "paid" | "buddy_plus" | "buddy_pro";
 export type BroadcastKind = "service_notice" | "product_update" | "feature_launch" | "community_reminder";
@@ -25,6 +27,7 @@ type BroadcastPayload = {
   sent: number;
   failed: number;
   skipped: number;
+  runId?: string;
 };
 
 class BroadcastJobError extends Error {
@@ -96,35 +99,42 @@ export async function handleBroadcastEmailJob(admin: Admin, rawPayload: Record<s
 
   let sent = 0;
   let failed = 0;
+  let retryableFailures = 0;
 
-  for (let index = 0; index < eligible.length; index += 5) {
-    const chunk = eligible.slice(index, index + 5);
-    const results = await Promise.all(
-      chunk.map((user) =>
-        sendMadBuddyEmail({
-          to: user.email!,
-          subject: payload.subject,
-          text,
-          html,
-          idempotencyKey: `broadcast/${payload.campaignId}/${user.id}`
-        })
-      )
-    );
+  // Send deliberately below Resend's normal API request ceiling. The previous
+  // implementation fired groups of five in parallel with no pacing, which can
+  // turn a healthy broadcast into a page of 429 responses.
+  for (let index = 0; index < eligible.length; index += 1) {
+    const user = eligible[index];
+    const result = await sendRecipientWithRetry({
+      to: user.email!,
+      subject: payload.subject,
+      text,
+      html,
+      idempotencyKey: `broadcast/${payload.campaignId}/${user.id}`
+    });
 
-    for (const result of results) {
-      if (result.ok) sent += 1;
-      else failed += 1;
+    if (result.ok) {
+      sent += 1;
+    } else {
+      failed += 1;
+      if (isRetryableFailure(result)) retryableFailures += 1;
     }
+
+    if (index < eligible.length - 1) await sleep(SEND_SPACING_MS);
   }
 
   const skipped = users.length - eligible.length;
   await updateJobProgress(admin, payload, { sent, failed, skipped });
 
-  // If the provider rejected the whole eligible page, retry this page instead
-  // of advancing. Successful retries remain duplicate-safe because every user
-  // has a stable Resend idempotency key for this campaign.
-  if (eligible.length > 0 && failed === eligible.length) {
-    throw new BroadcastJobError("PROVIDER_UNAVAILABLE", "The email provider rejected the entire broadcast page.");
+  // Retry the page when any temporary provider/network failure survives the
+  // local retries. Already-successful recipients keep the same Resend
+  // idempotency key, so the queue retry does not send them twice.
+  if (retryableFailures > 0) {
+    throw new BroadcastJobError(
+      "PROVIDER_UNAVAILABLE",
+      `${retryableFailures} broadcast deliveries hit a temporary provider failure.`
+    );
   }
 
   if (users.length === BROADCAST_PAGE_SIZE) {
@@ -132,6 +142,34 @@ export async function handleBroadcastEmailJob(admin: Admin, rawPayload: Record<s
   }
 
   return sent;
+}
+
+async function sendRecipientWithRetry(input: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  idempotencyKey: string;
+}): Promise<SendEmailResult> {
+  let last: SendEmailResult = { ok: false, errorCode: "resend_request_failed" };
+
+  for (let attempt = 1; attempt <= PROVIDER_ATTEMPTS; attempt += 1) {
+    last = await sendMadBuddyEmail(input);
+    if (last.ok || !isRetryableFailure(last) || attempt === PROVIDER_ATTEMPTS) return last;
+
+    const providerDelay = !last.ok ? last.retryAfterMs ?? 0 : 0;
+    const backoff = Math.max(providerDelay, 500 * attempt);
+    await sleep(Math.min(backoff, 5_000));
+  }
+
+  return last;
+}
+
+function isRetryableFailure(result: SendEmailResult) {
+  if (result.ok) return false;
+  if (result.errorCode === "resend_request_failed" || result.errorCode === "concurrent_idempotent_requests") return true;
+  if (result.httpStatus === 429) return true;
+  return typeof result.httpStatus === "number" && result.httpStatus >= 500;
 }
 
 async function enqueueNextPage(admin: Admin, payload: BroadcastPayload) {
@@ -150,12 +188,10 @@ async function enqueueNextPage(admin: Admin, payload: BroadcastPayload) {
     priority: 4,
     status: "queued",
     max_attempts: 5,
-    idempotency_key: broadcastJobKey(payload.campaignId, nextPage),
+    idempotency_key: broadcastJobKey(payload.campaignId, nextPage, payload.runId),
     run_at: new Date().toISOString()
   });
 
-  // A retry can race with a previously inserted continuation. The unique
-  // idempotency key makes that harmless.
   if (error && error.code !== "23505") {
     throw new BroadcastJobError("DATABASE_TIMEOUT", error.message);
   }
@@ -170,13 +206,15 @@ async function updateJobProgress(
   const { error } = await admin
     .from("jobs")
     .update({ payload: nextPayload })
-    .eq("idempotency_key", broadcastJobKey(payload.campaignId, payload.page));
+    .eq("idempotency_key", broadcastJobKey(payload.campaignId, payload.page, payload.runId));
 
   if (error) throw new BroadcastJobError("DATABASE_TIMEOUT", error.message);
 }
 
-export function broadcastJobKey(campaignId: string, page: number) {
-  return `communications:${campaignId}:page:${page}`;
+export function broadcastJobKey(campaignId: string, page: number, runId?: string) {
+  return runId
+    ? `communications:${campaignId}:run:${runId}:page:${page}`
+    : `communications:${campaignId}:page:${page}`;
 }
 
 function matchesAudience(
@@ -206,6 +244,7 @@ function parsePayload(value: Record<string, unknown>): BroadcastPayload | null {
   const subject = stringValue(value.subject, 120);
   const message = stringValue(value.message, 5000);
   const createdBy = stringValue(value.createdBy, 80);
+  const runId = value.runId === undefined ? undefined : stringValue(value.runId, 80) ?? undefined;
   const audience = value.audience;
   const kind = value.kind;
   const page = typeof value.page === "number" && Number.isInteger(value.page) && value.page >= 1 ? value.page : null;
@@ -236,7 +275,8 @@ function parsePayload(value: Record<string, unknown>): BroadcastPayload | null {
     page,
     sent: numericCount(value.sent),
     failed: numericCount(value.failed),
-    skipped: numericCount(value.skipped)
+    skipped: numericCount(value.skipped),
+    ...(runId ? { runId } : {})
   };
 }
 
@@ -248,4 +288,8 @@ function stringValue(value: unknown, max: number) {
 
 function numericCount(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
