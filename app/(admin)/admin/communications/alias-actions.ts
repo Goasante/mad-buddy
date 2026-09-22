@@ -34,13 +34,26 @@ export async function createEmailAliasAction(input: unknown): Promise<AliasActio
       actorId: context.userId,
       action: "admin_email_alias_create_requested",
       targetType: "email_alias",
-      targetId: requestedAddress,
-      newState: { address: requestedAddress },
+      newState: { address: requestedAddress, provider: "cloudflare_email_routing" },
       reason: "Create Cloudflare Email Routing alias"
     });
     if (!logged) return { ok: false, message: "The audit entry could not be recorded, so the alias was not created." };
 
     const alias = await createMadBuddyEmailAlias(parsed.data.localPart);
+
+    await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: "admin_email_alias_created",
+      targetType: "email_alias",
+      newState: {
+        address: alias.address,
+        provider: "cloudflare_email_routing",
+        providerRuleId: alias.id,
+        enabled: alias.enabled
+      },
+      reason: "Cloudflare Email Routing alias created"
+    });
+
     revalidatePath("/admin/communications");
     return { ok: true, message: `${alias.address} is ready to receive forwarded mail.` };
   } catch (error) {
@@ -68,13 +81,30 @@ export async function deleteEmailAliasAction(input: unknown): Promise<AliasActio
       actorId: context.userId,
       action: "admin_email_alias_delete_requested",
       targetType: "email_alias",
-      targetId: parsed.data.ruleId,
-      previousState: { address: parsed.data.address },
+      previousState: {
+        address: parsed.data.address,
+        provider: "cloudflare_email_routing",
+        providerRuleId: parsed.data.ruleId
+      },
       reason: "Delete Cloudflare Email Routing alias"
     });
     if (!logged) return { ok: false, message: "The audit entry could not be recorded, so the alias was not deleted." };
 
     await deleteMadBuddyEmailAlias(parsed.data.ruleId);
+
+    await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: "admin_email_alias_deleted",
+      targetType: "email_alias",
+      previousState: {
+        address: parsed.data.address,
+        provider: "cloudflare_email_routing",
+        providerRuleId: parsed.data.ruleId
+      },
+      newState: { deleted: true },
+      reason: "Cloudflare Email Routing alias deleted"
+    });
+
     revalidatePath("/admin/communications");
     return { ok: true, message: `${parsed.data.address} was removed.` };
   } catch (error) {
