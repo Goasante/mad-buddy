@@ -62,10 +62,23 @@ export async function sendAdminUserEmailAction(input: unknown): Promise<AdminUse
       return { ok: false, message: "The audit entry could not be recorded, so no email was sent." };
     }
 
+    const emailText = [
+      "Mad Buddy",
+      "",
+      parsed.data.message,
+      "",
+      "Warmly,",
+      "The Mad Buddy Team",
+      "hello@mad-buddy.com",
+      "mad-buddy.com",
+      "",
+      "When your friends are close, they glow."
+    ].join("\n");
+
     const result = await sendMadBuddyEmail({
       to: target.user.email,
       subject: parsed.data.subject,
-      text: `Mad Buddy\n\n${parsed.data.message}\n\nWhen your friends are close, they glow.`,
+      text: emailText,
       idempotencyKey: `admin-email/${context.userId}/${parsed.data.requestId}`
     });
 
