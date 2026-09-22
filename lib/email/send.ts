@@ -8,6 +8,7 @@ export async function sendMadBuddyEmail(input: {
   to: string;
   subject: string;
   text: string;
+  html?: string;
   idempotencyKey: string;
 }): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -29,7 +30,8 @@ export async function sendMadBuddyEmail(input: {
         from,
         to: [input.to],
         subject: input.subject,
-        text: input.text
+        text: input.text,
+        ...(input.html ? { html: input.html } : {})
       })
     });
 
