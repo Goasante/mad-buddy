@@ -3,9 +3,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  FEEDBACK_EVENT,
   FEEDBACK_VIBRATION_PATTERNS,
   feedbackPattern,
+  registerNativeFeedbackHandler,
   type FeedbackKind
 } from "@/lib/feedback/feedback";
 
@@ -60,8 +60,10 @@ describe("interaction feedback vocabulary", () => {
     expect(feedbackPattern("success")[0]).not.toBe(999);
   });
 
-  it("exposes one stable event name for a future Capacitor native bridge", () => {
-    expect(FEEDBACK_EVENT).toBe("mad-buddy:feedback");
+  it("exposes a registration seam for future native haptics without a global DOM event", () => {
+    expect(typeof registerNativeFeedbackHandler).toBe("function");
+    expect(semanticSource).not.toContain("window.dispatchEvent");
+    expect(semanticSource).not.toContain("CustomEvent");
   });
 
   it("keeps raw vibration in the canonical device adapter", () => {
