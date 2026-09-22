@@ -322,9 +322,10 @@ describe("dragging repositions the launcher without opening it", () => {
     expect(block).toContain("toggle()");
   });
 
-  it("snaps to the nearer edge on release", () => {
+  it("snaps to the nearer edge on release with semantic feedback", () => {
     expect(component).toContain('nextEdge: QuickActionsEdge');
     expect(component).toContain("settleIntoBounds(nextEdge");
+    expect(component).toContain("feedback.snap()");
   });
 
   it("clamps the vertical position within the safe band on every move", () => {
@@ -491,8 +492,10 @@ describe("haptics degrade silently", () => {
     expect(component).not.toContain("onScroll");
   });
 
-  it("confirms a completed drag with a tick, distinct from opening the sheet", () => {
+  it("confirms a completed drag with semantic snap feedback, distinct from opening the sheet", () => {
     const pointerUp = component.slice(component.indexOf("function onPointerUp"));
-    expect(pointerUp.slice(0, pointerUp.indexOf("function toggle"))).toContain('haptic("tick")');
+    const release = pointerUp.slice(0, pointerUp.indexOf("function toggle"));
+    expect(release).toContain("feedback.snap()");
+    expect(release.indexOf("feedback.snap()")).toBeGreaterThan(release.indexOf("saveQuickActionsPosition"));
   });
 });

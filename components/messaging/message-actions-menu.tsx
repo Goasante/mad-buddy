@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { useLongPress } from "@/hooks/use-long-press";
-import { haptic } from "@/lib/device/haptics";
+import { feedback } from "@/lib/feedback/feedback";
 import {
   isDestructiveMessageAction,
   MESSAGE_ACTION_LABELS,
@@ -44,7 +44,7 @@ export function MessageActionsMenu({
     () => {
       // The hold succeeded: acknowledge it under the finger before the menu
       // paints, so the gesture feels answered rather than merely obeyed.
-      haptic("tick");
+      feedback.longPress();
       setOpen(true);
     },
     { disabled: !hasActions }
@@ -61,7 +61,8 @@ export function MessageActionsMenu({
       index > 0 &&
       !isDestructiveMessageAction(available[index - 1]),
     onSelect: () => {
-      haptic("select");
+      if (isDestructiveMessageAction(action)) feedback.warning();
+      else feedback.selection();
       onAction(action);
     }
   }));

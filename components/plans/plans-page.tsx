@@ -42,6 +42,7 @@ import { PlanCover } from "@/components/plans/plan-cover";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { useAppMenu } from "@/hooks/app-menu-context";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 
 export type PlanInvitee = { id: string; name: string; username?: string | null; avatarUrl?: string | null; plan: SubscriptionPlan };
 
@@ -271,6 +272,7 @@ export function PlansPageContent({
           );
         }
         setFeedback("Couldn't save your RSVP. Try again.");
+        interactionFeedback.error();
         return;
       }
       if (!result.ok && previousRsvp !== undefined) {
@@ -278,6 +280,8 @@ export function PlansPageContent({
           current.map((plan) => (plan.id === planId ? { ...plan, myRsvp: previousRsvp } : plan))
         );
       }
+      if (result.ok) interactionFeedback.success();
+      else interactionFeedback.error();
       setFeedback(result.message);
       // Authoritative counts, roster statuses, and -- because reconciliation
       // runs inside the RSVP transaction -- the Plan Chat button appearing.
@@ -311,6 +315,8 @@ export function PlansPageContent({
     startTransition(async () => {
       const result = await votePollAction(pollId, [optionId]);
       setFeedback(result.message);
+      if (result.ok) interactionFeedback.selection();
+      else interactionFeedback.error();
       router.refresh();
     });
   }
@@ -324,6 +330,8 @@ export function PlansPageContent({
         options: options.map((label) => ({ label }))
       });
       setFeedback(result.message);
+      if (result.ok) interactionFeedback.success();
+      else interactionFeedback.error();
       router.refresh();
     });
   }
@@ -334,6 +342,8 @@ export function PlansPageContent({
          the host. This call is a convenience, never the authorization. */
       const result = await setPlanChatCloseWindowAction({ planId, days });
       setFeedback(result.message);
+      if (result.ok) interactionFeedback.success();
+      else interactionFeedback.error();
       if (result.ok) router.refresh();
     });
   }
@@ -342,6 +352,8 @@ export function PlansPageContent({
     startTransition(async () => {
       const result = await cancelPlanAction(planId);
       setFeedback(result.message);
+      if (result.ok) interactionFeedback.warning();
+      else interactionFeedback.error();
       if (result.ok) {
         setSelectedPlanId(null);
         router.refresh();
@@ -377,12 +389,14 @@ export function PlansPageContent({
       setIsCreating(false);
       setFeedback(result.message);
       if (!result.ok) {
+        interactionFeedback.error();
         /* STAY IN THE COMPOSER. A refused Plan keeps everything typed and says
          * why, right here -- navigating or closing would discard the work and
          * leave the person guessing what was wrong. */
         setCreateError(result.message);
         return;
       }
+      interactionFeedback.success();
       {
         createRequestKeyRef.current = null;
         setCreateError("");
@@ -470,7 +484,10 @@ export function PlansPageContent({
                   "focus-ring safe-motion inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium",
                   active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
-                onClick={() => setActiveBucket(tab.id)}
+                onClick={() => {
+                  if (!active) interactionFeedback.selection();
+                  setActiveBucket(tab.id);
+                }}
               >
                 {tab.label}
                 {showCount ? (

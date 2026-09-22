@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
+import { feedback } from "@/lib/feedback/feedback";
 import {
   LIVE_SIGNAL_DURATION_MS,
   parseLiveSignal,
@@ -20,6 +21,8 @@ type ActiveSignal = {
   id: string;
   title: string;
   subtitle: string;
+  /** Optional second line for a richer achievement celebration. */
+  detail: string | null;
   href: Route;
   /** Wave: the sender's avatar. Achievement: the badge artwork. */
   avatarUrl: string | null;
@@ -36,6 +39,11 @@ type ActiveSignal = {
  *
  * Delivery is a realtime subscription on the recipient's own notification rows
  * (RLS restricts the stream to `auth.uid() = user_id`).
+ *
+ * Feedback is semantic, not device-specific. The existing visual burst is the
+ * iPhone PWA experience; Android browsers additionally receive the restrained
+ * Vibration API pattern through lib/feedback/feedback. The same call site is
+ * ready for a future Capacitor native haptics bridge without changing this UI.
  *
  * THE POLL BELOW IS CONDITIONAL NOW (Vercel usage optimization pass). It used
  * to run unconditionally every 45s regardless of whether Realtime was
@@ -78,6 +86,13 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
       if (cancelled) return;
       window.clearTimeout(dismissTimer.current);
       setSignal(next);
+
+      // One semantic call, platform-adaptive underneath. iPhone PWA keeps the
+      // visual celebration only; supported Android PWAs add a short vibration;
+      // future native wrappers can intercept the same event for real haptics.
+      if (next.kind === "achievement") feedback.achievement();
+      else feedback.wave();
+
       dismissTimer.current = window.setTimeout(() => setSignal(null), LIVE_SIGNAL_DURATION_MS);
     };
 
@@ -105,6 +120,7 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
           kind: "achievement",
           title: "Achievement unlocked",
           subtitle: definition.name,
+          detail: definition.description,
           href: "/badges" as Route,
           avatarUrl: null,
           avatarName: definition.name,
@@ -137,6 +153,7 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
         kind: "wave",
         title: `${senderName} waved at you`,
         subtitle: senderUsername ? "Tap to wave back" : "Tap to open your Muddies",
+        detail: null,
         href: (senderUsername ? `/friends/${senderUsername}` : "/friends") as Route,
         avatarUrl: senderAvatarUrl,
         avatarName: senderName,
@@ -293,6 +310,7 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
   return (
     <div
       key={signal.id}
+      data-live-signal-kind={signal.kind}
       className="live-signal-stage fixed inset-0 z-[95] flex items-center justify-center px-6"
       role="status"
       aria-live="polite"
@@ -369,6 +387,11 @@ export function LiveSignalToast({ currentUserId }: { currentUserId: string | nul
           >
             {signal.subtitle}
           </button>
+          {signal.detail ? (
+            <p className="mt-2 max-w-[18rem] text-sm font-medium leading-relaxed text-foreground/75">
+              {signal.detail}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

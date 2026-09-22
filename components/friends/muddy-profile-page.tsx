@@ -32,6 +32,7 @@ import type { VisibleProfileFields } from "@/lib/profile/service";
 import type { ConfidenceLevel, ProximityLevel } from "@/lib/proximity";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
 import type { ProfileIdentitySummary } from "@/lib/profile/identity";
 
@@ -111,7 +112,12 @@ export function MuddyProfilePage({
     startWaveTransition(async () => {
       const result = await sendWaveV2Action(muddy.friendId, "profile");
       setWaveFeedback(result.message);
-      if (result.ok) setWaveSent(true);
+      if (result.ok) {
+        interactionFeedback.wave();
+        setWaveSent(true);
+      } else {
+        interactionFeedback.error();
+      }
     });
   }
 
@@ -147,15 +153,25 @@ export function MuddyProfilePage({
     startActionTransition(async () => {
       const result = await sendFriendRequestAction(muddy.friendId);
       setWaveFeedback(result.message);
-      if (result.ok) setRequestSent(true);
+      if (result.ok) {
+        interactionFeedback.success();
+        setRequestSent(true);
+      } else {
+        interactionFeedback.error();
+      }
     });
   }
 
   function blockPerson() {
     startActionTransition(async () => {
       const result = await blockUserAction(muddy.friendId);
-      if (result.ok) router.push("/friends");
-      else setWaveFeedback(result.message);
+      if (result.ok) {
+        interactionFeedback.warning();
+        router.push("/friends");
+      } else {
+        interactionFeedback.error();
+        setWaveFeedback(result.message);
+      }
     });
   }
 

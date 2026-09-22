@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { conversationHref } from "@/lib/messaging/open-conversation";
+import { feedback } from "@/lib/feedback/feedback";
 import { Button } from "@/components/ui/button";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import type { ProximityBand } from "@/lib/proximity/bands";
@@ -71,6 +72,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
       }
       // Already-generalised server copy: never a raw database error, and
       // never a reason that would reveal a block.
+      feedback.error();
       setWaveFeedback(result.message);
     });
   }
@@ -81,7 +83,12 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
     startWaveTransition(async () => {
       const result = await sendWaveV2Action(friendId, "profile");
       setWaveFeedback(result.message);
-      if (result.ok) setWaveSent(true);
+      if (result.ok) {
+        feedback.wave();
+        setWaveSent(true);
+      } else {
+        feedback.error();
+      }
     });
   }
 
@@ -192,6 +199,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
                     size="sm"
                     className="justify-start"
                     onClick={() => {
+                      feedback.selection();
                       onSendPing?.(prompt.message);
                       setPingOpen(false);
                     }}

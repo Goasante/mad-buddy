@@ -35,6 +35,7 @@ import { SafeArrivalSetup, type SafeArrivalSetupInput } from "@/components/safet
 import { PageHeader } from "@/components/app-shell/page-header";
 import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { conversationHref } from "@/lib/messaging/open-conversation";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 
 /**
  * Safe Arrival, both experiences.
@@ -128,18 +129,28 @@ export function SafeArrivalPage({
    * browser cannot stop a retried or replayed request. */
   const inFlightRef = useRef(false);
 
-  function runAction(action: () => Promise<{ ok: boolean; message: string; journey?: SafeArrivalJourney | null }>) {
+  function runAction(
+    action: () => Promise<{ ok: boolean; message: string; journey?: SafeArrivalJourney | null }>,
+    onSuccessFeedback?: () => void
+  ) {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     startTransition(async () => {
       try {
         const result = await action();
         setToast(result.message);
-        if (!result.ok) return;
+        if (!result.ok) {
+          interactionFeedback.error();
+          return;
+        }
+        onSuccessFeedback?.();
         // Adopt the canonical journey the server returned, then reconcile. `null`
         // (a cancel) clears the local copy so the Home screen returns at once.
         setOptimistic(result.journey ?? null);
         router.refresh();
+      } catch {
+        setToast("Couldn't update Safe Arrival. Check your connection and try again.");
+        interactionFeedback.error();
       } finally {
         // Released even on a thrown action, or one failure would strand every
         // later mutation on this screen.
@@ -151,18 +162,25 @@ export function SafeArrivalPage({
   function handleStart(input: SafeArrivalSetupInput) {
     setSetupError(null);
     startTransition(async () => {
-      const result = await createSafeArrivalAction(input);
-      if (!result.ok) {
-        // Keep the sheet open with every field intact so Retry is one tap.
-        setSetupError(result.message);
-        return;
+      try {
+        const result = await createSafeArrivalAction(input);
+        if (!result.ok) {
+          // Keep the sheet open with every field intact so Retry is one tap.
+          setSetupError(result.message);
+          interactionFeedback.error();
+          return;
+        }
+        interactionFeedback.success();
+        setSetupError(null);
+        setOptimistic(result.journey ?? null);
+        setDismissedArrival(null);
+        // Closed only now that the journey provably exists.
+        setSetupOpen(false);
+        router.refresh();
+      } catch {
+        interactionFeedback.error();
+        setSetupError("Couldn't start Safe Arrival. Check your connection and try again.");
       }
-      setSetupError(null);
-      setOptimistic(result.journey ?? null);
-      setDismissedArrival(null);
-      // Closed only now that the journey provably exists.
-      setSetupOpen(false);
-      router.refresh();
     });
   }
 
@@ -191,7 +209,9 @@ export function SafeArrivalPage({
           journey={watcherFocus}
           nowMs={nowMs}
           isPending={isPending}
-          onRespond={(response) => runAction(() => acknowledgeSafeArrivalAction(watcherFocus.id, response))}
+          onRespond={(response) =>
+            runAction(() => acknowledgeSafeArrivalAction(watcherFocus.id, response), () => interactionFeedback.success())
+          }
         />
       ) : arrivedJourney ? (
         <ArrivedJourneyView
@@ -208,14 +228,21 @@ export function SafeArrivalPage({
           journey={activeJourney}
           nowMs={nowMs}
           isPending={isPending}
-          onConfirm={() => runAction(() => confirmSafeArrivalAction(activeJourney.id))}
+          onConfirm={() =>
+            runAction(() => confirmSafeArrivalAction(activeJourney.id), () => interactionFeedback.importantSuccess())
+          }
           onExtend={(minutes) => {
             /* Minted per activation, so a retry of THIS intent is idempotent while a
                later, deliberate extension is a new intent with a new id. */
             const mutationId = crypto.randomUUID();
-            runAction(() => extendSafeArrivalAction(activeJourney.id, minutes, mutationId));
+            runAction(
+              () => extendSafeArrivalAction(activeJourney.id, minutes, mutationId),
+              () => interactionFeedback.success()
+            );
           }}
-          onCancel={() => runAction(() => cancelSafeArrivalAction(activeJourney.id))}
+          onCancel={() =>
+            runAction(() => cancelSafeArrivalAction(activeJourney.id), () => interactionFeedback.warning())
+          }
         />
       ) : (
         <SafeArrivalHome onStart={() => setSetupOpen(true)} />
