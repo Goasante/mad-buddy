@@ -613,7 +613,7 @@ export function ProfilePageContent({
                   label="Birthday"
                   size="compact"
                   className="min-w-0"
-                  triggerClassName="px-2"
+                  triggerClassName="!w-full !min-w-0 px-2"
                   value={birthdayVisibility}
                   options={BIRTH_VISIBILITY_OPTIONS}
                   onChange={setBirthdayVisibility}
@@ -622,7 +622,7 @@ export function ProfilePageContent({
                   label="Age"
                   size="compact"
                   className="min-w-0"
-                  triggerClassName="px-2"
+                  triggerClassName="!w-full !min-w-0 px-2"
                   value={ageVisibility}
                   options={BIRTH_VISIBILITY_OPTIONS}
                   onChange={setAgeVisibility}
@@ -631,7 +631,7 @@ export function ProfilePageContent({
                   label="Zodiac"
                   size="compact"
                   className="min-w-0"
-                  triggerClassName="px-2"
+                  triggerClassName="!w-full !min-w-0 px-2"
                   value={zodiacVisibility}
                   options={BIRTH_VISIBILITY_OPTIONS}
                   onChange={setZodiacVisibility}
