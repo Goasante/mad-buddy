@@ -36,7 +36,9 @@ export function AdminCommunicationsForm() {
   const [kind, setKind] = useState<Kind>("product_update");
   const [confirmation, setConfirmation] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [pending, startTransition] = useTransition();
+  const [testPending, startTestTransition] = useTransition();
+  const [broadcastPending, startBroadcastTransition] = useTransition();
+  const busy = testPending || broadcastPending;
 
   const complete = useMemo(
     () => campaignName.trim().length >= 2 && subject.trim().length >= 2 && message.trim().length >= 2,
@@ -45,7 +47,7 @@ export function AdminCommunicationsForm() {
 
   function sendTest() {
     setFeedback("");
-    startTransition(async () => {
+    startTestTransition(async () => {
       const result = await sendCommunicationTestAction({
         campaignName: campaignName.trim(),
         subject: subject.trim(),
@@ -61,7 +63,7 @@ export function AdminCommunicationsForm() {
   function queueCampaign() {
     const requestId = crypto.randomUUID();
     setFeedback("");
-    startTransition(async () => {
+    startBroadcastTransition(async () => {
       const result = await queueBroadcastCommunicationAction({
         campaignName: campaignName.trim(),
         subject: subject.trim(),
@@ -91,7 +93,7 @@ export function AdminCommunicationsForm() {
             onChange={(event) => setCampaignName(event.target.value)}
             placeholder="September feature launch"
             maxLength={80}
-            disabled={pending}
+            disabled={busy}
           />
         </label>
 
@@ -102,7 +104,7 @@ export function AdminCommunicationsForm() {
             onChange={(event) => setSubject(event.target.value)}
             placeholder="Something new just landed in Mad Buddy"
             maxLength={120}
-            disabled={pending}
+            disabled={busy}
           />
         </label>
 
@@ -111,7 +113,7 @@ export function AdminCommunicationsForm() {
           <select
             value={kind}
             onChange={(event) => setKind(event.target.value as Kind)}
-            disabled={pending}
+            disabled={busy}
             className="focus-ring h-10 w-full rounded-xl border border-border bg-card/60 px-3 text-sm text-foreground outline-none"
           >
             {kinds.map((option) => (
@@ -125,7 +127,7 @@ export function AdminCommunicationsForm() {
           <select
             value={audience}
             onChange={(event) => setAudience(event.target.value as Audience)}
-            disabled={pending}
+            disabled={busy}
             className="focus-ring h-10 w-full rounded-xl border border-border bg-card/60 px-3 text-sm text-foreground outline-none"
           >
             {audiences.map((option) => (
@@ -143,7 +145,7 @@ export function AdminCommunicationsForm() {
           placeholder="Write the announcement exactly as users should receive it…"
           maxLength={5000}
           rows={10}
-          disabled={pending}
+          disabled={busy}
         />
         <span className="block text-right text-[11px] text-muted-foreground">{message.length}/5000</span>
       </label>
@@ -151,7 +153,7 @@ export function AdminCommunicationsForm() {
       <div className="rounded-xl border border-[#E88C2B]/20 bg-[#E88C2B]/[0.06] p-4">
         <p className="text-sm font-semibold text-foreground">Before broadcasting</p>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          Send yourself a test first. The final broadcast is queued in the background and delivered in bounded batches, so the admin page does not have to stay open.
+          Send yourself a test first. A test only goes to your admin account. The final broadcast is a separate action and is queued only after you type SEND and press Queue broadcast.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
           <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
@@ -161,18 +163,18 @@ export function AdminCommunicationsForm() {
               onChange={(event) => setConfirmation(event.target.value.toUpperCase())}
               placeholder="SEND"
               maxLength={4}
-              disabled={pending}
+              disabled={busy}
             />
           </label>
 
-          <Button type="button" variant="outline" disabled={pending || !complete} onClick={sendTest}>
-            {pending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MailCheck className="h-4 w-4" aria-hidden="true" />}
-            Send test to me
+          <Button type="button" variant="outline" disabled={busy || !complete} onClick={sendTest}>
+            {testPending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MailCheck className="h-4 w-4" aria-hidden="true" />}
+            {testPending ? "Sending test…" : "Send test to me"}
           </Button>
 
-          <Button type="button" disabled={pending || !complete || confirmation !== "SEND"} onClick={queueCampaign}>
-            {pending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Megaphone className="h-4 w-4" aria-hidden="true" />}
-            Queue broadcast
+          <Button type="button" disabled={busy || !complete || confirmation !== "SEND"} onClick={queueCampaign}>
+            {broadcastPending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Megaphone className="h-4 w-4" aria-hidden="true" />}
+            {broadcastPending ? "Queuing broadcast…" : "Queue broadcast"}
           </Button>
         </div>
       </div>
