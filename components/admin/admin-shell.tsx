@@ -18,6 +18,7 @@ import {
   Headphones,
   Image as ImageIcon,
   KeyRound,
+  Megaphone,
   Menu,
   PowerOff,
   ShieldAlert,
@@ -42,6 +43,7 @@ type AdminHref =
   | "/admin/trusted-members"
   | "/admin/reports"
   | "/admin/support"
+  | "/admin/communications"
   | "/admin/repairs"
   | "/admin/billing"
   | "/admin/access"
@@ -83,6 +85,7 @@ const adminNavigationGroups: AdminNavigationGroup[] = [
       { href: "/admin/trusted-members", label: "Trusted Members", icon: ShieldCheck, permission: "admin.verification.review" },
       { href: "/admin/reports", label: "Reports", icon: ShieldAlert, permission: "admin.reports.review" },
       { href: "/admin/support", label: "Support", icon: Headphones, permission: "admin.support.manage" },
+      { href: "/admin/communications", label: "Communications", icon: Megaphone, permission: "admin.support.manage" },
       { href: "/admin/repairs", label: "Repairs", icon: Wrench, permission: "admin.support.manage" }
     ]
   },
@@ -219,7 +222,7 @@ export function AdminShell({ children, email, isDevelopmentFallback, permissions
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-white/[0.10] bg-white/[0.035] text-white shadow-none hover:bg-white/[0.07]"
+                className="border-white/[0.10] bg-white/[0.035] text-white shadow-none hover:bg-white/[0.07] hover:text-white"
                 asChild
               >
                 <Link href="/dashboard">
