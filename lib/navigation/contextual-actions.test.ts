@@ -69,7 +69,7 @@ describe("the shared wrapper honours the interaction contract", () => {
   });
 
   it("acknowledges a successful hold with a haptic", () => {
-    expect(shared).toContain('haptic("tick")');
+    expect(shared).toContain("feedback.longPress()");
   });
 });
 

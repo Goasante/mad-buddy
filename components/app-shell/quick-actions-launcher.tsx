@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { haptic } from "@/lib/device/haptics";
+import { feedback } from "@/lib/feedback/feedback";
 import { QUICK_ACTIONS, showsQuickActions } from "@/lib/navigation/quick-actions";
 import {
   loadQuickActionsPosition,
@@ -222,7 +223,7 @@ export function QuickActionsLauncher() {
     const { top: minTop, bottom: maxTop } = verticalBounds();
     const fraction = maxTop > minTop ? (settledTop - minTop) / (maxTop - minTop) : 0;
     saveQuickActionsPosition({ edge: nextEdge, verticalFraction: fraction });
-    haptic("tick");
+    feedback.snap();
     setDragging(false);
   }
 

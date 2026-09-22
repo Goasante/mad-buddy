@@ -181,9 +181,12 @@ describe("the message menu reuses the app's interaction architecture", () => {
     expect(menu).not.toContain("LONG_PRESS_DURATION_MS =");
   });
 
-  it("uses the canonical menu and haptics", () => {
+  it("uses the canonical menu and semantic feedback", () => {
     expect(menu).toContain('from "@/components/ui/app-dropdown"');
-    expect(menu).toContain('from "@/lib/device/haptics"');
+    expect(menu).toContain('from "@/lib/feedback/feedback"');
+    expect(menu).toContain("feedback.longPress()");
+    expect(menu).toContain("feedback.warning()");
+    expect(menu).toContain("feedback.selection()");
     expect(menu).not.toContain("navigator.vibrate");
   });
 

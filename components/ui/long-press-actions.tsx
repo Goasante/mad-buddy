@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AppMenu, type AppMenuItem } from "@/components/ui/app-dropdown";
 import { useLongPress } from "@/hooks/use-long-press";
-import { haptic } from "@/lib/device/haptics";
+import { feedback } from "@/lib/feedback/feedback";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,7 +41,7 @@ export function LongPressActions({
   const { pressing, handlers } = useLongPress(
     () => {
       // Acknowledge the hold under the finger before the menu paints.
-      haptic("tick");
+      feedback.longPress();
       setOpen(true);
     },
     { disabled: !hasActions }

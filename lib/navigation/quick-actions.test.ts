@@ -322,9 +322,10 @@ describe("dragging repositions the launcher without opening it", () => {
     expect(block).toContain("toggle()");
   });
 
-  it("snaps to the nearer edge on release", () => {
+  it("snaps to the nearer edge on release with semantic feedback", () => {
     expect(component).toContain('nextEdge: QuickActionsEdge');
     expect(component).toContain("settleIntoBounds(nextEdge");
+    expect(component).toContain("feedback.snap()");
   });
 
   it("clamps the vertical position within the safe band on every move", () => {
