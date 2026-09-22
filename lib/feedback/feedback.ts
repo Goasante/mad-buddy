@@ -1,3 +1,5 @@
+import { cancelHaptics, vibratePattern } from "@/lib/device/haptics";
+
 export type FeedbackKind =
   | "selection"
   | "light"
@@ -26,11 +28,12 @@ export type FeedbackResult = {
  * One semantic feedback vocabulary for the whole product.
  *
  * The numbers are milliseconds, not "strength". Android browsers that expose
- * navigator.vibrate() receive these restrained patterns. iPhone Safari/PWA has
- * no general vibration API, so this layer quietly no-ops there while the
- * calling component keeps its visual motion. Future Capacitor iOS can listen
- * for FEEDBACK_EVENT, trigger a native Taptic/Haptics effect, and
- * preventDefault() to suppress the web fallback without changing call sites.
+ * vibration receive these restrained patterns through the existing canonical
+ * device adapter in lib/device/haptics.ts. iPhone Safari/PWA has no general
+ * vibration API, so this layer quietly no-ops there while the calling
+ * component keeps its visual motion. Future Capacitor iOS can listen for
+ * FEEDBACK_EVENT, trigger a native Taptic/Haptics effect, and preventDefault()
+ * to suppress the web fallback without changing call sites.
  */
 export const FEEDBACK_VIBRATION_PATTERNS = {
   selection: [10],
@@ -57,7 +60,7 @@ export function feedbackPattern(kind: FeedbackKind): number[] {
  *
  * - SSR/server rendering: no-op.
  * - iPhone PWA: event is emitted for future native bridges; vibration no-ops.
- * - Android PWA: uses navigator.vibrate() when present and the page is visible.
+ * - Android PWA: the canonical device adapter vibrates when supported/visible.
  * - Future Capacitor: bridge handles the event and calls preventDefault().
  *
  * We deliberately do NOT synthesize audio here. Realtime achievements and
@@ -80,26 +83,11 @@ export function triggerFeedback(kind: FeedbackKind): FeedbackResult {
   const nativeHandled = !window.dispatchEvent(event);
   if (nativeHandled) return { kind, vibrated: false, nativeHandled: true };
 
-  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
-    return { kind, vibrated: false, nativeHandled: false };
-  }
-
-  // Do not buzz from a hidden/background tab. The visual counterpart is not
-  // visible there either, and a surprise vibration without context is noise.
-  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-    return { kind, vibrated: false, nativeHandled: false };
-  }
-
-  try {
-    // Cancel any previous pattern first so two rapid events do not merge into
-    // one long, muddy buzz. Each product moment should feel discrete.
-    navigator.vibrate(0);
-    const vibrated = navigator.vibrate(feedbackPattern(kind));
-    return { kind, vibrated, nativeHandled: false };
-  } catch {
-    // Feedback is an enhancement. It must never fail the action it celebrates.
-    return { kind, vibrated: false, nativeHandled: false };
-  }
+  // Keep rapid product moments discrete. Both operations are capability-safe;
+  // on iPhone PWA, SSR, blocked policies, or hidden documents they simply no-op.
+  cancelHaptics();
+  const vibrated = vibratePattern(feedbackPattern(kind));
+  return { kind, vibrated, nativeHandled: false };
 }
 
 export const feedback = {
