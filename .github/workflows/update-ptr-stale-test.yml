@@ -1,0 +1,52 @@
+name: Update pull-to-refresh stale test
+
+on:
+  push:
+    branches:
+      - hotfix/messages-pull-refresh-nested-scroll
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/messages-pull-refresh-nested-scroll
+          fetch-depth: 0
+      - name: Update stale pull-to-refresh contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("lib/content/moments-polish.test.ts")
+          text = path.read_text()
+          old = '''  it("only arms at the top of the page, for a single touch", () => {
+            expect(ptr).toContain('[data-app-scroll-owner]');
+            expect(ptr).toContain("scrollOwner.scrollTop <= 0");
+            expect(ptr).toContain("event.touches.length !== 1");
+          });
+          '''.replace("            ", "    ").replace("          });", "  });")
+          new = '''  it("only arms at the top of the active vertical scroll container, for a single touch", () => {
+            expect(ptr).toContain('[data-app-scroll-owner]');
+            expect(ptr).toContain("if (scrollOwner.scrollTop > 0) return false");
+            expect(ptr).toContain("node.scrollHeight > node.clientHeight + 1");
+            expect(ptr).toContain("return node.scrollTop <= 0");
+            expect(ptr).toContain("event.touches.length !== 1");
+          });
+          '''.replace("            ", "    ").replace("          });", "  });")
+          if old not in text:
+              raise SystemExit("expected stale test block not found")
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit test update and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/update-ptr-stale-test.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "update nested scroll pull-to-refresh regression"
+          git push origin HEAD:hotfix/messages-pull-refresh-nested-scroll
