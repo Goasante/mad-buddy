@@ -1,10 +1,14 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Loader2, RotateCcw, X } from "lucide-react";
+import { Loader2, RotateCcw, Send, X } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
-import { loadSkippedPeopleAction, undoPassAction } from "@/app/(app)/social-actions";
+import {
+  loadSkippedPeopleAction,
+  requestPassReversalAction,
+  undoPassAction
+} from "@/app/(app)/social-actions";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { skipExpiryLabel, type SkippedPerson } from "@/lib/social/skipped-people-shared";
 
@@ -35,6 +39,9 @@ export function SkippedPeopleSheet({
   onRestored: () => void;
 }) {
   const [people, setPeople] = useState<SkippedPerson[] | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const [adminRequiredFor, setAdminRequiredFor] = useState<string | null>(null);
+  const [requestedFor, setRequestedFor] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   /**
@@ -48,7 +55,12 @@ export function SkippedPeopleSheet({
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
-    if (open) setPeople(null);
+    if (open) {
+      setPeople(null);
+      setFeedback("");
+      setAdminRequiredFor(null);
+      setRequestedFor(null);
+    }
   }
 
   useEffect(() => {
@@ -65,15 +77,32 @@ export function SkippedPeopleSheet({
   }, [open]);
 
   function restore(person: SkippedPerson) {
+    setFeedback("");
+    setAdminRequiredFor(null);
     // Optimistic: the row leaves the list immediately and returns if the
     // delete fails, so the list never disagrees with the server for long.
     setPeople((current) => current?.filter((item) => item.userId !== person.userId) ?? null);
     startTransition(async () => {
       const result = await undoPassAction(person.userId);
       if (result.ok) {
+        setFeedback(result.message || "Profile restored to Linkr.");
         onRestored();
       } else {
         setPeople((current) => (current ? [person, ...current] : [person]));
+        setFeedback(result.message);
+        if (result.code === "undo_limit_reached") setAdminRequiredFor(person.userId);
+      }
+    });
+  }
+
+  function askAdmin(person: SkippedPerson) {
+    setFeedback("");
+    startTransition(async () => {
+      const result = await requestPassReversalAction(person.userId);
+      setFeedback(result.message);
+      if (result.ok) {
+        setRequestedFor(person.userId);
+        setAdminRequiredFor(null);
       }
     });
   }
@@ -97,10 +126,7 @@ export function SkippedPeopleSheet({
                 id="skipped-people-description"
                 className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground"
               >
-                {/* States the promise rather than leaving it to be discovered:
-                    a skip lapses on its own, and it was never visible to them. */}
-                Skipping is private — they were never told. Everyone here comes
-                back on their own, or you can bring them back now.
+                Skipping is private — they were never told. Passes expire after 30 days. You get three self-service rewinds every 24 hours; after that you can ask support to restore one.
               </Dialog.Description>
             </div>
             <Dialog.Close
@@ -112,6 +138,7 @@ export function SkippedPeopleSheet({
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto px-5 pb-6 pt-4">
+            {feedback ? <p className="mb-3 rounded-xl border border-border/70 bg-secondary/30 px-3 py-2 text-xs leading-5 text-muted-foreground" role="status">{feedback}</p> : null}
             {people === null ? (
               <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -132,16 +159,31 @@ export function SkippedPeopleSheet({
                         {skipExpiryLabel(person.expiresAt)}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => restore(person)}
-                      disabled={isPending}
-                      aria-label={`Bring ${person.displayName} back`}
-                      className="focus-ring safe-motion inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-border/60 px-3 text-[0.8125rem] font-semibold transition-colors hover:bg-secondary/50 disabled:opacity-50"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                      Undo
-                    </button>
+                    {requestedFor === person.userId ? (
+                      <span className="shrink-0 text-xs font-medium text-muted-foreground">Requested</span>
+                    ) : adminRequiredFor === person.userId ? (
+                      <button
+                        type="button"
+                        onClick={() => askAdmin(person)}
+                        disabled={isPending}
+                        aria-label={`Ask support to restore ${person.displayName}`}
+                        className="focus-ring safe-motion inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-[#E88C2B]/30 bg-[#E88C2B]/10 px-3 text-[0.8125rem] font-semibold text-[#E88C2B] transition-colors hover:bg-[#E88C2B]/15 disabled:opacity-50"
+                      >
+                        <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                        Ask admin
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => restore(person)}
+                        disabled={isPending}
+                        aria-label={`Bring ${person.displayName} back`}
+                        className="focus-ring safe-motion inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-full border border-border/60 px-3 text-[0.8125rem] font-semibold transition-colors hover:bg-secondary/50 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                        Undo
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
