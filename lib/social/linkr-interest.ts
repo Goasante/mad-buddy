@@ -11,6 +11,41 @@ import type { Database } from "@/lib/supabase/database.types";
 const uuidSchema = z.string().uuid();
 const PASS_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
+type Admin = ReturnType<typeof createSupabaseAdminClient>;
+
+async function settleReciprocalInterest(
+  admin: Admin,
+  rlsClient: SupabaseClient<Database>,
+  userId: string,
+  targetId: string,
+  incomingRequestId: string
+): Promise<ServiceResult> {
+  const matched = await acceptFriendRequest(rlsClient, userId, incomingRequestId);
+  if (matched.ok) {
+    return { ...matched, message: "You both chose to connect — you're Muddies now." };
+  }
+
+  // An exactly-simultaneous pair of swipes can race through two acceptance
+  // calls. The canonical RPC serializes the relationship and settles every
+  // pending request for the pair; if this caller loses that race, the
+  // friendship may already be real even though its own RPC reports that the
+  // request was handled. Re-read the canonical relationship before showing a
+  // false failure.
+  const low = userId < targetId ? userId : targetId;
+  const high = userId < targetId ? targetId : userId;
+  const { data: friendship } = await admin
+    .from("friendships")
+    .select("id")
+    .eq("user_one_id", low)
+    .eq("user_two_id", high)
+    .is("ended_at", null)
+    .maybeSingle();
+
+  return friendship
+    ? { ok: true, message: "You both chose to connect — you're Muddies now." }
+    : matched;
+}
+
 /**
  * Record a RIGHT swipe in Linkr without exposing it to the recipient.
  *
@@ -73,21 +108,16 @@ export async function sendLinkrInterest(
   if (friendshipResult.data?.length) return { ok: false, message: "This person is already your Muddy." };
 
   const pairRequests = pairRequestsResult.data ?? [];
-  const pending = pairRequests.find((row) => row.status === "pending");
-  if (pending) {
-    if (pending.sender_id === userId) {
-      return { ok: true, message: "Choice saved. If they choose you too, you'll connect.", resourceId: pending.id };
-    }
-
-    if (pending.context_type === "socialize") {
+  const incomingPending = pairRequests.find(
+    (row) => row.status === "pending" && row.receiver_id === userId
+  );
+  if (incomingPending) {
+    if (incomingPending.context_type === "socialize") {
       // Reciprocal choice. Use the canonical acceptance service so friendship
       // lifecycle, achievements and post-match notification all stay in one
       // place. The recipient still never learned about the first swipe before
       // making this choice themselves.
-      const matched = await acceptFriendRequest(rlsClient, userId, pending.id);
-      return matched.ok
-        ? { ...matched, message: "You both chose to connect — you're Muddies now." }
-        : matched;
+      return settleReciprocalInterest(admin, rlsClient, userId, targetId, incomingPending.id);
     }
 
     // An ordinary incoming Muddy request is a different product surface. Do
@@ -96,6 +126,17 @@ export async function sendLinkrInterest(
       ok: false,
       message: "You already have a Muddy request from this person. Open Requests to respond.",
       reason: "incoming_request_exists"
+    };
+  }
+
+  const outgoingPending = pairRequests.find(
+    (row) => row.status === "pending" && row.sender_id === userId
+  );
+  if (outgoingPending) {
+    return {
+      ok: true,
+      message: "Choice saved. If they choose you too, you'll connect.",
+      resourceId: outgoingPending.id
     };
   }
 
@@ -135,6 +176,24 @@ export async function sendLinkrInterest(
       errorType: errorType(error)
     });
     return { ok: false, message: "Couldn't save that choice. Try again." };
+  }
+
+  // Close the small race where both people choose each other at nearly the
+  // same time after both initial reads saw no pending row. If the opposite
+  // hidden interest now exists, the current user is its receiver and can use
+  // the canonical acceptance RPC immediately.
+  const { data: reciprocal } = await admin
+    .from("friend_requests")
+    .select("id")
+    .eq("sender_id", targetId)
+    .eq("receiver_id", userId)
+    .eq("status", "pending")
+    .eq("context_type", "socialize")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (reciprocal) {
+    return settleReciprocalInterest(admin, rlsClient, userId, targetId, reciprocal.id);
   }
 
   // Deliberately no notification. The request is an internal reciprocity
