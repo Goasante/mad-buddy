@@ -98,6 +98,40 @@ export async function passCandidate(
 }
 
 /**
+ * Restore a profile previously hidden with "Don't show me again".
+ *
+ * Only the caller's own permanent Pass is removed. This does not undo a block,
+ * create a connection, reveal the other person's choices, or override any
+ * current Linkr eligibility rule.
+ */
+export async function restoreHiddenProfile(
+  viewerId: string,
+  targetId: string
+): Promise<{ ok: boolean; message: string }> {
+  if (!serverReady()) return { ok: false, message: "This action needs the server database configuration." };
+  const parsed = z.string().uuid().safeParse(targetId);
+  if (!parsed.success || parsed.data === viewerId) return { ok: false, message: "That profile is no longer available." };
+
+  const limit = await consumeRateLimit({ action: "linkr.decide", userId: viewerId });
+  if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId: viewerId, surface: "linkr" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+
+  const { error } = await admin
+    .from("linkr_actions")
+    .delete()
+    .eq("actor_id", viewerId)
+    .eq("target_id", parsed.data)
+    .eq("action", "pass")
+    .is("expires_at", null);
+
+  if (error) return { ok: false, message: "That profile could not be restored. Try again." };
+  return { ok: true, message: "They can appear in Linkr again." };
+}
+
+/**
  * Connect: private interest, which becomes a connection only if returned.
  *
  * The block check is re-run HERE rather than trusted from the deck the client

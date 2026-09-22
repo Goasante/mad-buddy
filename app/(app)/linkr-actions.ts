@@ -8,6 +8,7 @@ import {
   endLinkrConnection,
   passCandidate,
   requestLinkrPassReversalReview,
+  restoreHiddenProfile,
   undoLastLinkrAction,
   type ConnectResult
 } from "@/lib/linkr/connection-service";
@@ -20,7 +21,7 @@ import {
   type LinkrActionResult,
   type LinkrOwnProfile
 } from "@/lib/linkr/profile-service";
-import { loadClickedPeople, loadPendingClicks } from "@/lib/linkr/collections-service";
+import { loadClickedPeople, loadHiddenProfiles, loadPendingClicks } from "@/lib/linkr/collections-service";
 import { resolveMutualDestination } from "@/lib/linkr/mutual-resolution";
 import { resolveViewerEventMode } from "@/lib/linkr/event-mode-adapter";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -155,6 +156,14 @@ export async function passCandidateAction(input: {
   });
 }
 
+export async function restoreHiddenProfileAction(targetId: string): Promise<LinkrActionResult> {
+  const userId = await getAuthedUserId();
+  if (!userId) return NOT_LOGGED_IN;
+  const result = await restoreHiddenProfile(userId, targetId);
+  if (result.ok) revalidatePath("/linkr");
+  return result;
+}
+
 export async function connectWithCandidateAction(input: {
   targetId: string;
   eventId?: string | null;
@@ -231,6 +240,12 @@ export async function loadClickedPeopleAction() {
 export async function loadPendingClicksAction() {
   const userId = await getAuthedUserId();
   return userId ? loadPendingClicks(userId) : [];
+}
+
+/** Permanent "Don't show me again" choices owned by this viewer. */
+export async function loadHiddenProfilesAction() {
+  const userId = await getAuthedUserId();
+  return userId ? loadHiddenProfiles(userId) : [];
 }
 
 /**

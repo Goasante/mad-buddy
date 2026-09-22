@@ -63,6 +63,14 @@ export type PendingClick = {
   clickedAt: string;
 };
 
+/** A profile this viewer explicitly chose "Don't show me again" for. */
+export type HiddenProfile = {
+  userId: string;
+  displayName: string;
+  photo: string | null;
+  hiddenAt: string;
+};
+
 function serverReady(): boolean {
   const env = getSupabaseServerEnv();
   return Boolean(env.url && env.serviceRoleKey);
@@ -294,4 +302,46 @@ export async function loadPendingClicks(viewerId: string): Promise<PendingClick[
     });
   }
   return clicks;
+}
+
+
+/**
+ * HIDDEN PROFILES: permanent Pass rows owned by this viewer.
+ *
+ * This is intentionally separate from blocked_users. Hiding says "do not put
+ * this person back in my discovery deck"; blocking is the stronger account-
+ * wide safety boundary. The list reads only the viewer's own permanent Passes.
+ */
+export async function loadHiddenProfiles(viewerId: string): Promise<HiddenProfile[]> {
+  if (!serverReady()) return [];
+  const admin = createSupabaseAdminClient();
+
+  const { data: actions } = await admin
+    .from("linkr_actions")
+    .select("target_id, updated_at")
+    .eq("actor_id", viewerId)
+    .eq("action", "pass")
+    .is("expires_at", null)
+    .order("updated_at", { ascending: false });
+
+  const rows = actions ?? [];
+  if (rows.length === 0) return [];
+
+  const described = await describePeople(
+    admin,
+    rows.map((row) => row.target_id)
+  );
+
+  const hidden: HiddenProfile[] = [];
+  for (const row of rows) {
+    const person = described.get(row.target_id);
+    if (!person) continue;
+    hidden.push({
+      userId: row.target_id,
+      displayName: person.displayName,
+      photo: person.photo,
+      hiddenAt: row.updated_at
+    });
+  }
+  return hidden;
 }

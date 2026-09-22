@@ -1,10 +1,12 @@
 "use client";
 
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, ChevronRight, RotateCcw } from "lucide-react";
 
 import { LINKR_INTENT_LABELS } from "@/lib/linkr/intent";
 import { LINKR_DISTANCE_OPTIONS } from "@/lib/linkr/rules";
 import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
+import type { HiddenProfile } from "@/lib/linkr/collections-service";
 
 /**
  * Screen 12: Linkr settings.
@@ -17,7 +19,10 @@ import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
 
 export type LinkrSettingsProps = {
   profile: LinkrOwnProfile;
-  hiddenCount: number;
+  blockedCount: number;
+  hiddenProfiles: readonly HiddenProfile[];
+  hiddenProfilesLoading?: boolean;
+  onRestoreHidden: (userId: string) => Promise<{ ok: boolean; message: string }>;
   onToggleEnabled: (enabled: boolean) => Promise<void>;
   onToggleEventMode: (enabled: boolean) => Promise<void>;
   onOpenFilters: () => void;
@@ -28,7 +33,10 @@ export type LinkrSettingsProps = {
 
 export function LinkrSettings({
   profile,
-  hiddenCount,
+  blockedCount,
+  hiddenProfiles,
+  hiddenProfilesLoading = false,
+  onRestoreHidden,
   onToggleEnabled,
   onToggleEventMode,
   onOpenFilters,
@@ -36,6 +44,8 @@ export function LinkrSettings({
   onBack,
   busy
 }: LinkrSettingsProps) {
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [hiddenStatus, setHiddenStatus] = useState<string | null>(null);
   const distanceLabel =
     LINKR_DISTANCE_OPTIONS.find((option) => option.id === profile.discoveryDistance)?.label ?? "Around you";
 
@@ -68,9 +78,54 @@ export function LinkrSettings({
           onChange={onToggleEventMode}
         />
 
-        {/* Blocking is account-wide and canonical. Linkr links to it rather
-            than keeping a second list that could disagree with the real one. */}
-        <SettingRow label="Hide from specific people" value={`${hiddenCount} people`} onClick={onOpenBlocked} />
+        {/* Blocking is account-wide and canonical. Permanent Linkr hides are
+            a different, lighter choice and are managed immediately below. */}
+        <SettingRow
+          label="Blocked people"
+          value={blockedCount === 1 ? "1 person" : `${blockedCount} people`}
+          onClick={onOpenBlocked}
+        />
+
+        <h2 className="linkr-settings__group">Hidden profiles</h2>
+        <p className="linkr-settings__note">
+          People you chose “Don’t show me again” for. Showing someone again does not connect you or undo a block.
+        </p>
+        {hiddenProfilesLoading ? (
+          <p className="linkr-collection__empty">Loading hidden profiles…</p>
+        ) : hiddenProfiles.length === 0 ? (
+          <p className="linkr-collection__empty">No hidden profiles.</p>
+        ) : (
+          <ul className="linkr-collection">
+            {hiddenProfiles.map((person) => (
+              <li key={person.userId}>
+                <div className="linkr-collection__row linkr-collection__row--static">
+                  <HiddenFace photo={person.photo} name={person.displayName} />
+                  <span className="linkr-collection__text">
+                    <strong>{person.displayName}</strong>
+                    <small>Hidden from your Linkr discovery</small>
+                  </span>
+                  <button
+                    type="button"
+                    className="linkr-link"
+                    disabled={busy || restoringId === person.userId}
+                    onClick={() => {
+                      void (async () => {
+                        setRestoringId(person.userId);
+                        const result = await onRestoreHidden(person.userId);
+                        setHiddenStatus(result.message);
+                        setRestoringId(null);
+                      })();
+                    }}
+                  >
+                    <RotateCcw aria-hidden />
+                    {restoringId === person.userId ? "Restoring…" : "Show again"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {hiddenStatus ? <p className="linkr-settings__note" role="status">{hiddenStatus}</p> : null}
 
         <h2 className="linkr-settings__group">Preferences</h2>
         <SettingRow label="Discovery distance" value={distanceLabel} onClick={onOpenFilters} />
@@ -147,5 +202,17 @@ function SettingRow({
         <ChevronRight aria-hidden />
       </span>
     </button>
+  );
+}
+
+
+function HiddenFace({ photo, name }: { photo: string | null; name: string }) {
+  return photo ? (
+    // eslint-disable-next-line @next/next/no-img-element -- signed, short-lived media URL
+    <img src={photo} alt="" className="linkr-collection__face" />
+  ) : (
+    <span className="linkr-collection__face linkr-collection__face--fallback" aria-hidden>
+      {name.charAt(0).toUpperCase()}
+    </span>
   );
 }

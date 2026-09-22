@@ -3,18 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Flag, Hand, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Flag, Hand, MoreHorizontal, RotateCcw } from "lucide-react";
 
 import {
   connectWithCandidateAction,
   disableLinkrAction,
   enableLinkrAction,
   loadClickedPeopleAction,
+  loadHiddenProfilesAction,
   loadLinkrCandidatesAction,
   loadPendingClicksAction,
   passCandidateAction,
   resolveMutualDestinationAction,
   requestLinkrPassReversalReviewAction,
+  restoreHiddenProfileAction,
   undoLinkrActionAction,
   updateLinkrProfileAction,
   updateLinkrSettingsAction
@@ -35,7 +37,7 @@ import { LinkrPreview } from "@/components/linkr/linkr-preview";
 import { LinkrProfileEditor } from "@/components/linkr/linkr-profile-editor";
 import { LinkrSettings } from "@/components/linkr/linkr-settings";
 import type { LinkrCandidate } from "@/lib/linkr/candidate-service";
-import type { ClickedPerson, PendingClick } from "@/lib/linkr/collections-service";
+import type { ClickedPerson, HiddenProfile, PendingClick } from "@/lib/linkr/collections-service";
 import type { LinkrOwnProfile } from "@/lib/linkr/profile-service";
 import type { LinkrIntent } from "@/lib/linkr/intent";
 import { cameFromInsideApp } from "@/lib/navigation/entry-origin";
@@ -133,6 +135,8 @@ function LinkrPageContent({
   const connectingTargetId = useRef<string | null>(null);
   const [clicked, setClicked] = useState<ClickedPerson[]>([]);
   const [pendingClicks, setPendingClicks] = useState<PendingClick[]>([]);
+  const [hiddenProfiles, setHiddenProfiles] = useState<HiddenProfile[]>([]);
+  const [hiddenProfilesLoading, setHiddenProfilesLoading] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [reviewTargetId, setReviewTargetId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -279,6 +283,15 @@ function LinkrPageContent({
     setClicked(clickedPeople);
     setPendingClicks(pending);
     return { clickedPeople, pending };
+  }, []);
+
+  const refreshHiddenProfiles = useCallback(async () => {
+    setHiddenProfilesLoading(true);
+    try {
+      setHiddenProfiles(await loadHiddenProfilesAction());
+    } finally {
+      setHiddenProfilesLoading(false);
+    }
   }, []);
 
   /**
@@ -617,10 +630,20 @@ function LinkrPageContent({
     return (
       <LinkrSettings
         profile={profile}
-        hiddenCount={blockedCount}
+        blockedCount={blockedCount}
+        hiddenProfiles={hiddenProfiles}
+        hiddenProfilesLoading={hiddenProfilesLoading}
         busy={pending || writing}
         onBack={() => setView("discover")}
         onOpenFilters={() => setView("filters")}
+        onRestoreHidden={async (targetId) => {
+          const result = await restoreHiddenProfileAction(targetId);
+          if (result.ok) {
+            setHiddenProfiles((current) => current.filter((person) => person.userId !== targetId));
+            refreshDeck();
+          }
+          return result;
+        }}
         /* The blocked list itself, not the Safety Centre that merely links
            to it. `hiddenCount` counts `blocked_users`, and discovery excludes
            on that same table, so this row must land where that list is
@@ -712,7 +735,10 @@ function LinkrPageContent({
                 id: "settings",
                 label: "Linkr settings",
                 separatorBefore: true,
-                onSelect: () => setView("settings")
+                onSelect: () => {
+                  setView("settings");
+                  void refreshHiddenProfiles();
+                }
               }
             ]}
           />
@@ -806,7 +832,8 @@ function LinkrPageContent({
           </div>
         </>
       ) : (
-        <LinkrEmptyState
+        <>
+          <LinkrEmptyState
           canWiden={canWiden}
           onWiden={() => {
             const next: LinkrDistancePreference = distance === "very_close" ? "around_you" : "wider";
@@ -825,7 +852,33 @@ function LinkrPageContent({
               refreshDeck(next);
             })();
           }}
-        />
+          />
+          {canUndo ? (
+            <div className="linkr-card-helper">
+              <button
+                type="button"
+                className="linkr-action linkr-action--undo"
+                onClick={handleUndo}
+                disabled={pending || writing}
+              >
+                <RotateCcw aria-hidden />
+                <span>Undo last pass</span>
+              </button>
+            </div>
+          ) : reviewTargetId ? (
+            <div className="linkr-card-helper">
+              <button
+                type="button"
+                className="linkr-action linkr-action--undo"
+                onClick={handleRequestReview}
+                disabled={pending || writing}
+              >
+                <RotateCcw aria-hidden />
+                <span>Ask support</span>
+              </button>
+            </div>
+          ) : null}
+        </>
       )}
 
       {match ? (
