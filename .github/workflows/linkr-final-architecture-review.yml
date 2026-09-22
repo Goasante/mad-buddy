@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE=f30463da9677c8406eaa3f7b1eabf26e332e0c16
-          git checkout "$BASE" -- 'app/(app)/actions.ts' 'app/(app)/social-actions.ts' 'app/api/friends/request/route.ts' 'lib/friends/service.ts' 'lib/social/socialize-mobile.ts' 'components/socialize/socialize-page.tsx'
+          git checkout "$BASE" -- 'app/(app)/actions.ts' 'app/(app)/social-actions.ts' 'app/api/friends/request/route.ts' 'lib/friends/service.ts' 'lib/social/socialize-mobile.ts' 'components/socialize/socialize-page.tsx' 'components/socialize/skipped-people-sheet.tsx'
           git rm -f --ignore-unmatch lib/social/linkr-interest.ts
 
       - name: Apply canonical Linkr fixes
