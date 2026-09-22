@@ -49,6 +49,7 @@ import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { UPFOR_QUICK_IDEAS } from "@/lib/social/upfor";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { withTimeout } from "@/lib/network/resilience";
+import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { upforEducationStorageKey } from "@/lib/hangout/education";
 import type {
@@ -489,6 +490,7 @@ export function HangoutModePage({
     const allowed = await canEditUpForAction(target.id);
     if (!allowed.ok) {
       showToast(allowed.message, true);
+      interactionFeedback.error();
       return;
     }
     setEditingUpForId(target.id);
@@ -536,9 +538,12 @@ export function HangoutModePage({
     }));
     showToast(result.message, !result.ok);
     if (result.ok) {
+      interactionFeedback.light();
       setFeed((current) =>
         current.map((item) => (item.id === hangoutId ? { ...item, myRequestStatus: "pending" } : item))
       );
+    } else {
+      interactionFeedback.error();
     }
   }
 
@@ -574,8 +579,10 @@ export function HangoutModePage({
         message: "Couldn't update that. Try again."
       }));
       if (result.ok) {
+        interactionFeedback.light();
         showToast(result.message);
       } else {
+        interactionFeedback.error();
         setFeed((current) =>
           current.map((item) =>
             item.id === hangoutId
@@ -601,7 +608,12 @@ export function HangoutModePage({
     startTransition(async () => {
       const result = await rsvpAction(plan.id, "going");
       showToast(result.message, !result.ok);
-      if (result.ok) router.refresh();
+      if (result.ok) {
+        interactionFeedback.success();
+        router.refresh();
+      } else {
+        interactionFeedback.error();
+      }
     });
   }
 
@@ -640,6 +652,7 @@ export function HangoutModePage({
         if (!ended.ok) {
           setSetupError(ended.message);
           showToast(ended.message, true);
+          interactionFeedback.error();
           return;
         }
       }
@@ -657,6 +670,7 @@ export function HangoutModePage({
       });
 
       if (result.ok && result.hangoutId) {
+        interactionFeedback.success();
         setActiveHangout({
           id: result.hangoutId,
           activityType: activity,
@@ -681,6 +695,7 @@ export function HangoutModePage({
         if (editing) setActiveHangout(null);
         setSetupError(result.message);
         showToast(result.message, true);
+        interactionFeedback.error();
       }
     });
   }
@@ -726,8 +741,10 @@ export function HangoutModePage({
       const result = await endHangoutAction(hangoutId);
       if (!result.ok) {
         showToast(result.message, true);
+        interactionFeedback.error();
         return;
       }
+      interactionFeedback.warning();
       if (activeHangout?.id === hangoutId) {
         setActiveHangout(null);
         setRequests([]);
@@ -756,7 +773,13 @@ export function HangoutModePage({
          read. The management sheet reads requestsByUpFor, so accepting left
          the open sheet showing the request still pending even though the row
          had already changed in the database. */
-      if (result.ok) await refreshOwnedUpFors();
+      if (result.ok) {
+        if (response === "accepted") interactionFeedback.success();
+        else interactionFeedback.light();
+        await refreshOwnedUpFors();
+      } else {
+        interactionFeedback.error();
+      }
     });
   }
 
@@ -782,6 +805,7 @@ export function HangoutModePage({
     }));
     showToast(result.message, !result.ok);
     if (result.ok) {
+      interactionFeedback.success();
       if (activeHangout?.id === hangoutId) {
         setActiveHangout(null);
         setRequests([]);
@@ -802,6 +826,8 @@ export function HangoutModePage({
         return;
       }
       router.refresh();
+    } else {
+      interactionFeedback.error();
     }
   }
 
