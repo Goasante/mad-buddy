@@ -2,7 +2,7 @@ import "server-only";
 
 export type SendEmailResult =
   | { ok: true; providerMessageId: string }
-  | { ok: false; errorCode: string };
+  | { ok: false; errorCode: string; httpStatus?: number; retryAfterMs?: number };
 
 export async function sendMadBuddyEmail(input: {
   to: string;
@@ -41,14 +41,20 @@ export async function sendMadBuddyEmail(input: {
     };
 
     if (!response.ok) {
+      const retryAfterHeader = response.headers.get("retry-after");
+      const retryAfterSeconds = retryAfterHeader ? Number.parseFloat(retryAfterHeader) : Number.NaN;
       return {
         ok: false,
-        errorCode: payload.name ?? `resend_http_${response.status}`
+        errorCode: payload.name ?? `resend_http_${response.status}`,
+        httpStatus: response.status,
+        ...(Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0
+          ? { retryAfterMs: Math.ceil(retryAfterSeconds * 1000) }
+          : {})
       };
     }
 
     if (!payload.id) {
-      return { ok: false, errorCode: "resend_missing_message_id" };
+      return { ok: false, errorCode: "resend_missing_message_id", httpStatus: response.status };
     }
 
     return { ok: true, providerMessageId: payload.id };
