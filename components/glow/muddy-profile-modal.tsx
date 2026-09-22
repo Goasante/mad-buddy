@@ -205,7 +205,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
               variant="outline"
               size="lg"
               className="safe-motion h-12 min-w-0 rounded-full border-border/80 bg-background/20 px-3 text-sm font-semibold shadow-none backdrop-blur-sm hover:bg-secondary/45 active:scale-[0.985] sm:text-base"
-              disabled={!muddy.friendId || isMessagePending}
+              disabled={!muddy?.friendId || isMessagePending}
               onClick={openConversation}
             >
               <MessagesSquare className="h-5 w-5 shrink-0" aria-hidden="true" />
