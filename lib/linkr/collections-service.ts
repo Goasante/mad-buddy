@@ -71,6 +71,18 @@ export type HiddenProfile = {
   hiddenAt: string;
 };
 
+/** A support request created after the viewer has used their three self-service rewinds. */
+export type LinkrRewindRequest = {
+  id: string;
+  targetUserId: string;
+  targetDisplayName: string;
+  targetPhoto: string | null;
+  status: string;
+  decision: "approve" | "reject" | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 function serverReady(): boolean {
   const env = getSupabaseServerEnv();
   return Boolean(env.url && env.serviceRoleKey);
@@ -345,3 +357,72 @@ export async function loadHiddenProfiles(viewerId: string): Promise<HiddenProfil
   }
   return hidden;
 }
+
+/**
+ * The viewer's own Linkr rewind support requests, newest first.
+ *
+ * This is deliberately a tiny projection. It never exposes internal notes,
+ * diagnostics, staff identity, or anything about the other person's Linkr
+ * choices. The target id is already part of the viewer's own pass action; it
+ * is used only to label which skipped profile the request refers to.
+ */
+export async function loadLinkrRewindRequests(viewerId: string): Promise<LinkrRewindRequest[]> {
+  if (!serverReady()) return [];
+  const admin = createSupabaseAdminClient();
+
+  const { data: tickets } = await admin
+    .from("support_tickets")
+    .select("id, status, created_at, updated_at, diagnostics")
+    .eq("user_id", viewerId)
+    .eq("diagnostics->>workflow", "linkr_pass_reversal")
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  const rows = tickets ?? [];
+  if (rows.length === 0) return [];
+
+  const targetByTicket = new Map<string, string>();
+  for (const ticket of rows) {
+    const diagnostics = ticket.diagnostics;
+    if (!diagnostics || typeof diagnostics !== "object" || Array.isArray(diagnostics)) continue;
+    const target = (diagnostics as Record<string, unknown>).target_user_id;
+    if (typeof target === "string") targetByTicket.set(ticket.id, target);
+  }
+
+  const targetIds = [...new Set(targetByTicket.values())];
+  const described = await describePeople(admin, targetIds);
+
+  const decisionByTicket = new Map<string, "approve" | "reject">();
+  const ticketIds = rows.map((ticket) => ticket.id);
+  const { data: events } = await admin
+    .from("support_ticket_events")
+    .select("ticket_id, note, created_at")
+    .in("ticket_id", ticketIds)
+    .eq("event_type", "status_changed")
+    .order("created_at", { ascending: false });
+  for (const event of events ?? []) {
+    if (decisionByTicket.has(event.ticket_id)) continue;
+    const note = event.note?.toLowerCase() ?? "";
+    if (note.includes("linkr rewind approved")) decisionByTicket.set(event.ticket_id, "approve");
+    else if (note.includes("linkr rewind rejected")) decisionByTicket.set(event.ticket_id, "reject");
+  }
+
+  const requests: LinkrRewindRequest[] = [];
+  for (const ticket of rows) {
+    const targetUserId = targetByTicket.get(ticket.id);
+    if (!targetUserId) continue;
+    const person = described.get(targetUserId);
+    requests.push({
+      id: ticket.id,
+      targetUserId,
+      targetDisplayName: person?.displayName ?? "Profile unavailable",
+      targetPhoto: person?.photo ?? null,
+      status: ticket.status,
+      decision: decisionByTicket.get(ticket.id) ?? null,
+      createdAt: ticket.created_at,
+      updatedAt: ticket.updated_at
+    });
+  }
+  return requests;
+}
+

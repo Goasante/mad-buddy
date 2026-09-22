@@ -107,6 +107,18 @@ export async function reviewLinkrPassReversalAction(input: unknown): Promise<Lin
       note: approved ? "Linkr rewind approved" : "Linkr rewind rejected"
     });
 
+    const publicMessage = approved
+      ? activePassId
+        ? "Your Linkr rewind was approved. That profile can appear in Linkr again. No connection was created automatically."
+        : "Your Linkr rewind was approved. The pass had already expired or been cleared, so no additional change was needed."
+      : "Your Linkr rewind request was reviewed and was not approved. The pass stays in place until its normal expiry.";
+    await admin.from("support_ticket_messages").insert({
+      ticket_id: ticket.id,
+      sender_type: "agent",
+      sender_id: context.userId,
+      message: publicMessage
+    });
+
     await deliverNotification(admin, {
       userId: ticket.user_id,
       type: "system_alert",
@@ -119,6 +131,7 @@ export async function reviewLinkrPassReversalAction(input: unknown): Promise<Lin
     });
 
     revalidatePath("/admin/support");
+    revalidatePath("/admin/linkr-requests");
     revalidatePath(`/admin/support/${ticket.id}`);
     return {
       ok: true,
