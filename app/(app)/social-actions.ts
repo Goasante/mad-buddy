@@ -349,7 +349,7 @@ export async function createMeetingPingAction(input: unknown): Promise<SocialAct
   });
   {
     const { grantAchievement } = await import("@/lib/engagement/achievements");
-    await grantAchievement(admin, userId, "thoughtful_reply");
+    await grantAchievement(admin, userId, "first_ping");
   }
 
   logBackendEvent("info", { requestId, action: "ping.create", userId, statusCode: 200 });
