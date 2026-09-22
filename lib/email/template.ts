@@ -16,8 +16,15 @@ function formatMessage(value: string) {
   return escapeHtml(value).replace(/\r?\n/g, "<br />");
 }
 
-export function buildMadBuddyAdminEmailHtml(message: string) {
+export function buildMadBuddyAdminEmailHtml(
+  message: string,
+  options: { managePreferencesUrl?: string } = {}
+) {
   const body = formatMessage(message);
+  const preferencesUrl = options.managePreferencesUrl ? escapeHtml(options.managePreferencesUrl) : null;
+  const preferencesLink = preferencesUrl
+    ? `<div style="margin-top:11px;font-size:11px;line-height:1.5;color:#8b8082;"><a href="${preferencesUrl}" style="color:#8b8082;text-decoration:underline;">Manage email preferences</a></div>`
+    : "";
 
   return `<!doctype html>
 <html>
@@ -118,6 +125,7 @@ export function buildMadBuddyAdminEmailHtml(message: string) {
                       <div style="height:1px;background:#f1d4ca;margin:15px 0 12px 0;"></div>
 
                       <div style="font-size:13px;line-height:1.55;font-weight:700;color:#ff5343;">When your friends are close, they glow.</div>
+                      ${preferencesLink}
                     </td>
                   </tr>
                 </table>
