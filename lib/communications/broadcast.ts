@@ -2,6 +2,7 @@ import "server-only";
 
 import { buildMadBuddyAdminEmailHtml } from "@/lib/email/template";
 import { sendMadBuddyEmail } from "@/lib/email/send";
+import { allowsBroadcastKind, emailPreferencesFromNotificationBlob } from "@/lib/email/preferences";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -49,25 +50,35 @@ export async function handleBroadcastEmailJob(admin: Admin, rawPayload: Record<s
   }
 
   const userIds = users.map((user) => user.id);
-  const [profilesResult, subscriptionsResult] = await Promise.all([
+  const [profilesResult, subscriptionsResult, preferencesResult] = await Promise.all([
     admin.from("profiles").select("user_id, deleted_at").in("user_id", userIds),
-    admin.from("subscriptions").select("user_id, plan, status").in("user_id", userIds)
+    admin.from("subscriptions").select("user_id, plan, status").in("user_id", userIds),
+    admin.from("user_preferences").select("user_id, notification_preferences").in("user_id", userIds)
   ]);
 
   if (profilesResult.error) throw new BroadcastJobError("DATABASE_TIMEOUT", profilesResult.error.message);
   if (subscriptionsResult.error) throw new BroadcastJobError("DATABASE_TIMEOUT", subscriptionsResult.error.message);
+  if (preferencesResult.error) throw new BroadcastJobError("DATABASE_TIMEOUT", preferencesResult.error.message);
 
   const activeProfiles = new Set(
     (profilesResult.data ?? []).filter((profile) => !profile.deleted_at).map((profile) => profile.user_id)
   );
   const subscriptionByUser = new Map((subscriptionsResult.data ?? []).map((subscription) => [subscription.user_id, subscription]));
+  const preferencesByUser = new Map(
+    (preferencesResult.data ?? []).map((row) => [row.user_id, emailPreferencesFromNotificationBlob(row.notification_preferences)])
+  );
 
   const eligible = users.filter((user) => {
     if (!user.email || !activeProfiles.has(user.id)) return false;
-    return matchesAudience(subscriptionByUser.get(user.id), payload.audience);
+    if (!matchesAudience(subscriptionByUser.get(user.id), payload.audience)) return false;
+    return allowsBroadcastKind(
+      preferencesByUser.get(user.id) ?? emailPreferencesFromNotificationBlob(null),
+      payload.kind
+    );
   });
 
-  const html = buildMadBuddyAdminEmailHtml(payload.message);
+  const preferencesUrl = "https://mad-buddy.com/settings/notifications";
+  const html = buildMadBuddyAdminEmailHtml(payload.message, { managePreferencesUrl: preferencesUrl });
   const text = [
     "Mad Buddy",
     "",
@@ -78,7 +89,9 @@ export async function handleBroadcastEmailJob(admin: Admin, rawPayload: Record<s
     "support@mad-buddy.com",
     "mad-buddy.com",
     "",
-    "When your friends are close, they glow."
+    "When your friends are close, they glow.",
+    "",
+    `Manage optional email preferences: ${preferencesUrl}`
   ].join("\n");
 
   let sent = 0;
