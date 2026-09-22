@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Stethoscope } from "lucide-react";
 import { IssueDetailPanel, type IssueDetailData } from "@/components/admin/support/issue-detail-panel";
+import { LinkrReversalReview } from "@/components/admin/support/linkr-reversal-review";
 import { getAdminAccess } from "@/lib/admin/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
@@ -12,6 +13,7 @@ type DetailPageProps = { params: Promise<{ issueId: string }> };
 
 // Only ever surface these diagnostic keys — never anything sensitive.
 const SAFE_DIAGNOSTIC_KEYS = ["affected_feature", "platform", "app_version", "route"] as const;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default async function SupportIssueDetailPage({ params }: DetailPageProps) {
   const { issueId } = await params;
@@ -34,6 +36,41 @@ export default async function SupportIssueDetailPage({ params }: DetailPageProps
   for (const key of SAFE_DIAGNOSTIC_KEYS) {
     const value = diagnostics[key];
     if (typeof value === "string" && value.length <= 120) safeDiagnostics[key] = value;
+  }
+
+  let linkrReversal: {
+    targetName: string;
+    targetUsername: string | null;
+    passExpiresAt: string | null;
+    reviewed: boolean;
+  } | null = null;
+  const linkrTargetUserId =
+    diagnostics.workflow === "linkr_pass_reversal" &&
+    typeof diagnostics.target_user_id === "string" &&
+    UUID_PATTERN.test(diagnostics.target_user_id)
+      ? diagnostics.target_user_id
+      : null;
+  if (linkrTargetUserId && ticket.user_id) {
+    const [passRes, targetProfileRes] = await Promise.all([
+      admin
+        .from("discovery_passes")
+        .select("expires_at")
+        .eq("user_id", ticket.user_id)
+        .eq("passed_user_id", linkrTargetUserId)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle(),
+      admin
+        .from("profiles")
+        .select("full_name, username")
+        .eq("user_id", linkrTargetUserId)
+        .maybeSingle()
+    ]);
+    linkrReversal = {
+      targetName: targetProfileRes.data?.full_name ?? "Profile unavailable",
+      targetUsername: targetProfileRes.data?.username ?? null,
+      passExpiresAt: passRes.data?.expires_at ?? null,
+      reviewed: ticket.status === "resolved" || ticket.status === "closed"
+    };
   }
 
   const [messagesRes, notesRes, eventsRes, auditRes, staffRes] = await Promise.all([
@@ -188,6 +225,15 @@ export default async function SupportIssueDetailPage({ params }: DetailPageProps
           </Link>
         ) : null}
       </div>
+      {linkrReversal ? (
+        <LinkrReversalReview
+          ticketId={ticket.id}
+          targetName={linkrReversal.targetName}
+          targetUsername={linkrReversal.targetUsername}
+          passExpiresAt={linkrReversal.passExpiresAt}
+          reviewed={linkrReversal.reviewed}
+        />
+      ) : null}
       <IssueDetailPanel data={data} />
     </div>
   );
