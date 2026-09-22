@@ -1,22 +1,41 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Mail, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { AlertTriangle, Mail, Plus, Trash2 } from "lucide-react";
 import { createEmailAliasAction, deleteEmailAliasAction } from "@/app/(admin)/admin/communications/alias-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { MadBuddyEmailAlias } from "@/lib/email/cloudflare-aliases";
 
+type AliasConfigStatus = {
+  configured: boolean;
+  hasToken: boolean;
+  hasZoneId: boolean;
+  hasForwardTo: boolean;
+};
+
 export function AdminEmailAliases({
   aliases,
-  configured
+  configStatus,
+  connectionError
 }: {
   aliases: MadBuddyEmailAlias[];
-  configured: boolean;
+  configStatus: AliasConfigStatus;
+  connectionError: boolean;
 }) {
   const [localPart, setLocalPart] = useState("");
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
+
+  const missingVariables = useMemo(() => {
+    const missing: string[] = [];
+    if (!configStatus.hasToken) missing.push("CLOUDFLARE_EMAIL_ROUTING_API_TOKEN");
+    if (!configStatus.hasZoneId) missing.push("CLOUDFLARE_ZONE_ID");
+    if (!configStatus.hasForwardTo) missing.push("CLOUDFLARE_EMAIL_FORWARD_TO");
+    return missing;
+  }, [configStatus]);
+
+  const usable = configStatus.configured && !connectionError;
 
   function createAlias() {
     setFeedback("");
@@ -38,9 +57,29 @@ export function AdminEmailAliases({
 
   return (
     <div className="space-y-4">
-      {!configured ? (
+      {!configStatus.configured ? (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-sm text-amber-100">
-          Alias management is built, but the Cloudflare server credentials still need to be added before this panel can create or remove addresses.
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-medium">Cloudflare server setup is incomplete.</p>
+              <p className="mt-1 text-xs leading-5 text-amber-100/80">
+                Missing in this deployment: {missingVariables.join(", ") || "unknown configuration"}. Add the missing variable in Vercel Production and redeploy.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : connectionError ? (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-100">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-medium">The Cloudflare credentials are present, but the connection was rejected.</p>
+              <p className="mt-1 text-xs leading-5 text-red-100/80">
+                Check that the API token can edit Email Routing rules for mad-buddy.com, the Zone ID belongs to mad-buddy.com, and the forwarding destination is verified in Cloudflare Email Routing.
+              </p>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -51,7 +90,7 @@ export function AdminEmailAliases({
             onChange={(event) => setLocalPart(event.target.value.toLowerCase())}
             placeholder="press"
             maxLength={64}
-            disabled={!configured || pending}
+            disabled={!usable || pending}
             className="border-0 shadow-none focus-visible:ring-0"
             aria-label="New email alias"
           />
@@ -60,7 +99,7 @@ export function AdminEmailAliases({
         <Button
           type="button"
           onClick={createAlias}
-          disabled={!configured || pending || localPart.trim().length === 0}
+          disabled={!usable || pending || localPart.trim().length === 0}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           Create alias
@@ -73,7 +112,7 @@ export function AdminEmailAliases({
         {aliases.length === 0 ? (
           <div className="flex items-center gap-3 p-4 text-sm text-muted-foreground">
             <Mail className="h-4 w-4" aria-hidden="true" />
-            {configured ? "No Cloudflare aliases were returned." : "Aliases will appear here after Cloudflare is connected."}
+            {usable ? "No Cloudflare aliases were returned." : "Alias controls will unlock after the Cloudflare connection passes."}
           </div>
         ) : (
           <div className="divide-y divide-border/70">
