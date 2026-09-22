@@ -16,13 +16,25 @@ export type FeedbackResult = {
   kind: FeedbackKind;
   /** True only when the web Vibration API accepted the pattern. */
   vibrated: boolean;
-  /**
-   * True when a future native bridge intercepted the event and called
-   * preventDefault(). Web vibration then stands down so native haptics never
-   * double-fire with the browser fallback.
-   */
+  /** True when a registered native adapter handled the semantic feedback. */
   nativeHandled: boolean;
 };
+
+/**
+ * Future Capacitor/native shells register one adapter from their bootstrap.
+ * Keeping this as an in-module callback (rather than a global DOM event) means
+ * third-party page scripts cannot observe Mad Buddy's semantic feedback events.
+ * A native adapter can start an async Haptics call and return true immediately.
+ */
+export type NativeFeedbackHandler = (kind: FeedbackKind) => boolean;
+let nativeFeedbackHandler: NativeFeedbackHandler | null = null;
+
+export function registerNativeFeedbackHandler(handler: NativeFeedbackHandler): () => void {
+  nativeFeedbackHandler = handler;
+  return () => {
+    if (nativeFeedbackHandler === handler) nativeFeedbackHandler = null;
+  };
+}
 
 /**
  * One semantic feedback vocabulary for the whole product.
@@ -31,9 +43,8 @@ export type FeedbackResult = {
  * vibration receive these restrained patterns through the existing canonical
  * device adapter in lib/device/haptics.ts. iPhone Safari/PWA has no general
  * vibration API, so this layer quietly no-ops there while the calling
- * component keeps its visual motion. Future Capacitor iOS can listen for
- * FEEDBACK_EVENT, trigger a native Taptic/Haptics effect, and preventDefault()
- * to suppress the web fallback without changing call sites.
+ * component keeps its visual motion. A future Capacitor shell can register a
+ * native handler without changing product call sites.
  */
 export const FEEDBACK_VIBRATION_PATTERNS = {
   selection: [10],
@@ -48,20 +59,28 @@ export const FEEDBACK_VIBRATION_PATTERNS = {
   snap: [8]
 } as const satisfies Record<FeedbackKind, readonly number[]>;
 
-/** Native wrappers may intercept this cancelable event. */
-export const FEEDBACK_EVENT = "mad-buddy:feedback";
-
 export function feedbackPattern(kind: FeedbackKind): number[] {
   return [...FEEDBACK_VIBRATION_PATTERNS[kind]];
+}
+
+function tryNativeFeedback(kind: FeedbackKind): boolean {
+  if (!nativeFeedbackHandler) return false;
+  try {
+    return nativeFeedbackHandler(kind) === true;
+  } catch {
+    // Native feedback is decorative. A bridge/plugin problem must never affect
+    // the social action whose result we are acknowledging.
+    return false;
+  }
 }
 
 /**
  * Trigger semantic feedback without making support part of product logic.
  *
  * - SSR/server rendering: no-op.
- * - iPhone PWA: event is emitted for future native bridges; vibration no-ops.
+ * - iPhone PWA: vibration no-ops; the calling component keeps visual motion.
  * - Android PWA: the canonical device adapter vibrates when supported/visible.
- * - Future Capacitor: bridge handles the event and calls preventDefault().
+ * - Future Capacitor: a registered native handler takes precedence.
  *
  * We deliberately do NOT synthesize audio here. Realtime achievements and
  * waves can arrive without a user gesture, and iOS/WebKit may block an audio
@@ -73,26 +92,11 @@ export function triggerFeedback(kind: FeedbackKind): FeedbackResult {
     return { kind, vibrated: false, nativeHandled: false };
   }
 
-  let nativeHandled = false;
-  try {
-    const event = new CustomEvent<{ kind: FeedbackKind }>(FEEDBACK_EVENT, {
-      detail: { kind },
-      cancelable: true
-    });
-
-    // dispatchEvent returns false when a listener called preventDefault(). That
-    // is the native bridge's "I handled this" signal.
-    nativeHandled = !window.dispatchEvent(event);
-  } catch {
-    // Even the bridge event is optional. A missing/blocked DOM event primitive
-    // must never turn decorative feedback into an application failure.
-    nativeHandled = false;
-  }
-
+  const nativeHandled = tryNativeFeedback(kind);
   if (nativeHandled) return { kind, vibrated: false, nativeHandled: true };
 
   // Keep rapid product moments discrete. Both operations are capability-safe;
-  // on iPhone PWA, SSR, blocked policies, or hidden documents they simply no-op.
+  // on iPhone PWA, blocked policies, or hidden documents they simply no-op.
   cancelHaptics();
   const vibrated = vibratePattern(feedbackPattern(kind));
   return { kind, vibrated, nativeHandled: false };
