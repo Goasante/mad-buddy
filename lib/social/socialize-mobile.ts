@@ -247,16 +247,6 @@ export async function deactivateSocialize(userId: string): Promise<SocializeActi
 }
 
 const PROXIMITY_RANK: Record<string, number> = { close: 0, near: 1, far: 2 };
-const LINKR_INTEREST_BOOST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
-const LINKR_INTEREST_MAX_BOOST = 0.85;
-const LINKR_PASS_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
-
-function inboundLinkrInterestBoost(createdAt: string | undefined, nowMs: number) {
-  if (!createdAt) return 0;
-  const ageMs = nowMs - Date.parse(createdAt);
-  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= LINKR_INTEREST_BOOST_WINDOW_MS) return 0;
-  return LINKR_INTEREST_MAX_BOOST * (1 - ageMs / LINKR_INTEREST_BOOST_WINDOW_MS);
-}
 
 /**
  * Privacy-safe discovery of other people currently using Socialize. Reuses the
@@ -380,44 +370,16 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       profileByUserId
     });
 
-    const requestCutoffIso = new Date(Date.parse(nowIso) - LINKR_PASS_COOLDOWN_MS).toISOString();
-    const [pendingRequestResult, declinedRequestResult] = await Promise.all([
-      admin
-        .from("friend_requests")
-        .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
-        .eq("status", "pending")
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
-      admin
-        .from("friend_requests")
-        .select("sender_id, receiver_id, status, context_type, created_at, responded_at")
-        .eq("sender_id", userId)
-        .eq("status", "declined")
-        .eq("context_type", "socialize")
-        .gte("responded_at", requestCutoffIso)
-    ]);
-
-    const pendingRequests = pendingRequestResult.data ?? [];
+    const { data: requests } = await admin
+      .from("friend_requests")
+      .select("sender_id, receiver_id, status")
+      .eq("status", "pending")
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
     const sentTo = new Set(
-      pendingRequests.filter((request) => request.sender_id === userId).map((request) => request.receiver_id)
+      (requests ?? []).filter((request) => request.sender_id === userId).map((request) => request.receiver_id)
     );
-    // Ordinary incoming requests remain visible through their normal Accept
-    // state. Linkr interest is different: it stays private until reciprocal.
     const receivedFrom = new Set(
-      pendingRequests
-        .filter((request) => request.receiver_id === userId && request.context_type !== "socialize")
-        .map((request) => request.sender_id)
-    );
-    const inboundLinkrInterest = new Map<string, string>();
-    for (const request of pendingRequests) {
-      if (request.receiver_id === userId && request.context_type === "socialize") {
-        const existing = inboundLinkrInterest.get(request.sender_id);
-        if (!existing || Date.parse(request.created_at) > Date.parse(existing)) {
-          inboundLinkrInterest.set(request.sender_id, request.created_at);
-        }
-      }
-    }
-    const recentDeclinedOutgoing = new Set(
-      (declinedRequestResult.data ?? []).map((request) => request.receiver_id)
+      (requests ?? []).filter((request) => request.receiver_id === userId).map((request) => request.sender_id)
     );
     const plans = await loadEffectivePlansForUsers(admin, safe.map((candidate) => candidate.friend_id));
 
@@ -428,9 +390,6 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       if (!allowedTiers.includes(tier)) continue;
       const session = sessionByUserId.get(candidate.friend_id);
       if (!session) continue;
-      // When this viewer's earlier Linkr interest was passed on, give the pair
-      // the same 30-day breathing room as the recipient's pass.
-      if (recentDeclinedOutgoing.has(candidate.friend_id)) continue;
       // Someone whose device stopped reporting is not shown as nearby, even
       // though their Socialize session has not expired. Session expiry says
       // what they intended; presence says what we actually know.
@@ -485,18 +444,9 @@ export async function discoverSocializePeople(userId: string): Promise<Socialize
       });
     }
 
-    const sortNowMs = Date.parse(nowIso);
     people.sort((a, b) => {
-      // Private reciprocity boost: fresh inbound Linkr interest moves someone
-      // forward within the normal discovery order, but never by a whole
-      // proximity tier. The signal remains server-only and decays to zero.
-      const aScore =
-        PROXIMITY_RANK[a.proximityTier] -
-        inboundLinkrInterestBoost(inboundLinkrInterest.get(a.userId), sortNowMs);
-      const bScore =
-        PROXIMITY_RANK[b.proximityTier] -
-        inboundLinkrInterestBoost(inboundLinkrInterest.get(b.userId), sortNowMs);
-      if (aScore !== bScore) return aScore - bScore;
+      const tierDiff = PROXIMITY_RANK[a.proximityTier] - PROXIMITY_RANK[b.proximityTier];
+      if (tierDiff !== 0) return tierDiff;
       const aStart = Date.parse(sessionByUserId.get(a.userId)?.starts_at ?? "");
       const bStart = Date.parse(sessionByUserId.get(b.userId)?.starts_at ?? "");
       if (aStart !== bStart) return bStart - aStart;

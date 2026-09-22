@@ -26,8 +26,6 @@ import type { SkippedPerson } from "@/lib/social/skipped-people-shared";
 export type SocialActionState = {
   ok: boolean;
   message: string;
-  code?: "undo_limit_reached";
-  remaining?: number;
 };
 
 const uuidSchema = z.string().uuid();
@@ -604,10 +602,12 @@ export async function markPingSeenAction(pingId: string): Promise<SocialActionSt
  * and visibility. This is one-directional, invisible to the person passed on,
  * and fades after 30 days (the column default).
  *
- * If the person had already expressed private Linkr interest, passing closes
- * that pending interest without notifying either side. A successful rewind can
- * restore it later. This is what makes a left swipe end the current discovery
- * attempt instead of leaving a hidden request alive forever.
+ * Upsert rather than insert: re-passing someone whose earlier pass is still
+ * live refreshes it instead of erroring on the unique pair constraint.
+ *
+ * Failures return ok:false with a neutral message and the caller rolls its
+ * optimistic removal back — a card that silently stays gone after a failed
+ * write would look identical to success while the person returns on refresh.
  */
 export async function passPersonAction(targetUserId: string): Promise<SocialActionState> {
   const requestId = createRequestId();
@@ -619,17 +619,18 @@ export async function passPersonAction(targetUserId: string): Promise<SocialActi
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
+  // Also enforced by a check constraint; refused here so the round trip is
+  // never made.
   if (userId === parsedTarget.data) return { ok: false, message: "Not available." };
 
   const admin = createSupabaseAdminClient();
-  const nowIso = new Date().toISOString();
   const { error } = await admin
     .from("discovery_passes")
     .upsert(
       {
         user_id: userId,
         passed_user_id: parsedTarget.data,
-        created_at: nowIso,
+        created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       },
       { onConflict: "user_id,passed_user_id" }
@@ -637,24 +638,6 @@ export async function passPersonAction(targetUserId: string): Promise<SocialActi
 
   if (error) {
     logBackendEvent("warn", { requestId, action: "discovery.pass", userId, errorType: errorType(error) });
-    return { ok: false, message: "Couldn't skip that one. Try again." };
-  }
-
-  const { error: interestError } = await admin
-    .from("friend_requests")
-    .update({ status: "declined", responded_at: nowIso })
-    .eq("sender_id", parsedTarget.data)
-    .eq("receiver_id", userId)
-    .eq("context_type", "socialize")
-    .eq("status", "pending");
-
-  if (interestError) {
-    await admin
-      .from("discovery_passes")
-      .delete()
-      .eq("user_id", userId)
-      .eq("passed_user_id", parsedTarget.data);
-    logBackendEvent("warn", { requestId, action: "discovery.pass.interest_close", userId, errorType: errorType(interestError) });
     return { ok: false, message: "Couldn't skip that one. Try again." };
   }
 
@@ -667,10 +650,11 @@ export async function passPersonAction(targetUserId: string): Promise<SocialActi
 /**
  * Undo a pass.
  *
- * Three self-service rewinds are available in a rolling 24-hour window. The
- * limit is consumed only after we verify there is a real active pass to undo,
- * so stale buttons never cost a rewind. After the limit, the user can ask
- * support to review a specific pass instead.
+ * A swipe is easy to trigger by accident on a touch surface, so reversing one
+ * has to be equally cheap. Deletes the row outright rather than marking it
+ * undone — an undone pass carries no information worth keeping.
+ *
+ * Scoped to the caller's own rows, so this can only ever undo your own pass.
  */
 export async function undoPassAction(targetUserId: string): Promise<SocialActionState> {
   const requestId = createRequestId();
@@ -684,26 +668,6 @@ export async function undoPassAction(targetUserId: string): Promise<SocialAction
   if (!userId) return { ok: false, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
-  const { data: pass, error: passError } = await admin
-    .from("discovery_passes")
-    .select("id, created_at, expires_at")
-    .eq("user_id", userId)
-    .eq("passed_user_id", parsedTarget.data)
-    .gt("expires_at", new Date().toISOString())
-    .maybeSingle();
-
-  if (passError) return { ok: false, message: "Couldn't undo that. Try again." };
-  if (!pass) return { ok: true, message: "That skip is already cleared.", remaining: 3 };
-
-  const rewind = await consumeRateLimit({ action: "linkr.undo", userId, requestId });
-  if (!rewind.allowed) {
-    return {
-      ok: false,
-      code: "undo_limit_reached",
-      message: "You've used your 3 Linkr rewinds for now. Open People you skipped to ask admin to restore this profile."
-    };
-  }
-
   const { error } = await admin
     .from("discovery_passes")
     .delete()
@@ -715,109 +679,7 @@ export async function undoPassAction(targetUserId: string): Promise<SocialAction
     return { ok: false, message: "Couldn't undo that. Try again." };
   }
 
-  // Restore a private inbound Linkr interest that this pass closed. It remains
-  // invisible and merely affects server-side discovery priority until the user
-  // also chooses to connect.
-  await admin
-    .from("friend_requests")
-    .update({ status: "pending", responded_at: null })
-    .eq("sender_id", parsedTarget.data)
-    .eq("receiver_id", userId)
-    .eq("context_type", "socialize")
-    .eq("status", "declined")
-    .gte("responded_at", pass.created_at);
-
-  const label = rewind.remaining === 1 ? "rewind" : "rewinds";
-  return {
-    ok: true,
-    remaining: rewind.remaining,
-    message: `Profile restored. ${rewind.remaining} self-service ${label} left in this 24-hour window.`
-  };
-}
-
-/**
- * Ask support to restore one active pass after the self-service rewind limit.
- * The target id stays in internal diagnostics; it is never sent to the other
- * person and never creates a connection on its own.
- */
-export async function requestPassReversalAction(targetUserId: string): Promise<SocialActionState> {
-  const requestId = createRequestId();
-  const missing = missingEnvState();
-  if (missing) return missing;
-
-  const parsedTarget = uuidSchema.safeParse(targetUserId);
-  if (!parsedTarget.success) return { ok: false, message: "Not available." };
-
-  const userId = await getAuthedUserId();
-  if (!userId) return { ok: false, message: "Log in first." };
-
-  const admin = createSupabaseAdminClient();
-  const { data: pass, error: passError } = await admin
-    .from("discovery_passes")
-    .select("expires_at")
-    .eq("user_id", userId)
-    .eq("passed_user_id", parsedTarget.data)
-    .gt("expires_at", new Date().toISOString())
-    .maybeSingle();
-  if (passError) return { ok: false, message: "Couldn't prepare that request. Try again." };
-  if (!pass) return { ok: true, message: "That profile is already eligible to appear again." };
-
-  const { data: rewindWindow } = await admin
-    .from("rate_limits")
-    .select("count, window_end")
-    .eq("user_id", userId)
-    .eq("action", "linkr.undo")
-    .gt("window_end", new Date().toISOString())
-    .order("window_end", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!rewindWindow || rewindWindow.count < 3) {
-    return { ok: false, message: "Use your available Linkr rewinds first. Admin review opens after all 3 are used." };
-  }
-
-  const supportLimit = await consumeRateLimit({ action: "support.request", userId, requestId });
-  if (!supportLimit.allowed) return { ok: false, message: rateLimitMessage(supportLimit.resetAt) };
-
-  const { data: openTickets } = await admin
-    .from("support_tickets")
-    .select("id, diagnostics, status")
-    .eq("user_id", userId)
-    .eq("category", "muddies")
-    .not("status", "in", "(resolved,closed)")
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  const alreadyOpen = (openTickets ?? []).some((ticket) => {
-    const diagnostics = ticket.diagnostics;
-    if (!diagnostics || typeof diagnostics !== "object" || Array.isArray(diagnostics)) return false;
-    const record = diagnostics as Record<string, unknown>;
-    return record.workflow === "linkr_pass_reversal" && record.target_user_id === parsedTarget.data;
-  });
-  if (alreadyOpen) {
-    return { ok: true, message: "You already asked admin to review this rewind." };
-  }
-
-  const { error } = await admin.from("support_tickets").insert({
-    user_id: userId,
-    category: "muddies",
-    subject: "Linkr rewind request",
-    description: "I used my three self-service Linkr rewinds and want to restore a profile I skipped.",
-    priority: "normal",
-    status: "new",
-    diagnostics: {
-      affected_feature: "linkr",
-      workflow: "linkr_pass_reversal",
-      target_user_id: parsedTarget.data,
-      pass_expires_at: pass.expires_at
-    } as never
-  });
-
-  if (error) {
-    logBackendEvent("warn", { requestId, action: "discovery.pass.reversal_request", userId, errorType: errorType(error) });
-    return { ok: false, message: "Couldn't send that rewind request. Try again." };
-  }
-
-  return { ok: true, message: "Rewind request sent to Mad Buddy support for review." };
+  return { ok: true, message: "" };
 }
 
 /**

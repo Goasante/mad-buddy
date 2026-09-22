@@ -53,10 +53,12 @@ export default async function SupportIssueDetailPage({ params }: DetailPageProps
   if (linkrTargetUserId && ticket.user_id) {
     const [passRes, targetProfileRes] = await Promise.all([
       admin
-        .from("discovery_passes")
+        .from("linkr_actions")
         .select("expires_at")
-        .eq("user_id", ticket.user_id)
-        .eq("passed_user_id", linkrTargetUserId)
+        .eq("actor_id", ticket.user_id)
+        .eq("target_id", linkrTargetUserId)
+        .eq("action", "pass")
+        .not("expires_at", "is", null)
         .gt("expires_at", new Date().toISOString())
         .maybeSingle(),
       admin

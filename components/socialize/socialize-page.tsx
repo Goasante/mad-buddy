@@ -578,7 +578,7 @@ export function SocializePage({
         showToast(result.message, true);
       } else {
         interactionFeedback.wave();
-        showToast(result.message || `Choice saved for ${capitalize(person.displayName || person.username)}.`);
+        showToast(`Muddy request sent to ${capitalize(person.displayName || person.username)}.`);
       }
     });
   }

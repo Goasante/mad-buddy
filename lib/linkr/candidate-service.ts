@@ -57,6 +57,22 @@ export const CANDIDATE_BATCH_SIZE = 60;
 /** How long a returned deck is worth before the client asks again. */
 export const CANDIDATE_PAGE_SIZE = 20;
 
+/**
+ * Private reciprocity is a NUDGE, never an eligibility rule. Six points is
+ * useful inside an otherwise close ranking, but smaller than the base gap
+ * from close -> near (12) and near -> far (10). The signal decays to zero so
+ * an old one-sided click cannot permanently pin somebody near the front.
+ */
+const PRIVATE_RECIPROCITY_BOOST_MAX = 6;
+const PRIVATE_RECIPROCITY_BOOST_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+function privateReciprocityBoost(updatedAt: string | undefined, nowMs: number): number {
+  if (!updatedAt) return 0;
+  const ageMs = nowMs - Date.parse(updatedAt);
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs >= PRIVATE_RECIPROCITY_BOOST_WINDOW_MS) return 0;
+  return PRIVATE_RECIPROCITY_BOOST_MAX * (1 - ageMs / PRIVATE_RECIPROCITY_BOOST_WINDOW_MS);
+}
+
 export type LinkrCandidate = {
   userId: string;
   displayName: string;
@@ -173,6 +189,7 @@ export async function discoverLinkrCandidates(
     { data: profiles },
     { data: locations },
     { data: actions },
+    { data: inboundConnects },
     { data: connections },
     photosByUser,
     { data: interestRows },
@@ -200,6 +217,15 @@ export async function discoverLinkrCandidates(
       .select("target_id, action, expires_at")
       .eq("actor_id", viewerId)
       .in("target_id", candidateIds),
+    // Incoming one-sided Connects are used only as a server-side ordering
+    // hint. Actor ids/timestamps never enter the response shape, and no count,
+    // badge, or "liked you" state is exposed to the viewer.
+    admin
+      .from("linkr_actions")
+      .select("actor_id, updated_at")
+      .eq("target_id", viewerId)
+      .eq("action", "connect")
+      .in("actor_id", candidateIds),
     admin
       .from("linkr_connections")
       .select("user_low, user_high")
@@ -231,6 +257,9 @@ export async function discoverLinkrCandidates(
     (actions ?? [])
       .filter((row) => !row.expires_at || Date.parse(row.expires_at) > nowMs)
       .map((row) => row.target_id)
+  );
+  const inboundConnectAt = new Map(
+    (inboundConnects ?? []).map((row) => [row.actor_id, row.updated_at])
   );
 
   const profileByUserId = new Map(
@@ -359,7 +388,7 @@ export async function discoverLinkrCandidates(
         hasBio: Boolean(row.bio),
         activeNow: presence === "fresh",
         joinedRecently: Date.parse(row.created_at) > dayAgoMs
-      }),
+      }) + privateReciprocityBoost(inboundConnectAt.get(id), nowMs),
       candidate: {
         userId: id,
         displayName: profile.full_name?.trim() || profile.username || "Someone",

@@ -18,7 +18,6 @@ import {
   type ServiceFailureReason
 } from "@/lib/friends/service";
 import { updateProfile } from "@/lib/profile/service";
-import { sendLinkrInterest } from "@/lib/social/linkr-interest";
 
 export type IntegrationActionState = {
   ok: boolean;
@@ -180,10 +179,7 @@ export async function sendFriendRequestAction(
     return { ok: false, message: "Log in before sending Muddy requests." };
   }
 
-  const result =
-    source === "socialize"
-      ? await sendLinkrInterest(await createSupabaseServerClient(), userId, targetUserId)
-      : await sendFriendRequest(userId, targetUserId, source);
+  const result = await sendFriendRequest(userId, targetUserId, source);
 
   if (result.ok) {
     revalidatePath("/friends");

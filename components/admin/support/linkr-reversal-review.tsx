@@ -39,7 +39,7 @@ export function LinkrReversalReview({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">Linkr rewind request</p>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            The user has used their self-service rewinds and is asking to restore a profile they skipped. Approval only removes the temporary pass; it never creates a connection or reveals whether the other person showed interest.
+            The user has used their self-service rewinds and is asking to restore a profile they skipped. Approval only removes the canonical temporary Linkr pass; it never creates a connection, a Muddy friendship, or reveals whether the other person clicked.
           </p>
           <div className="mt-3 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5 text-sm">
             <p className="font-medium">{targetName}</p>

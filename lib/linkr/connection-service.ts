@@ -32,6 +32,7 @@ export const PASS_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Undo reaches back only this far, and only to the most recent action. */
 export const UNDO_WINDOW_MS = 5 * 60 * 1000;
+const DAILY_SELF_SERVICE_PASS_REWINDS = 3;
 
 export type ConnectResult = {
   ok: boolean;
@@ -338,6 +339,59 @@ async function notifyMutualConnection(
   }
 }
 
+async function requestPassReversalReview(
+  admin: Admin,
+  viewerId: string,
+  targetId: string,
+  passExpiresAt: string
+): Promise<string> {
+  // Dedupe before consuming the support-request limiter. Repeated taps on the
+  // same exhausted rewind must not create a queue of identical tickets.
+  const { data: openTickets } = await admin
+    .from("support_tickets")
+    .select("id, diagnostics, status")
+    .eq("user_id", viewerId)
+    .eq("category", "muddies")
+    .not("status", "in", "(resolved,closed)")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  const alreadyOpen = (openTickets ?? []).some((ticket) => {
+    const diagnostics = ticket.diagnostics;
+    if (!diagnostics || typeof diagnostics !== "object" || Array.isArray(diagnostics)) return false;
+    const record = diagnostics as Record<string, unknown>;
+    return record.workflow === "linkr_pass_reversal" && record.target_user_id === targetId;
+  });
+  if (alreadyOpen) {
+    return "You've used today's 3 Linkr rewinds. This pass is already waiting for Mad Buddy support review.";
+  }
+
+  const supportLimit = await consumeRateLimit({ action: "support.request", userId: viewerId });
+  if (!supportLimit.allowed) {
+    return `You've used today's 3 Linkr rewinds. ${rateLimitMessage(supportLimit.resetAt)}`;
+  }
+
+  const { error } = await admin.from("support_tickets").insert({
+    user_id: viewerId,
+    category: "muddies",
+    subject: "Linkr rewind request",
+    description: "I used my three self-service Linkr rewinds and want to restore the most recent profile I passed.",
+    priority: "normal",
+    status: "new",
+    diagnostics: {
+      affected_feature: "linkr",
+      workflow: "linkr_pass_reversal",
+      target_user_id: targetId,
+      pass_expires_at: passExpiresAt,
+      source: "linkr_v2"
+    } as never
+  });
+
+  return error
+    ? "You've used today's 3 Linkr rewinds. Support review could not be requested just now — try again."
+    : "You've used today's 3 Linkr rewinds. This pass was sent to Mad Buddy support for review.";
+}
+
 /**
  * Undo the most recent decision, within a short window.
  *
@@ -366,7 +420,7 @@ export async function undoLastLinkrAction(
    */
   const { data: last } = await admin
     .from("linkr_actions")
-    .select("id, target_id, action, created_at, updated_at")
+    .select("id, target_id, action, expires_at, created_at, updated_at")
     .eq("actor_id", viewerId)
     .order("updated_at", { ascending: false })
     .limit(1)
@@ -389,9 +443,38 @@ export async function undoLastLinkrAction(
     return { ok: false, message: "You're already connected. Open the chat to manage it." };
   }
 
+  let rewindRemaining: number | null = null;
+  const ordinaryExpiringPass = last.action === "pass" && Boolean(last.expires_at);
+  if (ordinaryExpiringPass) {
+    const rewind = await consumeRateLimit({ action: "linkr.undo", userId: viewerId });
+    if (!rewind.allowed) {
+      return {
+        ok: false,
+        message: await requestPassReversalReview(
+          admin,
+          viewerId,
+          last.target_id,
+          last.expires_at as string
+        )
+      };
+    }
+    rewindRemaining = rewind.remaining;
+  }
+
   const { error } = await admin.from("linkr_actions").delete().eq("id", last.id).eq("actor_id", viewerId);
   if (error) return { ok: false, message: "Couldn't undo that. Try again." };
-  return { ok: true, message: "Undone.", restoredUserId: last.target_id };
+
+  if (rewindRemaining === null) {
+    return { ok: true, message: "Undone.", restoredUserId: last.target_id };
+  }
+  return {
+    ok: true,
+    message:
+      rewindRemaining === 0
+        ? `Undone. You've used all ${DAILY_SELF_SERVICE_PASS_REWINDS} self-service Linkr rewinds for today.`
+        : `Undone. ${rewindRemaining} Linkr ${rewindRemaining === 1 ? "rewind" : "rewinds"} left today.`,
+    restoredUserId: last.target_id
+  };
 }
 
 /** Ends a mutual connection. Explicit, and separate from Block. */

@@ -366,8 +366,7 @@ export async function countIncomingRequests(userId: string): Promise<number> {
     .from("friend_requests")
     .select("id", { count: "exact", head: true })
     .eq("receiver_id", userId)
-    .eq("status", "pending")
-    .or("context_type.is.null,context_type.neq.socialize");
+    .eq("status", "pending");
 
   return error ? 0 : count ?? 0;
 }
@@ -386,7 +385,6 @@ export async function listIncomingRequests(
     .select("id, sender_id, created_at")
     .eq("receiver_id", userId)
     .eq("status", "pending")
-    .or("context_type.is.null,context_type.neq.socialize")
     .order("created_at", { ascending: false })
     .limit(100);
 

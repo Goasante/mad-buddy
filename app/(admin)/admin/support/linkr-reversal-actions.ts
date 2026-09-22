@@ -7,6 +7,7 @@ import { recordAdminAuditEvent } from "@/lib/admin/service";
 import { deliverNotification } from "@/lib/notifications/server";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { isBlockedEitherDirection } from "@/lib/social/permissions";
 
 export type LinkrReversalReviewState = { ok: boolean; message: string };
 
@@ -43,41 +44,51 @@ export async function reviewLinkrPassReversalAction(input: unknown): Promise<Lin
 
     const diagnostics = diagnosticsObject(ticket.diagnostics);
     const targetUserId = typeof diagnostics.target_user_id === "string" ? diagnostics.target_user_id : "";
-    const workflow = diagnostics.workflow;
-    if (workflow !== "linkr_pass_reversal" || !z.string().uuid().safeParse(targetUserId).success) {
+    if (diagnostics.workflow !== "linkr_pass_reversal" || !z.string().uuid().safeParse(targetUserId).success) {
       return { ok: false, message: "This support issue is not a Linkr rewind request." };
     }
 
     const approved = parsed.data.decision === "approve";
+    let activePassId: string | null = null;
+
+    if (approved) {
+      // Safety always outranks recovery. Admin cannot use a rewind ticket to
+      // route around a block that either person placed after the pass.
+      if (await isBlockedEitherDirection(admin, ticket.user_id, targetUserId)) {
+        return { ok: false, message: "This profile cannot be restored while a block is active." };
+      }
+
+      const { data: pass, error: passError } = await admin
+        .from("linkr_actions")
+        .select("id, expires_at")
+        .eq("actor_id", ticket.user_id)
+        .eq("target_id", targetUserId)
+        .eq("action", "pass")
+        .not("expires_at", "is", null)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
+      if (passError) return { ok: false, message: "The current Linkr pass could not be verified." };
+      activePassId = pass?.id ?? null;
+    }
+
     const logged = await recordAdminAuditEvent(admin, {
       actorId: context.userId,
       action: approved ? "linkr_pass_reversal_approved" : "linkr_pass_reversal_rejected",
       targetType: "support_ticket",
       targetId: ticket.id,
-      newState: { targetUserId, decision: parsed.data.decision },
-      reason: "Admin review of Linkr rewind request"
+      newState: { targetUserId, decision: parsed.data.decision, activePass: Boolean(activePassId) },
+      reason: "Admin review of canonical Linkr rewind request"
     });
     if (!logged) return { ok: false, message: "The audit entry could not be recorded, so nothing was changed." };
 
-    if (approved) {
+    if (approved && activePassId) {
       const { error: deleteError } = await admin
-        .from("discovery_passes")
+        .from("linkr_actions")
         .delete()
-        .eq("user_id", ticket.user_id)
-        .eq("passed_user_id", targetUserId);
+        .eq("id", activePassId)
+        .eq("actor_id", ticket.user_id)
+        .eq("action", "pass");
       if (deleteError) return { ok: false, message: "The Linkr pass could not be restored." };
-
-      // If the skipped person had privately expressed Linkr interest, passing
-      // temporarily closes that interest. Restoring the pass makes that same
-      // private interest eligible again; it still does not create a match.
-      await admin
-        .from("friend_requests")
-        .update({ status: "pending", responded_at: null })
-        .eq("sender_id", targetUserId)
-        .eq("receiver_id", ticket.user_id)
-        .eq("context_type", "socialize")
-        .eq("status", "declined")
-        .gte("responded_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
     }
 
     const resolvedAt = new Date().toISOString();
@@ -101,15 +112,21 @@ export async function reviewLinkrPassReversalAction(input: unknown): Promise<Lin
       type: "system_alert",
       title: approved ? "Your Linkr rewind was approved" : "Your Linkr rewind was reviewed",
       message: approved
-        ? "That skipped profile can appear in Linkr again. No connection was created automatically."
-        : "The skip stays in place for now. It will still expire automatically after its normal 30-day window."
+        ? activePassId
+          ? "That passed profile is eligible to appear in Linkr again. No connection was created automatically."
+          : "That pass had already expired or been cleared, so the profile was already eligible to appear again."
+        : "The pass stays in place for now and will still expire automatically after its normal 30-day window."
     });
 
     revalidatePath("/admin/support");
     revalidatePath(`/admin/support/${ticket.id}`);
     return {
       ok: true,
-      message: approved ? "Linkr rewind approved and the profile was restored." : "Linkr rewind request rejected."
+      message: approved
+        ? activePassId
+          ? "Linkr rewind approved and the pass was removed."
+          : "Linkr rewind approved; the pass was already inactive."
+        : "Linkr rewind request rejected."
     };
   } catch {
     return { ok: false, message: "Admin access is required to review Linkr rewinds." };
