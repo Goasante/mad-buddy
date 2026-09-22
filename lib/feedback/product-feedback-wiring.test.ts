@@ -10,7 +10,12 @@ const safeArrival = read("components/safety/safe-arrival-page.tsx");
 const upFor = read("components/hangout/hangout-mode-page.tsx");
 const longPress = read("components/ui/long-press-actions.tsx");
 const messageActions = read("components/messaging/message-actions-menu.tsx");
+const messages = read("components/messages/messages-page-v4.tsx");
 const quickActions = read("components/app-shell/quick-actions-launcher.tsx");
+const friends = read("components/friends/friends-page.tsx");
+const muddyProfile = read("components/friends/muddy-profile-page.tsx");
+const findMuddies = read("components/contacts/find-muddies-sheet.tsx");
+const socialize = read("components/socialize/socialize-page.tsx");
 
 describe("approved product feedback map", () => {
   it("acknowledges Plan mutations only after their server result", () => {
@@ -47,6 +52,47 @@ describe("approved product feedback map", () => {
     expect(request.indexOf("await requestHangoutAction")).toBeGreaterThanOrEqual(0);
     expect(request.indexOf("interactionFeedback.light()")).toBeGreaterThan(
       request.indexOf("await requestHangoutAction")
+    );
+  });
+
+  it("covers Muddy requests and Waves on the production friendship surfaces", () => {
+    expect(friends).toContain('from "@/lib/feedback/feedback"');
+    expect(friends).toContain("interactionFeedback.success()");
+    expect(friends).toContain("interactionFeedback.error()");
+    expect(friends).toContain("acceptFriendRequestAction");
+    expect(friends).toContain("sendFriendRequestAction");
+
+    expect(muddyProfile).toContain("interactionFeedback.wave()");
+    expect(muddyProfile).toContain("interactionFeedback.success()");
+    expect(muddyProfile).toContain("interactionFeedback.error()");
+    expect(findMuddies).toContain("interactionFeedback.success()");
+    expect(findMuddies).toContain("interactionFeedback.error()");
+
+    const socializeWave = socialize.slice(
+      socialize.indexOf("function wave(person"),
+      socialize.indexOf("function passPerson")
+    );
+    expect(socializeWave).toContain("await sendFriendRequestAction");
+    expect(socializeWave).toContain("interactionFeedback.wave()");
+    expect(socializeWave.indexOf("interactionFeedback.wave()")).toBeGreaterThan(
+      socializeWave.indexOf("await sendFriendRequestAction")
+    );
+  });
+
+  it("acknowledges message reaction success and real send failure", () => {
+    expect(messages).toContain('from "@/lib/feedback/feedback"');
+    const reaction = messages.slice(messages.indexOf("function react(messageId"));
+    expect(reaction).toContain("await reactToMessageAction");
+    expect(reaction).toContain("interactionFeedback.selection()");
+    expect(reaction).toContain("interactionFeedback.error()");
+
+    const settle = messages.slice(
+      messages.indexOf("function settleOptimistic"),
+      messages.indexOf("function retryOptimistic")
+    );
+    expect(settle).toContain('if (outcome === "failed") interactionFeedback.error()');
+    expect(settle.indexOf("interactionFeedback.error()")).toBeGreaterThan(
+      settle.indexOf("updateOptimistic")
     );
   });
 
