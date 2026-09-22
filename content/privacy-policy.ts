@@ -1,12 +1,12 @@
 export { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 export const PRIVACY_POLICY_EFFECTIVE_DATE = "23 July 2026";
-export const PRIVACY_POLICY_LAST_UPDATED = "30 August 2026";
+export const PRIVACY_POLICY_LAST_UPDATED = "22 September 2026";
 
 export const legalContact = {
   companyName: "Godfred Ofosu Asante",
   businessAddress: "Ashongman Estate",
-  privacyEmail: "godfredasante004@gmail.com",
-  supportEmail: "godfredasante004@gmail.com"
+  privacyEmail: "hello@mad-buddy.com",
+  supportEmail: "support@mad-buddy.com"
 } as const;
 
 /**
