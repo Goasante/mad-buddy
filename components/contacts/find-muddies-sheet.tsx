@@ -102,7 +102,7 @@ export function FindMuddiesSheet({
   const [setupBusy, setSetupBusy] = useState(false);
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
-  const [phoneRegion, setPhoneRegion] = useState(() =>
+  const [phoneRegion, setPhoneRegion] = useState<string>(() =>
     contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
   );
   const [setupFeedback, setSetupFeedback] = useState("");
