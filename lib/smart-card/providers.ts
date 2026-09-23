@@ -20,6 +20,7 @@ import type {
 } from "@/lib/smart-card/home-context";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
+import { MAX_ACTIVE_UPFORS } from "@/lib/social/upfor-limits";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
@@ -831,6 +832,43 @@ function upForMomentumProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
+function ownedUpForLiveProvider(input: SmartCardInput): SmartCard | null {
+  const first = input.upFor?.ownedLive[0];
+  if (!first) return null;
+  const count = input.upFor?.ownedSlotCount ?? (input.upFor!.ownedLive.length + input.upFor!.ownedScheduled.length);
+  const remaining = Math.max(0, MAX_ACTIVE_UPFORS - count);
+  return {
+    id: "owned_upfor_live",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "YOUR UPFOR IS LIVE",
+    title: `Your ${first.activityLabel} UpFor is live`,
+    subtitle: remaining === 0
+      ? `You're using all ${MAX_ACTIVE_UPFORS} UpFor slots. Manage one when you're ready.`
+      : `You can start ${remaining} more ${remaining === 1 ? "UpFor" : "UpFors"}.`,
+    cta: "Manage UpFor",
+    destination: upForSessionDestination(first.id),
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
+    expiresAt: expiresAt(first.endsAt)
+  };
+}
+
+function upForPlanChatReadyProvider(input: SmartCardInput): SmartCard | null {
+  const first = input.upFor?.readyPlanChats?.[0];
+  if (!first) return null;
+  return {
+    id: "upfor_plan_chat_ready",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "PLAN CHAT READY",
+    title: `Your ${first.activityLabel} Plan Chat is ready`,
+    subtitle: "The UpFor has become a plan. Coordinate with everyone who joined.",
+    cta: "Open Plan Chat",
+    destination: conversationHref(first.conversationId),
+    expiresAt: expiresAt(first.endsAt)
+  };
+}
+
 /** Tier 2: somebody said yes to the viewer. */
 function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
   /* THE JOB, NOT THE STATE.
@@ -871,7 +909,9 @@ function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
     illustration: "celebration",
     eyebrow: "YOU'RE IN",
     title: first.ownerName + " said yes",
-    subtitle: acceptedTogetherLine(first.activityLabel),
+    subtitle: canOfferMessage
+      ? acceptedTogetherLine(first.activityLabel)
+      : `You're in. You and ${first.ownerName} aren't Muddies yet, so you can't message each other directly.`,
     cta: canOfferMessage ? "Message " + first.ownerName : "View UpFor",
     /* `destination` stays a real surface even when an intent is present: it is
        the honest fallback if the conversation cannot be opened. */
@@ -1258,6 +1298,8 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "upfor_opportunity", build: () => upForOpportunityProvider(input) },
     { id: "upfor_momentum", build: () => upForMomentumProvider(input) },
     { id: "upfor_accepted", build: () => upForAcceptedProvider(input) },
+    { id: "upfor_plan_chat_ready", build: () => upForPlanChatReadyProvider(input) },
+    { id: "owned_upfor_live", build: () => ownedUpForLiveProvider(input) },
     { id: "owned_upfor_starting", build: () => ownedUpForStartingProvider(input) },
     { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
     { id: "event_starting", build: () => eventStartingProvider(input) },

@@ -212,6 +212,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardPageContent
+      watchUpForChanges={upForContext?.joined.some((session) => session.myStatus === "pending" || session.myStatus === "accepted") ?? false}
       activationState={activationUnavailable ? null : activation?.state ?? null}
       firstMuddy={activation?.acknowledgeFirstMuddy ? activation.firstMuddy : null}
       firstMuddyNeedsLocation={activation ? !activation.locationGranted : false}

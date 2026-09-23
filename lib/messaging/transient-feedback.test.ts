@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTransientConfirmation, TRANSIENT_FEEDBACK_MS } from "@/hooks/use-transient-feedback";
+import { isExpiringMessageActionRefusal, isTransientConfirmation, TRANSIENT_FEEDBACK_MS } from "@/hooks/use-transient-feedback";
 
 /**
  * A confirmation must not become permanent UI.
@@ -86,5 +86,13 @@ describe("timing", () => {
 
   it("is short enough to feel transient", () => {
     expect(TRANSIENT_FEEDBACK_MS).toBeLessThanOrEqual(5000);
+  });
+});
+
+describe("edit and delete time-window refusals", () => {
+  it("expires the exact server refusals without hiding unrelated errors", () => {
+    expect(isExpiringMessageActionRefusal("This message can't be edited anymore.")).toBe(true);
+    expect(isExpiringMessageActionRefusal("This message can't be deleted for everyone anymore.")).toBe(true);
+    expect(isExpiringMessageActionRefusal("Couldn't remove that message. Try again.")).toBe(false);
   });
 });

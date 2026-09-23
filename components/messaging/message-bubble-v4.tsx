@@ -24,6 +24,7 @@ import type { ChatMessageView } from "@/lib/messaging/mobile";
 import type { ReactionAggregate } from "@/lib/messaging/reaction-summary-types";
 import type { ChatPollView } from "@/lib/messaging/ultimate-types";
 import { DELETED_MESSAGE_PLACEHOLDER } from "@/lib/messaging/rules";
+import { canEditMessage } from "@/lib/messaging/rules";
 import { cn } from "@/lib/utils";
 
 const REPLY_THRESHOLD = 58;
@@ -111,6 +112,7 @@ export function MessageBubbleV4({
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsOpenedAtMs, setActionsOpenedAtMs] = useState(0);
   const [thresholdHit, setThresholdHit] = useState(false);
   const [reactorAggregate, setReactorAggregate] = useState<ReactionAggregate | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -119,10 +121,22 @@ export function MessageBubbleV4({
   const longPressedRef = useRef(false);
   const reactionMap = useConversationReactionSummaries(conversationId);
   const liveAggregates = reactionAggregates.length > 0 ? reactionAggregates : reactionMap[message.id] ?? [];
+  const canEdit = actionsOpen && canEditMessage({
+    isSender: message.isMine,
+    createdAtMs: Date.parse(message.createdAt),
+    nowMs: actionsOpenedAtMs,
+    messageType: message.messageType,
+    deleted: message.deleted
+  });
 
   function clearTimer() {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
+  }
+
+  function openActions() {
+    setActionsOpenedAtMs(Date.now());
+    setActionsOpen(true);
   }
 
   useEffect(() => () => clearTimer(), []);
@@ -140,7 +154,7 @@ export function MessageBubbleV4({
     clearTimer();
     timerRef.current = setTimeout(() => {
       longPressedRef.current = true;
-      setActionsOpen(true);
+      openActions();
       haptic(8);
     }, LONG_PRESS_MS);
   }
@@ -225,7 +239,7 @@ export function MessageBubbleV4({
           onContextMenu={(event) => {
             event.preventDefault();
             clearTimer();
-            setActionsOpen(true);
+            openActions();
           }}
           onDoubleClick={() => react("heart")}
           className={cn(
@@ -316,9 +330,14 @@ export function MessageBubbleV4({
             <Action icon={Pin} label={pinned ? "Unpin" : "Pin"} onClick={() => { onPin(); setActionsOpen(false); }} active={pinned} />
             <Action icon={Forward} label="Forward" onClick={() => { onForward(); setActionsOpen(false); }} />
             {message.isMine ? <Action icon={Info} label="Info" onClick={() => { setInfoOpen(true); setActionsOpen(false); }} /> : null}
-            {message.isMine && message.text && !message.deleted ? <Action icon={Pencil} label="Edit" onClick={() => { onEdit(); setActionsOpen(false); }} /> : null}
+            {message.isMine && message.messageType === "text" && message.text && !message.deleted ? (
+              <Action icon={Pencil} label="Edit" disabled={!canEdit} onClick={() => { onEdit(); setActionsOpen(false); }} />
+            ) : null}
             {!message.deleted ? <Action icon={Trash2} label="Delete" destructive onClick={() => { onDelete(); setActionsOpen(false); }} /> : null}
           </div>
+          {message.isMine && message.messageType === "text" && message.text && !message.deleted && !canEdit ? (
+            <p className="text-center text-xs text-muted-foreground">You can edit a message for 10 minutes after sending it.</p>
+          ) : null}
         </div>
       </Modal>
 

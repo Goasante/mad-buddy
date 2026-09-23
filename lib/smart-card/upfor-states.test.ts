@@ -168,6 +168,32 @@ describe("momentum and obligation are never the same card", () => {
   });
 });
 
+describe("the creator's live UpFor", () => {
+  it("shows the two remaining slots after one creation", () => {
+    const card = pick(context({ ownedLive: [owned()] }));
+    expect(card?.id).toBe("owned_upfor_live");
+    expect(card?.subtitle).toBe("You can start 2 more UpFors.");
+  });
+
+  it("counts scheduled sessions toward the same server limit", () => {
+    const card = pick(context({
+      ownedLive: [owned()],
+      ownedScheduled: [owned({ id: "s2" })]
+    }));
+    expect(card?.subtitle).toBe("You can start 1 more UpFor.");
+  });
+
+  it("includes paused slots counted by the creation rule", () => {
+    const card = pick(context({ ownedLive: [owned()], ownedSlotCount: 3 }));
+    expect(card?.subtitle).toContain("all 3 UpFor slots");
+  });
+
+  it("keeps a pending response ahead of the creator summary", () => {
+    const card = pick(context({ ownedLive: [owned({ pendingRequestCount: 1 })] }));
+    expect(card?.id).toBe("upfor_requests");
+  });
+});
+
 describe("the viewer's own request states", () => {
   /* Accepted is a TRANSITION into coordination, not a destination: the primary
      action moves the person toward the Muddy they are now going with rather

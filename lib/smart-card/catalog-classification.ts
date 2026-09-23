@@ -82,6 +82,8 @@ export const SMART_CARD_STATE_OWNERSHIP: Record<string, SmartCardClassification>
   },
   upfor_momentum: { ownership: "CARD_B_WIRED", reason: "Wired from the Home UpFor context." },
   upfor_accepted: { ownership: "CARD_B_WIRED", reason: "Wired from the Home UpFor context." },
+  upfor_plan_chat_ready: { ownership: "CARD_B_WIRED", reason: "The accepted viewer is verified as a member of the converted Plan Chat." },
+  owned_upfor_live: { ownership: "CARD_B_WIRED", reason: "The creator's current UpFor count and shared creation ceiling are known." },
   owned_upfor_starting: { ownership: "CARD_B_WIRED", reason: "Wired from the Home UpFor context." },
   nearby_muddy: { ownership: "NEARBY_HERO_OWNED", reason: "NearbyHero owns the proximity payoff, with avatars, Glow colour and its own actions." },
   nearby_muddies: { ownership: "NEARBY_HERO_OWNED", reason: "Excluded at engine selection so Card B returns the next best state instead." },

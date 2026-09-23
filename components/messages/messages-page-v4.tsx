@@ -59,6 +59,7 @@ import { ConversationRowV4 } from "@/components/messaging/conversation-row-v4";
 import { MessageBubbleV4 } from "@/components/messaging/message-bubble-v4";
 import { MessageComposerV4Shell } from "@/components/messaging/message-composer-v4-shell";
 import { planChatClosedNotice } from "@/lib/messaging/plan-chat-closure";
+import { canDeleteForEveryone } from "@/lib/messaging/rules";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { Button } from "@/components/ui/button";
 import { AppMenu } from "@/components/ui/app-dropdown";
@@ -124,7 +125,7 @@ type InboxPreference = {
   draftUpdatedAt: string | null;
 };
 type InboxPreferenceMap = Record<string, Partial<InboxPreference>>;
-type DeleteTarget = { message: ChatMessageView } | null;
+type DeleteTarget = { message: ChatMessageView; openedAtMs: number } | null;
 type ForwardTarget = { message: ChatMessageView } | null;
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1136,20 +1137,15 @@ export function MessagesPageV4({
 
   return (
     <div className="mx-auto h-full min-h-0 w-full max-w-[1240px] overflow-hidden bg-background text-foreground dark:bg-[#111112] md:pb-3">
-      {/* FLOATS ABOVE THE THREAD, deliberately.
-          An open conversation is `fixed inset-0 z-30` -- a full-screen overlay
-          on phones. This banner used to sit in normal flow above that overlay,
-          which meant every message it carried was rendered somewhere the
-          reader could not see: a delete that was refused, a send that failed,
-          a copy that succeeded, all silent. Anything the product says about an
-          action has to appear over the surface the action happened on, so this
-          is fixed and z-40. */}
+      {/* Keep feedback visible over the full-screen chat without covering its
+          back button or intercepting navigation. Action refusals expire. */}
       {feedback ? (
         <div
           role="status"
-          className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 mx-auto max-w-md rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-top-2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2"
+          className="pointer-events-none fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+7rem)] z-40 mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 md:inset-x-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2"
         >
-          {feedback}
+          <span className="min-w-0 flex-1">{feedback}</span>
+          <button type="button" aria-label="Dismiss message" onClick={() => setFeedback("")} className="pointer-events-auto -mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>
       ) : null}
 
@@ -1275,7 +1271,7 @@ export function MessagesPageV4({
                                 onReact={(reaction) => react(message.id, reaction)}
                                 onCopy={() => { if (message.text) void navigator.clipboard?.writeText(message.text).then(() => setFeedback("Copied.")); }}
                                 onEdit={() => { setEditTarget(message); setEditDraft(message.text ?? ""); }}
-                                onDelete={() => setDeleteTarget({ message })}
+                                onDelete={() => setDeleteTarget({ message, openedAtMs: Date.now() })}
                                 onSave={() => saveMessage(message.id)}
                                 onPin={() => pinMessage(message.id)}
                                 onForward={() => setForwardTarget({ message })}
@@ -1472,8 +1468,12 @@ function EditMessageModal({ message, draft, setDraft, pending, onClose, onSave }
 }
 
 function DeleteMessageModal({ target, pending, onClose, onDelete }: { target: DeleteTarget; pending: boolean; onClose: () => void; onDelete: (forEveryone: boolean) => void }) {
-  const mine = target?.message.isMine;
-  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Delete message?" compact><div className="space-y-2"><button type="button" disabled={pending} onClick={() => onDelete(false)} className="focus-ring w-full rounded-2xl border border-border/70 p-3 text-left"><strong className="block text-sm">Delete for me</strong><span className="text-xs text-muted-foreground">Hide this message only from your chat.</span></button>{mine ? <button type="button" disabled={pending} onClick={() => onDelete(true)} className="focus-ring w-full rounded-2xl border border-destructive/20 bg-destructive/5 p-3 text-left text-destructive"><strong className="block text-sm">Delete for everyone</strong><span className="text-xs opacity-75">Remove it for everyone if the message is still eligible.</span></button> : null}<Button variant="outline" className="w-full" onClick={onClose} disabled={pending}>Cancel</Button></div></Modal>;
+  const everyone = target && canDeleteForEveryone({
+    isSender: target.message.isMine,
+    createdAtMs: Date.parse(target.message.createdAt),
+    nowMs: target.openedAtMs
+  });
+  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Delete message?" compact><div className="space-y-2"><button type="button" disabled={pending} onClick={() => onDelete(false)} className="focus-ring w-full rounded-2xl border border-border/70 p-3 text-left"><strong className="block text-sm">Delete for me</strong><span className="text-xs text-muted-foreground">Hide this message only from your chat.</span></button>{everyone ? <button type="button" disabled={pending} onClick={() => onDelete(true)} className="focus-ring w-full rounded-2xl border border-destructive/20 bg-destructive/5 p-3 text-left text-destructive"><strong className="block text-sm">Delete for everyone</strong><span className="text-xs opacity-75">Remove it for everyone in this chat.</span></button> : null}<Button variant="outline" className="w-full" onClick={onClose} disabled={pending}>Cancel</Button></div></Modal>;
 }
 
 function ForwardModal({ target, conversations, pending, onClose, onForward }: { target: ForwardTarget; conversations: ConversationView[]; pending: boolean; onClose: () => void; onForward: (conversationId: string) => void }) {

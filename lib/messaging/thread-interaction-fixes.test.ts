@@ -34,6 +34,21 @@ describe("the thread scrolls vertically only", () => {
 });
 
 describe("a delete visibly resolves", () => {
+  it("offers delete for everyone only within the server's time limit", () => {
+    const modal = page().slice(page().indexOf("function DeleteMessageModal"));
+    expect(modal).toContain("canDeleteForEveryone({");
+    expect(modal).toContain("nowMs: target.openedAtMs");
+    expect(page()).toContain("openedAtMs: Date.now()");
+    expect(modal).toContain("{everyone ?");
+  });
+
+  it("blocks editing an old message in the live bubble menu", () => {
+    const source = bubble();
+    expect(source).toContain("canEditMessage({");
+    expect(source).toContain('label="Edit" disabled={!canEdit}');
+    expect(source).toContain("You can edit a message for 10 minutes after sending it.");
+  });
+
   it("closes the sheet before waiting on the server", () => {
     const source = page();
     const handler = source.slice(source.indexOf("<DeleteMessageModal"));
@@ -75,6 +90,13 @@ describe("a delete visibly resolves", () => {
 });
 
 describe("what the product says is where the person can see it", () => {
+  it("keeps feedback away from the back button without intercepting taps", () => {
+    const banner = page().slice(page().indexOf("{feedback ? ("));
+    expect(banner.slice(0, 600)).toContain("bottom-");
+    expect(banner.slice(0, 600)).toContain("pointer-events-none");
+    expect(banner.slice(0, 900)).toContain('aria-label="Dismiss message"');
+  });
+
   it("floats the feedback banner above the full-screen thread", () => {
     const source = page();
     const banner = source.slice(source.indexOf("{feedback ? ("));

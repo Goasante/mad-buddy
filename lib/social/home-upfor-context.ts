@@ -5,9 +5,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { directConversationKey } from "@/lib/messaging/rules";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
+import { isUpcomingPlan } from "@/lib/social/plans";
 import { countPendingRequests } from "@/lib/social/hangout-requests";
 import { isComingUpUpFor, upForPhase } from "@/lib/social/upfor-lifecycle";
-import type { Database, HangoutActivityType } from "@/lib/supabase/database.types";
+import type { Database, HangoutActivityType, PlanStatus } from "@/lib/supabase/database.types";
 
 type Admin = SupabaseClient<Database>;
 
@@ -121,12 +122,16 @@ export type HomeUpForOpportunity = {
 };
 
 export type HomeUpForContext = {
+  /** All current or scheduled slots, including paused sessions counted by the creation RPC. */
+  ownedSlotCount?: number;
   /** Live sessions the viewer owns, most recently started first. */
   ownedLive: HomeUpForOwnedSession[];
   /** Scheduled sessions the viewer owns, soonest first. */
   ownedScheduled: HomeUpForOwnedSession[];
   /** Sessions the viewer asked to join, and where that request stands. */
   joined: HomeUpForJoinedSession[];
+  /** Converted UpFors whose accepted viewer is an actual Plan Chat member. */
+  readyPlanChats?: Array<{ conversationId: string; activityLabel: string; endsAt: string | null }>;
   /**
    * Live Muddy UpFors the viewer may see and has NOT requested to join.
    *
@@ -137,7 +142,7 @@ export type HomeUpForContext = {
   opportunities: HomeUpForOpportunity[];
 };
 
-const EMPTY: HomeUpForContext = { ownedLive: [], ownedScheduled: [], joined: [], opportunities: [] };
+const EMPTY: HomeUpForContext = { ownedSlotCount: 0, ownedLive: [], ownedScheduled: [], joined: [], readyPlanChats: [], opportunities: [] };
 
 /**
  * Cap on the coordination-evidence read.
@@ -175,7 +180,7 @@ export async function loadHomeUpForContext(
        * Full is still a live owner commitment in the canonical UpFor lifecycle.
        * Paused is intentionally absent from Home presentation.
        */
-      .in("status", ["active", "full"])
+      .in("status", ["active", "paused", "full"])
       .order("starts_at", { ascending: true })
       .limit(12),
     admin
@@ -190,6 +195,7 @@ export async function loadHomeUpForContext(
   if (ownedResult.error && joinedResult.error) return EMPTY;
 
   const ownedRows = ownedResult.data ?? [];
+  const ownedSlotCount = ownedRows.filter((row) => row.ends_at && Date.parse(row.ends_at) > nowMs).length;
   const joinedRows = [...(joinedResult.data ?? [])].sort((a, b) => {
     /*
      * Providers take the first accepted/pending join that matches their state.
@@ -342,10 +348,65 @@ export async function loadHomeUpForContext(
      most of them. */
   await markCoordinatedSessions(admin, viewerId, joinedRows, joined);
 
+  const readyPlanChats = await loadConvertedPlanChats(admin, viewerId, joinedRows, nowMs);
+
   const requestedSessionIds = new Set(joinedRows.map((row) => row.hangout_session_id));
   const opportunities = await loadMuddyOpportunities(admin, viewerId, requestedSessionIds, nowMs);
 
-  return { ownedLive, ownedScheduled, joined, opportunities };
+  return { ownedSlotCount, ownedLive, ownedScheduled, joined, readyPlanChats, opportunities };
+}
+
+/** Conversion retires the UpFor, so its accepted request no longer appears in
+ * joined. Resolve the Plan Chat from the same bounded request set and check
+ * actual conversation membership. A request alone is never chat authority. */
+async function loadConvertedPlanChats(
+  admin: Admin,
+  viewerId: string,
+  requests: Array<{ status: string; hangout_session_id: string }>,
+  nowMs: number
+): Promise<NonNullable<HomeUpForContext["readyPlanChats"]>> {
+  const acceptedIds = requests.filter((row) => row.status === "accepted").map((row) => row.hangout_session_id);
+  if (acceptedIds.length === 0) return [];
+  const { data: sessions, error: sessionError } = await admin
+    .from("hangout_sessions")
+    .select("id, activity_type, converted_plan_id")
+    .in("id", acceptedIds)
+    .eq("status", "converted_to_plan");
+  if (sessionError || !sessions?.length) return [];
+  const planIds = sessions.map((row) => row.converted_plan_id).filter((id): id is string => Boolean(id));
+  if (planIds.length === 0) return [];
+  const { data: plans, error: planError } = await admin
+    .from("plans")
+    .select("id, status, start_at, end_at")
+    .in("id", planIds);
+  if (planError) return [];
+  const activePlans = (plans ?? []).filter((plan) =>
+    isUpcomingPlan({ status: plan.status as PlanStatus, startAt: plan.start_at, endAt: plan.end_at }, nowMs)
+  );
+  if (activePlans.length === 0) return [];
+  const { data: conversations, error: conversationError } = await admin
+    .from("conversations")
+    .select("id, context_id")
+    .eq("context_type", "plan")
+    .in("context_id", activePlans.map((plan) => plan.id));
+  if (conversationError || !conversations?.length) return [];
+  const { data: memberships, error: membershipError } = await admin
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", viewerId)
+    .eq("status", "joined")
+    .in("conversation_id", conversations.map((row) => row.id));
+  if (membershipError) return [];
+  const joinedIds = new Set((memberships ?? []).map((row) => row.conversation_id));
+  const conversationByPlan = new Map(conversations.filter((row) => joinedIds.has(row.id)).map((row) => [row.context_id, row.id]));
+  const activePlanById = new Map(activePlans.map((row) => [row.id, row]));
+  return sessions.flatMap((session) => {
+    const plan = session.converted_plan_id ? activePlanById.get(session.converted_plan_id) : null;
+    const conversationId = session.converted_plan_id ? conversationByPlan.get(session.converted_plan_id) : null;
+    return plan && conversationId
+      ? [{ conversationId, activityLabel: activityLabelFor(session.activity_type as HangoutActivityType), endsAt: plan.end_at }]
+      : [];
+  });
 }
 
 /**

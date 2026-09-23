@@ -33,6 +33,7 @@ export const SMART_CARD_IDS = [
      viewer has already been waiting on, so it beats a NEW Event Linkr opt-in
      offer happening at the same time. */
   "upfor_accepted",
+  "upfor_plan_chat_ready",
   /* A checked-in Event Linkr decision is more specific than the generic
      "this Event is live" card. If event_live wins first, the offer is
      unreachable for the entire check-in window and expires without ever
@@ -40,6 +41,7 @@ export const SMART_CARD_IDS = [
   "event_linkr_ready",
   "event_live",
   "upfor_momentum",
+  "owned_upfor_live",
   "owned_upfor_starting",
   "upfor_active_muddy",
   /* Tier 2, and LAST of the UpFor group deliberately. Something you have

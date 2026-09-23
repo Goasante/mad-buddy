@@ -123,6 +123,8 @@ type NearbyFriendApiItem = {
 };
 
 type DashboardPageContentProps = {
+  /** Keep a visible participant's UpFor outcome current while the owner acts. */
+  watchUpForChanges?: boolean;
   initialVisibilityStatus?: "visible" | "ghost" | "app_open_only";
   displayName?: string;
   hasActiveStatus?: boolean;
@@ -298,6 +300,7 @@ function firstName(name: string): string {
 }
 
 export function DashboardPageContent({
+  watchUpForChanges = false,
   initialVisibilityStatus = "visible",
   displayName = "",
   hasActiveStatus = false,
@@ -373,6 +376,23 @@ export function DashboardPageContent({
 
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const router = useRouter();
+  useEffect(() => {
+    if (!watchUpForChanges) return;
+    let lastRefresh = Date.now();
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefresh < 15000) return;
+      lastRefresh = Date.now();
+      router.refresh();
+    };
+    const timer = window.setInterval(refresh, 15000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [watchUpForChanges, router]);
   const [quickControlsOpen, setQuickControlsOpen] = useState(false);
   // The app-wide menu sheet lives in AppShell; Home just asks it to open.
   const openAppMenu = useAppMenu();

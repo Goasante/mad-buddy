@@ -39,6 +39,7 @@ import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { HANGOUT_ACTIVITY_LABELS, HANGOUT_ACTIVITY_TYPES } from "@/lib/social/plans";
 import { replacementEditVerdict, upForEditBlockedMessage } from "@/lib/social/upfor-lifecycle";
+import { MAX_ACTIVE_UPFORS } from "@/lib/social/upfor-limits";
 import type { HangoutActivityType, HangoutAudienceType, HangoutRequestStatus, SubscriptionPlan } from "@/lib/supabase/database.types";
 
 export type HangoutActionState = {
@@ -223,7 +224,6 @@ const startHangoutSchema = z.object({
 });
 
 /** Flat anti-abuse ceilings for everyone; payment never raises these limits. */
-const MAX_ACTIVE_UPFORS = 3;
 /** Fallback when a client sends no zone. Only decides what "today" means. */
 const DEFAULT_UPFOR_TIMEZONE = "Africa/Accra";
 const MAX_UPFOR_CAPACITY = 50;
@@ -1447,6 +1447,7 @@ export async function convertHangoutToPlanAction(
   if (result.created && result.conversationId) {
     await notifyPlanChatReady(userId, hangoutId, result.conversationId);
   }
+  revalidatePath("/dashboard");
   return result;
 }
 

@@ -154,6 +154,9 @@ export function HangoutModePage({
      legitimate UI state; one session standing in for the whole collection is
      the defect this repair removed. */
   const [managingId, setManagingId] = useState<string | null>(null);
+  const [planConversion, setPlanConversion] = useState<{ id: string; label: string; acceptedCount: number } | null>(null);
+  const [convertingPlan, setConvertingPlan] = useState(false);
+  const convertingPlanRef = useRef(false);
   const [requestsByUpFor, setRequestsByUpFor] = useState<Record<string, HangoutRequestSummary[]>>({});
   /* Pending count per UpFor, from the session-scoped projection. Derived, so
      a row cannot disagree with the list the sheet will show. */
@@ -792,7 +795,22 @@ export function HangoutModePage({
    * convertHangoutToPlanAction -> create_plan_lifecycle; there is no second
    * Plan path.
    */
-  async function convertToPlanById(hangoutId: string) {
+  function convertToPlanById(hangoutId: string) {
+    const session = ownedUpFors.find((row) => row.id === hangoutId);
+    if (!session) return;
+    setManagingId(null);
+    setPlanConversion({
+      id: hangoutId,
+      label: HANGOUT_ACTIVITY_LABELS[session.activityType as HangoutActivityType] ?? "your",
+      acceptedCount: (requestsByUpFor[hangoutId] ?? []).filter((row) => row.status === "accepted").length
+    });
+  }
+
+  async function confirmPlanConversion() {
+    if (!planConversion || convertingPlanRef.current) return;
+    convertingPlanRef.current = true;
+    setConvertingPlan(true);
+    const hangoutId = planConversion.id;
     /* The fallback is shaped like the action's own result so the success branch
        can read conversationId. Deliberately NOT `import type` from
        hangout-actions: that module is "use server", where Turbopack turns every
@@ -803,8 +821,11 @@ export function HangoutModePage({
       message: "Couldn't create the Plan yet. Try again.",
       conversationId: undefined as string | undefined
     }));
+    convertingPlanRef.current = false;
+    setConvertingPlan(false);
     showToast(result.message, !result.ok);
     if (result.ok) {
+      setPlanConversion(null);
       interactionFeedback.success();
       if (activeHangout?.id === hangoutId) {
         setActiveHangout(null);
@@ -1156,9 +1177,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                 className="w-full"
                 disabled={isPending}
                 onClick={() => {
-                  const targetId = managedUpFor.id;
-                  setManagingId(null);
-                  void convertToPlanById(targetId);
+                  convertToPlanById(managedUpFor.id);
                 }}
               >
                 Create a group plan with {managedAcceptedCount}{" "}
@@ -1182,6 +1201,27 @@ UpFors are temporary and disappear when they end. Jump in while you can!
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={planConversion !== null}
+        onOpenChange={(open) => { if (!open && !convertingPlan) setPlanConversion(null); }}
+        title="Create a Plan Chat?"
+        description="Everyone you accepted will be able to open the Plan Chat."
+        variant="sheet"
+        compact
+        footer={
+          <>
+            <Button type="button" variant="outline" disabled={convertingPlan} onClick={() => setPlanConversion(null)}>Keep UpFor live</Button>
+            <Button type="button" disabled={convertingPlan} onClick={() => void confirmPlanConversion()}>
+              {convertingPlan ? "Creating…" : "End UpFor and open Plan Chat"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          This ends your {planConversion?.label} UpFor. People can no longer request to join it. The {planConversion?.acceptedCount === 1 ? "person" : "people"} you accepted will move into a Plan Chat with you.
+        </p>
       </Modal>
 
       <Modal

@@ -120,6 +120,13 @@ export function isTransientConfirmation(message: string): boolean {
   return confirmationSignals.some((signal) => text.includes(signal));
 }
 
+/** A race at the end of an edit/delete window can still reach the server.
+ * Explain the refusal briefly; it does not need a persistent page banner. */
+export function isExpiringMessageActionRefusal(message: string): boolean {
+  return message === "This message can't be edited anymore."
+    || message === "This message can't be deleted for everyone anymore.";
+}
+
 /**
  * A feedback string that clears itself when it is a confirmation.
  *
@@ -155,7 +162,7 @@ export function useTransientFeedback(
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    if (!feedback || !isTransientConfirmation(feedback)) return;
+    if (!feedback || !(isTransientConfirmation(feedback) || isExpiringMessageActionRefusal(feedback))) return;
 
     timerRef.current = setTimeout(() => {
       // The raw setter, not the memoized wrapper: this effect must depend only

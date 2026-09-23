@@ -148,6 +148,7 @@ describe("Home offers a message only where one could be allowed", () => {
     expect(card?.id).toBe("upfor_accepted");
     expect(card?.primaryIntent).toBeUndefined();
     expect(card?.cta).toBe("View UpFor");
+    expect(card?.subtitle).toContain("aren't Muddies yet, so you can't message each other directly");
     expect(card?.destination).toBe("/hangout-mode?hangout=session-9");
   });
 
@@ -218,22 +219,15 @@ describe("Accepted UpFor coordination is available without entitlement input", (
   });
 });
 
-/**
- * CONVERSION. A converted UpFor must not leave a stale coordination card
- * behind, and Home must not grow a second card saying the same thing.
- *
- * The mechanism is already correct and this pins it: `loadHomeUpForContext`
- * reads only live coordination states (`active` or `full`), and the canonical
- * lifecycle sets `status = 'converted_to_plan'`. So a converted session simply
- * stops appearing in `joined`, `upfor_accepted` yields, and Plan authority
- * takes the moment over. Nothing had to be added to make that true.
- */
+/** Conversion retires the UpFor card and presents the authorized Plan Chat. */
 describe("conversion hands the moment to Plan authority", () => {
   const READER = readFileSync("lib/social/home-upfor-context.ts", "utf8");
 
   it("joined sessions are read only from live coordination states", () => {
     expect(READER).toContain('.in("status", ["active", "full"])');
-    expect(READER).not.toContain('"converted_to_plan"');
+    expect(READER).toContain('.eq("status", "converted_to_plan")');
+    expect(READER).toContain('.eq("user_id", viewerId)');
+    expect(READER).toContain('.eq("status", "joined")');
   });
 
   it("the accepted card disappears once the session leaves the joined set", () => {
@@ -242,13 +236,14 @@ describe("conversion hands the moment to Plan authority", () => {
     expect(card?.id).not.toBe("upfor_accepted");
   });
 
-  it("nothing keeps the accepted card alive to say 'Open Plan Chat'", () => {
-    const source = readFileSync("lib/smart-card/providers.ts", "utf8");
-    const provider = source.slice(
-      source.indexOf("function upForAcceptedProvider"),
-      source.indexOf("function ownedUpForStartingProvider")
-    );
-    expect(provider).not.toMatch(/converted_plan_id|Open Plan Chat|plan_chat/i);
+  it("opens the exact Plan Chat after conversion", () => {
+    const card = pick({ upFor: context({ joined: [], readyPlanChats: [
+      { conversationId: "plan-chat-1", activityLabel: "Study", endsAt: "2026-08-05T12:00:00.000Z" }
+    ] }) });
+    expect(card?.id).toBe("upfor_plan_chat_ready");
+    expect(card?.cta).toBe("Open Plan Chat");
+    expect(card?.destination).toBe("/messages?conversation=plan-chat-1");
+    expect(card?.expiresAt).toBe(Date.parse("2026-08-05T12:00:00.000Z"));
   });
 });
 
@@ -285,15 +280,10 @@ describe("Home renders without creating anything", () => {
     expect(reader).toContain(
       '.select("id, owner_id, activity_type, status, starts_at, ends_at, audience_type")'
     );
-    /* And no PER-SESSION lookup was introduced. The reads added since are all
-       batched over the whole candidate set:
-         joined sessions, owner profiles              (2, pre-existing)
-         conversations + messages                     (2, coordination evidence)
-         friendships, sessions, prior requests, profiles (4, opportunity discovery)
-       Eight bounded reads, none of them inside a loop. The extra request-history
-       read prevents a declined/cancelled UpFor from resurfacing as "new". */
+    /* Each read is batched. The four converted-Plan reads resolve the Plan,
+       conversation and actual membership for accepted viewers only. */
     const joinedBlock = reader.slice(reader.indexOf("const joinedSessionIds"));
-    expect(joinedBlock.match(/\.from\(/g) ?? []).toHaveLength(8);
+    expect(joinedBlock.match(/\.from\(/g) ?? []).toHaveLength(12);
 
     /* The real invariant behind that number: every read is batched over a
        whole candidate set, so none of them sits inside a loop. */

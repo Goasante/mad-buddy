@@ -61,6 +61,8 @@ export const SMART_CARD_APPROVED_STATES = [
   { id: "upfor_opportunity", tier: 2, family: "upfor", purpose: "A Muddy is UpFor something the viewer has not acted on yet." },
   { id: "upfor_momentum", tier: 2, family: "upfor", purpose: "An UpFor is gathering meaningful interest." },
   { id: "upfor_accepted", tier: 2, family: "upfor", purpose: "The viewer's UpFor request was accepted." },
+  { id: "upfor_plan_chat_ready", tier: 2, family: "upfor", purpose: "A converted UpFor has a Plan Chat the accepted viewer has joined." },
+  { id: "owned_upfor_live", tier: 2, family: "upfor", purpose: "The viewer has a live UpFor with room to start more." },
   { id: "owned_upfor_starting", tier: 2, family: "upfor", purpose: "The viewer's scheduled UpFor is starting soon." },
   { id: "nearby_muddy", tier: 2, family: "proximity", purpose: "A fresh, privacy-permitted Muddy is nearby." },
   { id: "nearby_muddies", tier: 2, family: "proximity", purpose: "Several fresh, privacy-permitted Muddies are nearby." },

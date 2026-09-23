@@ -1347,8 +1347,8 @@ because a live Safe Arrival outranks every teaching moment.
 - Action, media and query/fanout audits; runtime proof extended.
 
 ```
-TOTAL APPROVED CATALOG STATES   54
-WIRED CARD B                    28 catalog entries / 27 providers
+TOTAL APPROVED CATALOG STATES   57
+WIRED CARD B                    31 catalog entries / 30 providers
                                 (safe_arrival_overdue + safe_arrival_action
                                  share one live-journey provider)
 CARD A OWNED                     6
@@ -1358,7 +1358,7 @@ DEFERRED — NO CANONICAL AUTHORITY 10
 DEFERRED — PRODUCT PAUSED        1
 ```
 
-Every one of the 54 is classified individually in
+Every one of the 57 is classified individually in
 `lib/smart-card/catalog-classification.ts`, and the classification is VERIFIED
 AGAINST THE ENGINE by `catalog-classification.test.ts` rather than maintained by
 hand — a matrix that rots is worse than none.

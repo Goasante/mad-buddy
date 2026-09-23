@@ -51,8 +51,9 @@ describe("the hook itself", () => {
     expect(hook).toContain("timerRef");
   });
 
-  it("only ever auto-clears confirmations", () => {
+  it("auto-clears confirmations and edit/delete time-window refusals", () => {
     expect(hook).toContain("isTransientConfirmation(feedback)");
+    expect(hook).toContain("isExpiringMessageActionRefusal(feedback)");
   });
 
   it("keeps nothing in storage or the URL, so a reload cannot resurrect it", () => {
