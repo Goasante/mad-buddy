@@ -1,18 +1,25 @@
 "use client";
 
-import { ArrowLeft, BookUser, Loader2, Phone, Search, Share2, UserPlus, Users } from "lucide-react";
-import { useCallback, useReducer, useState } from "react";
+import { ArrowLeft, BookUser, Check, Loader2, Phone, Search, Share2, UserPlus, Users } from "lucide-react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 
 import { sendFriendRequestAction } from "@/app/(app)/actions";
-import { completeContactSetupAction } from "@/app/(app)/contact-actions";
+import {
+  completeContactSetupAction,
+  getPhoneIdentityAction,
+  savePhoneNumberAction,
+  setContactDiscoveryAction
+} from "@/app/(app)/contact-actions";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { detectContactCapability, selectContacts } from "@/lib/contacts/contact-capability";
 import { DEMO_CONTACTS, demoContactsAvailable } from "@/lib/contacts/demo-contacts";
+import { CONTACT_REGIONS, contactRegionFromLocale } from "@/lib/contacts/contact-regions";
 import {
   findMuddiesReducer,
   INITIAL_STATE,
@@ -52,6 +59,20 @@ type MatchPayload = {
   matches?: ContactMatchView[];
 };
 
+type ContactSetupState = {
+  hasPhone: boolean;
+  hint: string;
+  region: string | null;
+  discoveryEnabled: boolean;
+};
+
+const EMPTY_SETUP: ContactSetupState = {
+  hasPhone: false,
+  hint: "",
+  region: null,
+  discoveryEnabled: false
+};
+
 export function FindMuddiesSheet({
   open,
   onClose,
@@ -73,12 +94,96 @@ export function FindMuddiesSheet({
   const [pendingAdd, setPendingAdd] = useState<string | null>(null);
   const [rowError, setRowError] = useState("");
   const [notice, setNotice] = useState("");
+  const [setup, setSetup] = useState<ContactSetupState>(EMPTY_SETUP);
+  const [setupLoading, setSetupLoading] = useState(true);
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneRegion, setPhoneRegion] = useState("GH");
+  const [setupFeedback, setSetupFeedback] = useState("");
+  const [setupError, setSetupError] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let active = true;
+    setSetupLoading(true);
+
+    void getPhoneIdentityAction().then((identity) => {
+      if (!active) return;
+      setSetup(identity);
+      setPhoneRegion(
+        identity.region ??
+          contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
+      );
+      setSetupLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  function currentMatchRegion(): string {
+    if (setup.region) return setup.region;
+    return contactRegionFromLocale(
+      typeof navigator === "undefined" ? null : navigator.language
+    );
+  }
+
+  async function saveOwnNumber() {
+    if (!phoneInput.trim() || setupBusy) return;
+
+    setSetupBusy(true);
+    setSetupFeedback("");
+    setSetupError(false);
+    try {
+      const result = await savePhoneNumberAction({
+        phoneNumber: phoneInput,
+        region: phoneRegion
+      });
+      setSetupFeedback(result.message);
+      setSetupError(!result.ok);
+      if (!result.ok) return;
+
+      const identity = await getPhoneIdentityAction();
+      setSetup(identity);
+      setPhoneRegion(identity.region ?? phoneRegion);
+      setPhoneInput("");
+      setEditingPhone(false);
+    } finally {
+      setSetupBusy(false);
+    }
+  }
+
+  async function toggleOwnDiscovery() {
+    if (!setup.hasPhone || setupBusy) return;
+
+    setSetupBusy(true);
+    setSetupFeedback("");
+    setSetupError(false);
+    const next = !setup.discoveryEnabled;
+    try {
+      const result = await setContactDiscoveryAction(next);
+      setSetupFeedback(result.message);
+      setSetupError(!result.ok);
+      if (result.ok) {
+        setSetup((current) => ({ ...current, discoveryEnabled: next }));
+      }
+    } finally {
+      setSetupBusy(false);
+    }
+  }
 
   const close = useCallback(() => {
     dispatch({ type: "open" });
     setRequested({});
     setRowError("");
     setNotice("");
+    setSetupFeedback("");
+    setSetupError(false);
+    setEditingPhone(false);
+    setPhoneInput("");
     onClose();
   }, [onClose]);
 
@@ -99,7 +204,7 @@ export function FindMuddiesSheet({
     const response = await fetch("/api/contacts/match", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phoneNumbers })
+      body: JSON.stringify({ phoneNumbers, region: currentMatchRegion() })
     }).catch(() => null);
 
     if (!response) {
