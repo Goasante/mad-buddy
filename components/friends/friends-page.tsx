@@ -1365,6 +1365,7 @@ export function FriendsPageContent({
                 statusText: profileUser.note,
                 mutualMuddies: profileUser.mutualFriends,
                 proximityLevel: proximityByFriendId[profileUser.id]?.proximityLevel,
+                proximityBand: proximityByFriendId[profileUser.id]?.proximityBand ?? null,
                 glowStrength: proximityByFriendId[profileUser.id]?.glowStrength,
                 confidence: proximityByFriendId[profileUser.id]?.confidence,
                 glowColorId: glowColorByFriendId[profileUser.id] ?? null,
