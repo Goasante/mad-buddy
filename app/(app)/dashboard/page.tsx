@@ -125,6 +125,7 @@ export default async function DashboardPage() {
               watcherCount: safeArrival.travelling[0]?.acceptedCount ?? 0,
               destinationLabel: safeArrival.travelling[0]?.destinationLabel ?? null,
               expectedArrivalAt: safeArrival.travelling[0]?.expectedArrivalAt ?? null,
+              gracePeriodMinutes: safeArrival.travelling[0]?.gracePeriodMinutes ?? null,
               status: safeArrival.travelling[0]?.status ?? null
             }
           : null,
