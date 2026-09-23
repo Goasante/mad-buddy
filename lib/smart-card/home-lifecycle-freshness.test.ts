@@ -53,4 +53,14 @@ describe("Home Smart Card lifecycle freshness", () => {
     expect(upForReader).toContain("const liveSessions = (sessions ?? []).filter");
     expect(upForReader).toContain("const sessionById = new Map(liveSessions.map");
   });
+
+  it("does not resurrect a declined or cancelled UpFor as a fresh Home opportunity", () => {
+    expect(upForReader).toContain('.from("hangout_requests")');
+    expect(upForReader).toContain('"hangout_session_id"');
+    expect(upForReader).toContain('.eq("requester_id", viewerId)');
+    expect(upForReader).toContain("actedOnSessionIds");
+    expect(upForReader).toContain(
+      "candidates = candidates.filter((session) => !actedOnSessionIds.has(session.id))"
+    );
+  });
 });
