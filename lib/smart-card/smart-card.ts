@@ -29,6 +29,11 @@ export const SMART_CARD_IDS = [
      does not -- but still above everything that is merely happening. */
   "muddy_request",
   "plan_starting",
+  /* A checked-in Event Linkr decision is more specific than the generic
+     "this Event is live" card. If event_live wins first, the offer is
+     unreachable for the entire check-in window and expires without ever
+     getting a chance to surface. */
+  "event_linkr_ready",
   "event_live",
   /* Tier 2. `upfor_accepted` leads the group: somebody saying yes to you is the
      payoff UpFor exists to produce, and it is the only one of these the viewer
@@ -49,11 +54,6 @@ export const SMART_CARD_IDS = [
      unlike plan_decision it has no deadline of its own -- it ranks here because
      the conversation is live, not because a clock is running. */
   "plan_chat_decision",
-  /* Tier 2. Being checked in somewhere is the most current thing about this
-     viewer, and the offer only exists while they are still there. Below the
-     live commitments above it: what you are already committed to outranks an
-     optional extra at the place you have arrived. */
-  "event_linkr_ready",
   "nearby_muddies",
   /* Tier 3: relationship momentum. All are about a specific person, which is
      why they outrank the tier-4 opportunities below.
