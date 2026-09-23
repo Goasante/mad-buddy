@@ -1,5 +1,6 @@
 import "server-only";
 
+import { LIFE_MILESTONES_FLAG, isFeatureEnabled } from "@/lib/features/feature-flags";
 import { emitLifeEvents } from "@/lib/life/emit";
 import { relationshipId, type LifeEventInput } from "@/lib/life/events";
 import {
@@ -204,6 +205,10 @@ async function processBatch(admin: Admin, friendships: readonly ActiveFriendship
 }
 
 export async function reconcileFriendshipMilestones(admin: Admin, nowMs = Date.now()): Promise<number> {
+  // Global kill switch stays authoritative even though the feature is now
+  // launched. An Owner can stop generation/reminders without a deploy.
+  if (!(await isFeatureEnabled(admin, LIFE_MILESTONES_FLAG))) return 0;
+
   let offset = 0;
   let workDone = 0;
   while (true) {

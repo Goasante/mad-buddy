@@ -116,11 +116,14 @@ describe("schedule (spec §31)", () => {
       "financial.reconcile_paystack_fees",
       "recap.generate_monthly",
       "life.reconcile_milestones",
-      "streaks.close_expired_periods"
-      ,"birthdays.notify"
+      "birthdays.notify"
     ]) {
       expect(types, jobType).toContain(jobType);
     }
+  });
+
+  it("does not keep scheduling the retired streak engine", () => {
+    expect(SCHEDULE.map((spec) => spec.jobType)).not.toContain("streaks.close_expired_periods");
   });
 
   it("collapses a double-tick to one job via a period bucket", () => {

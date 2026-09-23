@@ -195,7 +195,9 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "financial.capture_daily_snapshot", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "financial.reconcile_paystack_fees", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "access.welcome_reminders", everyMinutes: 60 * 24, priority: 6 },
-  { jobType: "streaks.close_expired_periods", everyMinutes: 60 * 24, priority: 6 },
+  // The historical streak handler stays registered for already-queued rows,
+  // but no new streak sweep is scheduled: factual Milestones replaced that
+  // unfinished product surface.
   { jobType: "life.reconcile_milestones", everyMinutes: 60 * 24, priority: 7 },
   { jobType: "recap.generate_monthly", everyMinutes: 60 * 24, priority: 7 },
   { jobType: "birthdays.notify", everyMinutes: 60, priority: 5 },
