@@ -10,7 +10,8 @@ const providers = readFileSync(join(__dirname, "providers.ts"), "utf8");
 
 describe("Home heartbeat ownership boundaries", () => {
   it("does not repeat the traveller Safe Arrival when the Smart Card already owns it", () => {
-    expect(home).toContain('smartCard?.id === "safe_arrival" ? []');
+    expect(home).toContain('smartCard?.id === "safe_arrival"');
+    expect(home).toContain("safeArrival?.travelling.slice(1) ?? []");
     expect(home).toContain("safeArrivalTravellingForSection.map");
     expect(home).toContain("hasSafeArrivalSection");
   });
