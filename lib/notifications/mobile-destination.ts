@@ -13,10 +13,6 @@ import type { NotificationDestination } from "@/lib/notifications/destination";
  *                  that looks tappable and lands on an unavailable screen is
  *                  worse than one that plainly does not navigate.
  *
- *   NO DEEP ROUTE  /groups/<id> resolves to a group's detail page. Android has
- *                  /groups (the list) and no detail route, so the id cannot be
- *                  honoured. Better to open nothing than the wrong group.
- *
  *   QUERY IGNORED  No SPA screen reads query parameters yet, so
  *                  /plans?plan=<id>, /events?event=<id> and
  *                  /friends?tab=requests open the right screen but not the
@@ -49,11 +45,6 @@ export function resolveMobileNotificationDestination(
       return { type: "internal", href: `/messages/${conversationId}` as NonNullable<NotificationDestination>["href"] };
     }
   }
-
-  /* A group notification names a specific group, and Android has only the
-     list. Opening the list would answer a different question from the one the
-     notification asked, so the row does not navigate at all. */
-  if (rawPath.startsWith("/groups/")) return null;
 
   const mobilePath = toMobilePath(rawPath);
   if (!isBuiltForMobile(mobilePath)) return null;
