@@ -25,8 +25,9 @@ import type { ContactReminderKind } from "@/lib/contacts/reminder-eligibility";
  * would be the worst possible version of this feature.
  *
  * Two variants, because two different things may be missing -- a number, or
- * the contact step. Asking somebody to connect contacts before they have a
- * number would be out of order.
+ * the contact step. Both now open the same guided sheet: adding your own
+ * number is optional for checking contacts, but it is the step that lets
+ * people who already have you saved find you in the other direction.
  */
 export function ContactReminderCard({
   kind,
