@@ -278,6 +278,7 @@ describe("deterministic conflicts", () => {
         {
           userId: "u1",
           connectionId: "conn-1",
+          connectedAt: "2026-08-05T09:00:00.000Z",
           displayName: "Ama",
           photo: null,
           hasConversation: false,
