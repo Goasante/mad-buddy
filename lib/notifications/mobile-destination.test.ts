@@ -112,10 +112,15 @@ describe("against real resolver output", () => {
   });
 
   it.each([
+    [`group:${UUID}`, `/messages/${UUID}`],
+    [`group_message:${UUID}`, `/messages/${UUID}`]
+  ])("%s opens the canonical Messages conversation", (type, expected) => {
+    expect(adapt(resolveNotificationDestination(type))).toEqual({ type: "internal", href: expected });
+  });
+
+  it.each([
     [`linkr_connection:${UUID}`, "Linkr"],
-    [`hangout:${UUID}`, "Hangout Mode"],
-    [`group:${UUID}`, "a specific group"],
-    [`group_message:${UUID}`, "a specific group"]
+    [`hangout:${UUID}`, "Hangout Mode"]
   ])("%s does not navigate (%s is not on Android)", (type) => {
     expect(adapt(resolveNotificationDestination(type))).toBeNull();
   });
