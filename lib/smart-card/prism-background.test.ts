@@ -191,7 +191,7 @@ describe("reduced motion", () => {
 
 describe("the Smart Card is not redesigned", () => {
   it("keeps its content, actions and routing", () => {
-    expect(card).toContain("acknowledgeSmartCardAction(card.id)");
+    expect(card).toContain("acknowledgeSmartCardAction(card.acknowledgementKey ?? card.id)");
     expect(card).toContain("href={card.destination as Route}");
     expect(card).toContain("{card.title}");
     expect(card).toContain("{card.subtitle}");
