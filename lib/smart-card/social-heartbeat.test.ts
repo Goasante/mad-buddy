@@ -94,7 +94,7 @@ describe("Home Smart Card is the social heartbeat", () => {
       metaKind: "time",
       socialProof: "3 going · 1 maybe",
       cta: "Respond",
-      expiresAt: Date.parse("2026-09-23T17:00:00.000Z")
+      expiresAt: Date.parse("2026-09-23T15:00:00.000Z")
     });
   });
 
@@ -165,6 +165,40 @@ describe("Home Smart Card is the social heartbeat", () => {
     });
   });
 
+  it("expires an owner request summary at the first live UpFor boundary", () => {
+    const firstEnd = "2026-09-23T10:45:00.000Z";
+    const card = pick({
+      upFor: upFor({
+        ownedLive: [
+          {
+            id: "mine-1",
+            activityType: "coffee",
+            activityLabel: "Coffee",
+            startsAt: "2026-09-23T09:00:00.000Z",
+            endsAt: firstEnd,
+            pendingRequestCount: 1,
+            acceptedCount: 0
+          },
+          {
+            id: "mine-2",
+            activityType: "gym",
+            activityLabel: "Gym",
+            startsAt: "2026-09-23T09:30:00.000Z",
+            endsAt: "2026-09-23T11:30:00.000Z",
+            pendingRequestCount: 1,
+            acceptedCount: 0
+          }
+        ]
+      })
+    });
+
+    expect(card).toMatchObject({
+      id: "upfor_requests",
+      title: "2 people want to join your UpFors",
+      expiresAt: Date.parse(firstEnd)
+    });
+  });
+
   it("shows an untouched UpFor as a real person opportunity, then expires with it", () => {
     const end = "2026-09-23T12:00:00.000Z";
     const card = pick({
@@ -208,7 +242,8 @@ describe("Home Smart Card is the social heartbeat", () => {
           planId: "p3",
           planTitle: "Dinner",
           question: "Where should we eat?",
-          voterCount: 4
+          voterCount: 4,
+          closesAt: "2026-09-23T11:30:00.000Z"
         }
       ]
     });
@@ -220,7 +255,8 @@ describe("Home Smart Card is the social heartbeat", () => {
       meta: "Where should we eat?",
       metaKind: "decision",
       socialProof: "4 people have voted",
-      cta: "Vote now"
+      cta: "Vote now",
+      expiresAt: Date.parse("2026-09-23T11:30:00.000Z")
     });
   });
 
