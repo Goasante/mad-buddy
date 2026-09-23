@@ -29,16 +29,16 @@ export const SMART_CARD_IDS = [
      does not -- but still above everything that is merely happening. */
   "muddy_request",
   "plan_starting",
+  /* Tier 2. Somebody saying yes to an UpFor is existing coordination the
+     viewer has already been waiting on, so it beats a NEW Event Linkr opt-in
+     offer happening at the same time. */
+  "upfor_accepted",
   /* A checked-in Event Linkr decision is more specific than the generic
      "this Event is live" card. If event_live wins first, the offer is
      unreachable for the entire check-in window and expires without ever
      getting a chance to surface. */
   "event_linkr_ready",
   "event_live",
-  /* Tier 2. `upfor_accepted` leads the group: somebody saying yes to you is the
-     payoff UpFor exists to produce, and it is the only one of these the viewer
-     has already been waiting on. */
-  "upfor_accepted",
   "upfor_momentum",
   "owned_upfor_starting",
   "upfor_active_muddy",
