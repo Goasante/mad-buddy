@@ -371,7 +371,14 @@ function planRsvpProvider(input: SmartCardInput): SmartCard | null {
 function planStartingProvider(input: SmartCardInput): SmartCard | null {
   const plan = input.agenda.find((item) => {
     if (item.kind !== "plan") return false;
-    if (item.myRsvp === "invited" || item.myRsvp === "viewed" || item.myRsvp === "not_going") return false;
+    if (
+      item.myRsvp === "invited" ||
+      item.myRsvp === "viewed" ||
+      item.myRsvp === "not_going" ||
+      item.myRsvp === "waitlisted"
+    ) {
+      return false;
+    }
     const delta = Date.parse(item.startsAt) - input.now.getTime();
     return Number.isFinite(delta) && delta >= 0 && delta <= THREE_HOURS_MS;
   });
