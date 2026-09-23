@@ -320,6 +320,57 @@ describe("Home Smart Card is the social heartbeat", () => {
     });
   });
 
+  it("surfaces a recent achievement with a per-achievement retirement key", () => {
+    const card = pick({
+      recentAchievement: {
+        code: "first_wave",
+        title: "First Wave",
+        earnedAt: "2026-09-23T09:30:00.000Z",
+        expiresAt: "2026-09-30T09:30:00.000Z"
+      }
+    });
+
+    expect(card).toMatchObject({
+      id: "achievement",
+      eyebrow: "MILESTONE",
+      title: "First Wave",
+      acknowledgementKey: "achievement:first_wave",
+      expiresAt: Date.parse("2026-09-30T09:30:00.000Z"),
+      dismissible: true
+    });
+  });
+
+  it("retiring one achievement does not permanently silence future achievements", () => {
+    const firstInput = base({
+      recentAchievement: {
+        code: "first_wave",
+        title: "First Wave",
+        earnedAt: "2026-09-23T09:30:00.000Z",
+        expiresAt: "2026-09-30T09:30:00.000Z"
+      }
+    });
+    const first = resolveSmartCard(smartCardProviders(firstInput), {
+      now: firstInput.now.getTime(),
+      acknowledgedIds: new Set(["journey_complete", "achievement:first_wave"])
+    });
+    expect(first?.id).not.toBe("achievement");
+
+    const laterInput = base({
+      recentAchievement: {
+        code: "first_plan",
+        title: "First Plan",
+        earnedAt: "2026-09-23T09:45:00.000Z",
+        expiresAt: "2026-09-30T09:45:00.000Z"
+      }
+    });
+    const later = resolveSmartCard(smartCardProviders(laterInput), {
+      now: laterInput.now.getTime(),
+      acknowledgedIds: new Set(["journey_complete", "achievement:first_wave"])
+    });
+    expect(later?.id).toBe("achievement");
+    expect(later?.acknowledgementKey).toBe("achievement:first_plan");
+  });
+
   it("falls back to an emotionally useful UpFor prompt instead of filler", () => {
     const card = pick();
     expect(card).toMatchObject({
