@@ -161,7 +161,7 @@ describe("group notifications", () => {
     for (const key of conversationScopedKeys) {
       expect(resolveNotificationDestination(key), key).toEqual({
         type: "internal",
-        href: `/groups/${GROUP}`
+        href: `/messages?conversation=${GROUP}`
       });
     }
     // And the type is chosen from the conversation's own kind, never inferred
@@ -170,17 +170,16 @@ describe("group notifications", () => {
     expect(projection).toContain("isGroup ? `group:${conversationId}` : `message:${conversationId}`");
   });
 
-  it("never routes a Circle message to the direct inbox", () => {
-    // The precise failure mode, stated as a negative.
+  it("routes Group and direct notifications through the same canonical Messages thread surface", () => {
     const direct = resolveNotificationDestination(`message:${GROUP}`);
     expect(direct).toEqual({ type: "internal", href: `/messages?conversation=${GROUP}` });
-    expect(resolveNotificationDestination(`group:${GROUP}`)).not.toEqual(direct);
+    expect(resolveNotificationDestination(`group:${GROUP}`)).toEqual(direct);
   });
 
   it("resolves a group notification to the exact conversation", () => {
     expect(resolveNotificationDestination(`group_message:${GROUP}`)).toEqual({
       type: "internal",
-      href: `/groups/${GROUP}`
+      href: `/messages?conversation=${GROUP}`
     });
   });
 
@@ -188,7 +187,7 @@ describe("group notifications", () => {
     // Never a dead per-item URL.
     expect(resolveNotificationDestination("group:not-a-uuid")).toEqual({
       type: "internal",
-      href: "/groups"
+      href: "/messages?filter=groups"
     });
   });
 
