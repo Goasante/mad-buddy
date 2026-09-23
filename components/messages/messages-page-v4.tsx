@@ -1328,7 +1328,7 @@ export function MessagesPageV4({
                     return (
                       <Fragment key={message.id}>
                         {newDay ? <div className="my-4 flex justify-center"><span className="rounded-full bg-muted/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">{dayLabel(message.createdAt)}</span></div> : null}
-                        {message.messageType === "system" ? <p data-message-id={message.id} className="mx-auto my-3 max-w-lg text-center text-xs font-normal leading-relaxed text-muted-foreground">{message.text}</p> : (
+                        {message.messageType === "system" ? <p data-message-id={message.id} aria-hidden="true" className="mx-auto my-3 max-w-lg text-center text-xs font-normal leading-relaxed text-muted-foreground">{message.text}</p> : (
                           <div data-message-id={message.id} className={cn("flex transition-[background-color] duration-500", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1")}>
                             <div className="max-w-[86%] sm:max-w-[78%]">
                               <MessageBubbleV4
