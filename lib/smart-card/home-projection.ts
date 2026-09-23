@@ -357,6 +357,10 @@ export async function loadPlanChatDecisions(
     .select("message_id, conversation_id, question, closed_at, created_at")
     .in("conversation_id", planChatIds)
     .is("closed_at", null)
+    /* Newest candidates first before the bounded parent-message validation.
+       Without this, database row order could let old tombstones occupy the
+       whole limit and hide a current poll. */
+    .order("created_at", { ascending: false })
     .limit(20);
 
   const candidatePolls = polls ?? [];
