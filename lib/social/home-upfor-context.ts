@@ -404,9 +404,37 @@ async function loadMuddyOpportunities(
     .order("ends_at", { ascending: true })
     .limit(MAX_OPPORTUNITY_SESSIONS);
 
-  /* Sessions the viewer has already acted on are not opportunities -- they are
-     the pending/accepted states, which own those moments. */
-  const candidates = (sessions ?? []).filter((session) => !requestedSessionIds.has(session.id));
+  /* Sessions in the viewer's CURRENT pending/accepted/maybe projection are
+     already owned by those states. */
+  let candidates = (sessions ?? []).filter((session) => !requestedSessionIds.has(session.id));
+  if (candidates.length === 0) return [];
+
+  /*
+   * "Has not acted" means HAS NEVER CREATED A REQUEST FOR THIS LIVE SESSION,
+   * not merely "does not currently have a pending/accepted request".
+   *
+   * Declined and cancelled request rows are historical evidence that the
+   * viewer already acted. The old reader ignored them, so a host could decline
+   * somebody and Home would later resurrect the exact same UpFor as a fresh
+   * "you can ask to join" opportunity. The write path cannot even revive an
+   * owner-declined row, making that CTA both nagging and dead.
+   *
+   * Bounded by the already-capped candidate set, so this is one small query
+   * rather than unbounded request history.
+   */
+  const { data: priorRequests } = await admin
+    .from("hangout_requests")
+    .select("hangout_session_id")
+    .eq("requester_id", viewerId)
+    .in(
+      "hangout_session_id",
+      candidates.map((session) => session.id)
+    );
+
+  const actedOnSessionIds = new Set(
+    (priorRequests ?? []).map((request) => request.hangout_session_id)
+  );
+  candidates = candidates.filter((session) => !actedOnSessionIds.has(session.id));
   if (candidates.length === 0) return [];
 
   const ownerIds = [...new Set(candidates.map((session) => session.owner_id))];
