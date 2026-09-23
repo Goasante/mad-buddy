@@ -40,6 +40,7 @@ export function ContactDiscoveryPage() {
   const [hint, setHint] = useState("");
   const [discoveryEnabled, setDiscoveryEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
@@ -52,13 +53,25 @@ export function ContactDiscoveryPage() {
   useEffect(() => {
     let active = true;
     void (async () => {
-      const identity = await getPhoneIdentityAction();
-      if (!active) return;
-      setHasPhone(identity.hasPhone);
-      setHint(identity.hint);
-      setRegion(identity.region ?? "GH");
-      setDiscoveryEnabled(identity.discoveryEnabled);
-      setLoading(false);
+      try {
+        const identity = await getPhoneIdentityAction();
+        if (!active) return;
+        if (!identity.loaded) {
+          setLoadFailed(true);
+          setLoading(false);
+          return;
+        }
+        setLoadFailed(false);
+        setHasPhone(identity.hasPhone);
+        setHint(identity.hint);
+        setRegion(identity.region ?? "GH");
+        setDiscoveryEnabled(identity.discoveryEnabled);
+        setLoading(false);
+      } catch {
+        if (!active) return;
+        setLoadFailed(true);
+        setLoading(false);
+      }
     })();
     return () => {
       active = false;
@@ -77,6 +90,13 @@ export function ContactDiscoveryPage() {
       report(result);
       if (result.ok) {
         const identity = await getPhoneIdentityAction();
+        if (!identity.loaded) {
+          setLoadFailed(true);
+          setFeedback("Your number was saved, but these settings couldn't be reloaded yet.");
+          setIsError(true);
+          return;
+        }
+        setLoadFailed(false);
         setHasPhone(identity.hasPhone);
         setHint(identity.hint);
         setRegion(identity.region ?? region);
@@ -124,6 +144,15 @@ export function ContactDiscoveryPage() {
         <p className="text-sm text-muted-foreground" role="status">
           Loading your settings…
         </p>
+      ) : loadFailed ? (
+        <div className="space-y-3 rounded-xl border border-border/70 p-4">
+          <p className="text-sm font-medium" role="alert">
+            Contact discovery settings couldn&rsquo;t be loaded.
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Nothing was changed. Try reloading this page before adding a number or changing discoverability.
+          </p>
+        </div>
       ) : (
         <>
           <section className="space-y-3 border-y border-border/70 py-5">
