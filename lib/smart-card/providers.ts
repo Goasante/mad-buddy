@@ -9,14 +9,14 @@
 import { gracePeriodEndMs } from "@/lib/safety/safe-arrival";
 import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
 import type { LinkrMutualForCard } from "@/lib/smart-card/linkr-context";
+import { isPlanDecisionRsvpEligible } from "@/lib/smart-card/home-context";
 import type {
   BlockedFeatureForCard,
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
   PlanChatDecisionForCard,
   PlanDecisionForCard,
-  RecentAchievementForCard,
-  isPlanDecisionRsvpEligible
+  RecentAchievementForCard
 } from "@/lib/smart-card/home-context";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
