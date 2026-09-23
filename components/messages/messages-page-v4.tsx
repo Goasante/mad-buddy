@@ -53,6 +53,7 @@ import {
 } from "@/app/(app)/messaging-ultimate-actions";
 import { getReplyContextsAction } from "@/app/(app)/messaging-v3-actions";
 import { useImmersiveWhile } from "@/components/app-shell/immersive-mode";
+import { GroupDetailsModal } from "@/components/groups/group-details-modal";
 import { ChatSettingsV4 } from "@/components/messaging/chat-settings-v4";
 import { ConversationRowV4 } from "@/components/messaging/conversation-row-v4";
 import { MessageBubbleV4 } from "@/components/messaging/message-bubble-v4";
@@ -191,12 +192,14 @@ function presenceLabel(ultimate: UltimateConversationState | null, isGroup: bool
 export function MessagesPageV4({
   initialConversations = [],
   voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 },
-  viewerId = null
+  viewerId = null,
+  onManageGroups
 }: {
   initialConversations?: ConversationView[];
   voiceRecorderConfig?: VoiceRecorderConfig;
   /** Scopes the thread cache to this account. Presentation only, never access. */
   viewerId?: string | null;
+  onManageGroups?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -246,6 +249,7 @@ export function MessagesPageV4({
   const [feedback, setFeedback] = useTransientFeedback();
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [groupDetailsOpen, setGroupDetailsOpen] = useState(false);
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [threadQuery, setThreadQuery] = useState("");
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
@@ -825,6 +829,7 @@ export function MessagesPageV4({
     setReplyingToId(null);
     setMentionCandidates([]);
     setSettingsOpen(false);
+    setGroupDetailsOpen(false);
     setThreadSearchOpen(false);
     if (requestedConversationId) router.replace("/messages", { scroll: false });
   }
@@ -1365,9 +1370,26 @@ export function MessagesPageV4({
           await syncConversations();
           openConversation(result.conversationId);
         });
-      }} onOpenGroups={() => { setNewMessageOpen(false); setActiveFilter("groups"); }} />
+      }} onOpenGroups={() => {
+        setNewMessageOpen(false);
+        if (onManageGroups) onManageGroups();
+        else setActiveFilter("groups");
+      }} />
 
-      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onFeedback={setFeedback} /> : null}
+      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => { setSettingsOpen(false); setGroupDetailsOpen(true); }} onFeedback={setFeedback} /> : null}
+
+      {selected?.kind === "group" ? (
+        <GroupDetailsModal
+          conversationId={selected.id}
+          open={groupDetailsOpen}
+          onOpenChange={setGroupDetailsOpen}
+          onExited={() => {
+            setGroupDetailsOpen(false);
+            closeConversation();
+            setActiveFilter("groups");
+          }}
+        />
+      ) : null}
 
       <EditMessageModal message={editTarget} draft={editDraft} setDraft={setEditDraft} pending={isPending} onClose={() => setEditTarget(null)} onSave={() => {
         if (!editTarget || !selectedId || !editDraft.trim()) return;

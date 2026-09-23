@@ -21,6 +21,7 @@ import {
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import { updateConversationUserPreferencesAction } from "@/app/(app)/messaging-ultimate-actions";
+import { GroupsManagerModal } from "@/components/groups/groups-manager-modal";
 import { MessagesPageV4 } from "@/components/messages/messages-page-v4";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ export function MessagesExperienceV5({
   const [favoriteManagerOpen, setFavoriteManagerOpen] = useState(false);
   const [favoriteListOpen, setFavoriteListOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -190,6 +192,7 @@ export function MessagesExperienceV5({
           initialConversations={initialConversations}
           voiceRecorderConfig={voiceRecorderConfig}
           viewerId={viewerId}
+          onManageGroups={() => setGroupsManagerOpen(true)}
         />
       </div>
 
@@ -233,7 +236,12 @@ export function MessagesExperienceV5({
             router.push(`/messages?conversation=${result.conversationId}` as Route);
           });
         }}
+        onGroups={() => {
+          setNewChatOpen(false);
+          setGroupsManagerOpen(true);
+        }}
       />
+      <GroupsManagerModal open={groupsManagerOpen} onOpenChange={setGroupsManagerOpen} />
     </div>
   );
 }
@@ -475,12 +483,14 @@ function NewChatModal({
   open,
   onOpenChange,
   pending,
-  onSelect
+  onSelect,
+  onGroups
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pending: boolean;
   onSelect: (friendId: string) => void;
+  onGroups: () => void;
 }) {
   const [friends, setFriends] = useState<MessageableFriend[] | null>(null);
   const [query, setQuery] = useState("");
@@ -511,6 +521,19 @@ function NewChatModal({
             The member list is useful before search, and avoiding autoFocus also
             prevents the keyboard opening during the sheet's entrance geometry. */}
         <SearchField value={query} onChange={setQuery} placeholder="Search Muddies or usernames" />
+        <button
+          type="button"
+          onClick={onGroups}
+          className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-primary/15 bg-primary/[.07] p-3 text-left"
+        >
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3]">
+            <UsersRound className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-sm">Groups</strong>
+            <span className="text-xs text-muted-foreground">Create, manage or open a private Group</span>
+          </span>
+        </button>
         {friends === null ? (
           <div className="grid place-items-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
         ) : visible.length === 0 ? (

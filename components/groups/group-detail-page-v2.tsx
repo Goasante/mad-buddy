@@ -42,10 +42,16 @@ type ConfirmAction = {
 
 export function GroupDetailPageV2({
   group,
-  initialMessages
+  initialMessages,
+  embedded = false,
+  onRefresh,
+  onExit
 }: {
   group: GroupDetailView;
   initialMessages: ChatMessageView[];
+  embedded?: boolean;
+  onRefresh?: () => void;
+  onExit?: () => void;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("members");
@@ -67,6 +73,11 @@ export function GroupDetailPageV2({
       ? group.inviteCandidates.filter((candidate) => `${candidate.displayName} ${candidate.username}`.toLowerCase().includes(term))
       : group.inviteCandidates;
   }, [group.inviteCandidates, inviteQuery]);
+
+  function refreshView() {
+    if (onRefresh) onRefresh();
+    else router.refresh();
+  }
 
   function runAction(action: MemberAction, member: GroupMemberView) {
     if (action === "view_profile") {
@@ -91,7 +102,7 @@ export function GroupDetailPageV2({
         ? await promoteGroupAdminAction(payload)
         : await demoteGroupAdminAction(payload);
       setFeedback(result.message);
-      if (result.ok) router.refresh();
+      if (result.ok) refreshView();
     });
   }
 
@@ -106,8 +117,12 @@ export function GroupDetailPageV2({
       setFeedback(result.message);
       setConfirm(null);
       if (!result.ok) return;
-      if (confirm.action === "leave_group") router.push("/groups");
-      else router.refresh();
+      if (confirm.action === "leave_group") {
+        if (onExit) onExit();
+        else router.push("/messages?filter=groups");
+      } else {
+        refreshView();
+      }
     });
   }
 
@@ -119,7 +134,7 @@ export function GroupDetailPageV2({
       if (result.ok) {
         setTransferOpen(false);
         setTransferTarget(null);
-        router.refresh();
+        refreshView();
       }
     });
   }
@@ -131,18 +146,20 @@ export function GroupDetailPageV2({
       if (result.ok) {
         setInviteOpen(false);
         setInviteQuery("");
-        router.refresh();
+        refreshView();
       }
     });
   }
 
   return (
     <div className="mx-auto w-full max-w-3xl pb-8">
-      <div className="sticky top-0 z-20 -mx-1 flex items-center gap-2 border-b border-border/50 bg-background/88 px-1 py-2 backdrop-blur-xl">
-        <button type="button" onClick={() => router.back()} className="focus-ring grid h-11 w-11 place-items-center rounded-full transition-transform active:scale-90" aria-label="Back"><ArrowLeft className="h-5 w-5" /></button>
-        <div className="min-w-0 flex-1"><strong className="block truncate text-sm">Group details</strong><span className="block truncate text-[11px] text-muted-foreground">{group.memberCount} members</span></div>
-        <Button onClick={() => router.push(`/messages?conversation=${group.id}`)} className="rounded-full"><MessageCircle className="h-4 w-4" />Open chat</Button>
-      </div>
+      {!embedded ? (
+        <div className="sticky top-0 z-20 -mx-1 flex items-center gap-2 border-b border-border/50 bg-background/88 px-1 py-2 backdrop-blur-xl">
+          <button type="button" onClick={() => router.back()} className="focus-ring grid h-11 w-11 place-items-center rounded-full transition-transform active:scale-90" aria-label="Back"><ArrowLeft className="h-5 w-5" /></button>
+          <div className="min-w-0 flex-1"><strong className="block truncate text-sm">Group details</strong><span className="block truncate text-[11px] text-muted-foreground">{group.memberCount} members</span></div>
+          <Button onClick={() => router.push(`/messages?conversation=${group.id}`)} className="rounded-full"><MessageCircle className="h-4 w-4" />Open chat</Button>
+        </div>
+      ) : null}
 
       {feedback ? <div role="status" className="mt-3 rounded-2xl border border-[#E88C2B]/20 bg-[#E88C2B]/8 px-4 py-3 text-sm text-[#4E0401] animate-in fade-in slide-in-from-top-1">{feedback}</div> : null}
 
@@ -150,10 +167,10 @@ export function GroupDetailPageV2({
         <div className="flex flex-col items-center px-5 pb-5 pt-7 text-center">
           <UserAvatar name={group.name} src={group.imageUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
           <h1 className="mt-4 font-serif text-2xl font-semibold tracking-tight text-[#4E0401] dark:text-orange-50">{group.name}</h1>
-          <p className="mt-1 text-xs font-medium text-muted-foreground">{group.memberCount} members · {group.visibility === "public" ? "Public" : "Private"} · {group.joinMode === "link" ? "Open to join" : "Invite only"}</p>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">{group.memberCount} members · Private · Invite only</p>
           {group.description ? <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{group.description}</p> : null}
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Button onClick={() => router.push(`/messages?conversation=${group.id}`)}><MessageCircle className="h-4 w-4" />Message Group</Button>
+            {!embedded ? <Button onClick={() => router.push(`/messages?conversation=${group.id}`)}><MessageCircle className="h-4 w-4" />Message Group</Button> : null}
             {group.canManageMembers ? <Button variant="outline" onClick={() => setInviteOpen(true)}><UserPlus className="h-4 w-4" />Add people</Button> : null}
           </div>
         </div>
@@ -188,8 +205,8 @@ export function GroupDetailPageV2({
 
       {tab === "about" ? (
         <section className="mt-4 space-y-3">
-          <div className="rounded-[24px] border border-border/60 bg-card/60 p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Group authority</strong></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Your role is <strong className="text-foreground">{group.role ?? "member"}</strong>. Chat permissions, polls, pins and message-lifetime controls live in Group Settings inside the canonical chat.</p><button type="button" onClick={() => router.push(`/messages?conversation=${group.id}`)} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-border/60 px-3 py-3 text-left"><span><strong className="block text-sm">Open Group Settings</strong><span className="text-xs text-muted-foreground">Chat behaviour, permissions and notifications</span></span><ChevronRight className="h-4 w-4" /></button></div>
-          <div className="rounded-[24px] border border-border/60 bg-card/60 p-4"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Membership</strong></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{group.visibility === "public" ? "Anyone signed in can discover this group." : "Only people with access can discover this group."} {group.joinMode === "link" ? "People who are eligible can join without a manual invitation." : "New members join by invitation."}</p></div>
+          <div className="rounded-[24px] border border-border/60 bg-card/60 p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Group authority</strong></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Your role is <strong className="text-foreground">{group.role ?? "member"}</strong>. Chat permissions, polls, pins and message-lifetime controls live in Group Settings inside the canonical chat.</p>{!embedded ? <button type="button" onClick={() => router.push(`/messages?conversation=${group.id}`)} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-border/60 px-3 py-3 text-left"><span><strong className="block text-sm">Open Group Settings</strong><span className="text-xs text-muted-foreground">Chat behaviour, permissions and notifications</span></span><ChevronRight className="h-4 w-4" /></button> : null}</div>
+          <div className="rounded-[24px] border border-border/60 bg-card/60 p-4"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Membership</strong></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">This is a private Group. Only invited members can access it, and new members join by invitation.</p></div>
           {group.role !== "owner" ? <Button variant="outline" className="w-full border-destructive/25 text-destructive" onClick={() => setConfirm({ action: "leave_group", member: null })}><LogOut className="h-4 w-4" />Leave Group</Button> : <Button variant="outline" className="w-full" onClick={() => setTransferOpen(true)}>Transfer ownership</Button>}
         </section>
       ) : null}

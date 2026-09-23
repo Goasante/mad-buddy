@@ -1,48 +1,47 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Inbox, Loader2, Plus, Search, Shield, Users2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
+
 import {
   createGroupAction,
-  joinDiscoverableGroupAction,
-  uploadGroupImageAction,
-  respondToGroupInvitationAction
+  respondToGroupInvitationAction,
+  uploadGroupImageAction
 } from "@/app/(app)/group-actions";
 import { FormField } from "@/components/auth/form-field";
+import { PageHeader } from "@/components/app-shell/page-header";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import type { GroupInvitation, GroupSummary, GroupsPageData } from "@/lib/groups/types";
-import { cn, formatRelativeTime } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
-import { PageHeader } from "@/components/app-shell/page-header";
+import { cn, formatRelativeTime } from "@/lib/utils";
 
-type GroupTab = "mine" | "discover" | "requests";
+type GroupTab = "mine" | "requests";
 
 const groupTabs: Array<{ id: GroupTab; label: string }> = [
   { id: "mine", label: "My Groups" },
-  { id: "discover", label: "Discover" },
   { id: "requests", label: "Invitations" }
 ];
 
-export function GroupsPageContent({ initialData }: { initialData: GroupsPageData }) {
+export function GroupsPageContent({
+  initialData,
+  embedded = false,
+  onNavigate
+}: {
+  initialData: GroupsPageData;
+  embedded?: boolean;
+  onNavigate?: () => void;
+}) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [activeTab, setActiveTab] = useState<GroupTab>("mine");
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  /**
-   * Who can FIND the group, and separately whether they can join without an
-   * invitation. Two axes, not one: a public group may still be invite-only —
-   * browsable, but you ask. Both default to the closed answer.
-   */
-  const [visibility, setVisibility] = useState<"private" | "public">("private");
-  const [openToJoin, setOpenToJoin] = useState(false);
   const [imageMediaId, setImageMediaId] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -51,35 +50,28 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
   const [isPending, startTransition] = useTransition();
 
   const visibleGroups = useMemo(() => {
-    const source = activeTab === "mine" ? data.groups : data.discoverableGroups;
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return source;
-    return source.filter((group) =>
+    if (!normalized) return data.groups;
+    return data.groups.filter((group) =>
       `${group.name} ${group.description ?? ""}`.toLowerCase().includes(normalized)
     );
-  }, [activeTab, data.discoverableGroups, data.groups, query]);
+  }, [data.groups, query]);
+
+  function openGroup(groupId: string) {
+    onNavigate?.();
+    router.push(`/messages?conversation=${groupId}`);
+  }
 
   function refresh(message: string) {
     setFeedback(message);
     router.refresh();
   }
 
-  /**
-   * Upload the group image before the group exists.
-   *
-   * Returns a media id the create call attaches. An abandoned upload leaves
-   * an orphan asset that the retention sweep collects — better than creating
-   * a group first and leaving it half-made if the upload fails.
-   */
   function pickImage(file: File) {
     setUploading(true);
     setFeedback("");
     startTransition(async () => {
       const { compressImageForUpload } = await import("@/lib/media/client-compress");
-      // Downscaled in the browser first: a phone photo is routinely 4-12 MB
-      // and would otherwise bounce off the request cap before it is read.
-      // A failed compression falls back to the original, which the server
-      // validates and may still reject — better than refusing here.
       const compressed = await compressImageForUpload(file).catch(() => null);
       const prepared = compressed?.ok ? compressed.file : file;
 
@@ -102,34 +94,35 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
       const result = await createGroupAction({
         name,
         description,
-        visibility,
-        openToJoin,
         imageMediaId: imageMediaId ?? undefined
       });
       setFeedback(result.message);
       if (!result.ok) return;
+
       setName("");
       setDescription("");
-      setVisibility("private");
-      setOpenToJoin(false);
       setImageMediaId(null);
       setImagePreview(null);
       setCreateOpen(false);
-      setActiveTab("mine");
+
+      if (result.groupId) {
+        openGroup(result.groupId);
+        return;
+      }
       router.refresh();
-      if (result.groupId) router.push(`/groups/${result.groupId}`);
     });
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 md:pt-6">
-      <PageHeader title="Groups" />
+    <div className={cn("space-y-5", embedded ? "" : "mx-auto max-w-[1200px] md:pt-6")}>
+      {!embedded ? <PageHeader title="Groups" /> : null}
 
-      <header className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between md:pt-0">
+      <header className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between md:pt-0">
         <div>
-          {/* Hidden on mobile: the shared header carries the title there. */}
-          <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Groups</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Private spaces for conversations and shared plans.</p>
+          {!embedded ? <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Groups</h1> : null}
+          <p className="text-sm text-muted-foreground">
+            Private group conversations. Create one, handle invitations, or open an existing Group.
+          </p>
         </div>
         <Button type="button" onClick={() => setCreateOpen(true)} data-tour-id={TOUR_TARGET_IDS.GROUPS_CREATE}>
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -167,13 +160,13 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
         </div>
       </nav>
 
-      {activeTab !== "requests" ? (
+      {activeTab === "mine" ? (
         <div className="relative max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={activeTab === "mine" ? "Search your Groups" : "Search discoverable Groups"}
+            placeholder="Search your Groups"
             className="pl-9"
           />
         </div>
@@ -197,7 +190,7 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
                       }));
                     }
                     refresh(result.message);
-                    if (result.ok && accept && result.groupId) router.push(`/groups/${result.groupId}`);
+                    if (result.ok && accept && result.groupId) openGroup(result.groupId);
                   });
                 }}
               />
@@ -214,43 +207,18 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
           </div>
         )
       ) : visibleGroups.length > 0 ? (
-        <div data-tour-id={TOUR_TARGET_IDS.GROUPS_LIST} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div data-tour-id={TOUR_TARGET_IDS.GROUPS_LIST} className="grid gap-3 sm:grid-cols-2">
           {visibleGroups.map((group) => (
-            <GroupCard
-              key={group.id}
-              group={group}
-              discoverable={activeTab === "discover"}
-              disabled={isPending}
-              onJoin={() => {
-                startTransition(async () => {
-                  const result = await joinDiscoverableGroupAction(group.id);
-                  if (result.ok) {
-                    setData((current) => ({
-                      ...current,
-                      groups: [{ ...group, role: "member" }, ...current.groups],
-                      discoverableGroups: current.discoverableGroups.filter((item) => item.id !== group.id)
-                    }));
-                  }
-                  refresh(result.message);
-                  if (result.ok) router.push(`/groups/${group.id}`);
-                });
-              }}
-            />
+            <GroupCard key={group.id} group={group} onOpen={() => openGroup(group.id)} />
           ))}
         </div>
       ) : (
         <div data-tour-id={TOUR_TARGET_IDS.GROUPS_LIST}>
           <EmptyState
-            icon={activeTab === "discover" ? Search : Users2}
+            icon={Users2}
             className="!min-h-0 !shadow-none p-5"
-            title={query ? "No matching Groups" : activeTab === "discover" ? "No Groups to discover" : "No Groups yet"}
-            description={
-              query
-                ? "Try another search."
-                : activeTab === "discover"
-                  ? "Discoverable Groups created by approved Muddies will appear here."
-                  : "Create a private Group or accept an invitation to get started."
-            }
+            title={query ? "No matching Groups" : "No Groups yet"}
+            description={query ? "Try another search." : "Create a private Group or accept an invitation to get started."}
           />
         </div>
       )}
@@ -259,11 +227,11 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
         open={createOpen}
         onOpenChange={setCreateOpen}
         title="Create Group"
-        description="Groups are private by default."
+        description="Groups are private and invite-only."
         footer={
           <>
             <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={isPending}>Cancel</Button>
-            <Button type="button" onClick={createGroup} disabled={isPending || name.trim().length < 2}>
+            <Button type="button" onClick={createGroup} disabled={isPending || uploading || name.trim().length < 2}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
               Create group
             </Button>
@@ -274,12 +242,11 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
           <FormField htmlFor="group-name" label="Group name">
             <Input id="group-name" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Weekend Crew" />
           </FormField>
+
           <FormField htmlFor="group-description" label="Description (optional)">
             <Textarea id="group-description" value={description} maxLength={500} onChange={(event) => setDescription(event.target.value)} placeholder="What is this Group for?" />
           </FormField>
-          {/* THE GROUP IMAGE. Becomes the group's avatar and its card art on
-              Linkr, so one upload serves both. Optional: without it the card
-              falls back to a stable generated cover rather than a grey box. */}
+
           <div>
             <span className="mb-1.5 block text-sm font-medium">Group image (optional)</span>
             <label className="focus-ring flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3 hover:bg-secondary/40">
@@ -294,12 +261,8 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
                 )}
               </span>
               <span className="min-w-0">
-                <span className="block text-sm font-medium">
-                  {imagePreview ? "Change image" : "Add an image"}
-                </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Shown as the group photo and on Linkr.
-                </span>
+                <span className="block text-sm font-medium">{imagePreview ? "Change image" : "Add an image"}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">Shown as the Group photo in Messages.</span>
               </span>
               <input
                 type="file"
@@ -308,85 +271,21 @@ export function GroupsPageContent({ initialData }: { initialData: GroupsPageData
                 disabled={uploading || isPending}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  // Cleared so choosing the SAME file twice still fires.
                   event.target.value = "";
                   if (file) pickImage(file);
                 }}
               />
             </label>
           </div>
-
-          {/* WHO CAN FIND IT. A deliberate choice, defaulting to private. */}
-          <fieldset>
-            <legend className="mb-1.5 text-sm font-medium">Who can find this group?</legend>
-            <div className="flex flex-col gap-1.5">
-              {[
-                {
-                  id: "private" as const,
-                  label: "Private",
-                  hint: "Only people you invite can find it."
-                },
-                {
-                  id: "public" as const,
-                  label: "Public",
-                  hint: "Anyone can find it on Linkr."
-                }
-              ].map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setVisibility(option.id)}
-                  aria-pressed={visibility === option.id}
-                  className={cn(
-                    "focus-ring rounded-xl border px-3 py-2 text-left transition-colors",
-                    visibility === option.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border/70 hover:bg-secondary/40"
-                  )}
-                >
-                  <span className="block text-sm font-medium">{option.label}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{option.hint}</span>
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* JOINING. Only meaningful once people can find it, so it appears
-              under Public — asking "can strangers join?" about a group nobody
-              can see is a question with no consequence. */}
-          {visibility === "public" ? (
-            <label className="ml-3 flex items-start gap-3 border-l-2 border-border/60 pl-3">
-              <input
-                type="checkbox"
-                checked={openToJoin}
-                onChange={(event) => setOpenToJoin(event.target.checked)}
-                className="mt-1 h-4 w-4 accent-[var(--color-brand-orange)]"
-              />
-              <span>
-                <span className="block text-sm font-medium">Anyone can join without an invite</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">Leave this off to review each person first.</span>
-              </span>
-            </label>
-          ) : null}
         </div>
       </Modal>
     </div>
   );
 }
 
-function GroupCard({
-  group,
-  discoverable,
-  disabled,
-  onJoin
-}: {
-  group: GroupSummary;
-  discoverable: boolean;
-  disabled: boolean;
-  onJoin: () => void;
-}) {
+function GroupCard({ group, onOpen }: { group: GroupSummary; onOpen: () => void }) {
   return (
-    <article className="flex min-h-[220px] flex-col rounded-2xl border border-border/80 bg-card/60 p-5">
+    <article className="flex min-h-[210px] flex-col rounded-2xl border border-border/80 bg-card/60 p-5">
       <div className="flex items-start justify-between gap-2">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
           <Users2 className="h-5 w-5" aria-hidden="true" />
@@ -403,13 +302,7 @@ function GroupCard({
       {group.lastMessagePreview ? <p className="mt-2 truncate text-xs text-muted-foreground">{group.lastMessagePreview}</p> : null}
       {group.lastMessageAt ? <p className="mt-1 text-[11px] text-muted-foreground">Active {formatRelativeTime(group.lastMessageAt)}</p> : null}
       <div className="mt-auto pt-4">
-        {discoverable ? (
-          <Button type="button" size="sm" className="w-full" onClick={onJoin} disabled={disabled}>Join group</Button>
-        ) : (
-          <Button type="button" size="sm" variant="outline" className="w-full" asChild>
-            <Link href={`/groups/${group.id}`}>Open group</Link>
-          </Button>
-        )}
+        <Button type="button" size="sm" variant="outline" className="w-full" onClick={onOpen}>Open group</Button>
       </div>
     </article>
   );
