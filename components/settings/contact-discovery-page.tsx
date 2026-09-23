@@ -13,6 +13,7 @@ import {
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CONTACT_REGIONS } from "@/lib/contacts/contact-regions";
 import { haptic } from "@/lib/device/haptics";
 import { cn } from "@/lib/utils";
 
@@ -33,27 +34,6 @@ import { cn } from "@/lib/utils";
  * already knows their own number; what they need is enough to recognise which
  * one is on the account.
  */
-
-/**
- * A short list, not a full ISO catalogue.
- *
- * The parser accepts any country when a number is written in international
- * form, so this only helps people typing a national number. Ghana leads
- * because that is where most Mad Buddy users are; anyone elsewhere can type
- * +country and be parsed correctly regardless of what is selected.
- */
-const REGIONS = [
-  { code: "GH", label: "Ghana (+233)" },
-  { code: "NG", label: "Nigeria (+234)" },
-  { code: "GB", label: "United Kingdom (+44)" },
-  { code: "US", label: "United States (+1)" },
-  { code: "CA", label: "Canada (+1)" },
-  { code: "ZA", label: "South Africa (+27)" },
-  { code: "KE", label: "Kenya (+254)" },
-  { code: "DE", label: "Germany (+49)" },
-  { code: "FR", label: "France (+33)" },
-  { code: "IN", label: "India (+91)" }
-] as const;
 
 export function ContactDiscoveryPage() {
   const [hasPhone, setHasPhone] = useState(false);
@@ -76,6 +56,7 @@ export function ContactDiscoveryPage() {
       if (!active) return;
       setHasPhone(identity.hasPhone);
       setHint(identity.hint);
+      setRegion(identity.region ?? "GH");
       setDiscoveryEnabled(identity.discoveryEnabled);
       setLoading(false);
     })();
@@ -98,6 +79,7 @@ export function ContactDiscoveryPage() {
         const identity = await getPhoneIdentityAction();
         setHasPhone(identity.hasPhone);
         setHint(identity.hint);
+        setRegion(identity.region ?? region);
         setDiscoveryEnabled(identity.discoveryEnabled);
         setEditing(false);
         setPhoneInput("");
@@ -170,7 +152,7 @@ export function ContactDiscoveryPage() {
                   onChange={(event) => setRegion(event.target.value)}
                   className="focus-ring h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
                 >
-                  {REGIONS.map((entry) => (
+                  {CONTACT_REGIONS.map((entry) => (
                     <option key={entry.code} value={entry.code}>
                       {entry.label}
                     </option>
