@@ -199,7 +199,7 @@ describe("the UI uses the canonical batched endpoint", () => {
     expect(sheet).toContain('method: "POST"');
     expect(sheet).toContain("phoneNumbers,");
     expect(sheet).toContain("contactRegionFromLocale");
-    expect(sheet).toContain("setup.region ??");
+    expect(sheet).toContain("setup.region ?? phoneRegion");
     // One fetch call in the whole component -- and one submission path, so the
     // demo fixture and the OS picker cannot diverge after selection.
     expect((sheet.match(/fetch\("\/api\/contacts\/match"/g) ?? []).length).toBe(1);
@@ -375,10 +375,11 @@ describe("the guided sheet keeps setup and matching continuous", () => {
     expect(begin.slice(0, 500)).not.toContain("setup.hasPhone");
   });
 
-  it("uses the saved account region before a locale fallback for local-format contacts", () => {
+  it("uses the saved account region before an explicit/local-device fallback", () => {
     const post = sheet.slice(sheet.indexOf('fetch("/api/contacts/match"'));
-    expect(post.slice(0, 900)).toContain("setup.region ??");
-    expect(post.slice(0, 900)).toContain("contactRegionFromLocale");
+    expect(post.slice(0, 900)).toContain("setup.region ?? phoneRegion");
+    expect(sheet).toContain("contactRegionFromLocale");
+    expect(sheet).toContain("Country for locally saved numbers");
   });
 });
 
