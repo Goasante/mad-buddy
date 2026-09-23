@@ -25,7 +25,6 @@ import {
   Settings,
   UserRound,
   Users,
-  Users2,
   UsersRound
 } from "lucide-react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
