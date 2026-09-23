@@ -6,6 +6,7 @@
  * facts once, then the engine chooses the first truthful applicable state.
  */
 
+import { gracePeriodEndMs } from "@/lib/safety/safe-arrival";
 import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
 import type { LinkrMutualForCard } from "@/lib/smart-card/linkr-context";
 import type {
@@ -54,6 +55,7 @@ export type SmartCardInput = {
         watcherCount: number;
         destinationLabel?: string | null;
         expectedArrivalAt?: string | null;
+        gracePeriodMinutes?: number | null;
         status?: string | null;
       }
     | null;
@@ -249,26 +251,61 @@ function proximityLabel(band: SmartCardNearbyFriend["proximity_band"]): string |
 function safeArrivalProvider(input: SmartCardInput): SmartCard | null {
   const journey = input.safeArrival;
   if (!journey?.travelling) return null;
+
   const destination = journey.destinationLabel?.trim();
-  const needsCheckIn = journey.status === "grace_period" || journey.status === "unconfirmed";
+  const expectedMs = journey.expectedArrivalAt ? Date.parse(journey.expectedArrivalAt) : Number.NaN;
+  const graceMinutes = journey.gracePeriodMinutes ?? 0;
+  const graceEnd =
+    Number.isFinite(expectedMs) && Number.isFinite(graceMinutes)
+      ? gracePeriodEndMs({ expectedArrivalMs: expectedMs, gracePeriodMinutes: Math.max(0, graceMinutes) })
+      : Number.NaN;
+
+  /*
+   * Match Safe Arrival's own journey presentation: unconfirmed is overdue
+   * immediately, and a job that has not yet stamped the status must not make
+   * Home keep saying "in transit" after the stored grace deadline.
+   */
+  const overdueByClock = Number.isFinite(graceEnd) && input.now.getTime() >= graceEnd;
+  const needsCheckIn = journey.status === "unconfirmed" || overdueByClock;
+  const starting = journey.status === "draft" || journey.status === "pending_acknowledgement";
   const expected = relativeInLabel(journey.expectedArrivalAt, input.now);
+
+  const title = needsCheckIn
+    ? destination
+      ? `Confirm you arrived at ${destination}`
+      : "Confirm you arrived"
+    : starting
+      ? destination
+        ? `Safe Arrival to ${destination} is starting`
+        : "Safe Arrival is starting"
+      : destination
+        ? `You're heading to ${destination}`
+        : "You're on a journey";
 
   return {
     id: "safe_arrival",
     priority: 0,
     illustration: "people",
-    eyebrow: needsCheckIn ? "SAFE ARRIVAL · CHECK IN" : "SAFE ARRIVAL",
-    title: destination ? `You're heading to ${destination}` : "You're on a journey",
+    eyebrow: needsCheckIn ? "SAFE ARRIVAL · CHECK IN" : starting ? "SAFE ARRIVAL · STARTING" : "SAFE ARRIVAL",
+    title,
     subtitle:
       journey.watcherCount > 0
-        ? `${journey.watcherCount} ${journey.watcherCount === 1 ? "Muddy is" : "Muddies are"} checking on you. ${needsCheckIn ? "Let them know you arrived." : "Confirm when you arrive."}`
+        ? `${journey.watcherCount} ${journey.watcherCount === 1 ? "Muddy is" : "Muddies are"} checking on you. ${needsCheckIn ? "Let them know you arrived." : starting ? "They'll be there once it begins." : "Confirm when you arrive."}`
         : needsCheckIn
           ? "Your arrival check-in is due."
-          : "Confirm your arrival when you get there.",
+          : starting
+            ? "Your safety check is getting ready."
+            : "Confirm your arrival when you get there.",
     meta: needsCheckIn ? "Arrival check-in due" : expected ? `Expected ${expected}` : undefined,
     metaKind: "time",
     cta: "Open Safe Arrival",
-    destination: "/safe-arrival"
+    destination: "/safe-arrival",
+    /*
+     * Refresh exactly when Safe Arrival's own grace window ends. If the
+     * background job has not stamped unconfirmed yet, the next provider pass
+     * derives the overdue truth from the clock and keeps the safety card alive.
+     */
+    expiresAt: !needsCheckIn && Number.isFinite(graceEnd) ? graceEnd : undefined
   };
 }
 
