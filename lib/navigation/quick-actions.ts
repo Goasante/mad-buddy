@@ -10,13 +10,13 @@ import type { FeatureIconKey } from "@/lib/icons/feature-icons";
  * launcher costs essentially nothing to render and its behaviour can be tested
  * without mounting the app.
  *
- * The five actions each open the feature's CANONICAL route. There are no
+ * The actions each open the feature's CANONICAL route. There are no
  * context-dependent destinations: Plans opens Plans everywhere. An icon that
  * quietly means something different per screen is a thing users have to learn
  * page by page, and the first version should not ask that.
  */
 
-export type QuickActionId = "moments" | "plans" | "events" | "safe_arrival" | "groups";
+export type QuickActionId = "moments" | "plans" | "events" | "safe_arrival" | "focus";
 
 export type QuickAction = {
   id: QuickActionId;
@@ -38,9 +38,9 @@ export type QuickAction = {
 /**
  * The launcher's contents, in display order.
  *
- * Ordered top-to-bottom as they appear when expanded. Moments sits nearest the
- * user's thumb because it is the most frequently opened of the five; Groups is
- * furthest because it is the most deliberate.
+ * Ordered top-to-bottom as they appear when expanded. Groups is deliberately
+ * absent: group conversations now live under Messages, while Focus earns the
+ * spare launcher slot because it is a genuine cross-app control.
  *
  * Camera is deliberately ABSENT. Mad Cam is reached by the Home tab (tap to go
  * Home, tap again or double-tap to open the camera), and duplicating it here
@@ -66,7 +66,13 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
     featureIcon: "safeArrival",
     toneClass: "qa-tone-safe-arrival"
   },
-  { id: "groups", label: "Groups", href: "/groups" as Route, featureIcon: "groups", toneClass: "qa-tone-groups" }
+  {
+    id: "focus",
+    label: "Focus",
+    href: "/settings/engagement" as Route,
+    featureIcon: "focus",
+    toneClass: "qa-tone-focus"
+  }
 ];
 
 /**
