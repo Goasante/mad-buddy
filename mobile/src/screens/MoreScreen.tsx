@@ -5,7 +5,6 @@ import {
   MessageCircle,
   Camera,
   CalendarHeart,
-  Users2,
   Compass,
   ShieldCheck,
   Crown,
