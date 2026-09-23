@@ -53,9 +53,9 @@ describe("who is offered contact discovery", () => {
     expect(decide()).toEqual({ show: true, kind: "add_phone" });
   });
 
-  it("asks for a number first when there is none", () => {
-    // Connecting contacts before having a number would be out of order --
-    // there would be nothing to be discoverable by.
+  it("leads with the optional own-number step when there is none", () => {
+    // The guided sheet may still skip this and check selected contacts. The
+    // reminder variant simply makes two-way discovery understandable first.
     expect(decide({ hasPhone: false })).toEqual({ show: true, kind: "add_phone" });
   });
 
