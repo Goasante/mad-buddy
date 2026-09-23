@@ -179,7 +179,7 @@ describe("safety and real commitments always survive", () => {
     // Composition never gates it; it has its own signal.
     const dashboard = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
     const at = dashboard.indexOf("home-safe-arrival-heading");
-    const gate = dashboard.lastIndexOf("{hasSafeArrival ?", at);
+    const gate = dashboard.lastIndexOf("{hasSafeArrivalSection ?", at);
     expect(dashboard.slice(gate, at)).not.toContain("composition.");
   });
 
