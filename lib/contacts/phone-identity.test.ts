@@ -82,9 +82,9 @@ describe("numbers normalise to E.164", () => {
 });
 
 describe("contact-region defaults follow the person rather than Ghana blindly", () => {
-  it("uses a locale region even when that country is not in the compact dropdown", () => {
+  it("uses a locale region and offers that country in the shared selector", () => {
     expect(contactRegionFromLocale("en-AU")).toBe("AU");
-    expect(CONTACT_REGIONS.some((entry) => entry.code === "AU")).toBe(false);
+    expect(CONTACT_REGIONS.some((entry) => entry.code === "AU")).toBe(true);
   });
 
   it("uses Ghana only when the locale has no usable region", () => {
