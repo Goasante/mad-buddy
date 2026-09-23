@@ -141,7 +141,7 @@ describe("a stale fix blocks proximity, not the rest of Mad Buddy", () => {
   it("never blocks safety", () => {
     const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
     const at2 = home.indexOf("home-safe-arrival-heading");
-    const gate = home.lastIndexOf("{hasSafeArrival ?", at2);
+    const gate = home.lastIndexOf("{hasSafeArrivalSection ?", at2);
     expect(home.slice(gate, at2)).not.toContain("composition.");
   });
 
