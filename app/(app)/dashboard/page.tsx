@@ -122,7 +122,10 @@ export default async function DashboardPage() {
         safeArrival: safeArrival
           ? {
               travelling: safeArrival.travelling.length > 0,
-              watcherCount: safeArrival.travelling[0]?.acceptedCount ?? 0
+              watcherCount: safeArrival.travelling[0]?.acceptedCount ?? 0,
+              destinationLabel: safeArrival.travelling[0]?.destinationLabel ?? null,
+              expectedArrivalAt: safeArrival.travelling[0]?.expectedArrivalAt ?? null,
+              status: safeArrival.travelling[0]?.status ?? null
             }
           : null,
         birthday: dateOfBirth
