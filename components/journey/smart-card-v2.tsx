@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { CalendarDays, MapPin, ShieldCheck, UsersRound } from "lucide-react";
+import { CalendarDays, CircleHelp, Clock, MapPin, ShieldCheck, UsersRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
@@ -60,8 +60,18 @@ const LOCATION_META_IDS = new Set<SmartCard["id"]>([
    per state, which the fixed two-background system removes by design. */
 
 function MetadataIcon({ card }: { card: SmartCard }) {
-  if (card.id === "safe_arrival") return <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />;
-  if (LOCATION_META_IDS.has(card.id)) return <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  if (card.id === "safe_arrival") {
+    return <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
+  if (card.metaKind === "location" || LOCATION_META_IDS.has(card.id)) {
+    return <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
+  if (card.metaKind === "decision") {
+    return <CircleHelp className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
+  if (card.metaKind === "time" || card.metaKind === "status") {
+    return <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
   return <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />;
 }
 
@@ -84,6 +94,24 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
     const frame = requestAnimationFrame(() => setAnimatedPercent(percent));
     return () => cancelAnimationFrame(frame);
   }, [percent, reducedMotion]);
+
+  /**
+   * The heartbeat must change while Home is OPEN, not only after a manual
+   * refresh. Providers stamp the instant their fact stops being true (an Event
+   * starts, an UpFor ends, etc.). At that boundary, ask the server to choose
+   * the next truthful card.
+   *
+   * The browser timeout ceiling is ~24.8 days. Very distant expiries are
+   * harmlessly capped: that refresh simply re-renders the same still-valid card
+   * and schedules the remaining window.
+   */
+  useEffect(() => {
+    if (card.expiresAt === undefined) return;
+    const remaining = card.expiresAt - Date.now();
+    const delay = Math.max(0, Math.min(remaining + 75, 2_147_000_000));
+    const timer = window.setTimeout(() => router.refresh(), delay);
+    return () => window.clearTimeout(timer);
+  }, [card.expiresAt, router]);
 
   function acknowledgeIfNeeded() {
     if (!card.dismissible) return;
