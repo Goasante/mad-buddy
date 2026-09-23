@@ -234,7 +234,7 @@ describe("configuring Glow is not first value", () => {
     expect(composeHome(withPlan).showPlansEmpty).toBe(false);
     // A real plan renders from its own branch, and safety from its own gate.
     expect(home).toContain("agendaItems.length > 0");
-    expect(home).toContain("{hasSafeArrival ?");
+    expect(home).toContain("{hasSafeArrivalSection ?");
   });
 });
 
