@@ -13,7 +13,8 @@ import {
   recordPermanentDismissal,
   recordPrivacyChange,
   recordReminderDismissal,
-  recordSetupComplete
+  recordSetupComplete,
+  recordUnsupportedDevice
 } from "@/lib/contacts/reminder-store";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -183,6 +184,20 @@ export async function stopContactRemindersAction(): Promise<ContactActionState> 
   });
 
   return { ok: true, message: "We won't ask about this again. You can still find Muddies from Settings." };
+}
+
+/**
+ * Quiet automatic reminders when the current platform proves it cannot expose
+ * contacts. This changes reminder cadence only; it never changes discovery,
+ * the stored number or any relationship.
+ */
+export async function snoozeUnsupportedContactReminderAction(): Promise<ContactActionState> {
+  const user = await getCurrentUserRecord();
+  if (!user) return { ok: false, message: "" };
+
+  const admin = createSupabaseAdminClient();
+  await recordUnsupportedDevice(admin, user.id);
+  return { ok: true, message: "" };
 }
 
 /**
