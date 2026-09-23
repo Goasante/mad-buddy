@@ -133,6 +133,13 @@ function expiresAt(iso: string | null | undefined): number | undefined {
   return Number.isFinite(ms) ? ms : undefined;
 }
 
+function earliestExpiry(values: readonly (string | null | undefined)[]): number | undefined {
+  const times = values
+    .map((value) => expiresAt(value))
+    .filter((value): value is number => value !== undefined);
+  return times.length > 0 ? Math.min(...times) : undefined;
+}
+
 /**
  * Relative clock copy that is timezone-independent.
  *
@@ -292,7 +299,10 @@ function planRsvpProvider(input: SmartCardInput): SmartCard | null {
        is a small lie the moment the next screen asks the question again. */
     cta: "Respond",
     destination: `/plans?plan=${plan.id}`,
-    expiresAt: expiresAt(plan.endsAt ?? plan.startsAt)
+    /* Once the Plan has started this is no longer a pre-Plan invitation job.
+       The Plan may remain in Coming Up while it is in progress, but the
+       heartbeat must move on. */
+    expiresAt: expiresAt(plan.startsAt)
   };
 }
 
@@ -327,6 +337,11 @@ function planStartingProvider(input: SmartCardInput): SmartCard | null {
 function eventLiveProvider(input: SmartCardInput): SmartCard | null {
   const event = input.agenda.find((item) => {
     if (item.kind !== "event") return false;
+    /* "Interested" is consideration, not attendance. The starting-soon
+       providers already preserve that distinction; live Events must not undo
+       it by promoting a bookmark to HAPPENING NOW once the clock crosses
+       starts_at. */
+    if (!item.isHost && item.myRsvp !== "going") return false;
     const start = Date.parse(item.startsAt);
     const end = Date.parse(item.endsAt);
     const now = input.now.getTime();
@@ -639,7 +654,8 @@ function upForRequestsProvider(input: SmartCardInput): SmartCard | null {
     subtitle: "They are waiting on you before anything can happen.",
     cta: "Review requests",
     destination: "/hangout-mode",
-    media: many ? undefined : upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+    media: many ? undefined : upForActivitySmartCardMedia(first.activityType, first.activityLabel),
+    expiresAt: earliestExpiry(waiting.map((session) => session.endsAt))
   };
 }
 
@@ -1068,7 +1084,8 @@ function planDecisionProvider(input: SmartCardInput): SmartCard | null {
        canonical deep link Home already uses for a Plan invitation, and it
        opens that Plan's detail sheet where the poll lives. Landing on the
        index would make the person find again the thing the card just named. */
-    destination: `/plans?plan=${first.planId}`
+    destination: `/plans?plan=${first.planId}`,
+    expiresAt: expiresAt(first.closesAt)
   };
 }
 
