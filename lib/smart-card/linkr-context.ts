@@ -24,6 +24,8 @@ export type LinkrMutualForCard = {
    * pair without freezing a decision about them.
    */
   connectionId: string;
+  /** Canonical mutual-connection time, used only to keep "new connection" current. */
+  connectedAt: string;
   displayName: string;
   photo: string | null;
   /** Already talking. Not a moment, and not something to nag about. */
