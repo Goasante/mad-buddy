@@ -153,13 +153,14 @@ describe("the phone number cannot leak to another user", () => {
     expect(migration).not.toContain("alter table public.profiles");
   });
 
-  it("is readable only by its owner", () => {
+  it("started owner-scoped and is hardened to server-only authority", () => {
     expect(migration).toContain("enable row level security");
     const select = migration.slice(migration.indexOf('create policy "phone identity owner reads"'));
     expect(select.slice(0, 200)).toContain("using (auth.uid() = user_id)");
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner reads"');
   });
 
-  it("keeps browser access read-only and routes writes through the server", () => {
+  it("removes browser table authority and routes all access through the server", () => {
     expect(authorityMigration).toContain('drop policy if exists "phone identity owner writes"');
     expect(authorityMigration).toContain('drop policy if exists "phone identity owner reads"');
     expect(authorityMigration).toContain("revoke all");
@@ -195,7 +196,7 @@ describe("no number is presented as verified", () => {
     expect(migration).toContain("reject_client_phone_verification");
     expect(migration).toContain("phone_verified_at is set by verification only");
     expect(migration).toContain("<> 'service_role'");
-    expect(authorityMigration).toContain("server-write-only");
+    expect(authorityMigration).toContain("Server-only table");
   });
 
   it("keeps the column so OTP can be added without a schema change", () => {
