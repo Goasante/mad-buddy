@@ -1203,6 +1203,10 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
     return run.sent;
   },
   "streaks.close_expired_periods": handleCloseExpiredStreaks,
+  "life.reconcile_milestones": async (admin) => {
+    const { reconcileFriendshipMilestones } = await import("@/lib/life/milestone-service");
+    return reconcileFriendshipMilestones(admin);
+  },
   "recap.generate_monthly": handleGenerateMonthlyRecaps,
   "birthdays.notify": async (admin) => deliverBirthdayNotifications(admin),
   "rewards.earned_premium": async (_admin) => {

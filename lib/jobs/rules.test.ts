@@ -115,6 +115,7 @@ describe("schedule (spec §31)", () => {
       "financial.capture_daily_snapshot",
       "financial.reconcile_paystack_fees",
       "recap.generate_monthly",
+      "life.reconcile_milestones",
       "streaks.close_expired_periods"
       ,"birthdays.notify"
     ]) {

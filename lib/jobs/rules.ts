@@ -41,6 +41,7 @@ export type JobType =
    */
   | "access.welcome_reminders"
   | "recap.generate_monthly"
+  | "life.reconcile_milestones"
   | "streaks.close_expired_periods"
   | "birthdays.notify"
   | "rewards.earned_premium"
@@ -195,6 +196,7 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "financial.reconcile_paystack_fees", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "access.welcome_reminders", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "streaks.close_expired_periods", everyMinutes: 60 * 24, priority: 6 },
+  { jobType: "life.reconcile_milestones", everyMinutes: 60 * 24, priority: 7 },
   { jobType: "recap.generate_monthly", everyMinutes: 60 * 24, priority: 7 },
   { jobType: "birthdays.notify", everyMinutes: 60, priority: 5 },
   { jobType: "expiry.plans", everyMinutes: 60, priority: 5 },
