@@ -201,6 +201,7 @@ export function MessagesPageV4({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedConversationId = searchParams.get("conversation");
+  const requestedFilter = searchParams.get("filter");
 
   /* Bind the cache to this account BEFORE first render reads from it.
      Done during render rather than in an effect because the very first paint
@@ -234,7 +235,9 @@ export function MessagesPageV4({
     return id ? readThread(viewerId, id)?.controls ?? null : null;
   });
   const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<FilterId>("all");
+  const [activeFilter, setActiveFilter] = useState<FilterId>(() =>
+    requestedFilter === "groups" ? "groups" : "all"
+  );
   const [loadingMessages, setLoadingMessages] = useState(false);
   /* Confirmations expire, failures stay until the person deals with them.
      V4 was still using plain useState, so every "Deleted." and "Copied." sat
@@ -1362,9 +1365,9 @@ export function MessagesPageV4({
           await syncConversations();
           openConversation(result.conversationId);
         });
-      }} onOpenGroups={() => { setNewMessageOpen(false); router.push("/groups" as Route); }} />
+      }} onOpenGroups={() => { setNewMessageOpen(false); setActiveFilter("groups"); }} />
 
-      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => router.push(`/groups/${selected.id}` as Route)} onFeedback={setFeedback} /> : null}
+      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onFeedback={setFeedback} /> : null}
 
       <EditMessageModal message={editTarget} draft={editDraft} setDraft={setEditDraft} pending={isPending} onClose={() => setEditTarget(null)} onSave={() => {
         if (!editTarget || !selectedId || !editDraft.trim()) return;
