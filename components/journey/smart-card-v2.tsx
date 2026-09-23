@@ -160,7 +160,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   function acknowledgeIfNeeded() {
     if (!card.dismissible) return;
     startTransition(() => {
-      void acknowledgeSmartCardAction(card.id);
+      void acknowledgeSmartCardAction(card.acknowledgementKey ?? card.id);
     });
   }
 
