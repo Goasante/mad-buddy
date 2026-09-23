@@ -98,6 +98,32 @@ describe("Home Smart Card is the social heartbeat", () => {
     });
   });
 
+  it("does not keep an unanswered invitation alive after the Plan has started", () => {
+    const card = pick({
+      agenda: [
+        {
+          kind: "plan",
+          id: "p-started",
+          title: "Already Started",
+          startsAt: "2026-09-23T09:00:00.000Z",
+          endsAt: "2026-09-23T12:00:00.000Z",
+          startAt: "2026-09-23T09:00:00.000Z",
+          organiserName: "Kofi",
+          myRsvp: "invited",
+          invitedCount: 4,
+          goingCount: 2,
+          maybeCount: 0,
+          placeText: "Osu",
+          category: null,
+          coverImageUrl: null,
+          attendees: []
+        }
+      ]
+    });
+
+    expect(card?.id).not.toBe("plan_rsvp");
+  });
+
   it("pulls an imminent Plan forward without replacing Coming Up", () => {
     const start = "2026-09-23T10:45:00.000Z";
     const card = pick({
@@ -258,6 +284,22 @@ describe("Home Smart Card is the social heartbeat", () => {
       cta: "Vote now",
       expiresAt: Date.parse("2026-09-23T11:30:00.000Z")
     });
+  });
+
+  it("does not leave a Plan decision on screen after its scheduled close", () => {
+    const card = pick({
+      planDecisions: [
+        {
+          planId: "p-closed",
+          planTitle: "Dinner",
+          question: "Where should we eat?",
+          voterCount: 2,
+          closesAt: "2026-09-23T09:59:59.000Z"
+        }
+      ]
+    });
+
+    expect(card?.id).not.toBe("plan_decision");
   });
 
   it("lets a checked-in Event Linkr offer die with the Event", () => {
