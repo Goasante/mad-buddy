@@ -28,6 +28,8 @@ export type PhoneIdentity = {
   phoneE164: string;
   /** Last four digits, for owner-facing confirmation copy. Never the number. */
   hint: string;
+  /** Region used to interpret locally-saved contact numbers such as 024… */
+  region: CountryCode | null;
   discoveryEnabled: boolean;
   /** Always null until real verification exists. */
   verifiedAt: string | null;
@@ -142,7 +144,7 @@ export async function savePhoneNumber(
       },
       { onConflict: "user_id" }
     )
-    .select("phone_e164, contact_discovery_enabled, phone_verified_at")
+    .select("phone_e164, phone_region, contact_discovery_enabled, phone_verified_at")
     .maybeSingle();
 
   if (error || !data) {
@@ -163,6 +165,7 @@ export async function savePhoneNumber(
     identity: {
       phoneE164: data.phone_e164,
       hint: phoneHint(data.phone_e164),
+      region: (data.phone_region as CountryCode | null) ?? null,
       discoveryEnabled: data.contact_discovery_enabled,
       verifiedAt: data.phone_verified_at
     }
@@ -289,6 +292,7 @@ export async function getPhoneIdentity(
   return {
     phoneE164: data.phone_e164,
     hint: phoneHint(data.phone_e164),
+    region: (data.phone_region as CountryCode | null) ?? null,
     discoveryEnabled: data.contact_discovery_enabled,
     verifiedAt: data.phone_verified_at
   };
