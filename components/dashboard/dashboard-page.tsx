@@ -20,7 +20,6 @@ import {
   MessageCircle,
   UserPlus,
   Users,
-  Users2,
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
