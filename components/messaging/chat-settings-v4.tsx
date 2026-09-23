@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, Bookmark, ChevronRight, Clock3, Pin, Search, ShieldCheck, Star, UsersRound } from "lucide-react";
+import { BellOff, Bookmark, ChevronRight, Clock3, Pin, Search, ShieldCheck, Star } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useState } from "react";
 
