@@ -82,12 +82,14 @@ export const SMART_CARD_IDS = [
      offers the next generic step. A specific broken thing beats a general
      suggestion. */
   "profile_blocking",
-  "journey",
+  /* Completing the Journey is itself a one-off milestone and keeps first
+     priority inside progression. After that, a newly earned badge is a bounded
+     moment while the next Journey step and score meter are evergreen. The
+     moment gets one chance before those static prompts so it can actually
+     function as part of the heartbeat. */
   "journey_complete",
-  /* A newly earned badge is a bounded moment; generic score progress is
-     evergreen. Within the same tier, the moment gets one chance before the
-     meter so achievement cards are not starved forever on quiet Home. */
   "achievement",
+  "journey",
   "buddy_progress",
   "upfor_fallback"
 ] as const;
