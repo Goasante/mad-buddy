@@ -204,6 +204,13 @@ describe("only eligible accounts are ever returned", () => {
     expect(matching).toContain("blockedIds.has(profile.user_id)");
   });
 
+  it("fails closed if block or profile privacy evidence cannot be read", () => {
+    expect(matching).toContain("blocksResult.error || profilesResult.error");
+    expect(matching).toContain('"block_filter_failed"');
+    expect(matching).toContain('"profile_filter_failed"');
+    expect(matching).not.toContain("(blocks ?? [])");
+  });
+
   it("excludes deleted accounts", () => {
     // Anchored on the guarantee rather than the loop shape: the filter moved
     // from a `continue` to a predicate when the projection gained the marks,
@@ -323,6 +330,13 @@ describe("duplicate dormant claims behave predictably", () => {
 // ---------------------------------------------------------------------------
 // 15, 16, 18. Write protection
 // ---------------------------------------------------------------------------
+
+describe("relationship projection fails closed too", () => {
+  it("does not guess friendship/request state on a database error", () => {
+    expect(matching).toContain("verificationRows.error || friendships.error || requests.error");
+    expect(matching).toContain('"relationship_projection_failed"');
+  });
+});
 
 describe("matching writes nothing", () => {
   it("stores no contact the caller submitted", () => {
