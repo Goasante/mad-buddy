@@ -1027,7 +1027,7 @@ function linkrMutualEventProvider(input: SmartCardInput): SmartCard | null {
     destination: linkrPairDestination(first.connectionId),
     /* Opening a Plan with somebody you have not spoken to yet is a big second
        step, so it stays SECONDARY and the first message stays primary. */
-    secondaryAction: { label: "Make a Plan", destination: "/plans" },
+    secondaryAction: { label: "Make a Plan", destination: "/plans?create=1" },
     media: first.photo ? { url: first.photo, alt: first.displayName } : undefined,
     expiresAt: linkrMutualExpiry(first)
   };
