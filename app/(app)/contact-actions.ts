@@ -113,25 +113,32 @@ export async function setContactDiscoveryAction(enabled: boolean): Promise<Conta
  * and a full number on screen is a full number in a screenshot.
  */
 export async function getPhoneIdentityAction(): Promise<{
+  loaded: boolean;
   hasPhone: boolean;
   hint: string;
   region: string | null;
   discoveryEnabled: boolean;
 }> {
   const user = await getCurrentUserRecord();
-  if (!user) return { hasPhone: false, hint: "", region: null, discoveryEnabled: false };
+  if (!user) {
+    return { loaded: false, hasPhone: false, hint: "", region: null, discoveryEnabled: false };
+  }
 
   const admin = createSupabaseAdminClient();
-  const identity = await getPhoneIdentity(admin, user.id);
-
-  return {
-    hasPhone: Boolean(identity),
-    hint: identity?.hint ?? "",
-    region: identity?.region ?? null,
-    discoveryEnabled: identity?.discoveryEnabled ?? false
-    // verifiedAt is deliberately NOT surfaced. It is always null, and sending
-    // it invites a client to render a verification state that does not exist.
-  };
+  try {
+    const identity = await getPhoneIdentity(admin, user.id);
+    return {
+      loaded: true,
+      hasPhone: Boolean(identity),
+      hint: identity?.hint ?? "",
+      region: identity?.region ?? null,
+      discoveryEnabled: identity?.discoveryEnabled ?? false
+      // verifiedAt is deliberately NOT surfaced. It is always null, and sending
+      // it invites a client to render a verification state that does not exist.
+    };
+  } catch {
+    return { loaded: false, hasPhone: false, hint: "", region: null, discoveryEnabled: false };
+  }
 }
 
 /**
