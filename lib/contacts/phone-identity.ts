@@ -98,7 +98,7 @@ export async function savePhoneNumber(
   // or the UI would remain "on" while the account silently stopped matching.
   const matchIdentifier = matchingConfigured() ? deriveMatchIdentifier(e164) : null;
 
-  const [{ data: currentIdentity }, { data: existing }] = await Promise.all([
+  const [currentResult, existingResult] = await Promise.all([
     admin
       .from("user_phone_identities")
       .select("contact_discovery_enabled")
@@ -112,6 +112,20 @@ export async function savePhoneNumber(
       .eq("contact_discovery_enabled", true)
       .maybeSingle()
   ]);
+
+  if (currentResult.error || existingResult.error) {
+    logBackendEvent("error", {
+      requestId,
+      action: "contacts.phone_save",
+      statusCode: 500,
+      userId,
+      errorType: "phone_identity_preflight_failed"
+    });
+    return { ok: false, reason: "failed", message: "Your number could not be saved. Please try again." };
+  }
+
+  const currentIdentity = currentResult.data;
+  const existing = existingResult.data;
 
   if (currentIdentity?.contact_discovery_enabled && !matchIdentifier) {
     return {
@@ -232,11 +246,15 @@ export async function setContactDiscovery(
   admin: SupabaseClient,
   { userId, enabled, requestId }: { userId: string; enabled: boolean; requestId: string }
 ): Promise<{ ok: boolean; message: string }> {
-  const { data: identity } = await admin
+  const { data: identity, error: identityError } = await admin
     .from("user_phone_identities")
     .select("phone_e164")
     .eq("user_id", userId)
     .maybeSingle();
+
+  if (identityError) {
+    return { ok: false, message: "That setting could not be loaded. Please try again." };
+  }
 
   if (!identity) {
     return { ok: false, message: "Add your phone number first." };
@@ -262,12 +280,16 @@ export async function setContactDiscovery(
     // Re-checked at enable time, not only at save time. A number saved while
     // dormant can be claimed by someone else in the meantime, and the partial
     // unique index covers exactly this row becoming active.
-    const { data: clash } = await admin
+    const { data: clash, error: clashError } = await admin
       .from("user_phone_identities")
       .select("user_id")
       .eq("phone_e164", identity.phone_e164)
       .eq("contact_discovery_enabled", true)
       .maybeSingle();
+
+    if (clashError) {
+      return { ok: false, message: "That setting could not be checked. Please try again." };
+    }
 
     if (clash && clash.user_id !== userId) {
       return {
@@ -324,7 +346,7 @@ export async function getPhoneIdentity(
 ): Promise<PhoneIdentity | null> {
   const { data } = await admin
     .from("user_phone_identities")
-    .select("phone_e164, contact_discovery_enabled, phone_verified_at")
+    .select("phone_e164, phone_region, contact_discovery_enabled, phone_verified_at")
     .eq("user_id", userId)
     .maybeSingle();
 
