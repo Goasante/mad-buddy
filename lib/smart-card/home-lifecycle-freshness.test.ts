@@ -67,6 +67,7 @@ describe("Home Smart Card lifecycle freshness", () => {
     expect(upForReader).toContain('"hangout_session_id"');
     expect(upForReader).toContain('.eq("requester_id", viewerId)');
     expect(upForReader).toContain("actedOnSessionIds");
+    expect(upForReader).toContain("if (priorRequestsError) return [];");
     expect(upForReader).toContain(
       "candidates = candidates.filter((session) => !actedOnSessionIds.has(session.id))"
     );
