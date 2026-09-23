@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
 import { acknowledgeSmartCard } from "@/lib/smart-card/smart-card-service";
 import { SMART_CARD_IDS } from "@/lib/smart-card/smart-card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -12,8 +13,21 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * from the client, so this cannot be used to write arbitrary rows. Home is
  * revalidated so the engine advances to the next applicable card immediately.
  */
-export async function acknowledgeSmartCardAction(cardId: string): Promise<void> {
-  if (!(SMART_CARD_IDS as readonly string[]).includes(cardId)) return;
+export async function acknowledgeSmartCardAction(acknowledgementKey: string): Promise<void> {
+  const isOrdinaryCardId = (SMART_CARD_IDS as readonly string[]).includes(acknowledgementKey);
+  const achievementCode = acknowledgementKey.startsWith("achievement:")
+    ? acknowledgementKey.slice("achievement:".length)
+    : null;
+  const isKnownAchievement =
+    achievementCode !== null && ACHIEVEMENT_BY_CODE.has(achievementCode);
+
+  /*
+   * The client may name only a canonical one-off card id or a real achievement
+   * code from the canonical catalog. That keeps the acknowledgement table from
+   * becoming an arbitrary user-controlled string store while allowing
+   * repeatable achievement cards to retire independently.
+   */
+  if (!isOrdinaryCardId && !isKnownAchievement) return;
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -21,6 +35,6 @@ export async function acknowledgeSmartCardAction(cardId: string): Promise<void> 
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  await acknowledgeSmartCard(user.id, cardId);
+  await acknowledgeSmartCard(user.id, acknowledgementKey);
   revalidatePath("/dashboard");
 }
