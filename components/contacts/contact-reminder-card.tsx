@@ -134,7 +134,7 @@ export function ContactReminderCard({
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" size="sm" disabled={isPending} onClick={openSetup}>
-              {isPhonePrompt ? "Add number" : "Find my Muddies"}
+              {isPhonePrompt ? "Set up" : "Find my Muddies"}
             </Button>
             <Button type="button" size="sm" variant="ghost" disabled={isPending} onClick={dismiss}>
               Maybe later
