@@ -71,6 +71,8 @@ export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
      looked available to isBuiltForMobile, so an achievement row rendered as a
      tappable link that reached the catch-all. */
   "/badges",
+  // Groups are conversations under /messages; the old standalone hub is retired.
+  "/groups",
 
   /* SETTINGS SUB-PAGES. Every one of these is a real web feature with no
      native screen yet. They are listed here rather than left out because the
