@@ -344,12 +344,18 @@ export async function getPhoneIdentity(
   admin: SupabaseClient,
   userId: string
 ): Promise<PhoneIdentity | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("user_phone_identities")
     .select("phone_e164, phone_region, contact_discovery_enabled, phone_verified_at")
     .eq("user_id", userId)
     .maybeSingle();
 
+  /*
+   * A read failure is not "this person has no number". Callers use null to
+   * decide whether to show Add number / a reminder, so collapsing database
+   * uncertainty into null would actively lie in the UI.
+   */
+  if (error) throw new Error("phone_identity_read_failed");
   if (!data) return null;
 
   return {
