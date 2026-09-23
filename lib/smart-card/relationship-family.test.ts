@@ -106,6 +106,24 @@ describe("a mutual with a shared Event says where they met", () => {
     expect(card?.destination).toBe("/linkr?connection=conn-7");
   });
 
+  it("retires an unspoken mutual once it is no longer a current heartbeat moment", () => {
+    const old = mutual({
+      connectedAt: "2026-07-20T09:00:00.000Z",
+      eventName: "Acoustic Night"
+    });
+    const card = pick({ linkrMutuals: [old] });
+    expect(card?.id).not.toBe("linkr_mutual_event");
+    expect(card?.id).not.toBe("linkr_mutual");
+  });
+
+  it("expires a current mutual exactly at the bounded recency window", () => {
+    const card = pick({
+      linkrMutuals: [mutual({ connectedAt: "2026-08-05T09:00:00.000Z" })]
+    });
+    expect(card?.id).toBe("linkr_mutual");
+    expect(card?.expiresAt).toBe(Date.parse("2026-08-12T09:00:00.000Z"));
+  });
+
   it("says nothing at all when the pair is already talking", () => {
     const card = pick({
       linkrMutuals: [mutual({ eventName: "Acoustic Night", hasConversation: true })]
