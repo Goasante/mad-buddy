@@ -42,13 +42,15 @@ const decision: PlanDecisionForCard = {
   planTitle: "Friday Dinner",
   question: "Where should we eat?",
   voterCount: 4,
-  closesAt: "2026-08-05T12:00:00.000Z"
+  closesAt: "2026-08-05T12:00:00.000Z",
+  planEndsAt: "2026-08-05T20:00:00.000Z"
 };
 
 const chatDecision: PlanChatDecisionForCard = {
   conversationId: "c1",
   planTitle: "Friday Dinner",
-  question: "Which venue?"
+  question: "Which venue?",
+  planEndsAt: "2026-08-05T20:00:00.000Z"
 };
 
 /** An UpFor the viewer OWNS, with people waiting: an existing commitment. */
