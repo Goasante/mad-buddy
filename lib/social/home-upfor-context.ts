@@ -433,7 +433,7 @@ async function loadMuddyOpportunities(
    * Bounded by the already-capped candidate set, so this is one small query
    * rather than unbounded request history.
    */
-  const { data: priorRequests } = await admin
+  const { data: priorRequests, error: priorRequestsError } = await admin
     .from("hangout_requests")
     .select("hangout_session_id")
     .eq("requester_id", viewerId)
@@ -441,6 +441,9 @@ async function loadMuddyOpportunities(
       "hangout_session_id",
       candidates.map((session) => session.id)
     );
+
+  // Unknown request history is not proof that the viewer has never acted.
+  if (priorRequestsError) return [];
 
   const actedOnSessionIds = new Set(
     (priorRequests ?? []).map((request) => request.hangout_session_id)
