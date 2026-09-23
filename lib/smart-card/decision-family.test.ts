@@ -76,16 +76,20 @@ describe("a Plan decision is an answer only the viewer can give", () => {
     expect(card?.meta).toBe("Where should we eat?");
   });
 
-  it("reports progress honestly, in both directions", () => {
-    expect(pick({ planDecisions: [decision({ voterCount: 4 })] })?.subtitle).toBe(
-      "4 people have voted. Yours is still missing."
-    );
-    expect(pick({ planDecisions: [decision({ voterCount: 1 })] })?.subtitle).toBe(
-      "1 person has voted. Yours is still missing."
-    );
-    expect(pick({ planDecisions: [decision({ voterCount: 0 })] })?.subtitle).toBe(
-      "Nobody has voted yet. Yours would be the first."
-    );
+  it("reports progress honestly without hiding the actual question", () => {
+    const many = pick({ planDecisions: [decision({ voterCount: 4 })] });
+    expect(many?.subtitle).toBe("Your vote is still missing.");
+    expect(many?.socialProof).toBe("4 people have voted");
+    expect(many?.meta).toBe("Where should we eat?");
+    expect(many?.metaKind).toBe("decision");
+
+    const one = pick({ planDecisions: [decision({ voterCount: 1 })] });
+    expect(one?.subtitle).toBe("Your vote is still missing.");
+    expect(one?.socialProof).toBe("1 person has voted");
+
+    const none = pick({ planDecisions: [decision({ voterCount: 0 })] });
+    expect(none?.subtitle).toBe("Yours would be the first vote.");
+    expect(none?.socialProof).toBeUndefined();
   });
 
   /**
