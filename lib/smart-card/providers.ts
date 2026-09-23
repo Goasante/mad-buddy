@@ -13,7 +13,8 @@ import type {
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
   PlanChatDecisionForCard,
-  PlanDecisionForCard
+  PlanDecisionForCard,
+  RecentAchievementForCard
 } from "@/lib/smart-card/home-context";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
@@ -109,7 +110,7 @@ export type SmartCardInput = {
   locationFreshForProximity: boolean;
   muddyCount: number;
   buddyScore: Pick<BuddyScoreData, "nextLevel" | "pointsToNext" | "progressPercent"> | null;
-  recentAchievement: { title: string } | null;
+  recentAchievement: RecentAchievementForCard | null;
   suggestionCount: number;
 };
 
@@ -575,16 +576,25 @@ function buddyProgressProvider(input: SmartCardInput): SmartCard | null {
 }
 
 function achievementProvider(input: SmartCardInput): SmartCard | null {
-  if (!input.recentAchievement) return null;
+  const achievement = input.recentAchievement;
+  if (!achievement) return null;
   return {
     id: "achievement",
     priority: 0,
     illustration: "trophy",
     eyebrow: "MILESTONE",
-    title: input.recentAchievement.title,
+    title: achievement.title,
     subtitle: "You hit a new milestone in your Journey.",
     cta: "View Achievement",
     destination: "/buddy-score",
+    /*
+     * Achievements repeat over a person's lifetime. A generic "achievement"
+     * acknowledgement would permanently silence the whole family after the
+     * first tap; the canonical achievement code is unique per user and makes
+     * the acknowledgement about THIS earned badge.
+     */
+    acknowledgementKey: `achievement:${achievement.code}`,
+    expiresAt: expiresAt(achievement.expiresAt),
     dismissible: true
   };
 }
