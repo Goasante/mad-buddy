@@ -171,7 +171,13 @@ describe("no permission prompt appears unrequested", () => {
     expect(actionsBlock.slice(0, 700)).toContain("onClick={invite}");
   });
 
-  it("routes Search Muddies to the field rather than the route it is already on", () => {
+  it("temporarily snoozes automatic reminders after the device proves unsupported", () => {
+    const begin = sheet.slice(sheet.indexOf("function begin()"));
+    expect(begin.slice(0, 900)).toContain("if (!supported)");
+    expect(begin.slice(0, 900)).toContain("snoozeUnsupportedContactReminderAction()");
+  });
+
+    it("routes Search Muddies to the field rather than the route it is already on", () => {
     // THE DEAD BUTTON. A <Link href="/friends"> inside a sheet rendered on
     // /friends is the same route: Next.js no-ops it, the sheet closes, and
     // nothing else happens. It must close AND focus the real input.
@@ -369,7 +375,15 @@ describe("the guided sheet keeps setup and matching continuous", () => {
     expect(sheet).toContain("3. Find your people");
   });
 
-  it("does not require an own number before checking selected contacts", () => {
+  it("does not turn an identity read failure into a fake no-number state", () => {
+    expect(actions).toContain("loaded: boolean");
+    expect(actions).toContain("loaded: false");
+    expect(sheet).toContain("setup.loaded ?");
+    expect(settings).toContain("identity.loaded");
+    expect(settings).toContain("loadFailed");
+  });
+
+    it("does not require an own number before checking selected contacts", () => {
     expect(sheet).toContain("You can still find people from your contacts without adding your own number.");
     const begin = sheet.slice(sheet.indexOf("function begin()"));
     expect(begin.slice(0, 500)).not.toContain("setup.hasPhone");
