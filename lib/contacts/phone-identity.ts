@@ -92,18 +92,34 @@ export async function savePhoneNumber(
 
   const { e164, country } = normalised;
 
-  // Best-effort: an unconfigured secret must not stop someone saving their
-  // number. It only means discovery cannot match them yet, which the endpoint
-  // reports honestly rather than returning a silently empty result.
+  // Best-effort for a NEW/dormant identity: an unconfigured secret must not
+  // stop somebody storing their number. If discovery is ALREADY on, however,
+  // changing the number must also produce a new identifier in the same write
+  // or the UI would remain "on" while the account silently stopped matching.
   const matchIdentifier = matchingConfigured() ? deriveMatchIdentifier(e164) : null;
 
-  // Is another ACTIVE account already discoverable on this number?
-  const { data: existing } = await admin
-    .from("user_phone_identities")
-    .select("user_id")
-    .eq("phone_e164", e164)
-    .eq("contact_discovery_enabled", true)
-    .maybeSingle();
+  const [{ data: currentIdentity }, { data: existing }] = await Promise.all([
+    admin
+      .from("user_phone_identities")
+      .select("contact_discovery_enabled")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    // Is another ACTIVE account already discoverable on this number?
+    admin
+      .from("user_phone_identities")
+      .select("user_id")
+      .eq("phone_e164", e164)
+      .eq("contact_discovery_enabled", true)
+      .maybeSingle()
+  ]);
+
+  if (currentIdentity?.contact_discovery_enabled && !matchIdentifier) {
+    return {
+      ok: false,
+      reason: "failed",
+      message: "Contact discovery isn't available right now. Please try changing your number later."
+    };
+  }
 
   if (existing && existing.user_id !== userId) {
     logBackendEvent("warn", {
