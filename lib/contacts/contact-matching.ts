@@ -232,7 +232,7 @@ export async function matchContacts(
   // Fails closed: anything this cannot positively confirm as visible is
   // dropped. A blocked person reappearing because their number is still in an
   // address book is the specific outcome this prevents.
-  const [{ data: blocks }, { data: profiles }] = await Promise.all([
+  const [blocksResult, profilesResult] = await Promise.all([
     admin
       .from("blocked_users")
       .select("blocker_id, blocked_id")
@@ -243,13 +243,29 @@ export async function matchContacts(
       .in("user_id", candidateIds)
   ]);
 
+  /*
+   * Privacy evidence fails CLOSED. In particular, a failed block read cannot
+   * mean "there are no blocks" -- that would make a blocked account reappear
+   * through contact discovery precisely when the database is unhealthy.
+   */
+  if (blocksResult.error || profilesResult.error) {
+    logBackendEvent("error", {
+      requestId,
+      action: "contacts.match",
+      statusCode: 500,
+      userId: viewerId,
+      errorType: blocksResult.error ? "block_filter_failed" : "profile_filter_failed"
+    });
+    return { ok: false, reason: "failed", message: "Contact matching failed. Please try again." };
+  }
+
   // Either direction hides the person, matching the rule every other surface
   // uses.
   const blockedIds = new Set(
-    (blocks ?? []).flatMap((block) => [block.blocker_id, block.blocked_id])
+    (blocksResult.data ?? []).flatMap((block) => [block.blocker_id, block.blocked_id])
   );
 
-  const visible = (profiles ?? []).filter((profile) => {
+  const visible = (profilesResult.data ?? []).filter((profile) => {
     if (blockedIds.has(profile.user_id)) return false;
     // A soft-deleted account is gone as far as discovery is concerned.
     if (profile.deleted_at) return false;
@@ -271,7 +287,7 @@ export async function matchContacts(
     loadEffectivePlansForUsers(admin, visibleIds),
     visibleIds.length > 0
       ? admin.from("account_verifications").select("user_id, status").in("user_id", visibleIds)
-      : Promise.resolve({ data: [] as { user_id: string; status: string }[] }),
+      : Promise.resolve({ data: [] as { user_id: string; status: string }[], error: null }),
     // ended_at IS NULL is the canonical definition of "currently Muddies";
     // an ended friendship must read as "none" so a fresh request is offered.
     visibleIds.length > 0
@@ -280,15 +296,37 @@ export async function matchContacts(
           .select("user_one_id, user_two_id")
           .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`)
           .is("ended_at", null)
-      : Promise.resolve({ data: [] as { user_one_id: string; user_two_id: string }[] }),
+      : Promise.resolve({
+          data: [] as { user_one_id: string; user_two_id: string }[],
+          error: null
+        }),
     visibleIds.length > 0
       ? admin
           .from("friend_requests")
           .select("sender_id, receiver_id")
           .eq("status", "pending")
           .or(`sender_id.eq.${viewerId},receiver_id.eq.${viewerId}`)
-      : Promise.resolve({ data: [] as { sender_id: string; receiver_id: string }[] })
+      : Promise.resolve({
+          data: [] as { sender_id: string; receiver_id: string }[],
+          error: null
+        })
   ]);
+
+  /*
+   * Relationship evidence also fails closed. Showing "Add Muddy" because the
+   * friendship/request read failed creates duplicate or crossing requests and
+   * tells the person something false about an existing relationship.
+   */
+  if (verificationRows.error || friendships.error || requests.error) {
+    logBackendEvent("error", {
+      requestId,
+      action: "contacts.match",
+      statusCode: 500,
+      userId: viewerId,
+      errorType: "relationship_projection_failed"
+    });
+    return { ok: false, reason: "failed", message: "Contact matching failed. Please try again." };
+  }
 
   const verificationByUserId = new Map<string, VerificationRow[]>();
   for (const row of verificationRows.data ?? []) {
