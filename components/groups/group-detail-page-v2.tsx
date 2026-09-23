@@ -106,7 +106,7 @@ export function GroupDetailPageV2({
       setFeedback(result.message);
       setConfirm(null);
       if (!result.ok) return;
-      if (confirm.action === "leave_group") router.push("/groups");
+      if (confirm.action === "leave_group") router.push("/messages?tab=groups");
       else router.refresh();
     });
   }
@@ -150,7 +150,7 @@ export function GroupDetailPageV2({
         <div className="flex flex-col items-center px-5 pb-5 pt-7 text-center">
           <UserAvatar name={group.name} src={group.imageUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
           <h1 className="mt-4 font-serif text-2xl font-semibold tracking-tight text-[#4E0401] dark:text-orange-50">{group.name}</h1>
-          <p className="mt-1 text-xs font-medium text-muted-foreground">{group.memberCount} members · {group.visibility === "public" ? "Public" : "Private"} · {group.joinMode === "link" ? "Open to join" : "Invite only"}</p>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">{group.memberCount} members · Private Group · Invitation based</p>
           {group.description ? <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{group.description}</p> : null}
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <Button onClick={() => router.push(`/messages?conversation=${group.id}`)}><MessageCircle className="h-4 w-4" />Message Group</Button>
@@ -189,7 +189,7 @@ export function GroupDetailPageV2({
       {tab === "about" ? (
         <section className="mt-4 space-y-3">
           <div className="rounded-[24px] border border-border/60 bg-card/60 p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Group authority</strong></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Your role is <strong className="text-foreground">{group.role ?? "member"}</strong>. Chat permissions, polls, pins and message-lifetime controls live in Group Settings inside the canonical chat.</p><button type="button" onClick={() => router.push(`/messages?conversation=${group.id}`)} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-border/60 px-3 py-3 text-left"><span><strong className="block text-sm">Open Group Settings</strong><span className="text-xs text-muted-foreground">Chat behaviour, permissions and notifications</span></span><ChevronRight className="h-4 w-4" /></button></div>
-          <div className="rounded-[24px] border border-border/60 bg-card/60 p-4"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Membership</strong></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{group.visibility === "public" ? "Anyone signed in can discover this group." : "Only people with access can discover this group."} {group.joinMode === "link" ? "People who are eligible can join without a manual invitation." : "New members join by invitation."}</p></div>
+          <div className="rounded-[24px] border border-border/60 bg-card/60 p-4"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Membership</strong></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Groups are private conversations. New members join through an invitation from an eligible Group admin or owner.</p></div>
           {group.role !== "owner" ? <Button variant="outline" className="w-full border-destructive/25 text-destructive" onClick={() => setConfirm({ action: "leave_group", member: null })}><LogOut className="h-4 w-4" />Leave Group</Button> : <Button variant="outline" className="w-full" onClick={() => setTransferOpen(true)}>Transfer ownership</Button>}
         </section>
       ) : null}
