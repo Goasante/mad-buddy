@@ -106,7 +106,7 @@ describe("every action opens its canonical route", () => {
       "plans",
       "events",
       "safe_arrival",
-      "groups"
+      "focus"
     ]);
   });
 
@@ -121,7 +121,8 @@ describe("every action opens its canonical route", () => {
     expect(routes.plans).toBe("/plans");
     expect(routes.events).toBe("/events");
     expect(routes.safe_arrival).toBe("/safe-arrival");
-    expect(routes.groups).toBe("/groups");
+    expect(routes.focus).toBe("/settings/engagement");
+    expect(routes.groups).toBeUndefined();
   });
 
   it("never includes the camera", () => {
