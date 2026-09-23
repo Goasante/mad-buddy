@@ -3,7 +3,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
-import { deriveMatchIdentifiers, matchingConfigured } from "@/lib/contacts/match-identifier";
+import {
+  ACTIVE_KEY_VERSION,
+  deriveMatchIdentifiers,
+  matchingConfigured,
+  readableMatchKeyVersions
+} from "@/lib/contacts/match-identifier";
 import { normalisePhoneNumbers } from "@/lib/contacts/phone-normalization";
 import { logBackendEvent } from "@/lib/observability/logger";
 import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
@@ -163,20 +168,42 @@ export async function matchContacts(
     };
   }
 
-  const identifiers = deriveMatchIdentifiers(normalised);
+  /*
+   * KEY ROTATION COEXISTENCE.
+   *
+   * Rows keep the key version that produced their identifier. During a
+   * rotation, old and new versions may coexist, so derive the selected batch
+   * under every still-configured version and compare only to rows carrying
+   * that same version. This makes the versioning promise real instead of
+   * silently breaking old rows the moment ACTIVE_KEY_VERSION changes.
+   */
+  const readableVersions = readableMatchKeyVersions();
+  if (!readableVersions.includes(ACTIVE_KEY_VERSION)) {
+    return {
+      ok: false,
+      reason: "unconfigured",
+      message: "Contact matching isn't available right now."
+    };
+  }
 
   // ELIGIBILITY, applied in the query rather than after it.
   //
   // Only rows that are discoverable are read at all, so an account that exists
   // but has discovery off is indistinguishable from one that does not exist --
   // no row, no timing difference, nothing to infer.
-  const { data: eligible, error } = await admin
-    .from("user_phone_identities")
-    .select("user_id")
-    .in("match_hmac", identifiers)
-    .eq("contact_discovery_enabled", true);
+  const versionLookups = await Promise.all(
+    readableVersions.map(async (version) => {
+      const identifiers = deriveMatchIdentifiers(normalised, version);
+      return admin
+        .from("user_phone_identities")
+        .select("user_id")
+        .in("match_hmac", identifiers)
+        .eq("match_key_version", version)
+        .eq("contact_discovery_enabled", true);
+    })
+  );
 
-  if (error) {
+  if (versionLookups.some((lookup) => lookup.error)) {
     logBackendEvent("error", {
       requestId,
       action: "contacts.match",
@@ -187,9 +214,11 @@ export async function matchContacts(
     return { ok: false, reason: "failed", message: "Contact matching failed. Please try again." };
   }
 
+  const eligible = versionLookups.flatMap((lookup) => (lookup.data ?? []) as EligibleRow[]);
+
   // The viewer's own account is never a match. Their own number is in their
   // own contacts more often than not.
-  const candidateIds = [...new Set((eligible as EligibleRow[] | null ?? []).map((row) => row.user_id))].filter(
+  const candidateIds = [...new Set(eligible.map((row) => row.user_id))].filter(
     (id) => id !== viewerId
   );
 
