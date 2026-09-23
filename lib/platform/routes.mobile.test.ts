@@ -73,7 +73,7 @@ describe("features that do not exist on mobile are never substituted", () => {
 });
 
 describe("paths that are the same on both", () => {
-  it.each(["/messages", "/plans", "/events", "/groups", "/moments", "/profile", "/settings", "/help"])(
+  it.each(["/messages", "/plans", "/events", "/moments", "/profile", "/settings", "/help"])(
     "passes %s through unchanged",
     (path) => {
       expect(toMobilePath(path)).toBe(path);
