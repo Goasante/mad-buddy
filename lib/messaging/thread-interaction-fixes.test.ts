@@ -49,14 +49,17 @@ describe("a delete visibly resolves", () => {
     expect(source).toContain("You can edit a message for 10 minutes after sending it.");
   });
 
-  it("closes the sheet before waiting on the server", () => {
+  it("shows a dedicated deleting state instead of borrowing page-wide pending state", () => {
     const source = page();
-    const handler = source.slice(source.indexOf("<DeleteMessageModal"));
-    const body = handler.slice(0, handler.indexOf("}} />"));
-
-    // The sheet used to stay open for the whole round trip, which is most of
-    // what "nothing happens" meant.
-    expect(body.indexOf("setDeleteTarget(null)")).toBeLessThan(body.indexOf("await deleteMessageAction"));
+    const modal = source.slice(
+      source.indexOf("function DeleteMessageModal"),
+      source.indexOf("function ForwardModal")
+    );
+    expect(source).toContain('phase: "deleting"');
+    expect(modal).toContain("Deleting for me…");
+    expect(modal).toContain("Deleting for everyone…");
+    expect(modal).toContain("<Loader2");
+    expect(modal).not.toContain("pending: boolean");
   });
 
   it("removes the message immediately rather than waiting for a refetch", () => {
@@ -76,6 +79,16 @@ describe("a delete visibly resolves", () => {
     // "Delete for everyone" is refused outside its one-hour window. A refused
     // delete must not leave the message looking deleted.
     expect(body).toContain("setMessages(previousMessages)");
+    expect(body).toContain('phase: "error"');
+  });
+
+  it("keeps the result inside the foreground modal before closing", () => {
+    const source = page();
+    const modal = source.slice(source.indexOf("function DeleteMessageModal"));
+    expect(modal).toContain('role={operation.phase === "error" ? "alert" : "status"}');
+    expect(modal).toContain('aria-live="polite"');
+    expect(source).toContain('phase: "success"');
+    expect(source).toContain("}, 650)");
   });
 
   it("deletes into the conversation it started in", () => {
@@ -104,7 +117,7 @@ describe("what the product says is where the person can see it", () => {
     // An open conversation is `fixed inset-0 z-30`. A banner in normal flow
     // renders behind it, so every delete outcome was silently swallowed.
     expect(banner.slice(0, 600)).toContain("fixed");
-    expect(banner.slice(0, 600)).toContain("z-40");
+    expect(banner.slice(0, 600)).toContain("z-[70]");
   });
 
   it("keeps the thread overlay below the banner", () => {

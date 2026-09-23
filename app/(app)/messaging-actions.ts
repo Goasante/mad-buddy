@@ -439,13 +439,15 @@ export async function deleteMessageAction(
     return { ok: false, message: "This message can't be deleted for everyone anymore." };
   }
 
-  const { error } = await admin
+  const { data: deletedMessage, error } = await admin
     .from("messages")
     .update({ status: "deleted", deleted_at: new Date().toISOString(), text_content: null })
     .eq("id", messageId)
-    .eq("sender_id", userId);
-  if (error) return { ok: false, message: "Couldn't delete that message." };
-  return { ok: true, message: "Message deleted." };
+    .eq("sender_id", userId)
+    .select("id")
+    .maybeSingle();
+  if (error || !deletedMessage) return { ok: false, message: "Couldn't delete that message. Try again." };
+  return { ok: true, message: "Deleted for everyone." };
 }
 
 export async function reactToMessageAction(

@@ -126,6 +126,12 @@ type InboxPreference = {
 };
 type InboxPreferenceMap = Record<string, Partial<InboxPreference>>;
 type DeleteTarget = { message: ChatMessageView; openedAtMs: number } | null;
+type DeleteOperation = {
+  messageId: string;
+  scope: "me" | "everyone";
+  phase: "deleting" | "success" | "error";
+  message: string;
+} | null;
 type ForwardTarget = { message: ChatMessageView } | null;
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -153,6 +159,15 @@ function messagePreview(message: ChatMessageView) {
   if (message.messageType === "video") return "Video";
   if (message.messageType === "file") return "File";
   return message.text?.trim() || "Message";
+}
+
+function deletableItemLabel(message: ChatMessageView) {
+  if (message.messageType === "image" || message.attachment) return "photo";
+  if (message.messageType === "voice_note" || message.voice) return "voice message";
+  if (message.messageType === "video") return "video";
+  if (message.messageType === "file") return "file";
+  if (message.messageType === "poll") return "poll";
+  return "message";
 }
 
 /**
@@ -258,6 +273,7 @@ export function MessagesPageV4({
   const [editTarget, setEditTarget] = useState<ChatMessageView | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [deleteOperation, setDeleteOperation] = useState<DeleteOperation>(null);
   const [forwardTarget, setForwardTarget] = useState<ForwardTarget>(null);
   const [pollOpen, setPollOpen] = useState(false);
   const [unseenIncoming, setUnseenIncoming] = useState(0);
@@ -1142,7 +1158,7 @@ export function MessagesPageV4({
       {feedback ? (
         <div
           role="status"
-          className="pointer-events-none fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+7rem)] z-40 mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 md:inset-x-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2"
+          className="pointer-events-none fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+7rem)] z-[70] mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 md:inset-x-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2"
         >
           <span className="min-w-0 flex-1">{feedback}</span>
           <button type="button" aria-label="Dismiss message" onClick={() => setFeedback("")} className="pointer-events-auto -mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full hover:bg-muted"><X className="h-4 w-4" /></button>
@@ -1271,7 +1287,10 @@ export function MessagesPageV4({
                                 onReact={(reaction) => react(message.id, reaction)}
                                 onCopy={() => { if (message.text) void navigator.clipboard?.writeText(message.text).then(() => setFeedback("Copied.")); }}
                                 onEdit={() => { setEditTarget(message); setEditDraft(message.text ?? ""); }}
-                                onDelete={() => setDeleteTarget({ message, openedAtMs: Date.now() })}
+                                onDelete={() => {
+                                  setDeleteOperation(null);
+                                  setDeleteTarget({ message, openedAtMs: Date.now() });
+                                }}
                                 onSave={() => saveMessage(message.id)}
                                 onPin={() => pinMessage(message.id)}
                                 onForward={() => setForwardTarget({ message })}
@@ -1398,31 +1417,45 @@ export function MessagesPageV4({
         });
       }} />
 
-      <DeleteMessageModal target={deleteTarget} pending={isPending} onClose={() => setDeleteTarget(null)} onDelete={(forEveryone) => {
+      <DeleteMessageModal target={deleteTarget} operation={deleteOperation} onClose={() => {
+        if (deleteOperation?.phase === "deleting") return;
+        setDeleteTarget(null);
+        setDeleteOperation(null);
+      }} onDelete={(forEveryone) => {
         if (!deleteTarget || !selectedId) return;
         const messageId = deleteTarget.message.id;
         const conversationId = selectedId;
         const previousMessages = messages;
-        /* Close the sheet and remove the message NOW.
-           Both halves were the reported "nothing happens": the sheet stayed
-           open for the whole round trip, and the bubble only moved once a full
-           refetch came back -- so a delete looked like a dead button even when
-           the server had accepted it. The row is restored below if the server
-           refuses, which it does for "delete for everyone" outside its window. */
-        setDeleteTarget(null);
+        const scope = forEveryone ? "everyone" : "me";
+        /* Give the tap its own visible state. A page-wide transition previously
+           disabled this button whenever an unrelated chat action was pending,
+           and the button looked unchanged when tapped. Keep the confirmation
+           in front until the server answers, while removing the bubble
+           optimistically behind it. */
+        setDeleteOperation({ messageId, scope, phase: "deleting", message: forEveryone ? "Deleting for everyone…" : "Deleting for you…" });
+        interactionFeedback.selection();
         setMessages((current) => current.filter((message) => message.id !== messageId));
-        startTransition(async () => {
+        void (async () => {
           const result = await deleteMessageAction(messageId, forEveryone).catch(() => ({ ok: false, message: "Could not delete." }));
-          setFeedback(result.message);
           if (!result.ok) {
-            // Put it back. A refused delete must not look like a successful one.
             setMessages(previousMessages);
+            setDeleteOperation({ messageId, scope, phase: "error", message: result.message });
+            interactionFeedback.error();
             return;
           }
-          await refreshMessages(conversationId, false);
-          await syncConversations();
-          await refreshUltimate(conversationId);
-        });
+          setDeleteOperation({ messageId, scope, phase: "success", message: forEveryone ? "Deleted for everyone." : "Deleted for you." });
+          await Promise.all([
+            refreshMessages(conversationId, false),
+            syncConversations(),
+            refreshUltimate(conversationId)
+          ]);
+          setFeedback(forEveryone ? "Deleted for everyone." : "Deleted for you.");
+          window.setTimeout(() => {
+            if (!mountedRef.current) return;
+            setDeleteTarget((current) => current?.message.id === messageId ? null : current);
+            setDeleteOperation((current) => current?.messageId === messageId ? null : current);
+          }, 650);
+        })();
       }} />
 
       <ForwardModal target={forwardTarget} conversations={displayConversations.filter((conversation) => !inboxPreferences[conversation.id]?.archivedAt)} pending={isPending} onClose={() => setForwardTarget(null)} onForward={(targetConversationId) => {
@@ -1467,13 +1500,15 @@ function EditMessageModal({ message, draft, setDraft, pending, onClose, onSave }
   return <Modal open={Boolean(message)} onOpenChange={(open) => !open && onClose()} title="Edit message" compact footer={<><Button variant="outline" onClick={onClose} disabled={pending}>Cancel</Button><Button onClick={onSave} disabled={pending || !draft.trim()}>{pending ? "Saving…" : "Save"}</Button></>}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={5} className="focus-ring w-full resize-none rounded-2xl border border-border/70 bg-background p-3 text-sm" /></Modal>;
 }
 
-function DeleteMessageModal({ target, pending, onClose, onDelete }: { target: DeleteTarget; pending: boolean; onClose: () => void; onDelete: (forEveryone: boolean) => void }) {
+function DeleteMessageModal({ target, operation, onClose, onDelete }: { target: DeleteTarget; operation: DeleteOperation; onClose: () => void; onDelete: (forEveryone: boolean) => void }) {
   const everyone = target && canDeleteForEveryone({
     isSender: target.message.isMine,
     createdAtMs: Date.parse(target.message.createdAt),
     nowMs: target.openedAtMs
   });
-  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Delete message?" compact><div className="space-y-2"><button type="button" disabled={pending} onClick={() => onDelete(false)} className="focus-ring w-full rounded-2xl border border-border/70 p-3 text-left"><strong className="block text-sm">Delete for me</strong><span className="text-xs text-muted-foreground">Hide this message only from your chat.</span></button>{everyone ? <button type="button" disabled={pending} onClick={() => onDelete(true)} className="focus-ring w-full rounded-2xl border border-destructive/20 bg-destructive/5 p-3 text-left text-destructive"><strong className="block text-sm">Delete for everyone</strong><span className="text-xs opacity-75">Remove it for everyone in this chat.</span></button> : null}<Button variant="outline" className="w-full" onClick={onClose} disabled={pending}>Cancel</Button></div></Modal>;
+  const busy = operation?.phase === "deleting";
+  const item = target ? deletableItemLabel(target.message) : "message";
+  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title={`Delete ${item}?`} compact><div className="space-y-2"><button type="button" disabled={busy} aria-pressed={operation?.scope === "me"} onClick={() => onDelete(false)} className={cn("focus-ring w-full rounded-2xl border p-3 text-left transition-[transform,background-color,border-color,opacity] active:scale-[.98]", operation?.scope === "me" ? "border-primary/40 bg-primary/10" : "border-border/70", busy && operation?.scope !== "me" && "opacity-45")}><strong className="flex items-center gap-2 text-sm">{busy && operation?.scope === "me" ? <Loader2 className="h-4 w-4 animate-spin" /> : operation?.phase === "success" && operation.scope === "me" ? <Check className="h-4 w-4" /> : null}{busy && operation?.scope === "me" ? "Deleting for me…" : "Delete for me"}</strong><span className="mt-0.5 block text-xs text-muted-foreground">Hide this {item} only from your chat.</span></button>{everyone ? <button type="button" disabled={busy} aria-pressed={operation?.scope === "everyone"} onClick={() => onDelete(true)} className={cn("focus-ring w-full rounded-2xl border p-3 text-left text-destructive transition-[transform,background-color,border-color,opacity] active:scale-[.98]", operation?.scope === "everyone" ? "border-destructive/45 bg-destructive/12" : "border-destructive/20 bg-destructive/5", busy && operation?.scope !== "everyone" && "opacity-45")}><strong className="flex items-center gap-2 text-sm">{busy && operation?.scope === "everyone" ? <Loader2 className="h-4 w-4 animate-spin" /> : operation?.phase === "success" && operation.scope === "everyone" ? <Check className="h-4 w-4" /> : null}{busy && operation?.scope === "everyone" ? "Deleting for everyone…" : "Delete for everyone"}</strong><span className="mt-0.5 block text-xs opacity-75">Remove this {item} for everyone in this chat.</span></button> : null}{operation ? <p role={operation.phase === "error" ? "alert" : "status"} aria-live="polite" className={cn("rounded-xl px-3 py-2 text-sm font-medium", operation.phase === "error" ? "bg-destructive/10 text-destructive" : operation.phase === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-foreground")}>{operation.message}</p> : null}<Button variant="outline" className="w-full active:scale-[.98]" onClick={onClose} disabled={busy}>{busy ? "Deleting…" : operation?.phase === "error" ? "Close" : "Cancel"}</Button></div></Modal>;
 }
 
 function ForwardModal({ target, conversations, pending, onClose, onForward }: { target: ForwardTarget; conversations: ConversationView[]; pending: boolean; onClose: () => void; onForward: (conversationId: string) => void }) {
