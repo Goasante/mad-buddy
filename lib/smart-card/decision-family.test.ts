@@ -26,6 +26,7 @@ const decision = (over: Partial<PlanDecisionForCard> = {}): PlanDecisionForCard 
   planTitle: "Friday Dinner",
   question: "Where should we eat?",
   voterCount: 4,
+  closesAt: "2026-08-05T12:00:00.000Z",
   ...over
 });
 
@@ -82,6 +83,7 @@ describe("a Plan decision is an answer only the viewer can give", () => {
     expect(many?.socialProof).toBe("4 people have voted");
     expect(many?.meta).toBe("Where should we eat?");
     expect(many?.metaKind).toBe("decision");
+    expect(many?.expiresAt).toBe(Date.parse("2026-08-05T12:00:00.000Z"));
 
     const one = pick({ planDecisions: [decision({ voterCount: 1 })] });
     expect(one?.subtitle).toBe("Your vote is still missing.");
