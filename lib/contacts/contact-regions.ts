@@ -23,8 +23,6 @@ export const CONTACT_REGIONS = [
   { code: "IN", label: "India (+91)" }
 ] as const satisfies ReadonlyArray<{ code: CountryCode; label: string }>;
 
-const listed = new Set<string>(CONTACT_REGIONS.map((entry) => entry.code));
-
 /**
  * Best-effort device-region guess for local-format contacts when the user has
  * not added their own number yet.
@@ -32,9 +30,16 @@ const listed = new Set<string>(CONTACT_REGIONS.map((entry) => entry.code));
  * This never decides account identity. It only tells libphonenumber how to
  * interpret a saved national-format string such as 024…; explicit +E.164
  * numbers ignore this default entirely.
+ *
+ * The UI's country dropdown is intentionally compact, but locale inference is
+ * not limited to that list: a person in Australia, Brazil or Japan should not
+ * have their locally-saved contacts interpreted as Ghanaian simply because
+ * their country is not one of the quick-entry options.
  */
 export function contactRegionFromLocale(locale: string | null | undefined): CountryCode {
   const match = (locale ?? "").match(/[-_]([A-Za-z]{2})(?:$|[-_])/);
   const candidate = match?.[1]?.toUpperCase();
-  return candidate && listed.has(candidate) ? (candidate as CountryCode) : DEFAULT_PHONE_REGION;
+  return candidate && /^[A-Z]{2}$/.test(candidate)
+    ? (candidate as CountryCode)
+    : DEFAULT_PHONE_REGION;
 }
