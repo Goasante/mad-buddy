@@ -54,10 +54,21 @@ async function loadContactReminder(): Promise<ContactReminderKind | null> {
   if (!user) return null;
 
   const admin = createSupabaseAdminClient();
-  const [identity, state] = await Promise.all([
-    getPhoneIdentity(admin, user.id),
-    loadReminderState(admin, user.id)
-  ]);
+  let identity;
+  let state;
+  try {
+    [identity, state] = await Promise.all([
+      getPhoneIdentity(admin, user.id),
+      loadReminderState(admin, user.id)
+    ]);
+  } catch {
+    /*
+     * Unknown phone state must suppress the reminder rather than turning a
+     * database read failure into "add your number". Muddies itself remains
+     * available; only this optional suggestion disappears for the request.
+     */
+    return null;
+  }
 
   const decision = shouldContactDiscoveryReminderShow({
     hasPhone: Boolean(identity),
