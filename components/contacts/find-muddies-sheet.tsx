@@ -124,13 +124,6 @@ export function FindMuddiesSheet({
     };
   }, [open]);
 
-  function currentMatchRegion(): string {
-    if (setup.region) return setup.region;
-    return contactRegionFromLocale(
-      typeof navigator === "undefined" ? null : navigator.language
-    );
-  }
-
   async function saveOwnNumber() {
     if (!phoneInput.trim() || setupBusy) return;
 
@@ -204,7 +197,12 @@ export function FindMuddiesSheet({
     const response = await fetch("/api/contacts/match", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phoneNumbers, region: currentMatchRegion() })
+      body: JSON.stringify({
+        phoneNumbers,
+        region:
+          setup.region ??
+          contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
+      })
     }).catch(() => null);
 
     if (!response) {
@@ -234,7 +232,7 @@ export function FindMuddiesSheet({
     // contacts, and the reminder exists for exactly that gap. Reaching a
     // result closes it, whether or not anyone matched.
     void completeContactSetupAction();
-  }, []);
+  }, [setup.region]);
 
   /** "Find my Muddies" on the explanation screen. Touches no contacts. */
   function begin() {
