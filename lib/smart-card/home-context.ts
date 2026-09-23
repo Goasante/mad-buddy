@@ -64,7 +64,7 @@ export type PlanDecisionForCard = {
  * legitimately ask to vote or remind that the Plan is starting. Invitations
  * need an RSVP first; not-going and waitlisted explicitly do not have a seat.
  */
-export function isPlanDecisionRsvpEligible(rsvp: string): boolean {
+export function isPlanDecisionRsvpEligible(rsvp: string | null | undefined): boolean {
   return rsvp === "going" || rsvp === "maybe";
 }
 
