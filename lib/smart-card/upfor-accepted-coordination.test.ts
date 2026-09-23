@@ -223,7 +223,7 @@ describe("Accepted UpFor coordination is available without entitlement input", (
  * behind, and Home must not grow a second card saying the same thing.
  *
  * The mechanism is already correct and this pins it: `loadHomeUpForContext`
- * reads joined sessions with `.eq("status", "active")`, and the canonical
+ * reads only live coordination states (`active` or `full`), and the canonical
  * lifecycle sets `status = 'converted_to_plan'`. So a converted session simply
  * stops appearing in `joined`, `upfor_accepted` yields, and Plan authority
  * takes the moment over. Nothing had to be added to make that true.
@@ -231,8 +231,9 @@ describe("Accepted UpFor coordination is available without entitlement input", (
 describe("conversion hands the moment to Plan authority", () => {
   const READER = readFileSync("lib/social/home-upfor-context.ts", "utf8");
 
-  it("joined sessions are read as ACTIVE only", () => {
-    expect(READER).toContain('.eq("status", "active")');
+  it("joined sessions are read only from live coordination states", () => {
+    expect(READER).toContain('.in("status", ["active", "full"])');
+    expect(READER).not.toContain('"converted_to_plan"');
   });
 
   it("the accepted card disappears once the session leaves the joined set", () => {
@@ -288,10 +289,11 @@ describe("Home renders without creating anything", () => {
        batched over the whole candidate set:
          joined sessions, owner profiles              (2, pre-existing)
          conversations + messages                     (2, coordination evidence)
-         friendships, sessions, profiles              (3, opportunity discovery)
-       Seven bounded reads, none of them inside a loop. */
+         friendships, sessions, prior requests, profiles (4, opportunity discovery)
+       Eight bounded reads, none of them inside a loop. The extra request-history
+       read prevents a declined/cancelled UpFor from resurfacing as "new". */
     const joinedBlock = reader.slice(reader.indexOf("const joinedSessionIds"));
-    expect(joinedBlock.match(/\.from\(/g) ?? []).toHaveLength(7);
+    expect(joinedBlock.match(/\.from\(/g) ?? []).toHaveLength(8);
 
     /* The real invariant behind that number: every read is batched over a
        whole candidate set, so none of them sits inside a loop. */
