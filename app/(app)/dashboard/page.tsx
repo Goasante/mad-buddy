@@ -111,6 +111,11 @@ export default async function DashboardPage() {
         userId: user.id,
         planIds: agendaPlans.map((plan) => plan.id),
         planTitleById: new Map(agendaPlans.map((plan) => [plan.id, plan.title])),
+        /* A Plan without an explicit end leaves the Home agenda at its start,
+           so startsAt is the honest hard boundary in that case. */
+        planEndById: new Map(
+          agendaPlans.map((plan) => [plan.id, plan.endsAt ?? plan.startsAt])
+        ),
         now
       })
     : null;
