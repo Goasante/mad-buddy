@@ -41,7 +41,8 @@ const decision: PlanDecisionForCard = {
   planId: "p1",
   planTitle: "Friday Dinner",
   question: "Where should we eat?",
-  voterCount: 4
+  voterCount: 4,
+  closesAt: "2026-08-05T12:00:00.000Z"
 };
 
 const chatDecision: PlanChatDecisionForCard = {
