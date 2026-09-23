@@ -193,6 +193,14 @@ export type SmartCard = {
   progress?: SmartCardProgress;
   expiresAt?: number;
   dismissible?: boolean;
+  /**
+   * Optional per-instance retirement key.
+   *
+   * Most dismissible cards are one-off states and can use their id. Repeatable
+   * families such as achievements need a stable instance identity or opening
+   * one would permanently silence every future card in that family.
+   */
+  acknowledgementKey?: string;
 };
 
 export type SmartCardProvider = {
@@ -247,10 +255,16 @@ export function resolveSmartCard(
   );
 
   for (const provider of ordered) {
-    if (acknowledged.has(provider.id)) continue;
     if (excluded.has(provider.id)) continue;
     const card = provider.build();
     if (!card) continue;
+    /*
+     * Build first, then check acknowledgement. A repeatable family may have a
+     * per-instance key (for example achievement:first_wave) that cannot be
+     * known from provider.id alone.
+     */
+    const acknowledgementKey = card.acknowledgementKey ?? card.id;
+    if (acknowledged.has(acknowledgementKey)) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;
     return { ...card, priority: SMART_CARD_PRIORITY[card.id] };
   }
