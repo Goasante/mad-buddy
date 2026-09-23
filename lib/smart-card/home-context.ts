@@ -58,6 +58,17 @@ export type PlanDecisionForCard = {
 };
 
 /**
+ * Who has an active coordination stake in a Plan.
+ *
+ * Hosts are projected as "going", so going/maybe covers every person Home may
+ * legitimately ask to vote or remind that the Plan is starting. Invitations
+ * need an RSVP first; not-going and waitlisted explicitly do not have a seat.
+ */
+export function isPlanDecisionRsvpEligible(rsvp: string): boolean {
+  return rsvp === "going" || rsvp === "maybe";
+}
+
+/**
  * An open poll inside a Plan Chat the viewer is a member of, unanswered by them.
  *
  * A STRUCTURED decision, never message text. This exists so Home can say "the
