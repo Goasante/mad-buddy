@@ -1132,7 +1132,10 @@ function planDecisionProvider(input: SmartCardInput): SmartCard | null {
        opens that Plan's detail sheet where the poll lives. Landing on the
        index would make the person find again the thing the card just named. */
     destination: `/plans?plan=${first.planId}`,
-    expiresAt: expiresAt(first.closesAt)
+    /* An explicit poll close wins when it is sooner; otherwise the Plan's own
+       end is the absolute boundary after which this decision cannot still be
+       current on Home. */
+    expiresAt: earliestExpiry([first.closesAt, first.planEndsAt])
   };
 }
 
@@ -1166,7 +1169,11 @@ function planChatDecisionProvider(input: SmartCardInput): SmartCard | null {
        because three surfaces once navigated to a bare `/messages` and left the
        person hunting the inbox for the conversation they had just been shown;
        this card must not become the fourth. */
-    destination: conversationHref(first.conversationId)
+    destination: conversationHref(first.conversationId),
+    /* Chat polls have no scheduled close of their own. The current Plan's end
+       is the hard boundary that stops a still-open poll from lingering while
+       Home remains open. */
+    expiresAt: expiresAt(first.planEndsAt)
   };
 }
 
