@@ -6,7 +6,7 @@ import { directConversationKey } from "@/lib/messaging/rules";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { countPendingRequests } from "@/lib/social/hangout-requests";
-import { isComingUpUpFor } from "@/lib/social/upfor-lifecycle";
+import { isComingUpUpFor, upForPhase } from "@/lib/social/upfor-lifecycle";
 import type { Database, HangoutActivityType } from "@/lib/supabase/database.types";
 
 type Admin = SupabaseClient<Database>;
@@ -227,8 +227,21 @@ export async function loadHomeUpForContext(
         )
       : false
   );
-  const scheduledIds = new Set(ownedScheduled.map((session) => session.id));
-  const ownedLive = owned.filter((session) => !scheduledIds.has(session.id));
+  /*
+   * "Not scheduled" does NOT automatically mean live. A sweep may be late and
+   * leave status='active' on a row whose ends_at is already in the past. The
+   * canonical clock-aware lifecycle is the authority, so an ended UpFor cannot
+   * keep generating requests/momentum cards on Home while waiting for cleanup.
+   */
+  const ownedLive = owned.filter((session) => {
+    if (!session.startsAt || !session.endsAt) return false;
+    return (
+      upForPhase(
+        { status: "active", startsAt: session.startsAt, endsAt: session.endsAt },
+        nowMs
+      ) === "live"
+    );
+  });
 
   /* Sessions the viewer asked to join. Owner names and activity come from the
      session rows, so a request whose session has ended or been withdrawn
@@ -242,7 +255,22 @@ export async function loadHomeUpForContext(
       .in("id", joinedSessionIds)
       .eq("status", "active");
 
-    const ownerIds = [...new Set((sessions ?? []).map((session) => session.owner_id))];
+    /*
+     * Status is cleanup state; timestamps are lifecycle truth. A session whose
+     * end time passed must disappear from Home immediately even if the expiry
+     * sweep has not yet changed its stored status.
+     */
+    const liveSessions = (sessions ?? []).filter((session) => {
+      if (!session.starts_at || !session.ends_at) return false;
+      return (
+        upForPhase(
+          { status: session.status, startsAt: session.starts_at, endsAt: session.ends_at },
+          nowMs
+        ) === "live"
+      );
+    });
+
+    const ownerIds = [...new Set(liveSessions.map((session) => session.owner_id))];
     const nameById = new Map<string, string>();
     if (ownerIds.length > 0) {
       const { data: profiles } = await admin
@@ -254,7 +282,7 @@ export async function loadHomeUpForContext(
       }
     }
 
-    const sessionById = new Map((sessions ?? []).map((session) => [session.id, session]));
+    const sessionById = new Map(liveSessions.map((session) => [session.id, session]));
     for (const request of joinedRows) {
       const session = sessionById.get(request.hangout_session_id);
       if (!session) continue;
