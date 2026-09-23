@@ -19,6 +19,7 @@ const NOW = new Date("2026-08-05T10:00:00.000Z");
 const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => ({
   userId: "u1",
   connectionId: "conn-1",
+  connectedAt: "2026-08-05T09:00:00.000Z",
   displayName: "Ama",
   photo: null,
   hasConversation: false,
@@ -121,7 +122,8 @@ describe("Linkr surfaces only what both people chose", () => {
         mutual({ userId: "c", hasConversation: true })
       ]
     });
-    expect(card?.subtitle).toBe("2 Linkr connections are waiting for a first message.");
+    expect(card?.subtitle).toBe("You both chose to connect. Say hi when you're ready.");
+    expect(card?.socialProof).toBe("2 recent Linkr connections");
   });
 
   it("offers a first message rather than a recommendation", () => {

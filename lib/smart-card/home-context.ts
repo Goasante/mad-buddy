@@ -22,6 +22,8 @@
 export type EventLinkrOfferForCard = {
   eventId: string;
   eventName: string;
+  /** When the Event stops being a live check-in context. */
+  endsAt: string;
   /** The canonical Event surface, where the real opt-in control lives. */
   href: string;
 };
@@ -49,7 +51,22 @@ export type PlanDecisionForCard = {
   planTitle: string;
   question: string;
   voterCount: number;
+  /** Predictable poll boundary. Null means the poll has no scheduled close. */
+  closesAt: string | null;
+  /** The current Home Plan's hard end boundary. */
+  planEndsAt: string;
 };
+
+/**
+ * Who has an active coordination stake in a Plan.
+ *
+ * Hosts are projected as "going", so going/maybe covers every person Home may
+ * legitimately ask to vote or remind that the Plan is starting. Invitations
+ * need an RSVP first; not-going and waitlisted explicitly do not have a seat.
+ */
+export function isPlanDecisionRsvpEligible(rsvp: string | null | undefined): boolean {
+  return rsvp === "going" || rsvp === "maybe";
+}
 
 /**
  * An open poll inside a Plan Chat the viewer is a member of, unanswered by them.
@@ -62,6 +79,24 @@ export type PlanChatDecisionForCard = {
   conversationId: string;
   planTitle: string | null;
   question: string;
+  /** The current Home Plan's hard end boundary. */
+  planEndsAt: string;
+};
+
+/**
+ * One recently earned achievement suitable for Home.
+ *
+ * The code is the stable per-achievement identity. Achievements are granted
+ * once per user+code, so it also gives the dismissible Smart Card a
+ * per-instance acknowledgement key instead of globally silencing every future
+ * achievement after the first one is opened.
+ */
+export type RecentAchievementForCard = {
+  code: string;
+  title: string;
+  earnedAt: string;
+  /** End of the bounded "recent" Home window. */
+  expiresAt: string;
 };
 
 /**

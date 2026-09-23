@@ -819,6 +819,23 @@ export function DashboardPageContent({
     safeArrival !== null &&
     (safeArrival.travelling.length > 0 || safeArrival.checkingOn.length > 0 || safeArrival.invitations.length > 0);
 
+  /*
+   * ONE OWNER PER FACT. When Card B is already the live traveller's Safe
+   * Arrival heartbeat, repeating the same journey again in the lower Safe
+   * Arrival section makes Home say the same thing twice. The section still
+   * owns contact invitations and journeys the viewer is checking on; it also
+   * keeps traveller cards whenever another Smart Card is winning.
+   */
+  const safeArrivalTravellingForSection =
+    smartCard?.id === "safe_arrival"
+      ? safeArrival?.travelling.slice(1) ?? []
+      : safeArrival?.travelling ?? [];
+  const hasSafeArrivalSection =
+    safeArrival !== null &&
+    (safeArrivalTravellingForSection.length > 0 ||
+      safeArrival.checkingOn.length > 0 ||
+      safeArrival.invitations.length > 0);
+
   /* WHO OWNS THE SCREEN. Decided once, from state, so no section has to guess.
    *
    * Home was giving a first-time user three proximity instructions at once:
@@ -1242,7 +1259,7 @@ export function DashboardPageContent({
         {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
             invitation still awaiting my answer. Absent entirely when there is
             nothing live, so Home never carries an empty placeholder. */}
-        {hasSafeArrival ? (
+        {hasSafeArrivalSection ? (
           <section aria-labelledby="home-safe-arrival-heading" className="space-y-2.5">
             <div className="flex items-center justify-between gap-3">
               <h2 id="home-safe-arrival-heading" className="text-sm font-semibold">
@@ -1255,7 +1272,7 @@ export function DashboardPageContent({
             {safeArrival!.invitations.map((journey) => (
               <ContactInvitationHomeCard key={journey.id} journey={journey} />
             ))}
-            {safeArrival!.travelling.map((journey) => (
+            {safeArrivalTravellingForSection.map((journey) => (
               <TravellerJourneyHomeCard key={journey.id} journey={journey} />
             ))}
             {safeArrival!.checkingOn.map((journey) => (
@@ -1317,8 +1334,12 @@ export function DashboardPageContent({
                 displayName: selectedFriend.displayName,
                 username: selectedFriend.username,
                 avatarUrl: selectedFriend.avatarUrl,
-                statusText: selectedFriend.statusText,
+                /* API status_text is another proximity sentence (derived from
+                   the old coarse level). The badge already owns proximity.
+                   Only a real Muddy status belongs on the support line. */
+                statusText: selectedFriend.muddyStatusLabel ?? undefined,
                 proximityLevel: selectedFriend.proximityLevel,
+                proximityBand: selectedFriend.proximityBand,
                 glowStrength: selectedFriend.glowStrength,
                 confidence: selectedFriend.confidence,
                 glowColorId: glowColorByFriendId[selectedFriend.friendId] ?? null

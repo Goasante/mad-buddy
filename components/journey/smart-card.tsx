@@ -144,7 +144,7 @@ export function SmartCardHero({
   const handleClick = () => {
     if (!card.dismissible) return;
     startTransition(() => {
-      void acknowledgeSmartCardAction(card.id);
+      void acknowledgeSmartCardAction(card.acknowledgementKey ?? card.id);
     });
   };
 

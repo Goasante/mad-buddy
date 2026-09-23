@@ -23,6 +23,7 @@ const NOW = new Date("2026-08-05T10:00:00.000Z");
 const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => ({
   userId: "u1",
   connectionId: "conn-1",
+  connectedAt: "2026-08-05T09:00:00.000Z",
   displayName: "Ama",
   photo: null,
   hasConversation: false,
@@ -85,7 +86,7 @@ describe("a mutual with a shared Event says where they met", () => {
   it("offers a first message first, and a Plan only as the second step", () => {
     const card = pick({ linkrMutuals: [mutual({ eventName: "Acoustic Night" })] });
     expect(card?.cta).toBe("Say hi");
-    expect(card?.secondaryAction).toEqual({ label: "Make a Plan", destination: "/plans" });
+    expect(card?.secondaryAction).toEqual({ label: "Make a Plan", destination: "/plans?create=1" });
   });
 
   /**
@@ -103,6 +104,24 @@ describe("a mutual with a shared Event says where they met", () => {
     const card = pick({ linkrMutuals: [mutual({ connectionId: "conn-7", eventName: null })] });
     expect(card?.id).toBe("linkr_mutual");
     expect(card?.destination).toBe("/linkr?connection=conn-7");
+  });
+
+  it("retires an unspoken mutual once it is no longer a current heartbeat moment", () => {
+    const old = mutual({
+      connectedAt: "2026-07-20T09:00:00.000Z",
+      eventName: "Acoustic Night"
+    });
+    const card = pick({ linkrMutuals: [old] });
+    expect(card?.id).not.toBe("linkr_mutual_event");
+    expect(card?.id).not.toBe("linkr_mutual");
+  });
+
+  it("expires a current mutual exactly at the bounded recency window", () => {
+    const card = pick({
+      linkrMutuals: [mutual({ connectedAt: "2026-08-05T09:00:00.000Z" })]
+    });
+    expect(card?.id).toBe("linkr_mutual");
+    expect(card?.expiresAt).toBe(Date.parse("2026-08-12T09:00:00.000Z"));
   });
 
   it("says nothing at all when the pair is already talking", () => {
@@ -130,6 +149,7 @@ describe("Event Linkr is offered, never assumed", () => {
   const offer = (over: Partial<EventLinkrOfferForCard> = {}): EventLinkrOfferForCard => ({
     eventId: "e1",
     eventName: "Acoustic Night",
+    endsAt: "2026-08-05T14:00:00.000Z",
     href: "/events?event=e1",
     ...over
   });
@@ -171,6 +191,28 @@ describe("Event Linkr is offered, never assumed", () => {
     ];
     const card = pick({ agenda: goingSoon, eventLinkrOffer: null });
     expect(card?.id).not.toBe("event_linkr_ready");
+  });
+
+  it("beats the generic live-Event card during the same checked-in window", () => {
+    const liveEvent: SmartCardInput["agenda"] = [
+      {
+        kind: "event",
+        id: "e1",
+        title: "Acoustic Night",
+        startsAt: "2026-08-05T09:00:00.000Z",
+        endsAt: "2026-08-05T14:00:00.000Z",
+        locationLabel: "Osu",
+        href: "/events?event=e1",
+        isHost: false,
+        myRsvp: "going",
+        hostName: "Kofi",
+        coverUrl: null,
+        coverFocalX: null,
+        coverFocalY: null
+      }
+    ];
+    const card = pick({ agenda: liveEvent, eventLinkrOffer: offer() });
+    expect(card?.id).toBe("event_linkr_ready");
   });
 
   it("points at the Event, where the real opt-in control lives", () => {
@@ -248,11 +290,35 @@ describe("a Muddy birthday repeats a permitted fact, never a date", () => {
   });
 });
 
+describe("the viewer's own birthday changes state at the real boundary", () => {
+  it("refreshes a tomorrow card at midnight, not at the end of the birthday", () => {
+    const card = pick({ birthday: { birthdayToday: false, birthdayTomorrow: true } });
+    expect(card?.id).toBe("birthday");
+    const expected = new Date(NOW);
+    expected.setDate(expected.getDate() + 1);
+    expected.setHours(0, 0, 0, 0);
+    expect(card?.expiresAt).toBe(expected.getTime());
+  });
+
+  it("keeps today's birthday through the rest of the day", () => {
+    const card = pick({ birthday: { birthdayToday: true, birthdayTomorrow: false } });
+    expect(card?.id).toBe("birthday");
+    const expected = new Date(NOW);
+    expected.setHours(23, 59, 59, 999);
+    expect(card?.expiresAt).toBe(expected.getTime());
+  });
+});
+
 describe("family 3 ranking against the states already proven", () => {
   it("keeps Safe Arrival above every relationship state", () => {
     const card = pick({
       safeArrival: { travelling: true, watcherCount: 2 },
-      eventLinkrOffer: { eventId: "e1", eventName: "Acoustic Night", href: "/events?event=e1" },
+      eventLinkrOffer: {
+        eventId: "e1",
+        eventName: "Acoustic Night",
+        endsAt: "2026-08-05T14:00:00.000Z",
+        href: "/events?event=e1"
+      },
       linkrMutuals: [mutual({ eventName: "Acoustic Night" })],
       muddyBirthdays: [{ userId: "u9", displayName: "Ama" }]
     });

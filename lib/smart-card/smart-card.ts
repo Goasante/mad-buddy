@@ -29,11 +29,16 @@ export const SMART_CARD_IDS = [
      does not -- but still above everything that is merely happening. */
   "muddy_request",
   "plan_starting",
-  "event_live",
-  /* Tier 2. `upfor_accepted` leads the group: somebody saying yes to you is the
-     payoff UpFor exists to produce, and it is the only one of these the viewer
-     has already been waiting on. */
+  /* Tier 2. Somebody saying yes to an UpFor is existing coordination the
+     viewer has already been waiting on, so it beats a NEW Event Linkr opt-in
+     offer happening at the same time. */
   "upfor_accepted",
+  /* A checked-in Event Linkr decision is more specific than the generic
+     "this Event is live" card. If event_live wins first, the offer is
+     unreachable for the entire check-in window and expires without ever
+     getting a chance to surface. */
+  "event_linkr_ready",
+  "event_live",
   "upfor_momentum",
   "owned_upfor_starting",
   "upfor_active_muddy",
@@ -49,11 +54,6 @@ export const SMART_CARD_IDS = [
      unlike plan_decision it has no deadline of its own -- it ranks here because
      the conversation is live, not because a clock is running. */
   "plan_chat_decision",
-  /* Tier 2. Being checked in somewhere is the most current thing about this
-     viewer, and the offer only exists while they are still there. Below the
-     live commitments above it: what you are already committed to outranks an
-     optional extra at the place you have arrived. */
-  "event_linkr_ready",
   "nearby_muddies",
   /* Tier 3: relationship momentum. All are about a specific person, which is
      why they outrank the tier-4 opportunities below.
@@ -82,14 +82,30 @@ export const SMART_CARD_IDS = [
      offers the next generic step. A specific broken thing beats a general
      suggestion. */
   "profile_blocking",
-  "journey",
+  /* Completing the Journey is itself a one-off milestone and keeps first
+     priority inside progression. After that, a newly earned badge is a bounded
+     moment while the next Journey step and score meter are evergreen. The
+     moment gets one chance before those static prompts so it can actually
+     function as part of the heartbeat. */
   "journey_complete",
-  "buddy_progress",
   "achievement",
+  "journey",
+  "buddy_progress",
   "upfor_fallback"
 ] as const;
 
 export type SmartCardId = (typeof SMART_CARD_IDS)[number];
+
+/**
+ * Ordinary card families the product intentionally allows a person to retire
+ * permanently from Home.
+ *
+ * Keep this narrower than SMART_CARD_IDS. Safety, invitations, live
+ * coordination and opportunities are current facts; a forged acknowledgement
+ * must never be able to hide them forever. Repeatable achievements use their
+ * per-instance `achievement:<code>` key instead of the family id.
+ */
+export const DISMISSIBLE_SMART_CARD_IDS = ["journey_complete"] as const satisfies readonly SmartCardId[];
 
 /** Lower number = higher priority. Derived from one ordered list. */
 export const SMART_CARD_PRIORITY: Record<SmartCardId, number> = Object.fromEntries(
@@ -108,6 +124,16 @@ export type SmartCardProgress = {
   percent: number;
   label: string;
 };
+
+/**
+ * What the compact metadata row MEANS.
+ *
+ * The renderer needs this because "Where should we eat?", "Waiting on them"
+ * and "East Legon" are all plain strings but they are not the same kind of
+ * information. Treating every meta line as a calendar fact made the heartbeat
+ * visually misleading even when its words were correct.
+ */
+export type SmartCardMetaKind = "time" | "location" | "decision" | "status";
 
 /**
  * V2 presentation fields are additive so existing states keep rendering while
@@ -174,13 +200,23 @@ export type SmartCard = {
   primaryIntent?: SmartCardActionIntent;
   /** Optional truthful context line such as "2 Muddies might join". */
   socialProof?: string;
-  /** Optional privacy-safe metadata line such as "Close By · This evening". */
+  /** Optional privacy-safe metadata line such as "East Legon" or "Waiting on them". */
   meta?: string;
+  /** Semantic meaning of `meta`, so the UI can pair it with the right icon. */
+  metaKind?: SmartCardMetaKind;
   /** Optional real/curated media for V2 visual treatment. */
   media?: SmartCardMedia;
   progress?: SmartCardProgress;
   expiresAt?: number;
   dismissible?: boolean;
+  /**
+   * Optional per-instance retirement key.
+   *
+   * Most dismissible cards are one-off states and can use their id. Repeatable
+   * families such as achievements need a stable instance identity or opening
+   * one would permanently silence every future card in that family.
+   */
+  acknowledgementKey?: string;
 };
 
 export type SmartCardProvider = {
@@ -235,10 +271,21 @@ export function resolveSmartCard(
   );
 
   for (const provider of ordered) {
-    if (acknowledged.has(provider.id)) continue;
     if (excluded.has(provider.id)) continue;
     const card = provider.build();
     if (!card) continue;
+    /*
+     * Build first, then check acknowledgement. A repeatable family may have a
+     * per-instance key (for example achievement:first_wave) that cannot be
+     * known from provider.id alone.
+     */
+    const acknowledgementKey = card.acknowledgementKey ?? card.id;
+    /*
+     * Acknowledgements are presentation state, never authority. Even if an old
+     * row or a forged action managed to store "safe_arrival" or "plan_rsvp",
+     * a non-dismissible live fact must still render.
+     */
+    if (card.dismissible && acknowledged.has(acknowledgementKey)) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;
     return { ...card, priority: SMART_CARD_PRIORITY[card.id] };
   }

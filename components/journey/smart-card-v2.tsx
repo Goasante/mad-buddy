@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { CalendarDays, MapPin, ShieldCheck, UsersRound } from "lucide-react";
+import { CalendarDays, CircleHelp, Clock, MapPin, ShieldCheck, UsersRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
@@ -32,6 +32,10 @@ import { homeCardBBackground } from "@/lib/visuals/registry";
  */
 
 const HOME_CARD_B_BACKGROUND = homeCardBBackground().path;
+const MAX_BROWSER_TIMEOUT_MS = 2_147_000_000;
+const HEARTBEAT_BOUNDARY_GRACE_MS = 2_000;
+const HEARTBEAT_REFRESH_RETRIES = 2;
+const HEARTBEAT_RETRY_MS = 5_000;
 
 const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>([
   "safe_arrival",
@@ -60,8 +64,18 @@ const LOCATION_META_IDS = new Set<SmartCard["id"]>([
    per state, which the fixed two-background system removes by design. */
 
 function MetadataIcon({ card }: { card: SmartCard }) {
-  if (card.id === "safe_arrival") return <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />;
-  if (LOCATION_META_IDS.has(card.id)) return <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  if (card.metaKind === "location" || LOCATION_META_IDS.has(card.id)) {
+    return <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
+  if (card.metaKind === "decision") {
+    return <CircleHelp className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
+  if (card.metaKind === "time" || card.metaKind === "status") {
+    return <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
+  if (card.id === "safe_arrival") {
+    return <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
   return <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />;
 }
 
@@ -85,10 +99,68 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
     return () => cancelAnimationFrame(frame);
   }, [percent, reducedMotion]);
 
+  /**
+   * The heartbeat must change while Home is OPEN, not only after a manual
+   * refresh. Providers stamp the instant their fact stops being true (an Event
+   * starts, a poll closes, an UpFor ends, etc.). At that boundary, ask the
+   * server to choose the next truthful card.
+   *
+   * Two edge cases matter here:
+   *   1. browser timeouts cap at ~24.8 days, so a distant Plan invitation must
+   *      WAIT in chunks rather than refresh early and lose its timer;
+   *   2. the phone clock can be a little ahead of the server. A small bounded
+   *      retry window prevents the same expired-looking card from sticking if
+   *      the first refresh lands just before the server's boundary.
+   */
+  useEffect(() => {
+    if (card.expiresAt === undefined) return;
+
+    let timer: number | null = null;
+    let cancelled = false;
+    let retries = 0;
+
+    const refreshWithRetry = () => {
+      if (cancelled) return;
+      router.refresh();
+      if (retries >= HEARTBEAT_REFRESH_RETRIES) return;
+      retries += 1;
+      timer = window.setTimeout(refreshWithRetry, HEARTBEAT_RETRY_MS);
+    };
+
+    const scheduleUntilBoundary = () => {
+      if (cancelled) return;
+      const remaining = card.expiresAt! - Date.now();
+
+      if (remaining <= 0) {
+        timer = window.setTimeout(refreshWithRetry, HEARTBEAT_BOUNDARY_GRACE_MS);
+        return;
+      }
+
+      if (remaining > MAX_BROWSER_TIMEOUT_MS) {
+        /* Do not refresh a still-valid card merely because setTimeout cannot
+           hold the whole duration. Wake up at the ceiling and keep waiting. */
+        timer = window.setTimeout(scheduleUntilBoundary, MAX_BROWSER_TIMEOUT_MS);
+        return;
+      }
+
+      timer = window.setTimeout(
+        refreshWithRetry,
+        remaining + HEARTBEAT_BOUNDARY_GRACE_MS
+      );
+    };
+
+    scheduleUntilBoundary();
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [card.expiresAt, router]);
+
   function acknowledgeIfNeeded() {
     if (!card.dismissible) return;
     startTransition(() => {
-      void acknowledgeSmartCardAction(card.id);
+      void acknowledgeSmartCardAction(card.acknowledgementKey ?? card.id);
     });
   }
 

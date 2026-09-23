@@ -289,7 +289,7 @@ describe("safety outranks activation; discovery does not", () => {
      * outcome of hiding it is somebody not knowing a person is travelling. */
     const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
     const safeArrivalAt = home.indexOf("home-safe-arrival-heading");
-    const gate = home.lastIndexOf("{hasSafeArrival ?", safeArrivalAt);
+    const gate = home.lastIndexOf("{hasSafeArrivalSection ?", safeArrivalAt);
     expect(gate).toBeGreaterThan(-1);
     expect(home.slice(gate, safeArrivalAt)).not.toContain("composition.");
   });

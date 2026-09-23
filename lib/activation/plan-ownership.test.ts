@@ -5,6 +5,7 @@ import {
   type ActivationInputs,
   type ActivationState
 } from "@/lib/activation/state";
+import { isPlanDecisionRsvpEligible } from "@/lib/smart-card/home-context";
 import { smartCardProviders, type SmartCardInput } from "@/lib/smart-card/providers";
 import { resolveSmartCard } from "@/lib/smart-card/smart-card";
 
@@ -125,6 +126,21 @@ describe("Card A no longer monopolises Home for an ordinary Plan", () => {
     for (const count of [1, 2, 9]) {
       expect(resolveActivationState(mature({ upcomingPlanCount: count }))).toBe("activated");
     }
+  });
+});
+
+describe("Plan heartbeat participation is a commitment, not mere membership", () => {
+  it("accepts hosts/going and maybe, but not invitation, decline or waitlist states", () => {
+    expect(isPlanDecisionRsvpEligible("going")).toBe(true);
+    expect(isPlanDecisionRsvpEligible("maybe")).toBe(true);
+    for (const status of ["invited", "viewed", "not_going", "removed", "waitlisted"]) {
+      expect(isPlanDecisionRsvpEligible(status), status).toBe(false);
+    }
+  });
+
+  it("never calls a waitlisted Plan a starting-soon commitment", () => {
+    const card = cardB({ agenda: [{ ...answeredPlan(45), myRsvp: "waitlisted" }] });
+    expect(card?.id).not.toBe("plan_starting");
   });
 });
 

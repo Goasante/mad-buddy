@@ -26,6 +26,8 @@ const decision = (over: Partial<PlanDecisionForCard> = {}): PlanDecisionForCard 
   planTitle: "Friday Dinner",
   question: "Where should we eat?",
   voterCount: 4,
+  closesAt: "2026-08-05T12:00:00.000Z",
+  planEndsAt: "2026-08-05T20:00:00.000Z",
   ...over
 });
 
@@ -35,6 +37,7 @@ const chatDecision = (
   conversationId: "c1",
   planTitle: "Friday Dinner",
   question: "Which venue?",
+  planEndsAt: "2026-08-05T20:00:00.000Z",
   ...over
 });
 
@@ -76,16 +79,21 @@ describe("a Plan decision is an answer only the viewer can give", () => {
     expect(card?.meta).toBe("Where should we eat?");
   });
 
-  it("reports progress honestly, in both directions", () => {
-    expect(pick({ planDecisions: [decision({ voterCount: 4 })] })?.subtitle).toBe(
-      "4 people have voted. Yours is still missing."
-    );
-    expect(pick({ planDecisions: [decision({ voterCount: 1 })] })?.subtitle).toBe(
-      "1 person has voted. Yours is still missing."
-    );
-    expect(pick({ planDecisions: [decision({ voterCount: 0 })] })?.subtitle).toBe(
-      "Nobody has voted yet. Yours would be the first."
-    );
+  it("reports progress honestly without hiding the actual question", () => {
+    const many = pick({ planDecisions: [decision({ voterCount: 4 })] });
+    expect(many?.subtitle).toBe("Your vote is still missing.");
+    expect(many?.socialProof).toBe("4 people have voted");
+    expect(many?.meta).toBe("Where should we eat?");
+    expect(many?.metaKind).toBe("decision");
+    expect(many?.expiresAt).toBe(Date.parse("2026-08-05T12:00:00.000Z"));
+
+    const one = pick({ planDecisions: [decision({ voterCount: 1 })] });
+    expect(one?.subtitle).toBe("Your vote is still missing.");
+    expect(one?.socialProof).toBe("1 person has voted");
+
+    const none = pick({ planDecisions: [decision({ voterCount: 0 })] });
+    expect(none?.subtitle).toBe("Yours would be the first vote.");
+    expect(none?.socialProof).toBeUndefined();
   });
 
   /**
@@ -146,7 +154,7 @@ describe("a Plan Chat decision is structured, never message text", () => {
     const card = pick({ planChatDecisions: [chatDecision()] });
     const rendered = JSON.stringify(card);
     expect(rendered).not.toMatch(/unread/i);
-    expect(Object.keys(chatDecision())).toEqual(["conversationId", "planTitle", "question"]);
+    expect(Object.keys(chatDecision())).toEqual(["conversationId", "planTitle", "question", "planEndsAt"]);
   });
 
   it("says nothing when no poll is open", () => {
@@ -270,6 +278,7 @@ describe("deterministic conflicts", () => {
         {
           userId: "u1",
           connectionId: "conn-1",
+          connectedAt: "2026-08-05T09:00:00.000Z",
           displayName: "Ama",
           photo: null,
           hasConversation: false,

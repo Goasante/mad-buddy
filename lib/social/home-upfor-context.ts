@@ -6,7 +6,7 @@ import { directConversationKey } from "@/lib/messaging/rules";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
 import { countPendingRequests } from "@/lib/social/hangout-requests";
-import { isComingUpUpFor } from "@/lib/social/upfor-lifecycle";
+import { isComingUpUpFor, upForPhase } from "@/lib/social/upfor-lifecycle";
 import type { Database, HangoutActivityType } from "@/lib/supabase/database.types";
 
 type Admin = SupabaseClient<Database>;
@@ -40,6 +40,8 @@ export type HomeUpForOwnedSession = {
    * that says an UpFor starts at 16:30.
    */
   activityLabel: string;
+  /** Stored lifecycle state; loader supplies it, older test fixtures default to active. */
+  status?: string;
   startsAt: string | null;
   endsAt: string | null;
   /** Requests still waiting on the owner's answer. */
@@ -169,7 +171,11 @@ export async function loadHomeUpForContext(
       .from("hangout_sessions")
       .select("id, activity_type, status, starts_at, ends_at")
       .eq("owner_id", viewerId)
-      .eq("status", "active")
+      /*
+       * Full is still a live owner commitment in the canonical UpFor lifecycle.
+       * Paused is intentionally absent from Home presentation.
+       */
+      .in("status", ["active", "full"])
       .order("starts_at", { ascending: true })
       .limit(12),
     admin
@@ -177,13 +183,24 @@ export async function loadHomeUpForContext(
       .select("id, status, hangout_session_id, responded_at, created_at")
       .eq("requester_id", viewerId)
       .in("status", ["pending", "accepted", "maybe"])
+      .order("created_at", { ascending: false })
       .limit(12)
   ]);
 
   if (ownedResult.error && joinedResult.error) return EMPTY;
 
   const ownedRows = ownedResult.data ?? [];
-  const joinedRows = joinedResult.data ?? [];
+  const joinedRows = [...(joinedResult.data ?? [])].sort((a, b) => {
+    /*
+     * Providers take the first accepted/pending join that matches their state.
+     * "Most recent" therefore means the latest response for answered requests
+     * and the latest creation for requests still waiting, not whatever row
+     * order Postgres happened to return.
+     */
+    const aMs = Date.parse(a.responded_at ?? a.created_at ?? "") || 0;
+    const bMs = Date.parse(b.responded_at ?? b.created_at ?? "") || 0;
+    return bMs - aMs;
+  });
 
   /* Request counts for every owned session in ONE read rather than one per
      session -- the fanout this whole module exists to avoid. */
@@ -208,6 +225,7 @@ export async function loadHomeUpForContext(
       id: row.id,
       activityType: row.activity_type as HangoutActivityType,
       activityLabel: activityLabelFor(row.activity_type as HangoutActivityType),
+      status: row.status,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
       pendingRequestCount: countPendingRequests(requests),
@@ -219,16 +237,40 @@ export async function loadHomeUpForContext(
      Coming Up does. SQL narrows candidates; the predicate is the authority, so
      a new status added to the CHECK constraint cannot silently reclassify a
      session on Home. */
-  const ownedScheduled = owned.filter((session) =>
-    session.startsAt
-      ? isComingUpUpFor(
-          { status: "active", startsAt: session.startsAt, endsAt: session.endsAt ?? session.startsAt },
+  const ownedScheduled = owned
+    .filter((session) =>
+      session.startsAt
+        ? isComingUpUpFor(
+            {
+              status: session.status ?? "active",
+              startsAt: session.startsAt,
+              endsAt: session.endsAt ?? session.startsAt
+            },
+            nowMs
+          )
+        : false
+    )
+    .sort((a, b) => Date.parse(a.startsAt ?? "") - Date.parse(b.startsAt ?? ""));
+  /*
+   * "Not scheduled" does NOT automatically mean live. A sweep may be late and
+   * leave status='active' on a row whose ends_at is already in the past. The
+   * canonical clock-aware lifecycle is the authority, so an ended UpFor cannot
+   * keep generating requests/momentum cards on Home while waiting for cleanup.
+   */
+  const ownedLive = owned
+    .filter((session) => {
+      if (!session.startsAt || !session.endsAt) return false;
+      return (
+        upForPhase(
+          { status: session.status ?? "active", startsAt: session.startsAt, endsAt: session.endsAt },
           nowMs
-        )
-      : false
-  );
-  const scheduledIds = new Set(ownedScheduled.map((session) => session.id));
-  const ownedLive = owned.filter((session) => !scheduledIds.has(session.id));
+        ) === "live"
+      );
+    })
+    /* HomeUpForContext promises newest live first. The source query is
+       chronological so scheduled sessions naturally come out soonest first;
+       live sessions need the opposite order explicitly. */
+    .sort((a, b) => Date.parse(b.startsAt ?? "") - Date.parse(a.startsAt ?? ""));
 
   /* Sessions the viewer asked to join. Owner names and activity come from the
      session rows, so a request whose session has ended or been withdrawn
@@ -240,9 +282,24 @@ export async function loadHomeUpForContext(
       .from("hangout_sessions")
       .select("id, owner_id, activity_type, status, starts_at, ends_at, audience_type")
       .in("id", joinedSessionIds)
-      .eq("status", "active");
+      .in("status", ["active", "full"]);
 
-    const ownerIds = [...new Set((sessions ?? []).map((session) => session.owner_id))];
+    /*
+     * Status is cleanup state; timestamps are lifecycle truth. A session whose
+     * end time passed must disappear from Home immediately even if the expiry
+     * sweep has not yet changed its stored status.
+     */
+    const liveSessions = (sessions ?? []).filter((session) => {
+      if (!session.starts_at || !session.ends_at) return false;
+      return (
+        upForPhase(
+          { status: session.status, startsAt: session.starts_at, endsAt: session.ends_at },
+          nowMs
+        ) === "live"
+      );
+    });
+
+    const ownerIds = [...new Set(liveSessions.map((session) => session.owner_id))];
     const nameById = new Map<string, string>();
     if (ownerIds.length > 0) {
       const { data: profiles } = await admin
@@ -254,7 +311,7 @@ export async function loadHomeUpForContext(
       }
     }
 
-    const sessionById = new Map((sessions ?? []).map((session) => [session.id, session]));
+    const sessionById = new Map(liveSessions.map((session) => [session.id, session]));
     for (const request of joinedRows) {
       const session = sessionById.get(request.hangout_session_id);
       if (!session) continue;
@@ -358,9 +415,40 @@ async function loadMuddyOpportunities(
     .order("ends_at", { ascending: true })
     .limit(MAX_OPPORTUNITY_SESSIONS);
 
-  /* Sessions the viewer has already acted on are not opportunities -- they are
-     the pending/accepted states, which own those moments. */
-  const candidates = (sessions ?? []).filter((session) => !requestedSessionIds.has(session.id));
+  /* Sessions in the viewer's CURRENT pending/accepted/maybe projection are
+     already owned by those states. */
+  let candidates = (sessions ?? []).filter((session) => !requestedSessionIds.has(session.id));
+  if (candidates.length === 0) return [];
+
+  /*
+   * "Has not acted" means HAS NEVER CREATED A REQUEST FOR THIS LIVE SESSION,
+   * not merely "does not currently have a pending/accepted request".
+   *
+   * Declined and cancelled request rows are historical evidence that the
+   * viewer already acted. The old reader ignored them, so a host could decline
+   * somebody and Home would later resurrect the exact same UpFor as a fresh
+   * "you can ask to join" opportunity. The write path cannot even revive an
+   * owner-declined row, making that CTA both nagging and dead.
+   *
+   * Bounded by the already-capped candidate set, so this is one small query
+   * rather than unbounded request history.
+   */
+  const { data: priorRequests, error: priorRequestsError } = await admin
+    .from("hangout_requests")
+    .select("hangout_session_id")
+    .eq("requester_id", viewerId)
+    .in(
+      "hangout_session_id",
+      candidates.map((session) => session.id)
+    );
+
+  // Unknown request history is not proof that the viewer has never acted.
+  if (priorRequestsError) return [];
+
+  const actedOnSessionIds = new Set(
+    (priorRequests ?? []).map((request) => request.hangout_session_id)
+  );
+  candidates = candidates.filter((session) => !actedOnSessionIds.has(session.id));
   if (candidates.length === 0) return [];
 
   const ownerIds = [...new Set(candidates.map((session) => session.owner_id))];

@@ -18,6 +18,7 @@ const NOW = new Date("2026-08-05T10:00:00.000Z");
 const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => ({
   userId: "u1",
   connectionId: "conn-1",
+  connectedAt: "2026-08-05T09:00:00.000Z",
   displayName: "Ama",
   photo: null,
   hasConversation: false,
@@ -27,6 +28,7 @@ const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => (
 const offer: EventLinkrOfferForCard = {
   eventId: "e1",
   eventName: "Acoustic Night",
+  endsAt: "2026-08-05T14:00:00.000Z",
   href: "/events?event=e1"
 };
 
@@ -40,13 +42,16 @@ const decision: PlanDecisionForCard = {
   planId: "p1",
   planTitle: "Friday Dinner",
   question: "Where should we eat?",
-  voterCount: 4
+  voterCount: 4,
+  closesAt: "2026-08-05T12:00:00.000Z",
+  planEndsAt: "2026-08-05T20:00:00.000Z"
 };
 
 const chatDecision: PlanChatDecisionForCard = {
   conversationId: "c1",
   planTitle: "Friday Dinner",
-  question: "Which venue?"
+  question: "Which venue?",
+  planEndsAt: "2026-08-05T20:00:00.000Z"
 };
 
 /** An UpFor the viewer OWNS, with people waiting: an existing commitment. */

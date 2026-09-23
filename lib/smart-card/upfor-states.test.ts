@@ -149,7 +149,8 @@ describe("momentum and obligation are never the same card", () => {
   it("reports momentum only once nobody is waiting", () => {
     const card = pick(context({ ownedLive: [owned({ acceptedCount: 2, pendingRequestCount: 0 })] }));
     expect(card?.id).toBe("upfor_momentum");
-    expect(card?.subtitle).toBe("2 Muddies are in.");
+    expect(card?.subtitle).toBe("You've got company.");
+    expect(card?.socialProof).toBe("2 Muddies are in");
   });
 
   it("prefers the obligation while both are true of one session", () => {
@@ -162,7 +163,8 @@ describe("momentum and obligation are never the same card", () => {
 
   it("speaks naturally about a single yes", () => {
     const card = pick(context({ ownedLive: [owned({ acceptedCount: 1 })] }));
-    expect(card?.subtitle).toBe("One Muddy is in. It only takes one.");
+    expect(card?.subtitle).toBe("You've got company.");
+    expect(card?.socialProof).toBe("1 Muddy is in");
   });
 });
 
@@ -201,7 +203,8 @@ describe("scheduled UpFors", () => {
       context({ ownedScheduled: [owned({ startsAt: "2026-08-05T11:00:00.000Z", acceptedCount: 2 })] })
     );
     expect(card?.id).toBe("owned_upfor_starting");
-    expect(card?.subtitle).toBe("2 Muddies are in.");
+    expect(card?.subtitle).toBe("Your UpFor is ready to go.");
+    expect(card?.socialProof).toBe("2 Muddies are in");
   });
 
   it("keeps a distant one at the lower tier", () => {

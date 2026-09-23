@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
 import { normalizePreferences } from "@/lib/notifications/preferences";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { resolveEventLinkrEligibility } from "@/lib/events/linkr-consent";
@@ -15,10 +16,13 @@ import type {
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
   PlanChatDecisionForCard,
-  PlanDecisionForCard
+  PlanDecisionForCard,
+  RecentAchievementForCard
 } from "@/lib/smart-card/home-context";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
+
+const HOME_ACHIEVEMENT_RECENCY_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * ONE bounded Home projection for the Smart Card states added in families 3-5.
@@ -89,13 +93,14 @@ export async function loadEventLinkrOffer(
 
     const { data: event } = await admin
       .from("events")
-      .select("id, name")
+      .select("id, name, ends_at")
       .eq("id", eventId)
       .maybeSingle();
     const name = event?.name?.trim();
     if (!name) continue;
 
-    return { eventId, eventName: name, href: `/events?event=${eventId}` };
+    if (!event?.ends_at) continue;
+    return { eventId, eventName: name, endsAt: event.ends_at, href: `/events?event=${eventId}` };
   }
 
   return null;
@@ -222,29 +227,48 @@ export async function loadPlanDecisions(
   userId: string,
   planIds: readonly string[],
   planTitleById: ReadonlyMap<string, string>,
+  planEndById: ReadonlyMap<string, string>,
   now: Date
 ): Promise<PlanDecisionForCard[]> {
   if (planIds.length === 0) return [];
 
   const { data: polls } = await admin
     .from("plan_polls")
-    .select("id, plan_id, question, status, closes_at")
+    .select("id, plan_id, question, status, closes_at, created_at")
     .in("plan_id", [...planIds])
     .eq("status", "open");
 
-  const open = (polls ?? []).filter(
-    (poll) => !poll.closes_at || Date.parse(poll.closes_at) > now.getTime()
-  );
+  const planRank = new Map(planIds.map((planId, index) => [planId, index]));
+  const open = (polls ?? [])
+    .filter((poll) => !poll.closes_at || Date.parse(poll.closes_at) > now.getTime())
+    .sort((a, b) => {
+      /*
+       * The agenda is already chronological. A decision on the sooner Plan
+       * should therefore win Home before a decision on a later Plan. If one
+       * Plan somehow has several open polls, newest first is deterministic and
+       * matches the Plan Chat rule.
+       */
+      const planDelta = (planRank.get(a.plan_id) ?? Number.MAX_SAFE_INTEGER) -
+        (planRank.get(b.plan_id) ?? Number.MAX_SAFE_INTEGER);
+      if (planDelta !== 0) return planDelta;
+      return Date.parse(b.created_at) - Date.parse(a.created_at);
+    });
   if (open.length === 0) return [];
 
   const pollIds = open.map((poll) => poll.id);
   /* One query for every vote on every candidate poll: the viewer's own votes
      tell us which polls to drop, and the rest give the honest progress count
      without naming who chose what. */
-  const { data: votes } = await admin
+  const { data: votes, error: votesError } = await admin
     .from("plan_poll_votes")
     .select("poll_id, user_id")
     .in("poll_id", pollIds);
+
+  /*
+   * Unknown is NOT "the viewer has not voted". If the vote read fails, Home
+   * must not turn that uncertainty into an urgent card or claim zero progress.
+   */
+  if (votesError) return [];
 
   const votedByViewer = new Set<string>();
   const votersByPoll = new Map<string, Set<string>>();
@@ -258,12 +282,15 @@ export async function loadPlanDecisions(
   for (const poll of open) {
     if (votedByViewer.has(poll.id)) continue;
     const planTitle = planTitleById.get(poll.plan_id);
-    if (!planTitle) continue;
+    const planEndsAt = planEndById.get(poll.plan_id);
+    if (!planTitle || !planEndsAt) continue;
     decisions.push({
       planId: poll.plan_id,
       planTitle,
       question: poll.question,
-      voterCount: votersByPoll.get(poll.id)?.size ?? 0
+      voterCount: votersByPoll.get(poll.id)?.size ?? 0,
+      closesAt: poll.closes_at,
+      planEndsAt
     });
   }
   return decisions;
@@ -284,8 +311,19 @@ export async function loadPlanDecisions(
 export async function loadPlanChatDecisions(
   admin: Admin,
   userId: string,
-  planTitleById: ReadonlyMap<string, string>
+  planTitleById: ReadonlyMap<string, string>,
+  planEndById: ReadonlyMap<string, string>,
+  now: Date
 ): Promise<PlanChatDecisionForCard[]> {
+  /*
+   * A Plan Chat decision is a CURRENT coordination job, not a historical poll.
+   * If Home has no current Plan in its canonical agenda, there is nothing this
+   * reader is allowed to turn into a Smart Card.
+   */
+  if (planTitleById.size === 0) return [];
+
+  const currentPlanIds = [...planTitleById.keys()];
+
   const { data: memberships } = await admin
     .from("conversation_members")
     .select("conversation_id")
@@ -303,22 +341,86 @@ export async function loadPlanChatDecisions(
     .select("id, context_id")
     .in("id", conversationIds)
     .eq("context_type", "plan")
-    .neq("status", "deleted");
+    /*
+     * CLOSED PLAN CHATS ARE READABLE BUT NOT ACTIONABLE. Messaging archives a
+     * Plan Chat when its lifecycle closes; accepting every status except
+     * "deleted" made an archived, non-writable chat look like live
+     * coordination on Home.
+     */
+    .eq("status", "active")
+    /*
+     * Bound Plan Chat decisions to the same current agenda Home already uses
+     * for Plan RSVP/start/poll cards. This also fails closed if the closure job
+     * is late and a past Plan's conversation is still marked active.
+     */
+    .in("context_id", currentPlanIds);
 
   const planChatIds = (conversations ?? []).map((row) => row.id);
   if (planChatIds.length === 0) return [];
 
   const { data: polls } = await admin
     .from("chat_polls")
-    .select("message_id, conversation_id, question, closed_at")
+    .select("message_id, conversation_id, question, closed_at, created_at")
     .in("conversation_id", planChatIds)
     .is("closed_at", null)
+    /* Newest candidates first before the bounded parent-message validation.
+       Without this, database row order could let old tombstones occupy the
+       whole limit and hide a current poll. */
+    .order("created_at", { ascending: false })
     .limit(20);
 
-  const openPolls = polls ?? [];
+  const candidatePolls = polls ?? [];
+  if (candidatePolls.length === 0) return [];
+
+  /*
+   * IMPORTANT: this reader uses service_role, so chat_polls RLS cannot protect
+   * us from a deleted or expired parent message. A poll message may be
+   * tombstoned (delete-for-everyone) or may have expired while its structured
+   * poll row still exists. Home must apply the same "parent is live" rule the
+   * chat UI applies before a poll can become a Smart Card.
+   *
+   * Kept messages remain live after their original expires_at, matching the
+   * canonical retention rule.
+   */
+  const { data: parentMessages } = await admin
+    .from("messages")
+    .select("id, status, deleted_at, expires_at, kept_at")
+    .in(
+      "id",
+      candidatePolls.map((poll) => poll.message_id)
+    );
+
+  const nowMs = now.getTime();
+  const liveParentIds = new Set(
+    (parentMessages ?? [])
+      .filter((message) => {
+        if (message.deleted_at || message.status === "deleted") return false;
+        if (message.kept_at || !message.expires_at) return true;
+        const expiresAt = Date.parse(message.expires_at);
+        return Number.isFinite(expiresAt) && expiresAt > nowMs;
+      })
+      .map((message) => message.id)
+  );
+
+  const planIdByConversation = new Map(
+    (conversations ?? []).map((row) => [row.id, row.context_id])
+  );
+  const planRank = new Map(currentPlanIds.map((planId, index) => [planId, index]));
+
+  const openPolls = candidatePolls
+    .filter((poll) => liveParentIds.has(poll.message_id))
+    .sort((a, b) => {
+      const aPlan = planIdByConversation.get(a.conversation_id);
+      const bPlan = planIdByConversation.get(b.conversation_id);
+      const planDelta =
+        (aPlan ? planRank.get(aPlan) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER) -
+        (bPlan ? planRank.get(bPlan) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER);
+      if (planDelta !== 0) return planDelta;
+      return Date.parse(b.created_at) - Date.parse(a.created_at);
+    });
   if (openPolls.length === 0) return [];
 
-  const { data: votes } = await admin
+  const { data: votes, error: votesError } = await admin
     .from("chat_poll_votes")
     .select("poll_message_id")
     .eq("user_id", userId)
@@ -326,23 +428,66 @@ export async function loadPlanChatDecisions(
       "poll_message_id",
       openPolls.map((poll) => poll.message_id)
     );
+  /* Same fail-closed rule as Plan polls: a failed vote read cannot mean
+     "unanswered". */
+  if (votesError) return [];
   const answered = new Set((votes ?? []).map((row) => row.poll_message_id));
-
-  const planIdByConversation = new Map(
-    (conversations ?? []).map((row) => [row.id, row.context_id])
-  );
 
   const decisions: PlanChatDecisionForCard[] = [];
   for (const poll of openPolls) {
     if (answered.has(poll.message_id)) continue;
     const planId = planIdByConversation.get(poll.conversation_id);
+    const planTitle = planId ? planTitleById.get(planId) : undefined;
+    const planEndsAt = planId ? planEndById.get(planId) : undefined;
+    // Current agenda membership and a hard lifecycle boundary are mandatory.
+    if (!planId || !planTitle || !planEndsAt) continue;
     decisions.push({
       conversationId: poll.conversation_id,
-      planTitle: planId ? planTitleById.get(planId) ?? null : null,
-      question: poll.question
+      planTitle,
+      question: poll.question,
+      planEndsAt
     });
   }
   return decisions;
+}
+
+/**
+ * The newest achievement earned recently enough to still be a Home moment.
+ *
+ * We deliberately do NOT surface a user's all-time newest badge with no time
+ * bound: shipping this provider to an established account must not resurrect a
+ * months-old achievement as though it just happened. Seven days is a generous
+ * catch-up window for somebody who has not opened Home for a few days, while
+ * still keeping the heartbeat about current life.
+ *
+ * The canonical in-app achievement catalog supplies the display name; an
+ * unknown code fails closed instead of inventing presentation copy.
+ */
+export async function loadRecentAchievement(
+  admin: Admin,
+  userId: string,
+  now: Date
+): Promise<RecentAchievementForCard | null> {
+  const cutoff = new Date(now.getTime() - HOME_ACHIEVEMENT_RECENCY_MS).toISOString();
+  const { data: row } = await admin
+    .from("user_achievements")
+    .select("achievement_code, earned_at")
+    .eq("user_id", userId)
+    .gte("earned_at", cutoff)
+    .order("earned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!row) return null;
+  const definition = ACHIEVEMENT_BY_CODE.get(row.achievement_code);
+  if (!definition) return null;
+
+  return {
+    code: row.achievement_code,
+    title: definition.name,
+    earnedAt: row.earned_at,
+    expiresAt: new Date(Date.parse(row.earned_at) + HOME_ACHIEVEMENT_RECENCY_MS).toISOString()
+  };
 }
 
 /**
@@ -397,6 +542,7 @@ export type HomeSmartCardProjection = {
   planDecisions: PlanDecisionForCard[];
   planChatDecisions: PlanChatDecisionForCard[];
   blockedFeature: BlockedFeatureForCard | null;
+  recentAchievement: RecentAchievementForCard | null;
 };
 
 const EMPTY: HomeSmartCardProjection = {
@@ -404,7 +550,8 @@ const EMPTY: HomeSmartCardProjection = {
   muddyBirthdays: [],
   planDecisions: [],
   planChatDecisions: [],
-  blockedFeature: null
+  blockedFeature: null,
+  recentAchievement: null
 };
 
 /**
@@ -419,27 +566,49 @@ export async function loadHomeSmartCardProjection(input: {
   userId: string;
   planIds: readonly string[];
   planTitleById: ReadonlyMap<string, string>;
+  planEndById: ReadonlyMap<string, string>;
   now: Date;
 }): Promise<HomeSmartCardProjection> {
   if (!serverReady()) return EMPTY;
   const admin = createSupabaseAdminClient();
 
   try {
-    const [eventLinkrOffer, muddyBirthdays, planDecisions, planChatDecisions, blockedFeature] =
-      await Promise.all([
-        loadEventLinkrOffer(admin, input.userId),
-        loadMuddyBirthdays(admin, input.userId, input.now),
-        loadPlanDecisions(admin, input.userId, input.planIds, input.planTitleById, input.now),
-        loadPlanChatDecisions(admin, input.userId, input.planTitleById),
-        loadBlockedFeature(admin, input.userId)
-      ]);
+    const [
+      eventLinkrOffer,
+      muddyBirthdays,
+      planDecisions,
+      planChatDecisions,
+      blockedFeature,
+      recentAchievement
+    ] = await Promise.all([
+      loadEventLinkrOffer(admin, input.userId),
+      loadMuddyBirthdays(admin, input.userId, input.now),
+      loadPlanDecisions(
+        admin,
+        input.userId,
+        input.planIds,
+        input.planTitleById,
+        input.planEndById,
+        input.now
+      ),
+      loadPlanChatDecisions(
+        admin,
+        input.userId,
+        input.planTitleById,
+        input.planEndById,
+        input.now
+      ),
+      loadBlockedFeature(admin, input.userId),
+      loadRecentAchievement(admin, input.userId, input.now)
+    ]);
 
     return {
       eventLinkrOffer,
       muddyBirthdays,
       planDecisions,
       planChatDecisions,
-      blockedFeature
+      blockedFeature,
+      recentAchievement
     };
   } catch {
     return EMPTY;

@@ -38,35 +38,26 @@ export type MuddyProfileModalProps = {
   onSendPing?: (message: string) => void;
 };
 
-const PROXIMITY_SUPPORT_COPY: Partial<Record<ProximityBand, string>> = {
-  right_here: "Right here ✨",
-  around_you: "Very close by ✨",
-  close_by: "Close by",
-  nearby: "In your area",
-  around_town: "Around town",
-  further_away: "Nearby"
-};
-
 function proximityLabel(muddy: MuddyProfileSummary): string | null {
+  /*
+   * The API's six-state band is the canonical public proximity truth. Do not
+   * invent a label from the older coarse proximityLevel: doing so can make the
+   * popup disagree with Near/Glow and can mask a missing/stale band.
+   */
   if (muddy.proximityBand && muddy.proximityBand !== "outside_range") {
     return PROXIMITY_BAND_LABELS[muddy.proximityBand];
   }
-
-  if (muddy.proximityLevel === "close") return "Very Close";
-  if (muddy.proximityLevel === "near") return "In Area";
-  if (muddy.proximityLevel === "far") return "Far";
   return null;
 }
 
 function supportingLine(muddy: MuddyProfileSummary): string | null {
+  /*
+   * Proximity already has one clear home: the badge above. A second generated
+   * line such as "Very close by" only repeats the same fact. Keep this space
+   * for a real Muddy status when one exists.
+   */
   const status = muddy.statusText?.trim();
   if (status && !/glow confidence|\bconfidence\b/i.test(status)) return status;
-  if (muddy.proximityBand && muddy.proximityBand !== "outside_range") {
-    return PROXIMITY_SUPPORT_COPY[muddy.proximityBand] ?? null;
-  }
-  if (muddy.proximityLevel === "close") return "Very close by ✨";
-  if (muddy.proximityLevel === "near") return "In your area";
-  if (muddy.proximityLevel === "far") return "Nearby";
   return null;
 }
 

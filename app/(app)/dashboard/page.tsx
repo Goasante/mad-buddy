@@ -15,6 +15,7 @@ import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
 import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
 import { HOME_EXCLUDED_SMART_CARD_IDS } from "@/lib/smart-card/home-gate";
+import { isPlanDecisionRsvpEligible } from "@/lib/smart-card/home-context";
 import { loadHomeSmartCardProjection } from "@/lib/smart-card/home-projection";
 import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
@@ -106,11 +107,26 @@ export default async function DashboardPage() {
    * Smart Card from the states that were already proven.
    */
   const agendaPlans = (agenda?.items ?? []).filter((item) => item.kind === "plan");
+  /*
+   * A poll is coordination for people who are actually participating.
+   * The Home agenda intentionally also contains invitations, declines and
+   * waitlisted rows so the Plans surface can explain them, but those states
+   * must not become "Vote now" jobs. Hosts project as going, so going/maybe is
+   * the complete actionable set here and matches Plan Chat membership.
+   */
+  const decisionAgendaPlans = agendaPlans.filter((plan) =>
+    isPlanDecisionRsvpEligible(plan.myRsvp)
+  );
   const smartCardProjection = user
     ? await loadHomeSmartCardProjection({
         userId: user.id,
-        planIds: agendaPlans.map((plan) => plan.id),
-        planTitleById: new Map(agendaPlans.map((plan) => [plan.id, plan.title])),
+        planIds: decisionAgendaPlans.map((plan) => plan.id),
+        planTitleById: new Map(decisionAgendaPlans.map((plan) => [plan.id, plan.title])),
+        /* A Plan without an explicit end leaves the Home agenda at its start,
+           so startsAt is the honest hard boundary in that case. */
+        planEndById: new Map(
+          decisionAgendaPlans.map((plan) => [plan.id, plan.endsAt ?? plan.startsAt])
+        ),
         now
       })
     : null;
@@ -122,7 +138,11 @@ export default async function DashboardPage() {
         safeArrival: safeArrival
           ? {
               travelling: safeArrival.travelling.length > 0,
-              watcherCount: safeArrival.travelling[0]?.acceptedCount ?? 0
+              watcherCount: safeArrival.travelling[0]?.acceptedCount ?? 0,
+              destinationLabel: safeArrival.travelling[0]?.destinationLabel ?? null,
+              expectedArrivalAt: safeArrival.travelling[0]?.expectedArrivalAt ?? null,
+              gracePeriodMinutes: safeArrival.travelling[0]?.gracePeriodMinutes ?? null,
+              status: safeArrival.travelling[0]?.status ?? null
             }
           : null,
         birthday: dateOfBirth
@@ -142,7 +162,7 @@ export default async function DashboardPage() {
         locationFreshForProximity: activation?.locationFreshForProximity ?? false,
         muddyCount: activation?.muddyCount ?? 0,
         buddyScore,
-        recentAchievement: null,
+        recentAchievement: smartCardProjection?.recentAchievement ?? null,
         suggestionCount: 0,
         upFor: upForContext,
         /* Both are facts Home already owns: the request count feeds its header

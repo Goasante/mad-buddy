@@ -6,6 +6,14 @@ const source = readFileSync(
   join(__dirname, "..", "..", "components", "glow", "muddy-profile-modal.tsx"),
   "utf8"
 );
+const dashboard = readFileSync(
+  join(__dirname, "..", "..", "components", "dashboard", "dashboard-page.tsx"),
+  "utf8"
+);
+const friends = readFileSync(
+  join(__dirname, "..", "..", "components", "friends", "friends-page.tsx"),
+  "utf8"
+);
 
 describe("Muddy profile modal design contract", () => {
   it("uses the custom identity-led sheet instead of the generic visible title bar", () => {
@@ -25,6 +33,23 @@ describe("Muddy profile modal design contract", () => {
     expect(source).not.toContain("muddy.confidence ?");
     expect(source).not.toContain("confidence</span>");
     expect(source).toContain("glow confidence|\\bconfidence\\b");
+  });
+
+  it("uses only the canonical proximity band and does not repeat proximity below it", () => {
+    expect(source).toContain("PROXIMITY_BAND_LABELS[muddy.proximityBand]");
+    expect(source).not.toContain('if (muddy.proximityLevel === "close") return "Very Close"');
+    expect(source).not.toContain("PROXIMITY_SUPPORT_COPY");
+    expect(source).not.toContain('return "Very close by ✨"');
+  });
+
+  it("passes the canonical band from every current popup caller", () => {
+    expect(dashboard).toContain("proximityBand: selectedFriend.proximityBand");
+    expect(friends).toContain("proximityBand: proximityByFriendId[profileUser.id]?.proximityBand ?? null");
+  });
+
+  it("does not feed Home's coarse proximity status_text back into the support line", () => {
+    expect(dashboard).toContain("statusText: selectedFriend.muddyStatusLabel ?? undefined");
+    expect(dashboard).not.toContain("statusText: selectedFriend.statusText");
   });
 
   it("keeps the full profile handoff as a distinct bottom row", () => {
