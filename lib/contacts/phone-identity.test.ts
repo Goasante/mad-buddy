@@ -124,6 +124,10 @@ describe("the stored contact region preserves the person\'s numbering context", 
   it("does not rely on parser country inference alone for shared calling codes", () => {
     const gb = normalisePhoneNumber("+447911123456", "GB");
     expect(gb.ok && gb.e164).toBe("+447911123456");
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
     expect(save).toContain('e164.startsWith(`+${selectedCallingCode}`)');
     expect(save).toContain("? region");
   });
