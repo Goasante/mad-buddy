@@ -286,6 +286,15 @@ export async function loadPlanChatDecisions(
   userId: string,
   planTitleById: ReadonlyMap<string, string>
 ): Promise<PlanChatDecisionForCard[]> {
+  /*
+   * A Plan Chat decision is a CURRENT coordination job, not a historical poll.
+   * If Home has no current Plan in its canonical agenda, there is nothing this
+   * reader is allowed to turn into a Smart Card.
+   */
+  if (planTitleById.size === 0) return [];
+
+  const currentPlanIds = [...planTitleById.keys()];
+
   const { data: memberships } = await admin
     .from("conversation_members")
     .select("conversation_id")
@@ -303,16 +312,34 @@ export async function loadPlanChatDecisions(
     .select("id, context_id")
     .in("id", conversationIds)
     .eq("context_type", "plan")
-    .neq("status", "deleted");
+    /*
+     * CLOSED PLAN CHATS ARE READABLE BUT NOT ACTIONABLE. Messaging archives a
+     * Plan Chat when its lifecycle closes; accepting every status except
+     * "deleted" made an archived, non-writable chat look like live
+     * coordination on Home.
+     */
+    .eq("status", "active")
+    /*
+     * Bound Plan Chat decisions to the same current agenda Home already uses
+     * for Plan RSVP/start/poll cards. This also fails closed if the closure job
+     * is late and a past Plan's conversation is still marked active.
+     */
+    .in("context_id", currentPlanIds);
 
   const planChatIds = (conversations ?? []).map((row) => row.id);
   if (planChatIds.length === 0) return [];
 
   const { data: polls } = await admin
     .from("chat_polls")
-    .select("message_id, conversation_id, question, closed_at")
+    .select("message_id, conversation_id, question, closed_at, created_at")
     .in("conversation_id", planChatIds)
     .is("closed_at", null)
+    /*
+     * When more than one current Plan Chat has an unanswered poll, prefer the
+     * newest structured decision deterministically instead of database row
+     * order deciding which card Home shows.
+     */
+    .order("created_at", { ascending: false })
     .limit(20);
 
   const openPolls = polls ?? [];
@@ -336,9 +363,13 @@ export async function loadPlanChatDecisions(
   for (const poll of openPolls) {
     if (answered.has(poll.message_id)) continue;
     const planId = planIdByConversation.get(poll.conversation_id);
+    const planTitle = planId ? planTitleById.get(planId) : undefined;
+    // Current agenda membership is mandatory. Never downgrade stale context to
+    // the vague but still urgent-sounding "A Plan is deciding".
+    if (!planId || !planTitle) continue;
     decisions.push({
       conversationId: poll.conversation_id,
-      planTitle: planId ? planTitleById.get(planId) ?? null : null,
+      planTitle,
       question: poll.question
     });
   }
