@@ -11,6 +11,7 @@ import {
   normalisePhoneNumbers,
   phoneHint
 } from "@/lib/contacts/phone-normalization";
+import { CONTACT_REGIONS, contactRegionFromLocale } from "@/lib/contacts/contact-regions";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const service = stripComments(read("lib/contacts/phone-identity.ts"));
@@ -77,6 +78,18 @@ describe("numbers normalise to E.164", () => {
   it("bounds the input it will attempt", () => {
     // Refuses obvious junk instead of handing the parser something enormous.
     expect(normalisePhoneNumber("1".repeat(500), "GH").ok).toBe(false);
+  });
+});
+
+describe("contact-region defaults follow the person rather than Ghana blindly", () => {
+  it("uses a locale region even when that country is not in the compact dropdown", () => {
+    expect(contactRegionFromLocale("en-AU")).toBe("AU");
+    expect(CONTACT_REGIONS.some((entry) => entry.code === "AU")).toBe(false);
+  });
+
+  it("uses Ghana only when the locale has no usable region", () => {
+    expect(contactRegionFromLocale("en")).toBe("GH");
+    expect(contactRegionFromLocale(null)).toBe("GH");
   });
 });
 
