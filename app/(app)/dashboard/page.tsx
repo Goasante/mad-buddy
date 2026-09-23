@@ -251,7 +251,6 @@ export default async function DashboardPage() {
         "/events",
         "/discover",
         "/safe-arrival",
-        "/groups",
         "/reminders",
         "/settings/engagement",
         ...(momentsEnabled ? [] : ["/moments"])
