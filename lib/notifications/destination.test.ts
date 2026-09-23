@@ -16,6 +16,13 @@ describe("record-specific notification destinations", () => {
     expect(resolveNotificationDestination(type)).toEqual({ type: "internal", href });
   });
 
+  it("opens friendship milestones on their real private surface", () => {
+    expect(resolveNotificationDestination("friendship_milestone")).toEqual({
+      type: "internal",
+      href: "/badges?tab=milestones"
+    });
+  });
+
   it("opens an achievement code without treating it as a route fragment", () => {
     expect(resolveNotificationDestination("achievement:first_safe_arrival")).toEqual({
       type: "internal",

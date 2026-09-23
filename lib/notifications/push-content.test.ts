@@ -65,4 +65,16 @@ describe("privacy-safe push payloads", () => {
     );
     expect(serialized).not.toMatch(/access_token|refresh_token|secret/i);
   });
+
+  it("keeps friendship milestone details off the lock screen", () => {
+    const payload = privacySafePushPayload({
+      type: "friendship_milestone",
+      title: "One plan from a milestone",
+      message: "One more completed plan with Ama reaches five plans together."
+    });
+    expect(payload.title).toBe("Mad Buddy");
+    expect(payload.body).toBe("A private friendship milestone is coming up.");
+    expect(payload.url).toBe("/badges?tab=milestones");
+    expect(payload.body).not.toContain("Ama");
+  });
 });

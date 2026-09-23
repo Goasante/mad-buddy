@@ -21,7 +21,14 @@ import {
   reconnectSuggestionCopy,
   type ReconnectFacts
 } from "@/lib/life/reconnect";
-import { MILESTONE_FORBIDDEN_WORDS, milestoneDedupeKey, milestonesFor } from "@/lib/life/milestones";
+import {
+  MILESTONE_FORBIDDEN_WORDS,
+  anniversaryAtMs,
+  milestoneDedupeKey,
+  milestoneReminderCopy,
+  milestonesFor,
+  upcomingMilestoneReminders
+} from "@/lib/life/milestones";
 import { buildTimeline, timelineFacts, type TimelineSourceRow } from "@/lib/life/timeline";
 import { stripComments } from "@/lib/content/strip-comments";
 
@@ -436,6 +443,38 @@ describe("milestones", () => {
 
   it("reports nothing for a relationship with no history", () => {
     expect(milestonesFor({ createdAtMs: null, plansAttendedTogether: 0, reconnectsCompleted: 0 }, NOW)).toEqual([]);
+  });
+
+  it("uses calendar anniversaries without leap-day drift", () => {
+    const leapDay = Date.UTC(2024, 1, 29, 12);
+    expect(new Date(anniversaryAtMs(leapDay, 1)).toISOString()).toBe("2025-02-28T12:00:00.000Z");
+    expect(new Date(anniversaryAtMs(leapDay, 4)).toISOString()).toBe("2028-02-29T12:00:00.000Z");
+  });
+
+  it("only reminds when a factual milestone is genuinely close", () => {
+    expect(
+      upcomingMilestoneReminders(
+        { createdAtMs: null, plansAttendedTogether: 4, reconnectsCompleted: 0 },
+        NOW
+      ).map((item) => item.code)
+    ).toEqual(["five_plans_together"]);
+    expect(
+      upcomingMilestoneReminders(
+        { createdAtMs: null, plansAttendedTogether: 3, reconnectsCompleted: 0 },
+        NOW
+      )
+    ).toEqual([]);
+  });
+
+  it("keeps milestone reminder copy factual and non-comparative", () => {
+    const reminder = upcomingMilestoneReminders(
+      { createdAtMs: null, plansAttendedTogether: 9, reconnectsCompleted: 0 },
+      NOW
+    )[0]!;
+    const copy = milestoneReminderCopy(reminder, "Ama");
+    const text = `${copy.title} ${copy.body}`.toLowerCase();
+    expect(text).toContain("ama");
+    for (const banned of MILESTONE_FORBIDDEN_WORDS) expect(text).not.toContain(banned);
   });
 });
 
