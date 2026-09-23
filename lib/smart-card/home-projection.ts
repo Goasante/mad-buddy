@@ -89,13 +89,14 @@ export async function loadEventLinkrOffer(
 
     const { data: event } = await admin
       .from("events")
-      .select("id, name")
+      .select("id, name, ends_at")
       .eq("id", eventId)
       .maybeSingle();
     const name = event?.name?.trim();
     if (!name) continue;
 
-    return { eventId, eventName: name, href: `/events?event=${eventId}` };
+    if (!event?.ends_at) continue;
+    return { eventId, eventName: name, endsAt: event.ends_at, href: `/events?event=${eventId}` };
   }
 
   return null;
