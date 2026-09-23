@@ -1317,7 +1317,10 @@ export function DashboardPageContent({
                 displayName: selectedFriend.displayName,
                 username: selectedFriend.username,
                 avatarUrl: selectedFriend.avatarUrl,
-                statusText: selectedFriend.statusText,
+                /* API status_text is another proximity sentence (derived from
+                   the old coarse level). The badge already owns proximity.
+                   Only a real Muddy status belongs on the support line. */
+                statusText: selectedFriend.muddyStatusLabel ?? undefined,
                 proximityLevel: selectedFriend.proximityLevel,
                 proximityBand: selectedFriend.proximityBand,
                 glowStrength: selectedFriend.glowStrength,
