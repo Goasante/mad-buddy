@@ -7,6 +7,7 @@ const home = readFileSync(
   "utf8"
 );
 const providers = readFileSync(join(__dirname, "providers.ts"), "utf8");
+const gate = readFileSync(join(__dirname, "home-gate.ts"), "utf8");
 
 describe("Home heartbeat ownership boundaries", () => {
   it("does not repeat the traveller Safe Arrival when the Smart Card already owns it", () => {
@@ -17,8 +18,9 @@ describe("Home heartbeat ownership boundaries", () => {
   });
 
   it("keeps Nearby out of the Home Smart Card while retaining the provider for other surfaces", () => {
-    expect(home).toContain("smartCard={smartCard}");
+    expect(home).toContain("<SmartCardHeroV2 card={smartCard}");
     expect(providers).toContain('id: "nearby_muddies"');
+    expect(gate).toContain('"nearby_muddies"');
   });
 
   it("literal Plan-creation actions open the Plan creation flow", () => {
