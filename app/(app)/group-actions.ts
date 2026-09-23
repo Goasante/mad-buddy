@@ -50,13 +50,6 @@ const uuidSchema = z.string().uuid();
 const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).optional(),
-  /**
-   * Who can FIND it, and separately whether they can join uninvited. Two
-   * axes, not one: a public group may still be invite-only. Both default to
-   * the closed answer, so an omitted field can never publish a group.
-   */
-  visibility: z.enum(["private", "public"]).default("private"),
-  openToJoin: z.boolean().default(false),
   imageMediaId: z.string().uuid().optional()
 });
 const invitationSchema = z.object({ groupId: uuidSchema, userId: uuidSchema });
@@ -195,18 +188,16 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
     .select("conversation_id, role, status")
     .eq("user_id", userId);
   const roleById = new Map((memberships ?? []).map((row) => [row.conversation_id, row.role]));
-  const joinedIds = (memberships ?? []).filter((row) => row.status === "joined").map((row) => row.conversation_id);
-  const invitedIds = (memberships ?? []).filter((row) => row.status === "invited").map((row) => row.conversation_id);
+  const joinedIds = (memberships ?? [])
+    .filter((row) => row.status === "joined")
+    .map((row) => row.conversation_id);
+  const invitedIds = (memberships ?? [])
+    .filter((row) => row.status === "invited")
+    .map((row) => row.conversation_id);
 
-  const [groups, invitationSummaries, friendshipsResult, linkSettingsResult] = await Promise.all([
+  const [groups, invitationSummaries] = await Promise.all([
     summariesFor(admin, joinedIds, roleById),
-    summariesFor(admin, invitedIds, roleById),
-    admin
-      .from("friendships")
-      .select("user_one_id, user_two_id")
-      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
-    admin.from("group_settings").select("conversation_id").eq("join_mode", "link")
+    summariesFor(admin, invitedIds, roleById)
   ]);
 
   const invitations: GroupInvitation[] = [];
@@ -215,7 +206,9 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
       .from("conversations")
       .select("id, created_by")
       .in("id", invitationSummaries.map((group) => group.id));
-    const creatorIds = [...new Set((invitationConversations ?? []).map((row) => row.created_by).filter(Boolean))] as string[];
+    const creatorIds = [...new Set(
+      (invitationConversations ?? []).map((row) => row.created_by).filter(Boolean)
+    )] as string[];
     const { data: creators } = creatorIds.length
       ? await admin.from("profiles").select("user_id, full_name").in("user_id", creatorIds)
       : { data: [] };
@@ -225,63 +218,15 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
       const creatorId = creatorByGroupId.get(group.id);
       invitations.push({
         ...group,
-        invitedByName: creatorId ? creatorNameById.get(creatorId)?.trim() || MEMBER_NAME_PLACEHOLDER : "A Muddy"
+        invitedByName: creatorId
+          ? creatorNameById.get(creatorId)?.trim() || MEMBER_NAME_PLACEHOLDER
+          : MEMBER_NAME_PLACEHOLDER
       });
     }
   }
 
-  const friendIds = new Set(
-    (friendshipsResult.data ?? []).map((row) => row.user_one_id === userId ? row.user_two_id : row.user_one_id)
-  );
-  const knownMembership = new Map((memberships ?? []).map((row) => [row.conversation_id, row.status]));
-  const linkIds = (linkSettingsResult.data ?? []).map((row) => row.conversation_id);
-
-  /**
-   * Discoverable groups, from two independent sources:
-   *
-   *  1. PUBLIC groups — anyone signed in may see these exist. This is what
-   *     makes discovery real: previously a user with no Muddies could never
-   *     find a community at all.
-   *  2. Link-joinable groups created by a Muddy — the original behaviour,
-   *     kept so nothing a user could already discover disappears.
-   *
-   * Both are filtered through the same membership check, so a group the
-   * viewer already belongs to never appears as something to join.
-   */
-  // Filters on a column from a PENDING migration, so it must fail soft: until
-  // that migration is applied the filter errors, and discovery falls back to
-  // the friend-link path rather than taking the whole page down with it.
-  const { data: publicSettings } = await admin
-    .from("group_settings")
-    .select("conversation_id")
-    .eq("visibility", "public")
-    .limit(60)
-    .then((result) => (result.error ? { data: [] } : result));
-
-  const candidateIds = [
-    ...new Set([...(publicSettings ?? []).map((row) => row.conversation_id), ...linkIds])
-  ];
-
-  let discoverableGroups: GroupSummary[] = [];
-  if (candidateIds.length > 0) {
-    const { data: discoverableConversations } = await admin
-      .from("conversations")
-      .select("id, created_by")
-      .in("id", candidateIds)
-      .eq("conversation_type", "group")
-      .eq("status", "active");
-
-    const publicIds = new Set((publicSettings ?? []).map((row) => row.conversation_id));
-    const eligibleIds = (discoverableConversations ?? [])
-      // A link-only group still requires the creator to be a Muddy; a public
-      // group does not, which is the whole point of the visibility axis.
-      .filter((row) => publicIds.has(row.id) || (row.created_by && friendIds.has(row.created_by)))
-      .filter((row) => !knownMembership.has(row.id) || knownMembership.get(row.id) === "left")
-      .map((row) => row.id);
-    discoverableGroups = await summariesFor(admin, eligibleIds);
-  }
-
-  return { groups, discoverableGroups, invitations };
+  // Kept in the return shape for older clients, but discovery is retired.
+  return { groups, discoverableGroups: [], invitations };
 }
 
 export async function createGroupAction(input: unknown): Promise<GroupActionState> {
@@ -313,13 +258,10 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
       conversation_id: conversation.id,
       name: parsed.data.name,
       description: parsed.data.description || null,
-      // Two axes, set together at creation:
-      //   visibility — who can SEE the group exists
-      //   join_mode  — what happens when they try to join
-      // "Discoverable" now means genuinely public, not merely
-      // link-shareable to the creator's own Muddies.
-      visibility: parsed.data.visibility,
-      join_mode: parsed.data.openToJoin ? "link" : "invite",
+      // Groups are private messaging spaces. Public/Linkr group discovery is
+      // retired, and client input cannot widen this server-owned decision.
+      visibility: "private",
+      join_mode: "invite",
       image_media_id: parsed.data.imageMediaId ?? null,
       history_visibility: "since_join",
       posting_mode: "all_members"
@@ -342,7 +284,7 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
     const { grantAchievement } = await import("@/lib/engagement/achievements");
     await grantAchievement(admin, userId, "group_founder");
   }
-  revalidatePath("/groups");
+  revalidatePath("/messages");
   return { ok: true, message: "Group created.", groupId: conversation.id };
 }
 
@@ -882,20 +824,16 @@ const visibilitySchema = z.object({
 });
 
 /**
- * Change who can SEE a group exists.
+ * Compatibility action for older clients.
  *
- * OWNER ONLY, deliberately. Admins manage people and content; making a group
- * publicly listable is a decision about every member's exposure, and the one
- * person accountable for the group should be the one who makes it.
- *
- * Separate from join_mode, which is left untouched: a public group may still
- * be invite-only, and collapsing the two would silently make every
- * discoverable group openly joinable.
+ * Public Group discovery is retired. A stale client may still ask for
+ * visibility=public, but the server never widens a Group again.
  */
 export async function setGroupVisibilityAction(input: unknown): Promise<GroupActionState> {
-  if (!serverReady()) return { ok: false, message: "Groups need the server database configuration." };
   const parsed = visibilitySchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "That change isn't available." };
+  if (!parsed.success || parsed.data.visibility !== "private") {
+    return { ok: false, message: "Public Groups are no longer available." };
+  }
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
 
@@ -906,28 +844,19 @@ export async function setGroupVisibilityAction(input: unknown): Promise<GroupAct
     .eq("conversation_id", parsed.data.groupId)
     .eq("user_id", userId)
     .maybeSingle();
-
-  // Neutral on failure: never confirm whether a group exists to someone who
-  // is not its owner.
   if (membership?.status !== "joined" || membership.role !== "owner") {
     return { ok: false, message: "That change isn't available." };
   }
 
   const { error } = await admin
     .from("group_settings")
-    .update({ visibility: parsed.data.visibility, updated_at: new Date().toISOString() })
+    .update({ visibility: "private", updated_at: new Date().toISOString() })
     .eq("conversation_id", parsed.data.groupId);
   if (error) return { ok: false, message: "Couldn't update that Group." };
 
-  revalidatePath(`/groups/${parsed.data.groupId}`);
-  revalidatePath("/groups");
-  revalidatePath("/discover");
-  return {
-    ok: true,
-    message: parsed.data.visibility === "public" ? "Group is now public." : "Group is now private."
-  };
+  revalidatePath("/messages");
+  return { ok: true, message: "Group is private." };
 }
-
 
 /**
  * Upload a group image.
