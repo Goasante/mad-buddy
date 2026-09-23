@@ -150,7 +150,6 @@ const navigationItems: Array<{
      which had no such gate and was therefore removed outright. */
   { href: "/moments", label: "Moments", icon: Images, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
-  { href: "/groups", label: "Groups", icon: Users2, featureIcon: "groups" },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -163,7 +162,7 @@ const navigationItems: Array<{
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
-const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/linkr"] as const;
+const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/linkr"] as const;
 
 /**
  * Routes that render their own in-page title instead of the shared AppHeader
