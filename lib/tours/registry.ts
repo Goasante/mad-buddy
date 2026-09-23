@@ -19,7 +19,6 @@ export const TOUR_ROUTES: TourRouteOption[] = [
   { path: "/safe-arrival", label: "Safe Arrival" },
   { path: "/moments", label: "Moments and Air" },
   { path: "/events", label: "Events" },
-  { path: "/groups", label: "Groups" },
   { path: "/profile", label: "Profile" },
   { path: "/badges", label: "Achievements" },
   { path: "/buddy-score", label: "Buddy Score" },
@@ -236,10 +235,13 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.SETTINGS_NOTIFICATIONS, "Notification settings", "/settings", "Alerts, focus, and communication preferences."),
   target(TOUR_TARGET_IDS.SETTINGS_SUPPORT, "Help and guides", "/settings", "Help, Feature Guides, feedback, and invites."),
 
-  target(TOUR_TARGET_IDS.GROUPS_CREATE, "Create a group", "/groups", "Starts a private group."),
-  target(TOUR_TARGET_IDS.GROUPS_TABS, "Group filters", "/groups", "Your groups, discovery, and invitations."),
-  target(TOUR_TARGET_IDS.GROUPS_LIST, "Groups list", "/groups", "Real groups or the genuine empty state."),
-  target(TOUR_TARGET_IDS.GROUPS_INVITES, "Group invitations", "/groups", "Pending group invitations, when present."),
+  // Legacy target ids remain registered so historical tour rows still parse,
+  // but their destination is the canonical Messages Groups filter. The old
+  // standalone Groups page no longer exists as a product surface.
+  target(TOUR_TARGET_IDS.GROUPS_CREATE, "Groups in Messages", "/messages?filter=groups", "Open Groups inside Messages."),
+  target(TOUR_TARGET_IDS.GROUPS_TABS, "Groups filter", "/messages?filter=groups", "The Groups conversation filter in Messages."),
+  target(TOUR_TARGET_IDS.GROUPS_LIST, "Group conversations", "/messages?filter=groups", "Your current Group conversations."),
+  target(TOUR_TARGET_IDS.GROUPS_INVITES, "Group conversations", "/messages?filter=groups", "Group conversations live in Messages."),
 
 
   // The mobile bottom bar's five slots: Messages, Muddies, the Orb, Plans,
@@ -282,7 +284,6 @@ export const FEATURE_GUIDES: FeatureGuideDefinition[] = [
   { slug: "messages-guide", label: "Messages", group: "connect", entryRoute: "/messages" },
   { slug: "hangout-guide", label: "Hangout", group: "connect", entryRoute: "/hangout-mode" },
   { slug: "socialize-guide", label: "Linkr", group: "connect", entryRoute: "/discover" },
-  { slug: "groups-guide", label: "Groups", group: "connect", entryRoute: "/groups" },
   { slug: "moments-guide", label: "Moments", group: "share", entryRoute: "/moments" },
   { slug: "air-guide", label: "Air", group: "share", entryRoute: "/moments", activeTargetId: TOUR_TARGET_IDS.MOMENTS_AIR_TAB },
   { slug: "plans-guide", label: "Plans", group: "plan-safety", entryRoute: "/plans" },
