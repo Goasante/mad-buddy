@@ -8,7 +8,8 @@ import {
   completeContactSetupAction,
   getPhoneIdentityAction,
   savePhoneNumberAction,
-  setContactDiscoveryAction
+  setContactDiscoveryAction,
+  snoozeUnsupportedContactReminderAction
 } from "@/app/(app)/contact-actions";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
@@ -251,8 +252,19 @@ export function FindMuddiesSheet({
   function begin() {
     haptic("tick");
     const capability = detectContactCapability();
+    const demoAvailable = demoContactsAvailable();
     const supported =
-      capability === "picker" || capability === "native" || demoContactsAvailable();
+      capability === "picker" || capability === "native" || demoAvailable;
+
+    if (!supported) {
+      /*
+       * An unsupported device cannot finish this step, so do not let the
+       * server-rendered reminder send them back here on every Muddies visit.
+       * This is a temporary reminder cooldown, not a permanent opt-out.
+       */
+      void snoozeUnsupportedContactReminderAction();
+    }
+
     dispatch({ type: "begin", supported });
   }
 
@@ -638,7 +650,8 @@ export function FindMuddiesSheet({
         <div className="space-y-5">
           <p className="text-sm leading-6 text-muted-foreground">
             This phone or browser doesn&rsquo;t offer contact access to Mad Buddy. Nothing is wrong with your
-            account &mdash; you can still search for people or invite someone.
+            account &mdash; you can still search for people or invite someone. We won&rsquo;t keep automatically
+            prompting you about contact access for a while.
           </p>
           {bottomActions}
         </div>
