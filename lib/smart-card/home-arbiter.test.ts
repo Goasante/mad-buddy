@@ -130,6 +130,14 @@ describe("exactly one card, and never nothing by accident", () => {
     expect(result.reason).toBe("card_b_only");
   });
 
+  it("nearby Muddies never consume the card slot owned by NearbyHero", () => {
+    const result = arb({ activationState: "muddy_nearby", smartCardId: "upfor_fallback" });
+
+    expect(result.winner).toBe("card_b");
+    expect(result.cardATier).toBeNull();
+    expect(result.reason).toBe("card_b_only");
+  });
+
   it("never returns both surfaces at once", () => {
     const states: Array<ActivationState | null> = [
       null,
@@ -217,19 +225,24 @@ describe("Card A candidacy", () => {
     expect(cardACandidateTier({ activationState: "activated", firstMuddyVisible: false })).toBeNull();
   });
 
-  it("every activation state that renders has a tier", () => {
-    const states: Array<Exclude<ActivationState, "activated">> = [
+  it("every activation state that renders a card has a tier", () => {
+    const states: Array<Exclude<ActivationState, "activated" | "muddy_nearby">> = [
       "no_muddies",
       "request_pending",
       "visibility_off",
       "muddies_no_location",
       "location_stale",
       "no_one_nearby",
-      "muddy_nearby",
       "upcoming_plan"
     ];
     for (const state of states) {
       expect(cardACandidateTier({ activationState: state, firstMuddyVisible: false })).not.toBeNull();
     }
+  });
+
+  it("muddy_nearby is not a Card A candidate because NearbyHero owns it", () => {
+    expect(
+      cardACandidateTier({ activationState: "muddy_nearby", firstMuddyVisible: false })
+    ).toBeNull();
   });
 });
