@@ -238,10 +238,10 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   // Legacy target ids remain registered so historical tour rows still parse,
   // but their destination is the canonical Messages Groups filter. The old
   // standalone Groups page no longer exists as a product surface.
-  target(TOUR_TARGET_IDS.GROUPS_CREATE, "Groups in Messages", "/messages?filter=groups", "Open Groups inside Messages."),
-  target(TOUR_TARGET_IDS.GROUPS_TABS, "Groups filter", "/messages?filter=groups", "The Groups conversation filter in Messages."),
-  target(TOUR_TARGET_IDS.GROUPS_LIST, "Group conversations", "/messages?filter=groups", "Your current Group conversations."),
-  target(TOUR_TARGET_IDS.GROUPS_INVITES, "Group conversations", "/messages?filter=groups", "Group conversations live in Messages."),
+  target(TOUR_TARGET_IDS.GROUPS_CREATE, "Groups in Messages", "/messages", "Open Groups inside Messages."),
+  target(TOUR_TARGET_IDS.GROUPS_TABS, "Groups filter", "/messages", "The Groups conversation filter in Messages."),
+  target(TOUR_TARGET_IDS.GROUPS_LIST, "Group conversations", "/messages", "Your current Group conversations."),
+  target(TOUR_TARGET_IDS.GROUPS_INVITES, "Group conversations", "/messages", "Group conversations live in Messages."),
 
 
   // The mobile bottom bar's five slots: Messages, Muddies, the Orb, Plans,
