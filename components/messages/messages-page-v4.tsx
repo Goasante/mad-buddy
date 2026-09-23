@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ImagePlus,
   Loader2,
   MessageCircle,
   MoreHorizontal,
@@ -23,6 +24,10 @@ import {
 import type { CSSProperties } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
+import {
+  createGroupAction,
+  uploadGroupImageAction
+} from "@/app/(app)/group-actions";
 import {
   deleteMessageAction,
   editMessageAction,
@@ -111,6 +116,11 @@ const FILTERS = [
 ] as const;
 
 type FilterId = (typeof FILTERS)[number]["id"];
+
+function isFilterId(value: string | null): value is FilterId {
+  return Boolean(value) && FILTERS.some((filter) => filter.id === value);
+}
+
 const PRIMARY_FILTERS = FILTERS.filter((filter) => filter.id !== "favorites" && filter.id !== "archived");
 const SECONDARY_FILTERS = FILTERS.filter((filter) => filter.id === "favorites" || filter.id === "archived");
 type ReplyContext = { replyToMessageId: string; senderName: string; text: string };
@@ -201,6 +211,7 @@ export function MessagesPageV4({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedConversationId = searchParams.get("conversation");
+  const requestedFilter = searchParams.get("tab");
 
   /* Bind the cache to this account BEFORE first render reads from it.
      Done during render rather than in an effect because the very first paint
@@ -234,7 +245,9 @@ export function MessagesPageV4({
     return id ? readThread(viewerId, id)?.controls ?? null : null;
   });
   const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<FilterId>("all");
+  const [activeFilter, setActiveFilter] = useState<FilterId>(() =>
+    isFilterId(requestedFilter) ? requestedFilter : "all"
+  );
   const [loadingMessages, setLoadingMessages] = useState(false);
   /* Confirmations expire, failures stay until the person deals with them.
      V4 was still using plain useState, so every "Deleted." and "Copied." sat
@@ -242,6 +255,12 @@ export function MessagesPageV4({
      thread. The hook is a drop-in for useState. */
   const [feedback, setFeedback] = useTransientFeedback();
   const [newMessageOpen, setNewMessageOpen] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupImageMediaId, setGroupImageMediaId] = useState<string | null>(null);
+  const [groupImagePreview, setGroupImagePreview] = useState<string | null>(null);
+  const [groupUploading, setGroupUploading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [threadQuery, setThreadQuery] = useState("");
@@ -749,6 +768,53 @@ export function MessagesPageV4({
 
   const unreadChats = displayConversations.filter((conversation) => conversation.unreadCount > 0).length;
 
+  function resetGroupComposer() {
+    setGroupName("");
+    setGroupDescription("");
+    setGroupImageMediaId(null);
+    setGroupImagePreview(null);
+    setGroupUploading(false);
+  }
+
+  function pickGroupImage(file: File) {
+    setGroupUploading(true);
+    startTransition(async () => {
+      try {
+        const { compressImageForUpload } = await import("@/lib/media/client-compress");
+        const compressed = await compressImageForUpload(file).catch(() => null);
+        const prepared = compressed?.ok ? compressed.file : file;
+        const form = new FormData();
+        form.append("media", prepared);
+        const result = await uploadGroupImageAction(form);
+        setFeedback(result.message);
+        if (!result.ok || !result.mediaId) return;
+        setGroupImageMediaId(result.mediaId);
+        setGroupImagePreview(result.previewUrl ?? null);
+      } finally {
+        setGroupUploading(false);
+      }
+    });
+  }
+
+  function createPrivateGroup() {
+    if (groupName.trim().length < 2 || groupUploading) return;
+    startTransition(async () => {
+      const result = await createGroupAction({
+        name: groupName,
+        description: groupDescription,
+        imageMediaId: groupImageMediaId ?? undefined
+      }).catch(() => ({ ok: false, message: "Could not create that Group.", groupId: undefined }));
+      setFeedback(result.message);
+      if (!result.ok || !result.groupId) return;
+
+      setCreateGroupOpen(false);
+      resetGroupComposer();
+      setActiveFilter("groups");
+      await syncConversations();
+      router.push(`/messages?conversation=${result.groupId}` as Route);
+    });
+  }
+
   const filteredConversations = useMemo(() => {
     const term = query.trim().toLowerCase();
     return displayConversations.filter((conversation) => {
@@ -1172,7 +1238,19 @@ export function MessagesPageV4({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-3">
-            {filteredConversations.length === 0 ? <EmptyState icon={MessageCircle} title={activeFilter === "archived" ? "No archived chats" : "No chats here"} description={activeFilter === "archived" ? "Chats you archive will wait here quietly." : "Try another filter or start a new chat."} action={activeFilter === "archived" ? undefined : <Button onClick={() => setNewMessageOpen(true)}>New chat</Button>} /> : (
+            {activeFilter === "groups" ? (
+              <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl border border-primary/15 bg-primary/[0.055] px-3 py-2.5">
+                <div className="min-w-0">
+                  <strong className="block text-sm">Your Groups</strong>
+                  <span className="block text-xs text-muted-foreground">Private group conversations live in Messages.</span>
+                </div>
+                <Button type="button" size="sm" className="shrink-0" onClick={() => setCreateGroupOpen(true)}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  New group
+                </Button>
+              </div>
+            ) : null}
+            {filteredConversations.length === 0 ? <EmptyState icon={activeFilter === "groups" ? UsersRound : MessageCircle} title={activeFilter === "groups" ? "No Groups yet" : activeFilter === "archived" ? "No archived chats" : "No chats here"} description={activeFilter === "groups" ? "Create a private Group here. Once people join, it stays alongside your other conversations." : activeFilter === "archived" ? "Chats you archive will wait here quietly." : "Try another filter or start a new chat."} action={activeFilter === "archived" ? undefined : activeFilter === "groups" ? <Button onClick={() => setCreateGroupOpen(true)}>New group</Button> : <Button onClick={() => setNewMessageOpen(true)}>New chat</Button>} /> : (
               <ul className="space-y-1">
                 {filteredConversations.map((conversation) => <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>)}
               </ul>
@@ -1362,9 +1440,70 @@ export function MessagesPageV4({
           await syncConversations();
           openConversation(result.conversationId);
         });
-      }} onOpenGroups={() => { setNewMessageOpen(false); router.push("/groups" as Route); }} />
+      }} onOpenGroups={() => {
+        setNewMessageOpen(false);
+        setActiveFilter("groups");
+        router.replace("/messages?tab=groups" as Route);
+      }} />
 
-      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => router.push(`/groups/${selected.id}` as Route)} onFeedback={setFeedback} /> : null}
+      <Modal
+        open={createGroupOpen}
+        onOpenChange={(open) => {
+          setCreateGroupOpen(open);
+          if (!open) resetGroupComposer();
+        }}
+        title="New Group"
+        description="Groups are private and invitation-only. Add people from Group details after creation."
+        variant="sheet"
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setCreateGroupOpen(false)} disabled={isPending || groupUploading}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={createPrivateGroup} disabled={isPending || groupUploading || groupName.trim().length < 2}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+              Create group
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="messages-group-name" className="mb-1.5 block text-sm font-medium">Group name</label>
+            <Input id="messages-group-name" value={groupName} maxLength={80} onChange={(event) => setGroupName(event.target.value)} placeholder="Weekend Crew" autoFocus />
+          </div>
+          <div>
+            <label htmlFor="messages-group-description" className="mb-1.5 block text-sm font-medium">Description <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <textarea id="messages-group-description" value={groupDescription} maxLength={500} rows={3} onChange={(event) => setGroupDescription(event.target.value)} placeholder="What is this Group for?" className="focus-ring w-full resize-none rounded-2xl border border-border/70 bg-background p-3 text-sm" />
+          </div>
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">Group photo <span className="font-normal text-muted-foreground">(optional)</span></span>
+            <label className="focus-ring flex cursor-pointer items-center gap-3 rounded-2xl border border-border/70 p-3 hover:bg-secondary/40">
+              <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-secondary/60">
+                {groupImagePreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- signed preview URL from the existing media pipeline
+                  <img src={groupImagePreview} alt="" className="h-full w-full object-cover" />
+                ) : groupUploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                ) : (
+                  <ImagePlus className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">{groupImagePreview ? "Change photo" : "Add a photo"}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">Used as the Group avatar in Messages.</span>
+              </span>
+              <input type="file" accept="image/*" className="sr-only" disabled={groupUploading || isPending} onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) pickGroupImage(file);
+                event.currentTarget.value = "";
+              }} />
+            </label>
+          </div>
+        </div>
+      </Modal>
+
+      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => router.push(`/groups/${selected.id}?details=1` as Route)} onFeedback={setFeedback} /> : null}
 
       <EditMessageModal message={editTarget} draft={editDraft} setDraft={setEditDraft} pending={isPending} onClose={() => setEditTarget(null)} onSave={() => {
         if (!editTarget || !selectedId || !editDraft.trim()) return;
