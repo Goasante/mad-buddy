@@ -237,6 +237,14 @@ describe("an unverified number cannot be taken from another account", () => {
     expect(toggle).toContain("already in use for contact discovery");
   });
 
+  it("does not report discovery on unless a usable matching identifier exists", () => {
+    const toggle = service.slice(service.indexOf("export async function setContactDiscovery"));
+    expect(toggle).toContain("if (!matchingConfigured())");
+    expect(toggle).toContain("deriveMatchIdentifier(identity.phone_e164)");
+    expect(toggle).toContain("match_hmac: matchIdentifier.identifier");
+    expect(toggle).toContain("match_key_version: matchIdentifier.keyVersion");
+  });
+
   it("does not confirm whose account holds a claimed number", () => {
     // Otherwise the error message becomes a way to test whether a number is
     // registered.
