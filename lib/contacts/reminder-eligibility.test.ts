@@ -8,10 +8,12 @@ import {
   MAX_REMINDER_DISMISSALS,
   PRIVACY_CHANGE_QUIET_DAYS,
   REMINDER_COOLDOWN_DAYS,
+  UNSUPPORTED_DEVICE_QUIET_DAYS,
   afterDismissal,
   afterPermanentDismissal,
   afterPrivacyChange,
   afterSetupComplete,
+  afterUnsupportedDevice,
   isBusy,
   isExcludedSurface,
   shouldContactDiscoveryReminderShow,
@@ -133,6 +135,42 @@ describe("the cadence escalates and then stops", () => {
   it("keeps the intervals in one place", () => {
     // Scattered timings are how a cadence drifts without anyone noticing.
     expect(REMINDER_COOLDOWN_DAYS).toEqual([3, 7, 14]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Deliberate privacy choices
+// ---------------------------------------------------------------------------
+
+describe("unsupported devices are respected without counting as a refusal", () => {
+  it("goes quiet for the dedicated unsupported-device period", () => {
+    const state = afterUnsupportedDevice(EMPTY_REMINDER_STATE, NOW);
+    expect(Date.parse(state.suppressedUntil!)).toBe(NOW + UNSUPPORTED_DEVICE_QUIET_DAYS * DAY);
+    expect(decide({ state, nowMs: NOW + 7 * DAY })).toEqual({ show: false, reason: "cooling_down" });
+  });
+
+  it("does not consume a Maybe-later dismissal", () => {
+    const state = afterUnsupportedDevice(EMPTY_REMINDER_STATE, NOW);
+    expect(state.dismissCount).toBe(0);
+    expect(state.permanentlyDismissed).toBe(false);
+  });
+
+  it("records the cooldown only after the device actually proves unsupported", () => {
+    expect(sheet).toContain("snoozeUnsupportedContactReminderAction()");
+    const begin = sheet.slice(sheet.indexOf("function begin()"));
+    expect(begin.slice(0, 900)).toContain("if (!supported)");
+    expect(begin.slice(0, 900)).toContain("snoozeUnsupportedContactReminderAction()");
+    expect(begin.slice(0, 900)).not.toContain("recordPermanentDismissal");
+  });
+
+  it("persists through the reminder store without changing contact discovery", () => {
+    expect(store).toContain("recordUnsupportedDevice");
+    expect(store).toContain("afterUnsupportedDevice");
+    expect(actions).toContain("snoozeUnsupportedContactReminderAction");
+    const action = actions.slice(actions.indexOf("snoozeUnsupportedContactReminderAction"));
+    expect(action.slice(0, 700)).toContain("recordUnsupportedDevice(admin, user.id)");
+    expect(action.slice(0, 700)).not.toContain("setContactDiscovery");
+    expect(action.slice(0, 700)).not.toContain("removePhoneNumber");
   });
 });
 
