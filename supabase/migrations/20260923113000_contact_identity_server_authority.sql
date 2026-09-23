@@ -12,9 +12,13 @@
 drop policy if exists "phone identity owner writes"
   on public.user_phone_identities;
 
+revoke all
+  on table public.user_phone_identities
+  from public, anon;
+
 revoke insert, update, delete
   on table public.user_phone_identities
-  from anon, authenticated;
+  from authenticated;
 
 grant select
   on table public.user_phone_identities
