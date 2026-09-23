@@ -21,7 +21,6 @@ import { MeetingPingsScreen } from "./screens/MeetingPingsScreen";
 import { HelpScreen } from "./screens/HelpScreen";
 import { NotificationPreferencesScreen } from "./screens/NotificationPreferencesScreen";
 import { EventsScreen } from "./screens/EventsScreen";
-import { GroupsScreen } from "./screens/GroupsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
 import { UnavailableScreen } from "./screens/UnavailableScreen";
 import { SafetyScreen } from "./screens/SafetyScreen";
@@ -106,7 +105,6 @@ export default function App() {
         <Route path="/socialize" element={<SocializeScreen />} />
         <Route path="/pings" element={<MeetingPingsScreen />} />
         <Route path="/events" element={<EventsScreen />} />
-        <Route path="/groups" element={<GroupsScreen />} />
         <Route path="/safety" element={<SafetyScreen />} />
         <Route path="/subscription" element={<SubscriptionScreen />} />
         <Route path="/buddy-score" element={<BuddyScoreScreen />} />
