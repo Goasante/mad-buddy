@@ -10,13 +10,13 @@ import type { FeatureIconKey } from "@/lib/icons/feature-icons";
  * launcher costs essentially nothing to render and its behaviour can be tested
  * without mounting the app.
  *
- * The five actions each open the feature's CANONICAL route. There are no
+ * The four actions each open the feature's CANONICAL route. There are no
  * context-dependent destinations: Plans opens Plans everywhere. An icon that
  * quietly means something different per screen is a thing users have to learn
  * page by page, and the first version should not ask that.
  */
 
-export type QuickActionId = "moments" | "plans" | "events" | "safe_arrival" | "groups";
+export type QuickActionId = "moments" | "plans" | "events" | "safe_arrival" | "focus";
 
 export type QuickAction = {
   id: QuickActionId;
@@ -38,9 +38,10 @@ export type QuickAction = {
 /**
  * The launcher's contents, in display order.
  *
- * Ordered top-to-bottom as they appear when expanded. Moments sits nearest the
- * user's thumb because it is the most frequently opened of the five; Groups is
- * furthest because it is the most deliberate.
+ * Ordered top-to-bottom as they appear when expanded. Groups deliberately
+ * does not live here: group conversations are owned by Messages. Focus takes
+ * the fourth slot because it is an app-wide control without permanent bottom
+ * navigation.
  *
  * Camera is deliberately ABSENT. Mad Cam is reached by the Home tab (tap to go
  * Home, tap again or double-tap to open the camera), and duplicating it here
@@ -66,14 +67,14 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
     featureIcon: "safeArrival",
     toneClass: "qa-tone-safe-arrival"
   },
-  { id: "groups", label: "Groups", href: "/groups" as Route, featureIcon: "groups", toneClass: "qa-tone-groups" }
+  { id: "focus", label: "Focus", href: "/settings/engagement" as Route, featureIcon: "focus", toneClass: "qa-tone-focus" }
 ];
 
 /**
  * Where Quick Actions appears.
  *
  * EVERYWHERE IN THE APP, except surfaces that genuinely cannot carry it. The
- * launcher is a shortcut to five features, and a shortcut that only exists on
+ * launcher is a shortcut to four features, and a shortcut that only exists on
  * four screens is one people never learn is there.
  *
  * This is a DENY list, reversing the earlier allow list. The tradeoff is real:
@@ -120,15 +121,14 @@ const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/linkr"
 /**
  * Detail routes that keep their own corner.
  *
- * A person's profile, a single plan and a single group each have their own
- * primary action low on the screen. The parent list shows the launcher; the
- * detail view does not.
+ * A person's profile, a single plan and an event detail each have their own
+ * primary action low on the screen. The detail view does not. Legacy /groups
+ * routes redirect into Messages and therefore no longer need launcher rules.
  */
 const EXCLUDED_PREFIXES: readonly string[] = [
   "/friends/", // somebody's profile
   "/messages/", // a single conversation
   "/plans/",
-  "/groups/",
   "/events/",
   "/scan/",
   "/safe-arrival/",
