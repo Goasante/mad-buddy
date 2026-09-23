@@ -226,7 +226,23 @@ export async function setContactDiscovery(
     return { ok: false, message: "Add your phone number first." };
   }
 
+  let matchIdentifier: ReturnType<typeof deriveMatchIdentifier> | null = null;
+
   if (enabled) {
+    /*
+     * "On" must mean actually matchable. A number may have been saved while
+     * the HMAC secret was temporarily unavailable, or before a key rotation.
+     * Re-derive at the moment discoverability is enabled so the UI can never
+     * report success while the row carries no usable matching identifier.
+     */
+    if (!matchingConfigured()) {
+      return {
+        ok: false,
+        message: "Contact discovery isn't available right now. Please try again later."
+      };
+    }
+    matchIdentifier = deriveMatchIdentifier(identity.phone_e164);
+
     // Re-checked at enable time, not only at save time. A number saved while
     // dormant can be claimed by someone else in the meantime, and the partial
     // unique index covers exactly this row becoming active.
@@ -247,7 +263,16 @@ export async function setContactDiscovery(
 
   const { error } = await admin
     .from("user_phone_identities")
-    .update({ contact_discovery_enabled: enabled, updated_at: new Date().toISOString() })
+    .update({
+      contact_discovery_enabled: enabled,
+      ...(matchIdentifier
+        ? {
+            match_hmac: matchIdentifier.identifier,
+            match_key_version: matchIdentifier.keyVersion
+          }
+        : {}),
+      updated_at: new Date().toISOString()
+    })
     .eq("user_id", userId);
 
   if (error) {
