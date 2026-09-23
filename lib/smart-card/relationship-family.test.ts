@@ -86,7 +86,7 @@ describe("a mutual with a shared Event says where they met", () => {
   it("offers a first message first, and a Plan only as the second step", () => {
     const card = pick({ linkrMutuals: [mutual({ eventName: "Acoustic Night" })] });
     expect(card?.cta).toBe("Say hi");
-    expect(card?.secondaryAction).toEqual({ label: "Make a Plan", destination: "/plans" });
+    expect(card?.secondaryAction).toEqual({ label: "Make a Plan", destination: "/plans?create=1" });
   });
 
   /**
