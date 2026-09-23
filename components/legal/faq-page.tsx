@@ -11,7 +11,7 @@ const faqItems = [
   {
     question: "Can other people see my exact location?",
     answer:
-      "No. Mad Buddy does not show another user your exact GPS coordinates, street address, live map position, exact numerical distance, or location history through the ordinary proximity experience."
+      "No. Mad Buddy may show a broad proximity band and explain its category range, such as Just Around · 0–100 m. That is not your precise measured distance or position. Your GPS coordinates, street address, live map position, and location history are not shown through the ordinary proximity experience."
   },
   {
     question: "How is Linkr different from Muddy proximity?",
@@ -31,7 +31,7 @@ const faqItems = [
   {
     question: "Does Mad Buddy show a live map?",
     answer:
-      "No. The proximity experience is designed around broad signals rather than a live map, map pin, direction of travel, or exact distance."
+      "No. The proximity experience uses broad bands or coarsely rounded estimates. It does not show a live map, map pin, direction of travel, or precise position."
   },
   {
     question: "What is Safe Arrival?",

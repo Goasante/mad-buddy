@@ -4,7 +4,7 @@ import { LandingPage } from "@/components/landing/landing-page";
 import { absoluteUrl } from "@/lib/seo";
 
 const description =
-  "Mad Buddy is a free social app for privacy-safe proximity, Linkr discovery, UpFor, plans and messaging. Light ads support the free experience, and Mad Buddy Access removes ads — without live maps, exact coordinates, exact distances, or location history.";
+  "Mad Buddy is a free social app for privacy-safe proximity, Linkr discovery, UpFor, plans and messaging. Light ads support the free experience, and Mad Buddy Access removes ads, without live maps, exact coordinates, precise measured distances, or location history.";
 
 export const metadata: Metadata = {
   title: "When your Muddies are close, they glow",

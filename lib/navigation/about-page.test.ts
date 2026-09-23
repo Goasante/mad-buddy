@@ -140,7 +140,7 @@ describe("the page describes the product as it is now", () => {
 
   it("keeps proximity honest", () => {
     expect(about).toContain("exact coordinates");
-    expect(about).toContain("exact numerical distance");
+    expect(about).toContain("precise measured distance");
     expect(about).toContain("location history");
     // And never claims a live position is public.
     expect(about).not.toContain("live location");

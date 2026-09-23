@@ -1,6 +1,6 @@
 export { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 export const PRIVACY_POLICY_EFFECTIVE_DATE = "23 July 2026";
-export const PRIVACY_POLICY_LAST_UPDATED = "22 September 2026";
+export const PRIVACY_POLICY_LAST_UPDATED = "23 September 2026";
 
 export const legalContact = {
   companyName: "Godfred Ofosu Asante",
@@ -15,7 +15,7 @@ export const legalContact = {
  * The policy now distinguishes Muddy proximity from deliberately enabled Linkr
  * discovery. This is not a styling-only edit and should remain visible in the
  * release review. The approved product truth is that neither mode exposes
- * exact GPS coordinates, street location, exact numerical distance, a live map
+ * exact GPS coordinates, street location, precise measured distance, a live map
  * position, or location history to the other user.
  */
 export const privacyPolicyMarkdown = `
@@ -30,7 +30,7 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 * **Account information:** your email address, display name, username, and password (stored as a hash by our authentication provider; we never see your plain-text password).
 * **Profile information you choose to add:** a bio, a mood status, and a profile photo.
 * **A single location signal:** when your glow is on, your device sends your current coordinates over an encrypted connection. We store only your most recent signal: each update overwrites the previous one. We do not keep a location history.
-* **Derived proximity signals:** short-lived records of broad proximity used by Mad Buddy's proximity features, designed to expire after 15 minutes.
+* **Derived proximity signals:** short-lived records of broad proximity used by Mad Buddy's proximity features, designed to expire after 15 minutes. A feature may display a named proximity band, its broad category range, or a coarsely rounded estimate, but not the underlying precise measurement.
 * **Notifications and social activity:** friend requests, waves, meet-up pings, and in-app notifications you send or receive.
 * **Billing information:** if you subscribe, our payment provider (Paystack) processes your payment. We store a reference to your subscription status and plan, never your card number.
 
@@ -38,21 +38,22 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 
 * Location is collected only in the foreground, when the app is open and your glow is on. There is no background tracking.
 * Your raw coordinates are processed on our servers only. They are converted into broad proximity information before anything is shared with another user.
-* **Other users do not receive your coordinates, a live map position, your exact numerical distance, your direction of travel, your street address, or your location history through Mad Buddy's ordinary proximity experience.**
+* A label may be explained with a broad category range, such as **Just Around · 0–100 m**. This range describes the category that the signal falls within. It is not your precise measured distance or position.
+* **Other users do not receive your coordinates, a live map position, your precise measured distance, your direction of travel, your street address, or your location history through Mad Buddy's ordinary proximity experience.**
 * Turning on Ghost Mode removes you from nearby visibility immediately. This is enforced on the server, not just hidden in the interface.
 
 ## Muddy proximity
 
 * Muddies are people you have mutually approved.
 * Approved Muddies may receive privacy-preserving proximity information according to your visibility settings.
-* They may see a broad sense that you are nearby together with the profile information you have chosen to make available in that relationship.
+* They may see a named proximity band and its broad category range, together with the profile information you have chosen to make available in that relationship. The category does not reveal your precise measured distance or position.
 * Removing a Muddy or blocking someone ends their Muddy proximity access.
 
 ## Linkr discovery
 
 * Linkr is different from Muddy proximity. It is a discovery mode you deliberately enable when you want to meet someone new.
 * While you have Linkr enabled, eligible people who are not yet Muddies may receive a privacy-safe approximate proximity signal as part of discovery.
-* Linkr does not give another person your exact GPS coordinates, street address or street-level location, exact numerical distance, live map position, direction of travel, or location history.
+* Linkr may show a broad or coarsely rounded proximity estimate. It does not give another person your exact GPS coordinates, street address or street-level location, precise measured distance, live map position, direction of travel, or location history.
 * A Linkr discovery does not make someone a Muddy automatically. A continuing connection still requires mutual choice.
 * When you stop your Linkr session, Linkr discovery stops.
 
@@ -60,7 +61,7 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 
 * Exact GPS coordinates.
 * A live map position or map pin showing where you are.
-* Exact numerical distance or direction of travel.
+* Precise measured distance or direction of travel. A broad category range or coarsely rounded estimate is not the underlying precise measurement.
 * Street addresses or street-level location.
 * Location history.
 

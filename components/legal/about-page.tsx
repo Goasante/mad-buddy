@@ -47,7 +47,7 @@ const principles = [
   },
   {
     title: "Approximate by design",
-    description: "Proximity should create social awareness without handing another user your exact coordinates, street location, exact numerical distance, live map position, or location history."
+    description: "Proximity uses broad bands and category ranges to create social awareness without handing another user your exact coordinates, precise measured distance, street location, live map position, or location history."
   },
   {
     title: "Discovery is deliberate",

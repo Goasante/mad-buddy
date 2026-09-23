@@ -30,7 +30,7 @@ const flowSteps = [
   {
     title: "Notice",
     product: "Glow",
-    description: "A Muddy becomes more present as they get closer, without exposing an exact distance.",
+    description: "A Muddy becomes more present as they get closer, using broad proximity bands instead of their precise position.",
     icon: RadioTower
   },
   {
@@ -52,7 +52,7 @@ const connectionModes = [
     label: "Muddies",
     title: "People you already trust.",
     description:
-      "A Muddy is a friendship both people approve. Once connected, Glow can give you a rough sense that they are around — never a map, pin or exact distance.",
+      "A Muddy is a friendship both people approve. Once connected, Glow can show a broad proximity band, never their precise position on a map.",
     icon: UsersRound,
     points: ["Mutual approval first", "Privacy-safe proximity", "Ghost Mode whenever you want out"]
   },
@@ -76,7 +76,7 @@ const privacyNeverGet = [
   "Exact GPS coordinates",
   "A live map or map pin",
   "Street names or addresses",
-  "Exact numerical distance",
+  "A person's precise measured distance",
   "Direction of travel",
   "Location history"
 ];
@@ -260,7 +260,7 @@ function FeelingSection() {
             <MuddyAvatar initials="NA" name="Nana" className="bottom-[14%] right-[13%]" intensity="soft" />
             <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-[#4E0401]/10 bg-[#FEFBF3]/95 p-3.5 backdrop-blur dark:border-white/10 dark:bg-[#1C0E0B]/95">
               <p className="text-sm font-bold text-[#4E0401] dark:text-[#FFF8F1]">Close enough to connect.</p>
-              <p className="mt-1 text-xs leading-5 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">You’ll see broad proximity ranges such as “Just around,” never coordinates, routes or exact distances. Enough to know a Muddy is nearby without revealing precisely where they are.</p>
+              <p className="mt-1 text-xs leading-5 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">You may see a broad band such as “Just Around · 0–100 m.” That range explains the category, not a Muddy&apos;s precise measured distance or position. Coordinates, routes and map pins stay private.</p>
             </div>
           </div>
         </div>

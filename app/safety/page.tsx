@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 const neverShown = [
   "Exact GPS coordinates",
   "Street address or street-level location",
-  "Exact numerical distance",
+  "A person's precise measured distance",
   "A live map position",
   "Location history"
 ] as const;
@@ -31,7 +31,7 @@ export default function SafetyPage() {
           Proximity should help people connect, not help people track each other.
         </h1>
         <p className="mt-5 max-w-2xl text-base leading-8 text-[#4E0401]/65 dark:text-[#FFF8F1]/65">
-          Mad Buddy is designed around approximate social signals, deliberate discovery, mutual choices, and controls that let you leave an interaction.
+          Mad Buddy is designed around broad proximity bands, deliberate discovery, mutual choices, and controls that let you leave an interaction. A displayed range explains a category, not someone&apos;s precise position.
         </p>
 
         <section className="mt-14 grid gap-8 border-t border-[#4E0401]/10 pt-9 md:grid-cols-2 dark:border-white/10">
@@ -39,7 +39,7 @@ export default function SafetyPage() {
             <UserRoundCheck className="h-6 w-6 text-[#A45A18]" aria-hidden="true" />
             <h2 className="mt-4 text-xl font-semibold text-[#4E0401] dark:text-[#FFF8F1]">Muddy proximity</h2>
             <p className="mt-3 text-sm leading-7 text-[#4E0401]/62 dark:text-[#FFF8F1]/62">
-              Muddies are people who have mutually approved the connection. When visibility is enabled, approved Muddies may receive privacy-preserving proximity information according to each person&apos;s settings.
+              Muddies are people who have mutually approved the connection. When visibility is enabled, approved Muddies may see a named proximity band and its broad category range according to each person&apos;s settings. They do not receive the underlying precise measurement.
             </p>
           </div>
           <div>

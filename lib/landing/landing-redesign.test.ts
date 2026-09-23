@@ -98,7 +98,7 @@ describe("landing product story", () => {
     for (const statement of [
       "Exact GPS coordinates",
       "A live map or map pin",
-      "Exact numerical distance",
+      "A person's precise measured distance",
       "Location history"
     ]) {
       expect(landing).toContain(statement);
@@ -130,7 +130,7 @@ describe("landing accessibility and discovery", () => {
   it("describes the real product in route metadata and structured data", () => {
     expect(homePage).toContain("WebApplication");
     expect(homePage).toContain("SocialNetworkingApplication");
-    expect(homePage).toContain("without live maps, exact coordinates, exact distances, or location history");
+    expect(homePage).toContain("without live maps, exact coordinates, precise measured distances, or location history");
     expect(homePage).toContain('alternates: { canonical: "/" }');
     expect(homePage).toContain('card: "summary_large_image"');
   });

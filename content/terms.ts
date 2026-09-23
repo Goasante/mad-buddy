@@ -48,10 +48,10 @@ export const termsSections: TermsSection[] = [
         text: 'Mad Buddy helps mutually approved friends ("Muddies") stay socially connected by sharing privacy-focused proximity information.'
       },
       { type: "paragraph", text: "Mad Buddy intentionally does not display:" },
-      { type: "list", items: ["Exact GPS coordinates", "Street addresses", "Live maps", "Exact distances"] },
+      { type: "list", items: ["Exact GPS coordinates", "Street addresses", "Live maps", "A person's precise measured distance"] },
       {
         type: "paragraph",
-        text: "Instead, users receive approximate proximity signals designed to protect everyone's privacy."
+        text: "Instead, users receive approximate proximity signals designed to protect everyone's privacy. Mad Buddy may explain a named proximity band with a broad category range, such as Just Around · 0–100 m. The range describes the category, not the person's precise measured distance or position."
       },
       {
         type: "paragraph",

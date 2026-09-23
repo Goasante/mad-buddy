@@ -20,7 +20,7 @@ type PolicySection = {
 
 const summaryItems = [
   "No exact-location reveal to other users",
-  "No live map position or exact numerical distance",
+  "Broad proximity categories, not a precise position",
   "Muddy proximity is for mutually approved friends",
   "Linkr discovery only runs when you deliberately enable it"
 ] as const;

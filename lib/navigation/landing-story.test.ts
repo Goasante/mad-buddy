@@ -65,7 +65,7 @@ describe("the landing page keeps proximity communication privacy-safe", () => {
   it("communicates Muddy proximity without precise tracking primitives", () => {
     expectAll(muddiesMode, [
       /rough sense|privacy-safe proximity|roughly/i,
-      /never a map, pin or exact distance|no exact/i
+      /broad proximity band|precise position/i
     ]);
   });
 
@@ -77,7 +77,7 @@ describe("the landing page keeps proximity communication privacy-safe", () => {
     for (const invariant of [
       "Exact GPS coordinates",
       "A live map or map pin",
-      "Exact numerical distance"
+      "A person's precise measured distance"
     ]) {
       expect(privacyNeverGet).toContain(invariant);
     }
