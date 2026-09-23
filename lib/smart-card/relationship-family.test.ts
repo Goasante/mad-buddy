@@ -174,6 +174,28 @@ describe("Event Linkr is offered, never assumed", () => {
     expect(card?.id).not.toBe("event_linkr_ready");
   });
 
+  it("beats the generic live-Event card during the same checked-in window", () => {
+    const liveEvent: SmartCardInput["agenda"] = [
+      {
+        kind: "event",
+        id: "e1",
+        title: "Acoustic Night",
+        startsAt: "2026-08-05T09:00:00.000Z",
+        endsAt: "2026-08-05T14:00:00.000Z",
+        locationLabel: "Osu",
+        href: "/events?event=e1",
+        isHost: false,
+        myRsvp: "going",
+        hostName: "Kofi",
+        coverUrl: null,
+        coverFocalX: null,
+        coverFocalY: null
+      }
+    ];
+    const card = pick({ agenda: liveEvent, eventLinkrOffer: offer() });
+    expect(card?.id).toBe("event_linkr_ready");
+  });
+
   it("points at the Event, where the real opt-in control lives", () => {
     const card = pick({ eventLinkrOffer: offer() });
     expect(card?.destination).toBe("/events?event=e1");
