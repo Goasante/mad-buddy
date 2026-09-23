@@ -27,6 +27,13 @@ describe("Muddy profile modal design contract", () => {
     expect(source).toContain("glow confidence|\\bconfidence\\b");
   });
 
+  it("uses only the canonical proximity band and does not repeat proximity below it", () => {
+    expect(source).toContain("PROXIMITY_BAND_LABELS[muddy.proximityBand]");
+    expect(source).not.toContain('if (muddy.proximityLevel === "close") return "Very Close"');
+    expect(source).not.toContain("PROXIMITY_SUPPORT_COPY");
+    expect(source).not.toContain('return "Very close by ✨"');
+  });
+
   it("keeps the full profile handoff as a distinct bottom row", () => {
     expect(source).toContain("View full profile");
     expect(source).toContain("<UserRound");
