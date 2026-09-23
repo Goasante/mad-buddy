@@ -22,6 +22,8 @@
 export type EventLinkrOfferForCard = {
   eventId: string;
   eventName: string;
+  /** When the Event stops being a live check-in context. */
+  endsAt: string;
   /** The canonical Event surface, where the real opt-in control lives. */
   href: string;
 };
