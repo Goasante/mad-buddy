@@ -870,20 +870,16 @@ export async function transferGroupOwnershipAction(input: unknown): Promise<Grou
 }
 
 const visibilitySchema = z.object({
-  groupId: uuidSchema,
-  visibility: z.enum(["private", "public"])
+  groupId: uuidSchema
 });
 
 /**
- * Change who can SEE a group exists.
+ * Legacy compatibility action.
  *
- * OWNER ONLY, deliberately. Admins manage people and content; making a group
- * publicly listable is a decision about every member's exposure, and the one
- * person accountable for the group should be the one who makes it.
- *
- * Separate from join_mode, which is left untouched: a public group may still
- * be invite-only, and collapsing the two would silently make every
- * discoverable group openly joinable.
+ * Public Group discovery is retired. If an old client still submits a
+ * visibility change, the only permitted outcome is the canonical private
+ * state. This keeps a stale bundle or bookmarked form from resurrecting the
+ * pre-Linkr-2.0 community model.
  */
 export async function setGroupVisibilityAction(input: unknown): Promise<GroupActionState> {
   if (!serverReady()) return { ok: false, message: "Groups need the server database configuration." };
@@ -900,25 +896,18 @@ export async function setGroupVisibilityAction(input: unknown): Promise<GroupAct
     .eq("user_id", userId)
     .maybeSingle();
 
-  // Neutral on failure: never confirm whether a group exists to someone who
-  // is not its owner.
   if (membership?.status !== "joined" || membership.role !== "owner") {
     return { ok: false, message: "That change isn't available." };
   }
 
   const { error } = await admin
     .from("group_settings")
-    .update({ visibility: parsed.data.visibility, updated_at: new Date().toISOString() })
+    .update({ visibility: "private", join_mode: "invite", updated_at: new Date().toISOString() })
     .eq("conversation_id", parsed.data.groupId);
   if (error) return { ok: false, message: "Couldn't update that Group." };
 
-  revalidatePath(`/groups/${parsed.data.groupId}`);
-  revalidatePath("/groups");
-  revalidatePath("/discover");
-  return {
-    ok: true,
-    message: parsed.data.visibility === "public" ? "Group is now public." : "Group is now private."
-  };
+  revalidatePath("/messages");
+  return { ok: true, message: "Groups are private and managed from Messages." };
 }
 
 
