@@ -28,10 +28,12 @@ describe("destinations Android does not have", () => {
     expect(adapt(href(path))).toBeNull();
   });
 
-  it("opens nothing for a specific group rather than the group list", () => {
-    // Android has /groups but no /groups/<id>. Opening the list would answer a
-    // different question from the one the notification asked.
-    expect(adapt(href("/groups/0f1e2d3c-4b5a-4987-8765-1a2b3c4d5e6f"))).toBeNull();
+  it("deep-links a Group notification through the same Messages conversation route", () => {
+    const id = "0f1e2d3c-4b5a-4987-8765-1a2b3c4d5e6f";
+    expect(adapt(href(`/messages?conversation=${id}`))).toEqual({
+      type: "internal",
+      href: `/messages/${id}`
+    });
   });
 });
 
