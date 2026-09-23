@@ -556,7 +556,7 @@ function birthdayProvider(input: SmartCardInput): SmartCard | null {
     title: birthdayToday ? "Happy birthday!" : "Your birthday is tomorrow",
     subtitle: birthdayToday ? "Make the day yours with the people who matter." : "Want to put something together?",
     cta: birthdayToday ? "See Your Profile" : "Make a Plan",
-    destination: birthdayToday ? "/profile" : "/plans",
+    destination: birthdayToday ? "/profile" : "/plans?create=1",
     expiresAt: expiry.getTime()
   };
 }
@@ -572,7 +572,7 @@ function weekendPlansProvider(input: SmartCardInput): SmartCard | null {
     title: count > 0 ? "Your weekend is taking shape" : "Make weekend plans",
     subtitle: count > 0 ? `You have ${count} ${count === 1 ? "Plan" : "Plans"} coming up.` : "Nothing on yet. Put something together with your Muddies.",
     cta: count > 0 ? "View Plans" : "Create a Plan",
-    destination: "/plans",
+    destination: count > 0 ? "/plans" : "/plans?create=1",
     expiresAt: weekendWindowExpiry(input.now)
   };
 }
