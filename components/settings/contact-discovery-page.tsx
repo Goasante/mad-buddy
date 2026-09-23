@@ -13,7 +13,7 @@ import {
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CONTACT_REGIONS } from "@/lib/contacts/contact-regions";
+import { CONTACT_REGIONS, contactRegionFromLocale } from "@/lib/contacts/contact-regions";
 import { haptic } from "@/lib/device/haptics";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +44,9 @@ export function ContactDiscoveryPage() {
 
   const [editing, setEditing] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
-  const [region, setRegion] = useState<string>("GH");
+  const [region, setRegion] = useState<string>(() =>
+    contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
+  );
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [isError, setIsError] = useState(false);
@@ -64,7 +66,10 @@ export function ContactDiscoveryPage() {
         setLoadFailed(false);
         setHasPhone(identity.hasPhone);
         setHint(identity.hint);
-        setRegion(identity.region ?? "GH");
+        setRegion(
+          identity.region ??
+            contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
+        );
         setDiscoveryEnabled(identity.discoveryEnabled);
         setLoading(false);
       } catch {
