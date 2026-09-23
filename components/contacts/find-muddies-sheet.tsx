@@ -109,15 +109,22 @@ export function FindMuddiesSheet({
     let active = true;
     setSetupLoading(true);
 
-    void getPhoneIdentityAction().then((identity) => {
-      if (!active) return;
-      setSetup(identity);
-      setPhoneRegion(
-        identity.region ??
-          contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
-      );
-      setSetupLoading(false);
-    });
+    void getPhoneIdentityAction()
+      .then((identity) => {
+        if (!active) return;
+        setSetup(identity);
+        setPhoneRegion(
+          identity.region ??
+            contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
+        );
+        setSetupLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSetupLoading(false);
+        setSetupError(true);
+        setSetupFeedback("Couldn't load your contact discovery settings. You can still check your contacts.");
+      });
 
     return () => {
       active = false;
@@ -144,6 +151,9 @@ export function FindMuddiesSheet({
       setPhoneRegion(identity.region ?? phoneRegion);
       setPhoneInput("");
       setEditingPhone(false);
+    } catch {
+      setSetupError(true);
+      setSetupFeedback("Couldn't save your number. Check your connection and try again.");
     } finally {
       setSetupBusy(false);
     }
@@ -163,6 +173,9 @@ export function FindMuddiesSheet({
       if (result.ok) {
         setSetup((current) => ({ ...current, discoveryEnabled: next }));
       }
+    } catch {
+      setSetupError(true);
+      setSetupFeedback("Couldn't change contact discovery. Check your connection and try again.");
     } finally {
       setSetupBusy(false);
     }
@@ -275,7 +288,11 @@ export function FindMuddiesSheet({
         dispatch({ type: "failed", message: "Couldn't open your contacts.", retry: null });
         return;
       }
-      dispatch({ type: "failed", message: "Couldn't read your contacts.", retry: "choose" });
+      dispatch({
+        type: "failed",
+        message: "Contact access wasn't allowed. You can try again, search Muddies or invite someone.",
+        retry: "choose"
+      });
       return;
     }
 
@@ -598,8 +615,8 @@ export function FindMuddiesSheet({
       {state.name === "UNSUPPORTED" ? (
         <div className="space-y-5">
           <p className="text-sm leading-6 text-muted-foreground">
-            Contact matching isn&rsquo;t available on this device yet. You can still search for people or invite
-            someone to Mad Buddy.
+            This phone or browser doesn&rsquo;t offer contact access to Mad Buddy. Nothing is wrong with your
+            account &mdash; you can still search for people or invite someone.
           </p>
           {bottomActions}
         </div>
