@@ -235,7 +235,7 @@ export function MessagesExperienceV5({
         }}
         onGroups={() => {
           setNewChatOpen(false);
-          router.push("/groups" as Route);
+          router.push("/messages?tab=groups" as Route);
         }}
       />
     </div>
