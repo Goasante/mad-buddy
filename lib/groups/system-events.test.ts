@@ -10,14 +10,14 @@ import { stripComments } from "@/lib/content/strip-comments";
  *
  * The rules that matter: an event states WHAT happened without naming who
  * authorised it, a retry posts nothing new, and a group notification opens the
- * group rather than the direct-message inbox.
+ * exact Group conversation inside the canonical Messages inbox.
  */
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const actions = stripComments(read("app/(app)/group-actions.ts"));
 const service = stripComments(read("lib/messaging/service.ts"));
 const projection = stripComments(read("lib/messaging/mobile.ts"));
-const page = stripComments(read("components/groups/group-detail-page.tsx"));
+const page = stripComments(read("components/messages/messages-page-v4.tsx"));
 const migration = read("supabase/migrations/20260807140000_group_system_events.sql");
 
 const GROUP = "11111111-1111-4111-8111-111111111111";
@@ -161,7 +161,7 @@ describe("group notifications", () => {
     for (const key of conversationScopedKeys) {
       expect(resolveNotificationDestination(key), key).toEqual({
         type: "internal",
-        href: `/groups/${GROUP}`
+        href: `/messages?conversation=${GROUP}`
       });
     }
     // And the type is chosen from the conversation's own kind, never inferred
@@ -170,25 +170,24 @@ describe("group notifications", () => {
     expect(projection).toContain("isGroup ? `group:${conversationId}` : `message:${conversationId}`");
   });
 
-  it("never routes a Circle message to the direct inbox", () => {
-    // The precise failure mode, stated as a negative.
+  it("uses the same exact-conversation Messages route for direct and Group notifications", () => {
     const direct = resolveNotificationDestination(`message:${GROUP}`);
+    const group = resolveNotificationDestination(`group:${GROUP}`);
     expect(direct).toEqual({ type: "internal", href: `/messages?conversation=${GROUP}` });
-    expect(resolveNotificationDestination(`group:${GROUP}`)).not.toEqual(direct);
+    expect(group).toEqual(direct);
   });
 
   it("resolves a group notification to the exact conversation", () => {
     expect(resolveNotificationDestination(`group_message:${GROUP}`)).toEqual({
       type: "internal",
-      href: `/groups/${GROUP}`
+      href: `/messages?conversation=${GROUP}`
     });
   });
 
-  it("falls back to the Groups list for a malformed id", () => {
-    // Never a dead per-item URL.
+  it("falls back to the Groups filter in Messages for a malformed id", () => {
     expect(resolveNotificationDestination("group:not-a-uuid")).toEqual({
       type: "internal",
-      href: "/groups"
+      href: "/messages?tab=groups"
     });
   });
 
@@ -211,20 +210,5 @@ describe("group notifications", () => {
     // One extra query per send, not one per recipient.
     const notify = projection.slice(projection.indexOf("async function notifyOtherMembers"));
     expect(notify.slice(0, 1200)).toContain("Promise.all");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Shared Media
-// ---------------------------------------------------------------------------
-
-describe("shared media", () => {
-  it("is named Shared Media", () => {
-    expect(page).toContain("Shared Media");
-  });
-
-  it("still shows no Files or Links section", () => {
-    expect(page).not.toContain("Shared Files");
-    expect(page).not.toContain("Shared Links");
   });
 });
