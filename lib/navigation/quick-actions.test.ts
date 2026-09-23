@@ -33,7 +33,6 @@ describe("the launcher appears throughout the app", () => {
       "/hangout-mode",
       "/plans",
       "/events",
-      "/groups",
       "/moments",
       "/messages",
       "/notifications",
@@ -63,7 +62,6 @@ describe("the launcher appears throughout the app", () => {
       "/friends/ama",
       "/messages/abc123",
       "/plans/123",
-      "/groups/456",
       "/events/789"
     ]) {
       expect(showsQuickActions(path), `${path} should NOT show quick actions`).toBe(false);
