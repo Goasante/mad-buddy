@@ -52,6 +52,8 @@ describe("Home Smart Card lifecycle freshness", () => {
     );
     expect(upForReader).toContain("const liveSessions = (sessions ?? []).filter");
     expect(upForReader).toContain("const sessionById = new Map(liveSessions.map");
+    expect(upForReader).toContain('.in("status", ["active", "full"])');
+    expect(upForReader).toContain('status: session.status ?? "active"');
   });
 
   it("fails closed when vote evidence cannot prove a decision is unanswered", () => {
