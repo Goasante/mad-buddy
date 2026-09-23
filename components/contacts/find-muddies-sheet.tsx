@@ -359,20 +359,204 @@ export function FindMuddiesSheet({
 
       {state.name === "INTRO" ? (
         <div className="space-y-5">
-          <p className="text-sm leading-6 text-muted-foreground">
-            See which people you already know are on Mad Buddy. Choose contacts to privately check &mdash; they
-            won&rsquo;t appear on your profile.
-          </p>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="w-full sm:w-auto" onClick={begin}>
-              <Users className="h-4 w-4" aria-hidden="true" />
-              Find my Muddies
-            </Button>
-            <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={close}>
-              Not now
-            </Button>
+          <div>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Set up contact discovery once, then privately check contacts you choose. Your phone number is used only
+              for discovery &mdash; never as login, verification or profile content.
+            </p>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              You can still find people from your contacts without adding your own number. Adding it only lets people
+              who already have you saved find you too.
+            </p>
           </div>
+
+          {setupLoading ? (
+            <div className="flex items-center gap-2 rounded-xl border border-border/70 p-3" role="status">
+              <Loader2
+                className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              <span className="text-xs text-muted-foreground">Loading contact discovery…</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <section className="rounded-xl border border-border/70 p-3" aria-labelledby="contact-step-number">
+                <div className="flex items-start gap-3">
+                  <span
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
+                    aria-hidden="true"
+                  >
+                    {setup.hasPhone ? <Check className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 id="contact-step-number" className="text-sm font-semibold">
+                          1. Your number
+                        </h3>
+                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                          {setup.hasPhone
+                            ? `Added · ending ${setup.hint}`
+                            : "Optional. Helps people who already know you find your Mad Buddy profile."}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={setupBusy}
+                        onClick={() => setEditingPhone((current) => !current)}
+                      >
+                        {setup.hasPhone ? "Change" : "Add number"}
+                      </Button>
+                    </div>
+
+                    {editingPhone ? (
+                      <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+                        <label className="block text-xs font-medium" htmlFor="find-muddies-region">
+                          Country
+                        </label>
+                        <select
+                          id="find-muddies-region"
+                          value={phoneRegion}
+                          onChange={(event) => setPhoneRegion(event.target.value)}
+                          disabled={setupBusy}
+                          className="focus-ring h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                        >
+                          {CONTACT_REGIONS.map((entry) => (
+                            <option key={entry.code} value={entry.code}>
+                              {entry.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <label className="block text-xs font-medium" htmlFor="find-muddies-phone">
+                          Phone number
+                        </label>
+                        <Input
+                          id="find-muddies-phone"
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          value={phoneInput}
+                          maxLength={40}
+                          disabled={setupBusy}
+                          onChange={(event) => setPhoneInput(event.target.value)}
+                          placeholder="024 123 4567"
+                        />
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          International numbers beginning with + work regardless of the country selected.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={setupBusy || !phoneInput.trim()}
+                            onClick={() => void saveOwnNumber()}
+                          >
+                            {setupBusy ? (
+                              <Loader2
+                                className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                            Save number
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={setupBusy}
+                            onClick={() => {
+                              setEditingPhone(false);
+                              setPhoneInput("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-border/70 p-3" aria-labelledby="contact-step-discovery">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
+                    aria-hidden="true"
+                  >
+                    {setup.discoveryEnabled ? <Check className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 id="contact-step-discovery" className="text-sm font-semibold">
+                      2. Let people find you
+                    </h3>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                      {setup.hasPhone
+                        ? "Only people who already have your number can match to your profile. Your number is never shown."
+                        : "Add your number first if you want people who have it saved to find you."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Allow people who have my number to find me"
+                    aria-checked={setup.discoveryEnabled}
+                    disabled={!setup.hasPhone || setupBusy}
+                    onClick={() => void toggleOwnDiscovery()}
+                    className={`focus-ring relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
+                      setup.discoveryEnabled ? "bg-primary" : "bg-secondary"
+                    }`}
+                  >
+                    <span
+                      className={`absolute left-0 top-1 h-5 w-5 rounded-full bg-white transition-transform motion-reduce:transition-none ${
+                        setup.discoveryEnabled ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-border/70 p-3" aria-labelledby="contact-step-find">
+                <div className="flex items-start gap-3">
+                  <span
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"
+                    aria-hidden="true"
+                  >
+                    <BookUser className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 id="contact-step-find" className="text-sm font-semibold">
+                      3. Find your people
+                    </h3>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                      On supported phones, you choose contacts from the system picker. If this device cannot access
+                      contacts, Mad Buddy will offer Search and Invite instead.
+                    </p>
+                    <Button type="button" size="sm" className="mt-3" onClick={begin}>
+                      <Users className="h-4 w-4" aria-hidden="true" />
+                      Find my Muddies
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {setupFeedback ? (
+            <p
+              role={setupError ? "alert" : "status"}
+              className={`text-xs leading-5 ${setupError ? "font-medium text-destructive" : "text-muted-foreground"}`}
+            >
+              {setupFeedback}
+            </p>
+          ) : null}
+
+          <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={close}>
+            Not now
+          </Button>
         </div>
       ) : null}
 
