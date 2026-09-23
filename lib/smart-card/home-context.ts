@@ -51,8 +51,10 @@ export type PlanDecisionForCard = {
   planTitle: string;
   question: string;
   voterCount: number;
-  /** Predictable lifecycle boundary. Null means the poll has no scheduled close. */
+  /** Predictable poll boundary. Null means the poll has no scheduled close. */
   closesAt: string | null;
+  /** The current Home Plan's hard end boundary. */
+  planEndsAt: string;
 };
 
 /**
@@ -66,6 +68,8 @@ export type PlanChatDecisionForCard = {
   conversationId: string;
   planTitle: string | null;
   question: string;
+  /** The current Home Plan's hard end boundary. */
+  planEndsAt: string;
 };
 
 /**
