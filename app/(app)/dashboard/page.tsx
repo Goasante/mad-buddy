@@ -106,15 +106,25 @@ export default async function DashboardPage() {
    * Smart Card from the states that were already proven.
    */
   const agendaPlans = (agenda?.items ?? []).filter((item) => item.kind === "plan");
+  /*
+   * A poll is coordination for people who are actually participating.
+   * The Home agenda intentionally also contains invitations, declines and
+   * waitlisted rows so the Plans surface can explain them, but those states
+   * must not become "Vote now" jobs. Hosts project as going, so going/maybe is
+   * the complete actionable set here and matches Plan Chat membership.
+   */
+  const decisionAgendaPlans = agendaPlans.filter(
+    (plan) => plan.myRsvp === "going" || plan.myRsvp === "maybe"
+  );
   const smartCardProjection = user
     ? await loadHomeSmartCardProjection({
         userId: user.id,
-        planIds: agendaPlans.map((plan) => plan.id),
-        planTitleById: new Map(agendaPlans.map((plan) => [plan.id, plan.title])),
+        planIds: decisionAgendaPlans.map((plan) => plan.id),
+        planTitleById: new Map(decisionAgendaPlans.map((plan) => [plan.id, plan.title])),
         /* A Plan without an explicit end leaves the Home agenda at its start,
            so startsAt is the honest hard boundary in that case. */
         planEndById: new Map(
-          agendaPlans.map((plan) => [plan.id, plan.endsAt ?? plan.startsAt])
+          decisionAgendaPlans.map((plan) => [plan.id, plan.endsAt ?? plan.startsAt])
         ),
         now
       })
