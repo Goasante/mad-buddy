@@ -74,6 +74,23 @@ export function matchingConfigured(version: number = ACTIVE_KEY_VERSION): boolea
   return Boolean(secret && secret.length >= 32);
 }
 
+/**
+ * Key versions that may still exist on stored rows and whose secrets are still
+ * configured.
+ *
+ * A rotation is deliberately a coexistence period: after ACTIVE_KEY_VERSION is
+ * bumped, old rows continue matching under their old version while new writes
+ * use the active one. Once every row has been recomputed, operators can remove
+ * the old secret and it automatically drops out of this list.
+ */
+export function readableMatchKeyVersions(): number[] {
+  const versions: number[] = [];
+  for (let version = 1; version <= ACTIVE_KEY_VERSION; version += 1) {
+    if (matchingConfigured(version)) versions.push(version);
+  }
+  return versions;
+}
+
 export type MatchIdentifier = {
   /** Hex HMAC of the E.164 number. Never derived from anything else. */
   identifier: string;
