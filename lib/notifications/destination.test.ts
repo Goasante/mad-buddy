@@ -9,8 +9,8 @@ describe("record-specific notification destinations", () => {
     [`hangout:${ID}`, `/hangout-mode?hangout=${ID}`],
     [`plan:${ID}`, `/plans?plan=${ID}`],
     [`event:${ID}`, `/events?event=${ID}`],
-    [`group_message:${ID}`, `/groups/${ID}`],
-    [`group:${ID}`, `/groups/${ID}`],
+    [`group_message:${ID}`, `/messages?conversation=${ID}`],
+    [`group:${ID}`, `/messages?conversation=${ID}`],
     [`safe_arrival:${ID}`, `/safe-arrival?session=${ID}`]
   ])("resolves %s", (type, href) => {
     expect(resolveNotificationDestination(type)).toEqual({ type: "internal", href });
@@ -26,7 +26,7 @@ describe("record-specific notification destinations", () => {
   it("falls back safely for legacy and malformed suffixes", () => {
     expect(resolveNotificationDestination("message:new")).toEqual({ type: "internal", href: "/messages" });
     expect(resolveNotificationDestination("plan:https://evil.example")).toEqual({ type: "internal", href: "/plans" });
-    expect(resolveNotificationDestination("group:not-a-uuid")).toEqual({ type: "internal", href: "/groups" });
+    expect(resolveNotificationDestination("group:not-a-uuid")).toEqual({ type: "internal", href: "/messages?tab=groups" });
     expect(resolveNotificationDestination("unknown:anything")).toBeNull();
   });
 });
