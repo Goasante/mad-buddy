@@ -27,6 +27,7 @@ const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => (
 const offer: EventLinkrOfferForCard = {
   eventId: "e1",
   eventName: "Acoustic Night",
+  endsAt: "2026-08-05T14:00:00.000Z",
   href: "/events?event=e1"
 };
 
