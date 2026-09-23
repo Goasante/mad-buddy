@@ -23,8 +23,14 @@ describe("Home Smart Card lifecycle freshness", () => {
     expect(reader).toContain('.eq("status", "active")');
     expect(reader).toContain('.in("context_id", currentPlanIds)');
     expect(reader).not.toContain('.neq("status", "deleted")');
-    expect(reader).toContain('.order("created_at", { ascending: false })');
-    expect(reader).toContain("if (!planId || !planTitle) continue;");
+    expect(reader).toContain('.eq("status", "active")');
+    expect(reader).toContain('.in("context_id", currentPlanIds)');
+    expect(reader).not.toContain('.neq("status", "deleted")');
+    expect(reader).toContain('.from("messages")');
+    expect(reader).toContain('"id, status, deleted_at, expires_at, kept_at"');
+    expect(reader).toContain("liveParentIds");
+    expect(reader).toContain("message.kept_at || !message.expires_at");
+    expect(reader).toContain("if (!planId || !planTitle || !planEndsAt) continue;");
   });
 
   it("treats an active-status UpFor with a past end time as terminal", () => {
