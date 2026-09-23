@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
 import { normalizePreferences } from "@/lib/notifications/preferences";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { resolveEventLinkrEligibility } from "@/lib/events/linkr-consent";
@@ -15,10 +16,13 @@ import type {
   EventLinkrOfferForCard,
   MuddyBirthdayForCard,
   PlanChatDecisionForCard,
-  PlanDecisionForCard
+  PlanDecisionForCard,
+  RecentAchievementForCard
 } from "@/lib/smart-card/home-context";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
+
+const HOME_ACHIEVEMENT_RECENCY_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * ONE bounded Home projection for the Smart Card states added in families 3-5.
@@ -391,6 +395,44 @@ export async function loadPlanChatDecisions(
 }
 
 /**
+ * The newest achievement earned recently enough to still be a Home moment.
+ *
+ * We deliberately do NOT surface a user's all-time newest badge with no time
+ * bound: shipping this provider to an established account must not resurrect a
+ * months-old achievement as though it just happened. Seven days is a generous
+ * catch-up window for somebody who has not opened Home for a few days, while
+ * still keeping the heartbeat about current life.
+ *
+ * The canonical in-app achievement catalog supplies the display name; an
+ * unknown code fails closed instead of inventing presentation copy.
+ */
+export async function loadRecentAchievement(
+  admin: Admin,
+  userId: string,
+  now: Date
+): Promise<RecentAchievementForCard | null> {
+  const cutoff = new Date(now.getTime() - HOME_ACHIEVEMENT_RECENCY_MS).toISOString();
+  const { data: row } = await admin
+    .from("user_achievements")
+    .select("achievement_code, earned_at")
+    .eq("user_id", userId)
+    .gte("earned_at", cutoff)
+    .order("earned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!row) return null;
+  const definition = ACHIEVEMENT_BY_CODE.get(row.achievement_code);
+  if (!definition) return null;
+
+  return {
+    code: row.achievement_code,
+    title: definition.name,
+    earnedAt: row.earned_at
+  };
+}
+
+/**
  * A feature the viewer switched ON that their profile currently blocks.
  *
  * NOT PROFILE COMPLETION, and the difference is the whole state. This asks one
@@ -442,6 +484,7 @@ export type HomeSmartCardProjection = {
   planDecisions: PlanDecisionForCard[];
   planChatDecisions: PlanChatDecisionForCard[];
   blockedFeature: BlockedFeatureForCard | null;
+  recentAchievement: RecentAchievementForCard | null;
 };
 
 const EMPTY: HomeSmartCardProjection = {
@@ -449,7 +492,8 @@ const EMPTY: HomeSmartCardProjection = {
   muddyBirthdays: [],
   planDecisions: [],
   planChatDecisions: [],
-  blockedFeature: null
+  blockedFeature: null,
+  recentAchievement: null
 };
 
 /**
@@ -470,21 +514,29 @@ export async function loadHomeSmartCardProjection(input: {
   const admin = createSupabaseAdminClient();
 
   try {
-    const [eventLinkrOffer, muddyBirthdays, planDecisions, planChatDecisions, blockedFeature] =
-      await Promise.all([
-        loadEventLinkrOffer(admin, input.userId),
-        loadMuddyBirthdays(admin, input.userId, input.now),
-        loadPlanDecisions(admin, input.userId, input.planIds, input.planTitleById, input.now),
-        loadPlanChatDecisions(admin, input.userId, input.planTitleById),
-        loadBlockedFeature(admin, input.userId)
-      ]);
+    const [
+      eventLinkrOffer,
+      muddyBirthdays,
+      planDecisions,
+      planChatDecisions,
+      blockedFeature,
+      recentAchievement
+    ] = await Promise.all([
+      loadEventLinkrOffer(admin, input.userId),
+      loadMuddyBirthdays(admin, input.userId, input.now),
+      loadPlanDecisions(admin, input.userId, input.planIds, input.planTitleById, input.now),
+      loadPlanChatDecisions(admin, input.userId, input.planTitleById),
+      loadBlockedFeature(admin, input.userId),
+      loadRecentAchievement(admin, input.userId, input.now)
+    ]);
 
     return {
       eventLinkrOffer,
       muddyBirthdays,
       planDecisions,
       planChatDecisions,
-      blockedFeature
+      blockedFeature,
+      recentAchievement
     };
   } catch {
     return EMPTY;
