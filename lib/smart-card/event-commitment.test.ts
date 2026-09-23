@@ -133,6 +133,26 @@ describe("copy tells the truth about the viewer's role", () => {
   });
 });
 
+describe("live means attendance, not a bookmark", () => {
+  it("does not promote an interested-only Event to HAPPENING NOW", () => {
+    const interestedLive = event({
+      startsAt: "2026-08-05T09:00:00.000Z",
+      endsAt: "2026-08-05T13:00:00.000Z",
+      myRsvp: "interested"
+    });
+    expect(pick([interestedLive])?.id).not.toBe("event_live");
+  });
+
+  it("does keep a going attendee live", () => {
+    const goingLive = event({
+      startsAt: "2026-08-05T09:00:00.000Z",
+      endsAt: "2026-08-05T13:00:00.000Z",
+      myRsvp: "going"
+    });
+    expect(pick([goingLive])?.id).toBe("event_live");
+  });
+});
+
 describe("a live Event still outranks one starting soon", () => {
   it("prefers what is happening now", () => {
     const live = event({
