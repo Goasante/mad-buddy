@@ -314,7 +314,7 @@ export function SettingsPageContent({
           <SettingsLinkRow
             icon={Bell}
             title="Focus & balance"
-            description="Focus Mode, notification limits, recaps and streaks."
+            description="Focus Mode, notification limits, recaps and milestones."
             href="/settings/engagement"
           />
           <SettingsLinkRow

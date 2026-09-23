@@ -49,9 +49,9 @@ export function EngagementPage({ initialSettings }: { initialSettings: Engagemen
     startTransition(async () => {
       const result = await updateEngagementSettingsAction({
         recapsEnabled: next.recapsEnabled,
-        streaksEnabled: next.streaksEnabled,
+        milestonesEnabled: next.milestonesEnabled,
         achievementsEnabled: next.achievementsEnabled,
-        streakNotificationsEnabled: next.streakNotificationsEnabled,
+        milestoneRemindersEnabled: next.milestoneRemindersEnabled,
         dailyNotificationBudget: next.dailyNotificationBudget
       });
       setFeedback(result.message);
@@ -174,22 +174,22 @@ export function EngagementPage({ initialSettings }: { initialSettings: Engagemen
         <ToggleCard
           icon={Ribbon}
           label="Friendship milestones"
-          hint="Private milestones shared only with that Muddy. No rankings or leaderboards."
-          checked={settings.streaksEnabled}
+          hint="Factual moments such as plans together and Muddy anniversaries. No rankings or leaderboards."
+          checked={settings.milestonesEnabled}
           disabled={isPending}
           onChange={(value) => save({
             ...settings,
-            streaksEnabled: value,
-            streakNotificationsEnabled: value ? settings.streakNotificationsEnabled : false
+            milestonesEnabled: value,
+            milestoneRemindersEnabled: value ? settings.milestoneRemindersEnabled : false
           })}
         />
         <ToggleCard
           icon={Bell}
           label="Milestone reminders"
-          hint="Receive an occasional reminder when a connection milestone is close."
-          checked={settings.streakNotificationsEnabled}
-          disabled={isPending || !settings.streaksEnabled}
-          onChange={(value) => save({ ...settings, streakNotificationsEnabled: value })}
+          hint="Get an occasional reminder before an anniversary or when you’re one shared plan away from a milestone."
+          checked={settings.milestoneRemindersEnabled}
+          disabled={isPending || !settings.milestonesEnabled}
+          onChange={(value) => save({ ...settings, milestoneRemindersEnabled: value })}
         />
         <ToggleCard
           icon={Medal}

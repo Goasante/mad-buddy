@@ -9,9 +9,9 @@ import {
   pauseUntilMs,
   recapHeadline,
   sanitizeRecapSummary,
-  streakSummaryLabel,
   type RecapSummary
 } from "@/lib/engagement/rules";
+import { loadMilestoneViewsForUser, type MilestoneView } from "@/lib/life/milestone-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -20,9 +20,9 @@ export type EngagementActionState = { ok: boolean; message: string; endsAt?: str
 
 export type EngagementSettings = {
   recapsEnabled: boolean;
-  streaksEnabled: boolean;
+  milestonesEnabled: boolean;
   achievementsEnabled: boolean;
-  streakNotificationsEnabled: boolean;
+  milestoneRemindersEnabled: boolean;
   dailyNotificationBudget: number;
   examModeUntil: string | null;
   examModeActive: boolean;
@@ -49,9 +49,9 @@ async function getAuthedUserId() {
 export async function getEngagementSettingsAction(): Promise<EngagementSettings> {
   const fallback: EngagementSettings = {
     recapsEnabled: true,
-    streaksEnabled: true,
+    milestonesEnabled: true,
     achievementsEnabled: true,
-    streakNotificationsEnabled: true,
+    milestoneRemindersEnabled: true,
     dailyNotificationBudget: 8,
     examModeUntil: null,
     examModeActive: false,
@@ -73,9 +73,11 @@ export async function getEngagementSettingsAction(): Promise<EngagementSettings>
   const examUntilMs = data.exam_mode_until ? Date.parse(data.exam_mode_until) : null;
   return {
     recapsEnabled: data.recaps_enabled,
-    streaksEnabled: data.streaks_enabled,
+    // Legacy DB column names are retained for rollout compatibility. The
+    // product semantics are factual milestones, not streaks.
+    milestonesEnabled: data.streaks_enabled,
     achievementsEnabled: data.achievements_enabled,
-    streakNotificationsEnabled: data.streak_notifications_enabled,
+    milestoneRemindersEnabled: data.streak_notifications_enabled,
     dailyNotificationBudget: data.daily_notification_budget,
     examModeUntil: data.exam_mode_until,
     examModeActive: isExamModeActive(examUntilMs, Date.now()),
@@ -85,9 +87,9 @@ export async function getEngagementSettingsAction(): Promise<EngagementSettings>
 
 const settingsSchema = z.object({
   recapsEnabled: z.boolean(),
-  streaksEnabled: z.boolean(),
+  milestonesEnabled: z.boolean(),
   achievementsEnabled: z.boolean(),
-  streakNotificationsEnabled: z.boolean(),
+  milestoneRemindersEnabled: z.boolean(),
   dailyNotificationBudget: z.number().int()
 });
 
@@ -111,9 +113,9 @@ export async function updateEngagementSettingsAction(input: unknown): Promise<En
     {
       user_id: userId,
       recaps_enabled: parsed.data.recapsEnabled,
-      streaks_enabled: parsed.data.streaksEnabled,
+      streaks_enabled: parsed.data.milestonesEnabled,
       achievements_enabled: parsed.data.achievementsEnabled,
-      streak_notifications_enabled: parsed.data.streakNotificationsEnabled,
+      streak_notifications_enabled: parsed.data.milestoneRemindersEnabled,
       daily_notification_budget: clampNotificationBudget(parsed.data.dailyNotificationBudget),
       updated_at: new Date().toISOString()
     },
@@ -124,7 +126,7 @@ export async function updateEngagementSettingsAction(input: unknown): Promise<En
 }
 
 // ---------------------------------------------------------------------------
-// Engagement overview: achievements, streaks, latest recap (spec §26, §29)
+// Engagement overview: achievements, factual milestones, latest recap
 // ---------------------------------------------------------------------------
 
 export type EngagementOverview = {
@@ -136,14 +138,8 @@ export type EngagementOverview = {
     earned: boolean;
     earnedAt: string | null;
   }>;
-  streaks: Array<{
-    streakId: string;
-    label: string;
-    currentWeeks: number;
-    longestWeeks: number;
-    status: string;
-    pausedUntil: string | null;
-  }>;
+  milestonesEnabled: boolean;
+  milestones: MilestoneView[];
   recap: {
     periodLabel: string;
     headline: string;
@@ -154,13 +150,13 @@ export type EngagementOverview = {
 
 /** Everything here is the viewer's own private data, never anyone else's. */
 export async function getEngagementOverviewAction(): Promise<EngagementOverview> {
-  const empty: EngagementOverview = { achievements: [], streaks: [], recap: null };
+  const empty: EngagementOverview = { achievements: [], milestonesEnabled: true, milestones: [], recap: null };
   const env = getSupabaseServerEnv();
   const userId = await getAuthedUserId();
   if (!env.url || !env.serviceRoleKey || !userId) return empty;
 
   const admin = createSupabaseAdminClient();
-  const [definitionsRes, earnedRes, friendshipsRes, recapRes] = await Promise.all([
+  const [definitionsRes, earnedRes, friendshipsRes, recapRes, preferencesRes] = await Promise.all([
     admin
       .from("achievement_definitions")
       .select("code, name, description, category")
@@ -169,7 +165,7 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
     admin.from("user_achievements").select("achievement_code, earned_at").eq("user_id", userId),
     admin
       .from("friendships")
-      .select("id, user_one_id, user_two_id")
+      .select("id, user_one_id, user_two_id, created_at")
       .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
       .is("ended_at", null),
     admin
@@ -180,6 +176,11 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
       .eq("status", "ready")
       .order("period_start", { ascending: false })
       .limit(1)
+      .maybeSingle(),
+    admin
+      .from("engagement_preferences")
+      .select("streaks_enabled")
+      .eq("user_id", userId)
       .maybeSingle()
   ]);
 
@@ -194,41 +195,10 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
   }));
 
   const friendships = friendshipsRes.data ?? [];
-  let streaks: EngagementOverview["streaks"] = [];
-  if (friendships.length > 0) {
-    const friendByFriendship = new Map(
-      friendships.map((row) => [row.id, row.user_one_id === userId ? row.user_two_id : row.user_one_id])
-    );
-    const { data: streakRows } = await admin
-      .from("friendship_streaks")
-      .select("id, friendship_id, current_weeks, longest_weeks, status, paused_until")
-      .in(
-        "friendship_id",
-        friendships.map((row) => row.id)
-      )
-      .gt("current_weeks", 0);
-
-    const friendIds = [...new Set((streakRows ?? []).map((row) => friendByFriendship.get(row.friendship_id)))].filter(
-      (id): id is string => Boolean(id)
-    );
-    const { data: profiles } = friendIds.length
-      ? await admin.from("profiles").select("user_id, full_name").in("user_id", friendIds)
-      : { data: [] };
-    const nameById = new Map((profiles ?? []).map((row) => [row.user_id, row.full_name]));
-
-    streaks = (streakRows ?? []).map((row) => {
-      const friendId = friendByFriendship.get(row.friendship_id);
-      const friendName = (friendId && nameById.get(friendId)?.trim()) || "A Muddy";
-      return {
-        streakId: row.id,
-        label: streakSummaryLabel(row.current_weeks, friendName),
-        currentWeeks: row.current_weeks,
-        longestWeeks: row.longest_weeks,
-        status: row.status,
-        pausedUntil: row.paused_until
-      };
-    });
-  }
+  const milestonesEnabled = preferencesRes.data?.streaks_enabled ?? true;
+  const milestones = milestonesEnabled
+    ? await loadMilestoneViewsForUser(admin, userId, friendships)
+    : [];
 
   let recap: EngagementOverview["recap"] = null;
   if (recapRes.data) {
@@ -241,10 +211,10 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
     };
   }
 
-  return { achievements, streaks, recap };
+  return { achievements, milestonesEnabled, milestones, recap };
 }
 
-/** Pausing is free for everyone, spec §18 forbids monetising streaks. */
+/** Legacy compatibility for historical streak rows. New UI uses factual milestones. */
 export async function pauseStreakAction(streakId: string, weeks: number): Promise<EngagementActionState> {
   const missing = missingEnvState();
   if (missing) return missing;

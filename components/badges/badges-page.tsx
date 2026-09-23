@@ -1,21 +1,20 @@
 "use client";
 
-import { Award, Flame, HandHeart, PauseCircle, Scale, ShieldCheck, Users } from "lucide-react";
+import { Award, HandHeart, Ribbon, Scale, ShieldCheck, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { pauseStreakAction, type EngagementOverview } from "@/app/(app)/engagement-actions";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import type { EngagementOverview } from "@/app/(app)/engagement-actions";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { achievementIconPath } from "@/lib/achievements/achievement-catalog";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
-type BadgesTab = "achievements" | "streaks" | "recap";
+type BadgesTab = "achievements" | "milestones" | "recap";
 
 const tabs: Array<{ id: BadgesTab; label: string }> = [
   { id: "achievements", label: "Achievements" },
-  { id: "streaks", label: "Streaks" },
+  { id: "milestones", label: "Milestones" },
   { id: "recap", label: "Monthly recap" }
 ];
 
@@ -47,11 +46,12 @@ const recapRows: Array<{ key: string; label: string }> = [
  * states what happened and stops (spec §6, §26, §44).
  */
 export function BadgesPageContent({ overview }: { overview: EngagementOverview }) {
-  const requestedAchievement = useSearchParams().get("achievement");
-  const [tab, setTab] = useState<BadgesTab>("achievements");
-  const [streaks, setStreaks] = useState(overview.streaks);
-  const [feedback, setFeedback] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const searchParams = useSearchParams();
+  const requestedAchievement = searchParams.get("achievement");
+  const requestedTab = searchParams.get("tab");
+  const initialTab: BadgesTab =
+    requestedTab === "milestones" || requestedTab === "recap" ? requestedTab : "achievements";
+  const [tab, setTab] = useState<BadgesTab>(initialTab);
   const activeTab: BadgesTab = requestedAchievement ? "achievements" : tab;
 
   const earnedCount = overview.achievements.filter((achievement) => achievement.earned).length;
@@ -67,18 +67,6 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
     return () => window.cancelAnimationFrame(frame);
   }, [requestedAchievement]);
 
-  function pause(streakId: string) {
-    startTransition(async () => {
-      const result = await pauseStreakAction(streakId, 2);
-      setFeedback(result.message);
-      if (result.ok) {
-        setStreaks((current) =>
-          current.map((streak) => (streak.streakId === streakId ? { ...streak, status: "paused" } : streak))
-        );
-      }
-    });
-  }
-
   return (
     <div className="mx-auto max-w-[1000px] space-y-6 pt-6">
       {/* Canonical fixed header on mobile; the in-content heading below is
@@ -92,12 +80,6 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
           Private to you. Nothing here is ranked, compared, or shown to anyone else.
         </p>
       </div>
-
-      {feedback ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          {feedback}
-        </p>
-      ) : null}
 
       <div data-tour-id={TOUR_TARGET_IDS.BADGES_TABS} className="flex gap-1 border-b border-border/70">
         {tabs.map((item) => (
@@ -169,40 +151,39 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
         </div>
       ) : null}
 
-      {activeTab === "streaks" ? (
+      {activeTab === "milestones" ? (
         <div className="space-y-3">
-          {streaks.length === 0 ? (
+          {!overview.milestonesEnabled ? (
+            <p className="rounded-xl border border-border/70 bg-card/50 p-4 text-sm text-muted-foreground">
+              Friendship milestones are off. You can turn them on in Focus &amp; balance.
+            </p>
+          ) : overview.milestones.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No active streaks yet. A streak starts when you and a Muddy both connect in the same week, and it&apos;s
-              always fine to let one end.
+              No milestones yet. Factual moments such as a first plan together or a Muddy anniversary will appear here.
             </p>
           ) : (
-            streaks.map((streak) => (
+            overview.milestones.map((milestone) => (
               <div
-                key={streak.streakId}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/50 p-4"
+                key={`${milestone.relationshipId}:${milestone.code}`}
+                className="flex items-center gap-3 rounded-xl border border-border/70 bg-card/50 p-4"
               >
-                <div className="flex items-center gap-3">
-                  <Flame className="h-5 w-5 text-primary" aria-hidden="true" />
-                  <div>
-                    <p className="text-sm font-medium">{streak.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Longest: {streak.longestWeeks} {streak.longestWeeks === 1 ? "week" : "weeks"}
-                      {streak.status === "paused" ? " · Paused" : ""}
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                  <Ribbon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{milestone.label}</p>
+                  <p className="text-xs text-muted-foreground">With {milestone.friendName}</p>
+                  {milestone.reachedAt ? (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {new Date(milestone.reachedAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}
                     </p>
-                  </div>
+                  ) : null}
                 </div>
-                {streak.status === "active" ? (
-                  <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => pause(streak.streakId)}>
-                    <PauseCircle className="h-4 w-4" aria-hidden="true" />
-                    Pause 2 weeks
-                  </Button>
-                ) : null}
               </div>
             ))
           )}
           <p className="text-xs text-muted-foreground">
-            Pausing is free, always. Streaks never cost anything to keep or recover.
+            Milestones state what happened. They never score, rank, or compare your friendships.
           </p>
         </div>
       ) : null}
