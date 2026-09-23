@@ -47,6 +47,11 @@ describe("Muddy profile modal design contract", () => {
     expect(friends).toContain("proximityBand: proximityByFriendId[profileUser.id]?.proximityBand ?? null");
   });
 
+  it("does not feed Home's coarse proximity status_text back into the support line", () => {
+    expect(dashboard).toContain("statusText: selectedFriend.muddyStatusLabel ?? undefined");
+    expect(dashboard).not.toContain("statusText: selectedFriend.statusText");
+  });
+
   it("keeps the full profile handoff as a distinct bottom row", () => {
     expect(source).toContain("View full profile");
     expect(source).toContain("<UserRound");
