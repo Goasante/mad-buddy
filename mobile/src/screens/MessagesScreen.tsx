@@ -15,6 +15,7 @@ import { api } from "../lib/api";
 type Conversation = {
   id: string;
   title: string;
+  kind: string;
   otherUsername: string | null;
   lastMessagePreview: string | null;
   lastMessageAt: string | null;
@@ -30,8 +31,9 @@ export function MessagesScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "unread" | "plans">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "unread" | "groups" | "plans">("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,13 +50,13 @@ export function MessagesScreen() {
     <Screen
       title="Messages"
       action={
-        <Button size="sm" onClick={() => setComposing(true)}>
+        <Button size="sm" onClick={() => activeTab === "groups" ? setCreatingGroup(true) : setComposing(true)}>
           <PenSquare className="h-4 w-4" aria-hidden="true" />
-          New message
+          {activeTab === "groups" ? "New group" : "New message"}
         </Button>
       }
     >
-      <p className="-mt-3 mb-4 text-sm text-muted-foreground">Chat privately with your approved Muddies.</p>
+      <p className="-mt-3 mb-4 text-sm text-muted-foreground">Direct messages, private Groups and Plan chats live together here.</p>
 
       <div className="relative mb-4">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -63,7 +65,7 @@ export function MessagesScreen() {
 
       <nav className="mb-4 border-b border-border/70" aria-label="Messages tabs">
         <div className="flex gap-1">
-          {(["all", "unread", "plans"] as const).map((t) => (
+          {(["all", "unread", "groups", "plans"] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -90,7 +92,15 @@ export function MessagesScreen() {
         <ul className="overflow-hidden rounded-2xl border border-border">
           {conversations
             .filter((c) => query.trim().length === 0 || c.title.toLowerCase().includes(query.toLowerCase()))
-            .filter((c) => (activeTab === "unread" ? c.unreadCount > 0 : activeTab === "plans" ? c.contextBadge === "Plan" : true))
+            .filter((c) =>
+              activeTab === "unread"
+                ? c.unreadCount > 0
+                : activeTab === "groups"
+                  ? c.kind === "group"
+                  : activeTab === "plans"
+                    ? c.contextBadge === "Plan"
+                    : true
+            )
             .map((conversation, index) => (
             <li key={conversation.id}>
               <button
@@ -136,6 +146,15 @@ export function MessagesScreen() {
       )}
 
       <NewMessageModal open={composing} onOpenChange={setComposing} onOpened={(id, title) => navigate(`/messages/${id}`, { state: { title } })} />
+      <CreateGroupModal
+        open={creatingGroup}
+        onOpenChange={setCreatingGroup}
+        onCreated={(id, title) => {
+          setCreatingGroup(false);
+          void load();
+          navigate(`/messages/${id}`, { state: { title } });
+        }}
+      />
     </Screen>
   );
 }
@@ -223,6 +242,74 @@ function NewMessageModal({
             ))
           )}
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+
+function CreateGroupModal({
+  open,
+  onOpenChange,
+  onCreated
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (id: string, title: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function create() {
+    if (name.trim().length < 2 || pending) return;
+    setPending(true);
+    setError("");
+    const result = await api.post<{ ok: boolean; message: string; groupId?: string }>("/api/groups", {
+      name: name.trim(),
+      description: description.trim()
+    });
+    setPending(false);
+    if (!result.ok || !result.data.groupId) {
+      setError(result.ok ? result.data.message : result.error);
+      return;
+    }
+    const title = name.trim();
+    setName("");
+    setDescription("");
+    onCreated(result.data.groupId, title);
+  }
+
+  return (
+    <Modal
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) {
+          setName("");
+          setDescription("");
+          setError("");
+        }
+      }}
+      title="New group"
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Groups are private conversations. Add members after creating the Group.
+        </p>
+        <div>
+          <label htmlFor="native-group-name" className="mb-1 block text-sm font-medium">Group name</label>
+          <Input id="native-group-name" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Weekend Crew" />
+        </div>
+        <div>
+          <label htmlFor="native-group-description" className="mb-1 block text-sm font-medium">Description <span className="font-normal text-muted-foreground">(optional)</span></label>
+          <textarea id="native-group-description" value={description} maxLength={500} rows={3} onChange={(event) => setDescription(event.target.value)} className="focus-ring w-full resize-none rounded-lg border border-border bg-background p-3 text-sm" />
+        </div>
+        {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
+        <Button className="w-full" onClick={() => void create()} disabled={pending || name.trim().length < 2}>
+          {pending ? "Creating…" : "Create private Group"}
+        </Button>
       </div>
     </Modal>
   );
