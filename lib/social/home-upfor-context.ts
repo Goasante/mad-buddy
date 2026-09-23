@@ -177,13 +177,24 @@ export async function loadHomeUpForContext(
       .select("id, status, hangout_session_id, responded_at, created_at")
       .eq("requester_id", viewerId)
       .in("status", ["pending", "accepted", "maybe"])
+      .order("created_at", { ascending: false })
       .limit(12)
   ]);
 
   if (ownedResult.error && joinedResult.error) return EMPTY;
 
   const ownedRows = ownedResult.data ?? [];
-  const joinedRows = joinedResult.data ?? [];
+  const joinedRows = [...(joinedResult.data ?? [])].sort((a, b) => {
+    /*
+     * Providers take the first accepted/pending join that matches their state.
+     * "Most recent" therefore means the latest response for answered requests
+     * and the latest creation for requests still waiting, not whatever row
+     * order Postgres happened to return.
+     */
+    const aMs = Date.parse(a.responded_at ?? a.created_at ?? "") || 0;
+    const bMs = Date.parse(b.responded_at ?? b.created_at ?? "") || 0;
+    return bMs - aMs;
+  });
 
   /* Request counts for every owned session in ONE read rather than one per
      session -- the fanout this whole module exists to avoid. */
