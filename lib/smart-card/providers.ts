@@ -545,8 +545,17 @@ function birthdayProvider(input: SmartCardInput): SmartCard | null {
   if (!birthdayToday && !birthdayTomorrow) return null;
 
   const expiry = new Date(input.now);
-  if (birthdayTomorrow) expiry.setDate(expiry.getDate() + 1);
-  expiry.setHours(23, 59, 59, 999);
+  if (birthdayTomorrow) {
+    /*
+     * "Tomorrow" becomes false at the START of the birthday, not at the end of
+     * it. Refresh at midnight so Home can immediately graduate to YOUR DAY
+     * instead of spending the birthday still saying it is tomorrow.
+     */
+    expiry.setDate(expiry.getDate() + 1);
+    expiry.setHours(0, 0, 0, 0);
+  } else {
+    expiry.setHours(23, 59, 59, 999);
+  }
 
   return {
     id: "birthday",
