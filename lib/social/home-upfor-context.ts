@@ -219,29 +219,36 @@ export async function loadHomeUpForContext(
      Coming Up does. SQL narrows candidates; the predicate is the authority, so
      a new status added to the CHECK constraint cannot silently reclassify a
      session on Home. */
-  const ownedScheduled = owned.filter((session) =>
-    session.startsAt
-      ? isComingUpUpFor(
-          { status: "active", startsAt: session.startsAt, endsAt: session.endsAt ?? session.startsAt },
-          nowMs
-        )
-      : false
-  );
+  const ownedScheduled = owned
+    .filter((session) =>
+      session.startsAt
+        ? isComingUpUpFor(
+            { status: "active", startsAt: session.startsAt, endsAt: session.endsAt ?? session.startsAt },
+            nowMs
+          )
+        : false
+    )
+    .sort((a, b) => Date.parse(a.startsAt ?? "") - Date.parse(b.startsAt ?? ""));
   /*
    * "Not scheduled" does NOT automatically mean live. A sweep may be late and
    * leave status='active' on a row whose ends_at is already in the past. The
    * canonical clock-aware lifecycle is the authority, so an ended UpFor cannot
    * keep generating requests/momentum cards on Home while waiting for cleanup.
    */
-  const ownedLive = owned.filter((session) => {
-    if (!session.startsAt || !session.endsAt) return false;
-    return (
-      upForPhase(
-        { status: "active", startsAt: session.startsAt, endsAt: session.endsAt },
-        nowMs
-      ) === "live"
-    );
-  });
+  const ownedLive = owned
+    .filter((session) => {
+      if (!session.startsAt || !session.endsAt) return false;
+      return (
+        upForPhase(
+          { status: "active", startsAt: session.startsAt, endsAt: session.endsAt },
+          nowMs
+        ) === "live"
+      );
+    })
+    /* HomeUpForContext promises newest live first. The source query is
+       chronological so scheduled sessions naturally come out soonest first;
+       live sessions need the opposite order explicitly. */
+    .sort((a, b) => Date.parse(b.startsAt ?? "") - Date.parse(a.startsAt ?? ""));
 
   /* Sessions the viewer asked to join. Owner names and activity come from the
      session rows, so a request whose session has ended or been withdrawn
