@@ -124,7 +124,13 @@ describe("journey 2: unsupported leads to a working search, not a closed sheet",
     expect(walk([{ type: "begin", supported: false }]).name).toBe("UNSUPPORTED");
   });
 
-  it("closes the sheet AND focuses the existing field", () => {
+  it("snoozes automatic reminders without treating platform capability as a dismissal", () => {
+    const begin = sheet.slice(sheet.indexOf("function begin()"));
+    expect(begin.slice(0, 900)).toContain("snoozeUnsupportedContactReminderAction()");
+    expect(begin.slice(0, 900)).toContain("if (!supported)");
+  });
+
+    it("closes the sheet AND focuses the existing field", () => {
     // THE ORIGINAL BUG. <Link href="/friends"> inside a sheet already on
     // /friends is the same route: Next.js no-ops it, the sheet closes, and
     // nothing happens. Both halves are now asserted.
