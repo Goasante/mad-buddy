@@ -25,7 +25,6 @@ import {
   Settings,
   UserRound,
   Users,
-  Users2,
   UsersRound
 } from "lucide-react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
@@ -113,7 +112,6 @@ const navigationItems: Array<{
     | "/plans"
     | "/moments"
     | "/events"
-    | "/groups"
     | "/discover"
     // Linkr 2.0. `/discover` stays in this union: the old route still exists
     // and still redirects, so a saved link or an Event Mode deep link keeps
@@ -181,7 +179,6 @@ const PAGES_WITH_OWN_HEADER = [
   "/plans",
   "/messages",
   "/events",
-  "/groups",
   "/discover",
   "/linkr",
   "/meeting-pings",
@@ -236,9 +233,9 @@ const IMMERSIVE_HEADER_PAGES: readonly string[] = [
 
 function hasOwnHeader(pathname: string): boolean {
   /* Most entries are exact screens. Treating every entry as a prefix made
-     /friends/:username and /groups/:id inherit a fixed MobilePageHeader they
-     do not render. The shell then reserved an empty header band and stood
-     the real AppHeader down. Settings descendants and the ranked Events
+     /friends/:username must not inherit a fixed MobilePageHeader it does not
+     render. Legacy /groups routes redirect to Messages before rendering a
+     standalone surface. Settings descendants and the ranked Events
      screen are the only current nested routes that render PageHeader
      themselves.
      /settings/access now renders SettingsSubHeader like every other Settings
