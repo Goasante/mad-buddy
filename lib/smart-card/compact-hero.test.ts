@@ -87,7 +87,7 @@ describe("nothing was removed to save height", () => {
 
   it("keeps the artwork and the acknowledgement behaviour", () => {
     expect(component).toContain("ILLUSTRATIONS[card.illustration]");
-    expect(component).toContain("acknowledgeSmartCardAction(card.id)");
+    expect(component).toContain("acknowledgeSmartCardAction(card.acknowledgementKey ?? card.id)");
   });
 });
 
