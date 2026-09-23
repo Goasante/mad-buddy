@@ -69,6 +69,20 @@ export type PlanChatDecisionForCard = {
 };
 
 /**
+ * One recently earned achievement suitable for Home.
+ *
+ * The code is the stable per-achievement identity. Achievements are granted
+ * once per user+code, so it also gives the dismissible Smart Card a
+ * per-instance acknowledgement key instead of globally silencing every future
+ * achievement after the first one is opened.
+ */
+export type RecentAchievementForCard = {
+  code: string;
+  title: string;
+  earnedAt: string;
+};
+
+/**
  * A feature the viewer explicitly turned ON that their profile now blocks.
  *
  * Not profile completion. `requirement` is the canonical outstanding sentence
