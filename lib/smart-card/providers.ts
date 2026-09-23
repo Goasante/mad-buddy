@@ -47,7 +47,15 @@ export type SmartCardNearbyFriend = {
 export type SmartCardInput = {
   now: Date;
   journey: JourneyData | null;
-  safeArrival: { travelling: boolean; watcherCount: number } | null;
+  safeArrival:
+    | {
+        travelling: boolean;
+        watcherCount: number;
+        destinationLabel?: string | null;
+        expectedArrivalAt?: string | null;
+        status?: string | null;
+      }
+    | null;
   birthday: { birthdayToday: boolean; birthdayTomorrow: boolean } | null;
   /** Canonical Home agenda — Plans + Events, already permission-filtered. */
   agenda: readonly UpcomingAgendaItem[];
@@ -117,6 +125,42 @@ function soonLabel(minutes: number): string {
   if (minutes < 60) return `Starts in ${Math.max(1, minutes)} min`;
   const hours = Math.max(1, Math.round(minutes / 60));
   return `Starts in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
+function expiresAt(iso: string | null | undefined): number | undefined {
+  if (!iso) return undefined;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+/**
+ * Relative clock copy that is timezone-independent.
+ *
+ * Home does not currently carry the viewer's timezone into Smart Card
+ * selection, so "tomorrow" can be wrong around midnight. Durations are honest
+ * everywhere and still give the heartbeat the useful sense of when.
+ */
+function relativeInLabel(iso: string | null | undefined, now: Date): string | null {
+  if (!iso) return null;
+  const delta = Date.parse(iso) - now.getTime();
+  if (!Number.isFinite(delta) || delta <= 0) return null;
+  const minutes = Math.max(1, Math.ceil(delta / 60_000));
+  if (minutes < 60) return `in ${minutes} min`;
+  const hours = Math.max(1, Math.ceil(minutes / 60));
+  if (hours < 24) return `in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  const days = Math.max(1, Math.ceil(hours / 24));
+  return `in ${days} ${days === 1 ? "day" : "days"}`;
+}
+
+function startsInLabel(iso: string | null | undefined, now: Date): string | null {
+  const relative = relativeInLabel(iso, now);
+  return relative ? `Starts ${relative}` : null;
+}
+
+function endOfLocalDayMs(now: Date): number {
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  return end.getTime();
 }
 
 /**
@@ -195,18 +239,26 @@ function proximityLabel(band: SmartCardNearbyFriend["proximity_band"]): string |
 
 /** Tier 0: a live Safe Arrival remains the absolute Home override. */
 function safeArrivalProvider(input: SmartCardInput): SmartCard | null {
-  if (!input.safeArrival?.travelling) return null;
-  const { watcherCount } = input.safeArrival;
+  const journey = input.safeArrival;
+  if (!journey?.travelling) return null;
+  const destination = journey.destinationLabel?.trim();
+  const needsCheckIn = journey.status === "grace_period" || journey.status === "unconfirmed";
+  const expected = relativeInLabel(journey.expectedArrivalAt, input.now);
+
   return {
     id: "safe_arrival",
     priority: 0,
     illustration: "people",
-    eyebrow: "SAFE ARRIVAL",
-    title: "You're on a journey",
+    eyebrow: needsCheckIn ? "SAFE ARRIVAL · CHECK IN" : "SAFE ARRIVAL",
+    title: destination ? `You're heading to ${destination}` : "You're on a journey",
     subtitle:
-      watcherCount > 0
-        ? `${watcherCount} ${watcherCount === 1 ? "Muddy is" : "Muddies are"} checking on you. Confirm when you arrive.`
-        : "Confirm your arrival when you get there.",
+      journey.watcherCount > 0
+        ? `${journey.watcherCount} ${journey.watcherCount === 1 ? "Muddy is" : "Muddies are"} checking on you. ${needsCheckIn ? "Let them know you arrived." : "Confirm when you arrive."}`
+        : needsCheckIn
+          ? "Your arrival check-in is due."
+          : "Confirm your arrival when you get there.",
+    meta: needsCheckIn ? "Arrival check-in due" : expected ? `Expected ${expected}` : undefined,
+    metaKind: "time",
     cta: "Open Safe Arrival",
     destination: "/safe-arrival"
   };
@@ -219,23 +271,28 @@ function planRsvpProvider(input: SmartCardInput): SmartCard | null {
   );
   if (!plan || plan.kind !== "plan") return null;
 
+  const startLabel = startsInLabel(plan.startsAt, input.now);
+
   return {
     id: "plan_rsvp",
     priority: 0,
     illustration: "calendar",
     eyebrow: "NEEDS YOUR RESPONSE",
     title: `${plan.title} needs your answer`,
-    subtitle:
+    subtitle: `${plan.organiserName} invited you.`,
+    meta: startLabel ?? undefined,
+    metaKind: "time",
+    socialProof:
       plan.goingCount > 0
-        ? `${plan.goingCount} ${plan.goingCount === 1 ? "person is" : "people are"} already going.`
-        : `${plan.organiserName} invited you.`,
-    socialProof: plan.attendees.length > 0 ? `${plan.attendees.map((person) => person.name).slice(0, 2).join(", ")} ${plan.goingCount > 2 ? `+${plan.goingCount - 2}` : ""}`.trim() : undefined,
+        ? `${plan.goingCount} going${plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}`
+        : undefined,
     /* "Respond", not "RSVP". The tap OPENS the Plan, where the real RSVP
        controls live; it does not answer on the viewer's behalf. A button
        reading "RSVP" promises the answer is being given by pressing it, which
        is a small lie the moment the next screen asks the question again. */
     cta: "Respond",
-    destination: `/plans?plan=${plan.id}`
+    destination: `/plans?plan=${plan.id}`,
+    expiresAt: expiresAt(plan.endsAt ?? plan.startsAt)
   };
 }
 
@@ -255,12 +312,14 @@ function planStartingProvider(input: SmartCardInput): SmartCard | null {
     priority: 0,
     illustration: "calendar",
     eyebrow: "STARTING SOON",
-    title: plan.title,
-    subtitle: minutes === null ? "Your Plan is coming up." : `${soonLabel(minutes)}. Open it for the latest details.`,
+    title: minutes === null ? plan.title : `${plan.title} ${soonLabel(minutes).toLowerCase()}`,
+    subtitle: "Open the Plan for the latest details.",
     meta: plan.placeText ?? undefined,
+    metaKind: plan.placeText ? "location" : undefined,
     socialProof: plan.goingCount > 0 ? `${plan.goingCount} going${plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}` : undefined,
     cta: "Open Plan",
-    destination: `/plans?plan=${plan.id}`
+    destination: `/plans?plan=${plan.id}`,
+    expiresAt: expiresAt(plan.startsAt)
   };
 }
 
@@ -283,9 +342,12 @@ function eventLiveProvider(input: SmartCardInput): SmartCard | null {
     title: `${event.title} is happening now`,
     subtitle: event.isHost ? "You're hosting. Open the Event to see what's happening." : "You're connected to this Event right now.",
     meta: event.locationLabel ?? undefined,
+    metaKind: event.locationLabel ? "location" : undefined,
+    socialProof: event.isHost ? undefined : `Hosted by ${event.hostName}`,
     media: event.coverUrl ? { url: event.coverUrl, alt: `${event.title} cover`, focalX: event.coverFocalX, focalY: event.coverFocalY } : undefined,
     cta: "View Event",
-    destination: event.href
+    destination: event.href,
+    expiresAt: expiresAt(event.endsAt)
   };
 }
 
@@ -369,9 +431,12 @@ function eventCommitmentStartingProvider(input: SmartCardInput): SmartCard | nul
       ? "It " + when + ". People are counting on you being there."
       : "It " + when + ".",
     meta: event.locationLabel ?? undefined,
+    metaKind: event.locationLabel ? "location" : undefined,
+    socialProof: event.isHost ? undefined : `Hosted by ${event.hostName}`,
     media: eventMedia(event),
     cta: "View Event",
-    destination: event.href
+    destination: event.href,
+    expiresAt: expiresAt(event.startsAt)
   };
 }
 
@@ -389,9 +454,12 @@ function eventStartingProvider(input: SmartCardInput): SmartCard | null {
     title: event.title,
     subtitle: minutes === null ? "This Event is coming up." : soonLabel(minutes),
     meta: event.locationLabel ?? undefined,
+    metaKind: event.locationLabel ? "location" : undefined,
+    socialProof: `Hosted by ${event.hostName}`,
     media: eventMedia(event),
     cta: "View Event",
-    destination: event.href
+    destination: event.href,
+    expiresAt: expiresAt(event.startsAt)
   };
 }
 
@@ -481,7 +549,7 @@ function buddyProgressProvider(input: SmartCardInput): SmartCard | null {
     illustration: "trophy",
     eyebrow: "BUDDY SCORE",
     title: `${score.pointsToNext} points to ${score.nextLevel.label}`,
-    subtitle: "Progress matters after the real social stuff, not instead of it.",
+    subtitle: "Keep connecting with your Muddies and the next level will follow.",
     cta: "View My Progress",
     destination: "/buddy-score",
     progress: {
@@ -499,7 +567,7 @@ function achievementProvider(input: SmartCardInput): SmartCard | null {
     illustration: "trophy",
     eyebrow: "MILESTONE",
     title: input.recentAchievement.title,
-    subtitle: "A new achievement is ready in your Journey.",
+    subtitle: "You hit a new milestone in your Journey.",
     cta: "View Achievement",
     destination: "/buddy-score",
     dismissible: true
@@ -533,7 +601,7 @@ function upForFallbackProvider(): SmartCard {
     illustration: "people",
     eyebrow: "UPFOR",
     title: "What are you UpFor today?",
-    subtitle: "Put out a lightweight intent and see who wants in.",
+    subtitle: "Let your Muddies know what you feel like doing and see who wants in.",
     cta: "Open UpFor",
     destination: "/hangout-mode"
   };
@@ -603,13 +671,15 @@ function upForOpportunityProvider(input: SmartCardInput): SmartCard | null {
     illustration: "people",
     eyebrow: "HAPPENING NOW",
     title: first.ownerName + " is UpFor " + first.activityLabel.toLowerCase(),
-    subtitle:
+    subtitle: "You can ask to join while it's live.",
+    socialProof:
       opportunities.length > 1
         ? opportunities.length + " of your Muddies are UpFor something right now."
-        : "They put it out just now. You can ask to join.",
+        : undefined,
     cta: "See UpFor",
     destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
+    expiresAt: expiresAt(first.endsAt)
   };
 }
 
@@ -630,9 +700,11 @@ function upForActiveMuddyProvider(input: SmartCardInput): SmartCard | null {
     title: first.ownerName + " is UpFor " + first.activityLabel.toLowerCase(),
     subtitle: "You asked to join. They will see it and decide.",
     meta: "Waiting on them",
+    metaKind: "status",
     cta: "Details",
     destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
+    expiresAt: expiresAt(first.endsAt)
   };
 }
 
@@ -653,13 +725,13 @@ function upForMomentumProvider(input: SmartCardInput): SmartCard | null {
     illustration: "people",
     eyebrow: "GATHERING",
     title: "Your " + first.activityLabel + " UpFor is happening",
-    subtitle:
-      first.acceptedCount === 1
-        ? "One Muddy is in. It only takes one."
-        : first.acceptedCount + " Muddies are in.",
+    subtitle: "You've got company.",
+    socialProof:
+      first.acceptedCount === 1 ? "1 Muddy is in" : first.acceptedCount + " Muddies are in",
     cta: "Manage UpFor",
     destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
+    expiresAt: expiresAt(first.endsAt)
   };
 }
 
@@ -712,7 +784,8 @@ function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
       ? { kind: "open_direct_conversation", targetUserId: first.ownerId }
       : undefined,
     secondaryAction: canOfferMessage ? { label: "View UpFor", destination: upForHref } : undefined,
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
+    expiresAt: expiresAt(first.endsAt)
   };
 }
 
@@ -739,11 +812,16 @@ function ownedUpForStartingProvider(input: SmartCardInput): SmartCard | null {
       (minutes === null ? "is coming up" : soonLabel(minutes).toLowerCase()),
     subtitle:
       soon.acceptedCount > 0
-        ? soon.acceptedCount + (soon.acceptedCount === 1 ? " Muddy is in." : " Muddies are in.")
+        ? "Your UpFor is ready to go."
         : "It goes live automatically. Muddies can join from there.",
+    socialProof:
+      soon.acceptedCount > 0
+        ? soon.acceptedCount + (soon.acceptedCount === 1 ? " Muddy is in" : " Muddies are in")
+        : undefined,
     cta: "Manage UpFor",
     destination: upForSessionDestination(soon.id),
-    media: upForActivitySmartCardMedia(soon.activityType, soon.activityLabel)
+    media: upForActivitySmartCardMedia(soon.activityType, soon.activityLabel),
+    expiresAt: expiresAt(soon.startsAt)
   };
 }
 
@@ -765,9 +843,11 @@ function upForScheduledProvider(input: SmartCardInput): SmartCard | null {
         ? scheduled.length + " UpFors scheduled."
         : "Nobody sees it until it starts.",
     meta: minutes === null ? undefined : soonLabel(minutes),
+    metaKind: minutes === null ? undefined : "time",
     cta: "Manage UpFor",
     destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel)
+    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
+    expiresAt: expiresAt(first.startsAt)
   };
 }
 
@@ -897,7 +977,8 @@ function eventLinkrReadyProvider(input: SmartCardInput): SmartCard | null {
     title: "Meet people at " + offer.eventName + "?",
     subtitle: "Choose whether to be discoverable to others here.",
     cta: "See how it works",
-    destination: offer.href
+    destination: offer.href,
+    expiresAt: expiresAt(offer.endsAt)
   };
 }
 
@@ -936,7 +1017,8 @@ function muddyBirthdayProvider(input: SmartCardInput): SmartCard | null {
        second birthday-message flow on Home to justify the shorter label would
        be two surfaces answering one question. */
     cta: "Open birthday wishes",
-    destination: "/notifications"
+    destination: "/notifications",
+    expiresAt: endOfLocalDayMs(input.now)
   };
 }
 
@@ -972,13 +1054,15 @@ function planDecisionProvider(input: SmartCardInput): SmartCard | null {
     illustration: "calendar",
     eyebrow: "NEEDS YOUR ANSWER",
     title: first.planTitle + " needs a decision",
-    subtitle:
-      first.voterCount > 0
-        ? `${first.voterCount} ${first.voterCount === 1 ? "person has" : "people have"} voted. Yours is still missing.`
-        : "Nobody has voted yet. Yours would be the first.",
+    subtitle: first.voterCount > 0 ? "Your vote is still missing." : "Yours would be the first vote.",
     /* The poll's own question, so the card says what is being decided rather
        than making the person open it to find out. */
     meta: first.question,
+    metaKind: "decision",
+    socialProof:
+      first.voterCount > 0
+        ? `${first.voterCount} ${first.voterCount === 1 ? "person has" : "people have"} voted`
+        : undefined,
     cta: "Vote now",
     /* THE PLAN THAT HOLDS THE POLL, not the Plans list. `?plan=<id>` is the
        canonical deep link Home already uses for a Plan invitation, and it
