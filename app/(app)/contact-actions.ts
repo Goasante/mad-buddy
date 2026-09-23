@@ -114,10 +114,11 @@ export async function setContactDiscoveryAction(enabled: boolean): Promise<Conta
 export async function getPhoneIdentityAction(): Promise<{
   hasPhone: boolean;
   hint: string;
+  region: string | null;
   discoveryEnabled: boolean;
 }> {
   const user = await getCurrentUserRecord();
-  if (!user) return { hasPhone: false, hint: "", discoveryEnabled: false };
+  if (!user) return { hasPhone: false, hint: "", region: null, discoveryEnabled: false };
 
   const admin = createSupabaseAdminClient();
   const identity = await getPhoneIdentity(admin, user.id);
@@ -125,6 +126,7 @@ export async function getPhoneIdentityAction(): Promise<{
   return {
     hasPhone: Boolean(identity),
     hint: identity?.hint ?? "",
+    region: identity?.region ?? null,
     discoveryEnabled: identity?.discoveryEnabled ?? false
     // verifiedAt is deliberately NOT surfaced. It is always null, and sending
     // it invites a client to render a verification state that does not exist.
