@@ -1,7 +1,12 @@
-import { GroupsPageContent } from "@/components/groups/groups-page";
-import { loadGroupsPageDataAction } from "@/app/(app)/group-actions";
+import { redirect } from "next/navigation";
 
-export default async function GroupsPage() {
-  const data = await loadGroupsPageDataAction();
-  return <GroupsPageContent initialData={data} />;
+/**
+ * Legacy Groups entry point.
+ *
+ * Groups are conversations now. The standalone Groups hub had become a second,
+ * inconsistent inbox (and still carried the retired public-group discovery
+ * model), so every old bookmark lands on the canonical Messages Groups filter.
+ */
+export default function GroupsPage() {
+  redirect("/messages?tab=groups");
 }
