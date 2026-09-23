@@ -99,7 +99,9 @@ export function FindMuddiesSheet({
   const [setupBusy, setSetupBusy] = useState(false);
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
-  const [phoneRegion, setPhoneRegion] = useState("GH");
+  const [phoneRegion, setPhoneRegion] = useState(() =>
+    contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
+  );
   const [setupFeedback, setSetupFeedback] = useState("");
   const [setupError, setSetupError] = useState(false);
 
@@ -212,9 +214,7 @@ export function FindMuddiesSheet({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         phoneNumbers,
-        region:
-          setup.region ??
-          contactRegionFromLocale(typeof navigator === "undefined" ? null : navigator.language)
+        region: setup.region ?? phoneRegion
       })
     }).catch(() => null);
 
@@ -245,7 +245,7 @@ export function FindMuddiesSheet({
     // contacts, and the reminder exists for exactly that gap. Reaching a
     // result closes it, whether or not anyone matched.
     void completeContactSetupAction();
-  }, [setup.region]);
+  }, [phoneRegion, setup.region]);
 
   /** "Find my Muddies" on the explanation screen. Touches no contacts. */
   function begin() {
@@ -552,6 +552,28 @@ export function FindMuddiesSheet({
                       On supported phones, you choose contacts from the system picker. If this device cannot access
                       contacts, Mad Buddy will offer Search and Invite instead.
                     </p>
+                    {!setup.region ? (
+                      <div className="mt-3">
+                        <label className="block text-xs font-medium" htmlFor="find-muddies-contact-region">
+                          Country for locally saved numbers
+                        </label>
+                        <select
+                          id="find-muddies-contact-region"
+                          value={phoneRegion}
+                          onChange={(event) => setPhoneRegion(event.target.value)}
+                          className="focus-ring mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                        >
+                          {CONTACT_REGIONS.map((entry) => (
+                            <option key={entry.code} value={entry.code}>
+                              {entry.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          This only helps Mad Buddy interpret contacts saved without a +country code.
+                        </p>
+                      </div>
+                    ) : null}
                     <Button type="button" size="sm" className="mt-3" onClick={begin}>
                       <Users className="h-4 w-4" aria-hidden="true" />
                       Find my Muddies
