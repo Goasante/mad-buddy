@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { stripComments } from "@/lib/content/strip-comments";
 import { detectContactCapability, registerNativeContactBridge, selectContacts } from "@/lib/contacts/contact-capability";
+import { CONTACT_REGIONS } from "@/lib/contacts/contact-regions";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const capability = stripComments(read("lib/contacts/contact-capability.ts"));
@@ -383,7 +384,7 @@ describe("the guided sheet keeps setup and matching continuous", () => {
     expect(settings).toContain("loadFailed");
   });
 
-    it("does not require an own number before checking selected contacts", () => {
+  it("does not require an own number before checking selected contacts", () => {
     expect(sheet).toContain("You can still find people from your contacts without adding your own number.");
     const begin = sheet.slice(sheet.indexOf("function begin()"));
     expect(begin.slice(0, 500)).not.toContain("setup.hasPhone");
@@ -435,8 +436,10 @@ describe("phone and discovery are separate decisions", () => {
   });
 
   it("supports more than one country from one shared region source", () => {
-    expect(regions).toContain('code: "GB"');
-    expect(regions).toContain('code: "US"');
+    expect(CONTACT_REGIONS.some((entry) => entry.code === "GB")).toBe(true);
+    expect(CONTACT_REGIONS.some((entry) => entry.code === "US")).toBe(true);
+    expect(CONTACT_REGIONS.some((entry) => entry.code === "GH")).toBe(true);
+    expect(regions).toContain("getCountries()");
     expect(settings).toContain("CONTACT_REGIONS.map");
     expect(sheet).toContain("CONTACT_REGIONS.map");
     expect(settings).toContain("international number starting with +");
