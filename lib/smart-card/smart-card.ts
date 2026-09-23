@@ -84,8 +84,11 @@ export const SMART_CARD_IDS = [
   "profile_blocking",
   "journey",
   "journey_complete",
-  "buddy_progress",
+  /* A newly earned badge is a bounded moment; generic score progress is
+     evergreen. Within the same tier, the moment gets one chance before the
+     meter so achievement cards are not starved forever on quiet Home. */
   "achievement",
+  "buddy_progress",
   "upfor_fallback"
 ] as const;
 
