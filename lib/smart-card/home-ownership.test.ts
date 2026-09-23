@@ -20,7 +20,7 @@ describe("Home heartbeat ownership boundaries", () => {
   it("keeps Nearby out of the Home Smart Card while retaining the provider for other surfaces", () => {
     expect(home).toContain("<SmartCardHeroV2 card={smartCard}");
     expect(providers).toContain('id: "nearby_muddies"');
-    expect(gate).toContain('"nearby_muddies"');
+    expect(gate).toContain('nearby_muddies: "NearbyHero"');
   });
 
   it("literal Plan-creation actions open the Plan creation flow", () => {
