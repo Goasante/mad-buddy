@@ -60,9 +60,6 @@ const LOCATION_META_IDS = new Set<SmartCard["id"]>([
    per state, which the fixed two-background system removes by design. */
 
 function MetadataIcon({ card }: { card: SmartCard }) {
-  if (card.id === "safe_arrival") {
-    return <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />;
-  }
   if (card.metaKind === "location" || LOCATION_META_IDS.has(card.id)) {
     return <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />;
   }
@@ -71,6 +68,9 @@ function MetadataIcon({ card }: { card: SmartCard }) {
   }
   if (card.metaKind === "time" || card.metaKind === "status") {
     return <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />;
+  }
+  if (card.id === "safe_arrival") {
+    return <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />;
   }
   return <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />;
 }
@@ -108,7 +108,7 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   useEffect(() => {
     if (card.expiresAt === undefined) return;
     const remaining = card.expiresAt - Date.now();
-    const delay = Math.max(0, Math.min(remaining + 75, 2_147_000_000));
+    const delay = Math.max(100, Math.min(remaining + 75, 2_147_000_000));
     const timer = window.setTimeout(() => router.refresh(), delay);
     return () => window.clearTimeout(timer);
   }, [card.expiresAt, router]);
