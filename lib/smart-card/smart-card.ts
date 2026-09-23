@@ -96,6 +96,17 @@ export const SMART_CARD_IDS = [
 
 export type SmartCardId = (typeof SMART_CARD_IDS)[number];
 
+/**
+ * Ordinary card families the product intentionally allows a person to retire
+ * permanently from Home.
+ *
+ * Keep this narrower than SMART_CARD_IDS. Safety, invitations, live
+ * coordination and opportunities are current facts; a forged acknowledgement
+ * must never be able to hide them forever. Repeatable achievements use their
+ * per-instance `achievement:<code>` key instead of the family id.
+ */
+export const DISMISSIBLE_SMART_CARD_IDS = ["journey_complete"] as const satisfies readonly SmartCardId[];
+
 /** Lower number = higher priority. Derived from one ordered list. */
 export const SMART_CARD_PRIORITY: Record<SmartCardId, number> = Object.fromEntries(
   SMART_CARD_IDS.map((id, index) => [id, index])
@@ -269,7 +280,12 @@ export function resolveSmartCard(
      * known from provider.id alone.
      */
     const acknowledgementKey = card.acknowledgementKey ?? card.id;
-    if (acknowledged.has(acknowledgementKey)) continue;
+    /*
+     * Acknowledgements are presentation state, never authority. Even if an old
+     * row or a forged action managed to store "safe_arrival" or "plan_rsvp",
+     * a non-dismissible live fact must still render.
+     */
+    if (card.dismissible && acknowledged.has(acknowledgementKey)) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;
     return { ...card, priority: SMART_CARD_PRIORITY[card.id] };
   }
