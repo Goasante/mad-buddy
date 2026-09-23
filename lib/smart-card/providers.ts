@@ -995,10 +995,9 @@ function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
     illustration: "people",
     eyebrow: "YOU BOTH CONNECTED",
     title: "You and " + first.displayName + " connected",
-    subtitle:
-      unspoken.length > 1
-        ? unspoken.length + " Linkr connections are waiting for a first message."
-        : "Neither of you has said anything yet.",
+    subtitle: "You both chose to connect. Say hi when you're ready.",
+    socialProof:
+      unspoken.length > 1 ? unspoken.length + " recent Linkr connections" : undefined,
     cta: "Say hi",
     destination: linkrPairDestination(first.connectionId),
     media: first.photo ? { url: first.photo, alt: first.displayName } : undefined,
