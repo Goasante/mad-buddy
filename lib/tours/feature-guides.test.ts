@@ -7,8 +7,9 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 describe("feature guide catalogue after monetization reset", () => {
   it("keeps current product guides but retires Plan and billing education", () => {
-    expect(FEATURE_GUIDES).toHaveLength(18);
+    expect(FEATURE_GUIDES).toHaveLength(17);
     expect(FEATURE_GUIDES.some((guide) => guide.slug === "subscription-guide")).toBe(false);
+    expect(FEATURE_GUIDES.some((guide) => guide.slug === "groups-guide")).toBe(false);
     expect(new Set(FEATURE_GUIDES.map((guide) => guide.slug)).size).toBe(FEATURE_GUIDES.length);
     for (const guide of FEATURE_GUIDES) {
       expect(FEATURE_GUIDE_GROUPS.some((group) => group.id === guide.group)).toBe(true);
