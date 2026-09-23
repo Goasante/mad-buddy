@@ -18,6 +18,7 @@ const NOW = new Date("2026-08-05T10:00:00.000Z");
 const mutual = (over: Partial<LinkrMutualForCard> = {}): LinkrMutualForCard => ({
   userId: "u1",
   connectionId: "conn-1",
+  connectedAt: "2026-08-05T09:00:00.000Z",
   displayName: "Ama",
   photo: null,
   hasConversation: false,
