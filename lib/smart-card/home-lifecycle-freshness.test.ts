@@ -23,9 +23,6 @@ describe("Home Smart Card lifecycle freshness", () => {
     expect(reader).toContain('.eq("status", "active")');
     expect(reader).toContain('.in("context_id", currentPlanIds)');
     expect(reader).not.toContain('.neq("status", "deleted")');
-    expect(reader).toContain('.eq("status", "active")');
-    expect(reader).toContain('.in("context_id", currentPlanIds)');
-    expect(reader).not.toContain('.neq("status", "deleted")');
     expect(reader).toContain('.from("messages")');
     expect(reader).toContain('"id, status, deleted_at, expires_at, kept_at"');
     expect(reader).toContain("liveParentIds");
