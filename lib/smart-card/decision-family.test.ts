@@ -27,6 +27,7 @@ const decision = (over: Partial<PlanDecisionForCard> = {}): PlanDecisionForCard 
   question: "Where should we eat?",
   voterCount: 4,
   closesAt: "2026-08-05T12:00:00.000Z",
+  planEndsAt: "2026-08-05T20:00:00.000Z",
   ...over
 });
 
@@ -36,6 +37,7 @@ const chatDecision = (
   conversationId: "c1",
   planTitle: "Friday Dinner",
   question: "Which venue?",
+  planEndsAt: "2026-08-05T20:00:00.000Z",
   ...over
 });
 
@@ -152,7 +154,7 @@ describe("a Plan Chat decision is structured, never message text", () => {
     const card = pick({ planChatDecisions: [chatDecision()] });
     const rendered = JSON.stringify(card);
     expect(rendered).not.toMatch(/unread/i);
-    expect(Object.keys(chatDecision())).toEqual(["conversationId", "planTitle", "question"]);
+    expect(Object.keys(chatDecision())).toEqual(["conversationId", "planTitle", "question", "planEndsAt"]);
   });
 
   it("says nothing when no poll is open", () => {
