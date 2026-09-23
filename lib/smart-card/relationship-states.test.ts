@@ -122,7 +122,8 @@ describe("Linkr surfaces only what both people chose", () => {
         mutual({ userId: "c", hasConversation: true })
       ]
     });
-    expect(card?.subtitle).toBe("2 Linkr connections are waiting for a first message.");
+    expect(card?.subtitle).toBe("You both chose to connect. Say hi when you're ready.");
+    expect(card?.socialProof).toBe("2 recent Linkr connections");
   });
 
   it("offers a first message rather than a recommendation", () => {
