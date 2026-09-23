@@ -110,6 +110,16 @@ export type SmartCardProgress = {
 };
 
 /**
+ * What the compact metadata row MEANS.
+ *
+ * The renderer needs this because "Where should we eat?", "Waiting on them"
+ * and "East Legon" are all plain strings but they are not the same kind of
+ * information. Treating every meta line as a calendar fact made the heartbeat
+ * visually misleading even when its words were correct.
+ */
+export type SmartCardMetaKind = "time" | "location" | "decision" | "status";
+
+/**
  * V2 presentation fields are additive so existing states keep rendering while
  * richer providers are introduced. `cta` + `destination` remain the primary
  * action authority for the current renderer. `secondaryAction` is reserved for
@@ -174,8 +184,10 @@ export type SmartCard = {
   primaryIntent?: SmartCardActionIntent;
   /** Optional truthful context line such as "2 Muddies might join". */
   socialProof?: string;
-  /** Optional privacy-safe metadata line such as "Close By · This evening". */
+  /** Optional privacy-safe metadata line such as "East Legon" or "Waiting on them". */
   meta?: string;
+  /** Semantic meaning of `meta`, so the UI can pair it with the right icon. */
+  metaKind?: SmartCardMetaKind;
   /** Optional real/curated media for V2 visual treatment. */
   media?: SmartCardMedia;
   progress?: SmartCardProgress;
