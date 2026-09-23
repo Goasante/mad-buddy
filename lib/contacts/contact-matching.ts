@@ -63,6 +63,22 @@ import type { CountryCode } from "libphonenumber-js/min";
 export const MAX_CONTACT_BATCH = 1000;
 
 /**
+ * HMAC values are 64 hex characters and Supabase .in() serialises them into a
+ * query string. Sending all 1,000 in one request can exceed proxy/URL limits
+ * even though the product batch itself is valid, so database lookups are
+ * deliberately chunked. This does not change the privacy model or response.
+ */
+export const MATCH_LOOKUP_CHUNK = 100;
+
+function chunksOf<T>(values: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+/**
  * The fewest.
  *
  * A batch of one, or two, is a lookup wearing a batch's clothing: the caller
@@ -192,14 +208,16 @@ export async function matchContacts(
   // but has discovery off is indistinguishable from one that does not exist --
   // no row, no timing difference, nothing to infer.
   const versionLookups = await Promise.all(
-    readableVersions.map(async (version) => {
+    readableVersions.flatMap((version) => {
       const identifiers = deriveMatchIdentifiers(normalised, version);
-      return admin
-        .from("user_phone_identities")
-        .select("user_id")
-        .in("match_hmac", identifiers)
-        .eq("match_key_version", version)
-        .eq("contact_discovery_enabled", true);
+      return chunksOf(identifiers, MATCH_LOOKUP_CHUNK).map((identifierChunk) =>
+        admin
+          .from("user_phone_identities")
+          .select("user_id")
+          .in("match_hmac", identifierChunk)
+          .eq("match_key_version", version)
+          .eq("contact_discovery_enabled", true)
+      );
     })
   );
 
