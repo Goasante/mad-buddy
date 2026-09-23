@@ -54,6 +54,12 @@ describe("Home Smart Card lifecycle freshness", () => {
     expect(upForReader).toContain("const sessionById = new Map(liveSessions.map");
   });
 
+  it("fails closed when vote evidence cannot prove a decision is unanswered", () => {
+    expect(projection).toContain("const { data: votes, error: votesError }");
+    const voteErrors = projection.match(/if \(votesError\) return \[\];/g) ?? [];
+    expect(voteErrors.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("does not resurrect a declined or cancelled UpFor as a fresh Home opportunity", () => {
     expect(upForReader).toContain('.from("hangout_requests")');
     expect(upForReader).toContain('"hangout_session_id"');
