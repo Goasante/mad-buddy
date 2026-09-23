@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PenSquare, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ type Conversation = {
   lastMessageAt: string | null;
   unreadCount: number;
   contextBadge: string | null;
+  kind: string;
   otherPlan: SubscriptionPlan | null;
 };
 
@@ -27,11 +28,15 @@ type Friend = { friendId: string; displayName: string; username: string; avatarU
 
 export function MessagesScreen() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedFilter = searchParams.get("filter");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "unread" | "plans">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "unread" | "groups" | "plans">(
+    () => requestedFilter === "groups" ? "groups" : "all"
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,7 +68,7 @@ export function MessagesScreen() {
 
       <nav className="mb-4 border-b border-border/70" aria-label="Messages tabs">
         <div className="flex gap-1">
-          {(["all", "unread", "plans"] as const).map((t) => (
+          {(["all", "unread", "groups", "plans"] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -90,7 +95,15 @@ export function MessagesScreen() {
         <ul className="overflow-hidden rounded-2xl border border-border">
           {conversations
             .filter((c) => query.trim().length === 0 || c.title.toLowerCase().includes(query.toLowerCase()))
-            .filter((c) => (activeTab === "unread" ? c.unreadCount > 0 : activeTab === "plans" ? c.contextBadge === "Plan" : true))
+            .filter((c) =>
+              activeTab === "unread"
+                ? c.unreadCount > 0
+                : activeTab === "groups"
+                  ? c.kind === "group"
+                  : activeTab === "plans"
+                    ? c.contextBadge === "Plan"
+                    : true
+            )
             .map((conversation, index) => (
             <li key={conversation.id}>
               <button
