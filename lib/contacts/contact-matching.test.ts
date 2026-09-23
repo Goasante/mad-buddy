@@ -11,7 +11,8 @@ import {
   deriveMatchIdentifier,
   deriveMatchIdentifiers,
   identifiersMatch,
-  matchingConfigured
+  matchingConfigured,
+  readableMatchKeyVersions
 } from "@/lib/contacts/match-identifier";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -79,6 +80,10 @@ describe("matching identifiers are keyed, not merely hashed", () => {
   it("records the key version, so rotation does not break matching", () => {
     expect(deriveMatchIdentifier("+233241234567").keyVersion).toBe(ACTIVE_KEY_VERSION);
     expect(migration).toContain("match_key_version smallint not null default 1");
+    expect(readableMatchKeyVersions()).toContain(ACTIVE_KEY_VERSION);
+    expect(matching).toContain("readableMatchKeyVersions()");
+    expect(matching).toContain('.eq("match_key_version", version)');
+    expect(matching).toContain("deriveMatchIdentifiers(normalised, version)");
   });
 
   it("deduplicates a batch without preserving order", () => {
@@ -171,7 +176,7 @@ describe("input is bounded and validated server-side", () => {
     // A client-supplied identifier could be a hash it never derived from a
     // real number; a client-supplied E.164 may differ from the server's.
     expect(matching).toContain("normalisePhoneNumbers(rawNumbers, region)");
-    expect(matching).toContain("deriveMatchIdentifiers(normalised)");
+    expect(matching).toContain("deriveMatchIdentifiers(normalised, version)");
     expect(route).toContain("phoneNumbers: z");
     expect(route).not.toContain("identifiers:");
     expect(route).not.toContain("hmac");
@@ -260,8 +265,8 @@ describe("no phone number is returned or logged", () => {
   it("never selects the number during matching", () => {
     // Matching compares HMACs; the raw column is never read.
     const query = matching.slice(matching.indexOf('from("user_phone_identities")'));
-    expect(query.slice(0, 200)).toContain('.select("user_id")');
-    expect(query.slice(0, 200)).not.toContain("phone_e164");
+    expect(query.slice(0, 500)).toContain('.select("user_id")');
+    expect(query.slice(0, 500)).not.toContain("phone_e164");
   });
 
   it("logs no number, identifier or contact name", () => {
