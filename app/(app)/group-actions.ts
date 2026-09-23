@@ -51,12 +51,9 @@ const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).optional(),
   /**
-   * Who can FIND it, and separately whether they can join uninvited. Two
-   * axes, not one: a public group may still be invite-only. Both default to
-   * the closed answer, so an omitted field can never publish a group.
+   * Groups are private messaging conversations. Discovery/public visibility
+   * belonged to the retired Linkr model and is no longer an input.
    */
-  visibility: z.enum(["private", "public"]).default("private"),
-  openToJoin: z.boolean().default(false),
   imageMediaId: z.string().uuid().optional()
 });
 const invitationSchema = z.object({ groupId: uuidSchema, userId: uuidSchema });
@@ -313,13 +310,9 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
       conversation_id: conversation.id,
       name: parsed.data.name,
       description: parsed.data.description || null,
-      // Two axes, set together at creation:
-      //   visibility — who can SEE the group exists
-      //   join_mode  — what happens when they try to join
-      // "Discoverable" now means genuinely public, not merely
-      // link-shareable to the creator's own Muddies.
-      visibility: parsed.data.visibility,
-      join_mode: parsed.data.openToJoin ? "link" : "invite",
+      // Groups now live exclusively inside Messages: private and invite-only.
+      visibility: "private",
+      join_mode: "invite",
       image_media_id: parsed.data.imageMediaId ?? null,
       history_visibility: "since_join",
       posting_mode: "all_members"
