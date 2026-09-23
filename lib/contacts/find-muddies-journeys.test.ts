@@ -220,6 +220,24 @@ describe("journey 4: contact discovery is findable and controllable in settings"
 // JOURNEY 5 -- no phone, then a masked number
 // ---------------------------------------------------------------------------
 
+describe("journey 5: setup continues after adding a number", () => {
+  it("contains all three steps in the same sheet", () => {
+    for (const step of ["1. Your number", "2. Let people find you", "3. Find your people"]) {
+      expect(sheet).toContain(step);
+    }
+  });
+
+  it("saves the number and changes discoverability through server actions", () => {
+    expect(sheet).toContain("savePhoneNumberAction({");
+    expect(sheet).toContain("setContactDiscoveryAction(next)");
+    expect(sheet).toContain('role="switch"');
+  });
+
+  it("keeps contact checking available even before an own number is added", () => {
+    expect(sheet).toContain("You can still find people from your contacts without adding your own number.");
+  });
+});
+
 describe("journey 5: adding a number shows it back masked", () => {
   it("offers Add when there is no number and Change when there is", () => {
     expect(settings).toContain('{hasPhone ? "Change number" : "Add number"}');
@@ -260,12 +278,12 @@ describe("journey 6: a reminder can never produce an OS contact prompt", () => {
     expect(walk([{ type: "open" }]).name).toBe("INTRO");
   });
 
-  it("sends someone with no number to the screen that takes one", () => {
-    // Offering a contact check to somebody who cannot be found by it is the
-    // dead end this avoids.
+  it("keeps the no-number reminder inside the same setup journey", () => {
     const handler = muddiesPage.slice(muddiesPage.indexOf("onOpenSetup={() => {"));
-    expect(handler.slice(0, 600)).toContain('reminderKind === "add_phone"');
-    expect(handler.slice(0, 600)).toContain("/settings/contact-discovery");
+    expect(handler.slice(0, 700)).toContain("setFindMuddiesOpen(true)");
+    expect(handler.slice(0, 700)).not.toContain("/settings/contact-discovery");
+    expect(sheet).toContain("savePhoneNumberAction({");
+    expect(sheet).toContain("1. Your number");
   });
 
   it("keeps Maybe later and Don't ask again as reminder preferences only", () => {
