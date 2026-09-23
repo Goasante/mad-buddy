@@ -259,10 +259,16 @@ export async function loadPlanDecisions(
   /* One query for every vote on every candidate poll: the viewer's own votes
      tell us which polls to drop, and the rest give the honest progress count
      without naming who chose what. */
-  const { data: votes } = await admin
+  const { data: votes, error: votesError } = await admin
     .from("plan_poll_votes")
     .select("poll_id, user_id")
     .in("poll_id", pollIds);
+
+  /*
+   * Unknown is NOT "the viewer has not voted". If the vote read fails, Home
+   * must not turn that uncertainty into an urgent card or claim zero progress.
+   */
+  if (votesError) return [];
 
   const votedByViewer = new Set<string>();
   const votersByPoll = new Map<string, Set<string>>();
@@ -414,7 +420,7 @@ export async function loadPlanChatDecisions(
     });
   if (openPolls.length === 0) return [];
 
-  const { data: votes } = await admin
+  const { data: votes, error: votesError } = await admin
     .from("chat_poll_votes")
     .select("poll_message_id")
     .eq("user_id", userId)
@@ -422,6 +428,9 @@ export async function loadPlanChatDecisions(
       "poll_message_id",
       openPolls.map((poll) => poll.message_id)
     );
+  /* Same fail-closed rule as Plan polls: a failed vote read cannot mean
+     "unanswered". */
+  if (votesError) return [];
   const answered = new Set((votes ?? []).map((row) => row.poll_message_id));
 
   const decisions: PlanChatDecisionForCard[] = [];
