@@ -229,13 +229,25 @@ export async function loadPlanDecisions(
 
   const { data: polls } = await admin
     .from("plan_polls")
-    .select("id, plan_id, question, status, closes_at")
+    .select("id, plan_id, question, status, closes_at, created_at")
     .in("plan_id", [...planIds])
     .eq("status", "open");
 
-  const open = (polls ?? []).filter(
-    (poll) => !poll.closes_at || Date.parse(poll.closes_at) > now.getTime()
-  );
+  const planRank = new Map(planIds.map((planId, index) => [planId, index]));
+  const open = (polls ?? [])
+    .filter((poll) => !poll.closes_at || Date.parse(poll.closes_at) > now.getTime())
+    .sort((a, b) => {
+      /*
+       * The agenda is already chronological. A decision on the sooner Plan
+       * should therefore win Home before a decision on a later Plan. If one
+       * Plan somehow has several open polls, newest first is deterministic and
+       * matches the Plan Chat rule.
+       */
+      const planDelta = (planRank.get(a.plan_id) ?? Number.MAX_SAFE_INTEGER) -
+        (planRank.get(b.plan_id) ?? Number.MAX_SAFE_INTEGER);
+      if (planDelta !== 0) return planDelta;
+      return Date.parse(b.created_at) - Date.parse(a.created_at);
+    });
   if (open.length === 0) return [];
 
   const pollIds = open.map((poll) => poll.id);
@@ -264,7 +276,8 @@ export async function loadPlanDecisions(
       planId: poll.plan_id,
       planTitle,
       question: poll.question,
-      voterCount: votersByPoll.get(poll.id)?.size ?? 0
+      voterCount: votersByPoll.get(poll.id)?.size ?? 0,
+      closesAt: poll.closes_at
     });
   }
   return decisions;
