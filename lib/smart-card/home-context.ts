@@ -80,6 +80,8 @@ export type RecentAchievementForCard = {
   code: string;
   title: string;
   earnedAt: string;
+  /** End of the bounded "recent" Home window. */
+  expiresAt: string;
 };
 
 /**
