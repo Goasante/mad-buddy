@@ -60,8 +60,10 @@ export type HomeCardWinner = "card_a" | "card_b" | "none";
  *     very thing that solves the activation state.
  *
  *   muddy_nearby
- *     tier 4, SOCIAL MOMENTUM. A real, timely moment, ranked exactly like
- *     Card B's own momentum states.
+ *     NOT A CARD A CANDIDATE. NearbyHero already renders the real person,
+ *     their Glow and their current proximity band. Letting this state compete
+ *     for the single card slot can select a card that ActivationCard
+ *     deliberately renders as null, suppressing a useful Card B candidate.
  *
  *   location_stale / no_one_nearby
  *     tier 5, OPPORTUNITY / PROGRESSION. Honest and worth saying when nothing
@@ -75,12 +77,14 @@ export type HomeCardWinner = "card_a" | "card_b" | "none";
  *   activated
  *     Card A renders nothing at all, so it is not a candidate.
  */
-const CARD_A_TIER: Record<Exclude<ActivationState, "activated">, SmartCardTier> = {
+const CARD_A_TIER: Record<
+  Exclude<ActivationState, "activated" | "muddy_nearby">,
+  SmartCardTier
+> = {
   no_muddies: 3,
   request_pending: 3,
   visibility_off: 3,
   muddies_no_location: 3,
-  muddy_nearby: 4,
   location_stale: 5,
   no_one_nearby: 5,
   upcoming_plan: 6
@@ -153,7 +157,13 @@ export function cardACandidateTier(input: {
   /* FirstMuddyCard REPLACES the activation card, so it is checked first and
      the activation state underneath it is not also a candidate. */
   if (input.firstMuddyVisible) return FIRST_MUDDY_TIER;
-  if (!input.activationState || input.activationState === "activated") return null;
+  if (
+    !input.activationState ||
+    input.activationState === "activated" ||
+    input.activationState === "muddy_nearby"
+  ) {
+    return null;
+  }
   return CARD_A_TIER[input.activationState];
 }
 
