@@ -15,6 +15,7 @@ import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
 import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
 import { HOME_EXCLUDED_SMART_CARD_IDS } from "@/lib/smart-card/home-gate";
+import { isPlanDecisionRsvpEligible } from "@/lib/smart-card/home-context";
 import { loadHomeSmartCardProjection } from "@/lib/smart-card/home-projection";
 import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
@@ -113,8 +114,8 @@ export default async function DashboardPage() {
    * must not become "Vote now" jobs. Hosts project as going, so going/maybe is
    * the complete actionable set here and matches Plan Chat membership.
    */
-  const decisionAgendaPlans = agendaPlans.filter(
-    (plan) => plan.myRsvp === "going" || plan.myRsvp === "maybe"
+  const decisionAgendaPlans = agendaPlans.filter((plan) =>
+    isPlanDecisionRsvpEligible(plan.myRsvp)
   );
   const smartCardProjection = user
     ? await loadHomeSmartCardProjection({
