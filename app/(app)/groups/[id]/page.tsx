@@ -1,19 +1,17 @@
-import { notFound } from "next/navigation";
-import { getMessagesAction, getVoiceRecorderConfigAction } from "@/app/(app)/messaging-actions";
-import { loadGroupDetailAction } from "@/app/(app)/group-actions";
-import { GroupDetailPage } from "@/components/groups/group-detail-page";
+import { redirect } from "next/navigation";
 
-export default async function GroupDetailRoute({ params }: { params: Promise<{ id: string }> }) {
+/**
+ * Legacy Group deep link.
+ *
+ * A Group id is the conversation id, so the canonical destination is the
+ * Messages thread itself. Messages re-authorises the conversation before
+ * rendering; the URL never grants access.
+ */
+export default async function GroupDetailRoute({
+  params
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
-  const group = await loadGroupDetailAction(id);
-
-  if (!group) {
-    notFound();
-  }
-
-  const [messages, voiceRecorderConfig] = await Promise.all([
-    getMessagesAction(id),
-    getVoiceRecorderConfigAction()
-  ]);
-  return <GroupDetailPage group={group} initialMessages={messages} voiceRecorderConfig={voiceRecorderConfig} />;
+  redirect(`/messages?conversation=${encodeURIComponent(id)}`);
 }
