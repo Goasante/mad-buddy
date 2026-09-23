@@ -200,6 +200,16 @@ describe("adding a number does not make anyone discoverable", () => {
     expect(upsert).not.toContain("contact_discovery_enabled");
   });
 
+  it("cannot leave discovery on with no identifier after changing the number", () => {
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
+    expect(save).toContain('select("contact_discovery_enabled")');
+    expect(save).toContain("currentIdentity?.contact_discovery_enabled && !matchIdentifier");
+    expect(save).toContain("Contact discovery isn't available right now.");
+  });
+
   it("refuses to enable discovery with no number saved", () => {
     const toggle = service.slice(service.indexOf("export async function setContactDiscovery"));
     expect(toggle).toContain("Add your phone number first.");
