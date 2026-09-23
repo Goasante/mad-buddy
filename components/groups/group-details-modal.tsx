@@ -42,8 +42,6 @@ export function GroupDetailsModal({
   useEffect(() => {
     if (!open) return;
     let active = true;
-    setLoaded(null);
-    setFailed(false);
 
     void Promise.all([
       loadGroupDetailAction(conversationId),
@@ -56,6 +54,7 @@ export function GroupDetailsModal({
           return;
         }
         setLoaded({ group, messages });
+        setFailed(false);
       })
       .catch(() => {
         if (active) setFailed(true);
@@ -68,7 +67,7 @@ export function GroupDetailsModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Group details" variant="sheet" owner="messages-group-details">
-      {loaded ? (
+      {loaded?.group.id === conversationId ? (
         <GroupDetailPageV2
           group={loaded.group}
           initialMessages={loaded.messages}

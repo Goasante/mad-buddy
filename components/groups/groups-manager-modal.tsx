@@ -21,12 +21,13 @@ export function GroupsManagerModal({
   useEffect(() => {
     if (!open) return;
     let active = true;
-    setData(null);
-    setFailed(false);
 
     void loadGroupsPageDataAction()
       .then((next) => {
-        if (active) setData(next);
+        if (active) {
+          setData(next);
+          setFailed(false);
+        }
       })
       .catch(() => {
         if (active) setFailed(true);
