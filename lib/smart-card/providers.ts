@@ -117,6 +117,13 @@ export type SmartCardInput = {
 };
 
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+/*
+ * A mutual connection is a heartbeat MOMENT, not an evergreen reminder to
+ * message somebody. Seven days gives someone who does not open Home daily a
+ * fair chance to see it, while stopping a months-old silent match from
+ * outranking today's birthday or other current relationship context.
+ */
+const LINKR_MUTUAL_RECENCY_MS = 7 * 24 * 60 * 60 * 1000;
 
 function minutesUntil(iso: string, now: Date): number | null {
   const ms = Date.parse(iso) - now.getTime();
@@ -226,6 +233,22 @@ function acceptedTogetherLine(activityLabel: string): string {
 
 function upForSessionDestination(sessionId: string): string {
   return `/hangout-mode?hangout=${encodeURIComponent(sessionId)}`;
+}
+
+function currentLinkrMutuals(input: SmartCardInput): readonly LinkrMutualForCard[] {
+  const nowMs = input.now.getTime();
+  return (input.linkrMutuals ?? []).filter((person) => {
+    if (person.hasConversation) return false;
+    const connectedAt = Date.parse(person.connectedAt);
+    if (!Number.isFinite(connectedAt)) return false;
+    const age = nowMs - connectedAt;
+    return age >= 0 && age < LINKR_MUTUAL_RECENCY_MS;
+  });
+}
+
+function linkrMutualExpiry(person: LinkrMutualForCard): number | undefined {
+  const connectedAt = Date.parse(person.connectedAt);
+  return Number.isFinite(connectedAt) ? connectedAt + LINKR_MUTUAL_RECENCY_MS : undefined;
 }
 
 function proximityLabel(band: SmartCardNearbyFriend["proximity_band"]): string | null {
@@ -953,7 +976,7 @@ function muddyRequestProvider(input: SmartCardInput): SmartCard | null {
  * out rather than nagging about a conversation that exists.
  */
 function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
-  const unspoken = (input.linkrMutuals ?? []).filter((person) => !person.hasConversation);
+  const unspoken = currentLinkrMutuals(input);
   if (unspoken.length === 0) return null;
   const first = unspoken[0];
 
@@ -969,7 +992,8 @@ function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
         : "Neither of you has said anything yet.",
     cta: "Say hi",
     destination: linkrPairDestination(first.connectionId),
-    media: first.photo ? { url: first.photo, alt: first.displayName } : undefined
+    media: first.photo ? { url: first.photo, alt: first.displayName } : undefined,
+    expiresAt: linkrMutualExpiry(first)
   };
 }
 
@@ -988,9 +1012,7 @@ function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
  * which contains connections and never one-sided interest.
  */
 function linkrMutualEventProvider(input: SmartCardInput): SmartCard | null {
-  const withEvent = (input.linkrMutuals ?? []).filter(
-    (person) => !person.hasConversation && Boolean(person.eventName)
-  );
+  const withEvent = currentLinkrMutuals(input).filter((person) => Boolean(person.eventName));
   if (withEvent.length === 0) return null;
   const first = withEvent[0];
 
@@ -1006,7 +1028,8 @@ function linkrMutualEventProvider(input: SmartCardInput): SmartCard | null {
     /* Opening a Plan with somebody you have not spoken to yet is a big second
        step, so it stays SECONDARY and the first message stays primary. */
     secondaryAction: { label: "Make a Plan", destination: "/plans" },
-    media: first.photo ? { url: first.photo, alt: first.displayName } : undefined
+    media: first.photo ? { url: first.photo, alt: first.displayName } : undefined,
+    expiresAt: linkrMutualExpiry(first)
   };
 }
 
