@@ -228,9 +228,6 @@ describe("stage 1b rollout", () => {
     ["components/messages/messages-page.tsx", "Messages", "root"],
     ["components/content/moments-page.tsx", "Moments", "root"],
     ["components/events/events-page.tsx", "Events", "root"],
-    // Shared spaces are Groups. The route and every internal identifier stay
-    // `group*`; private Muddy organization remains Circles elsewhere.
-    ["components/groups/groups-page.tsx", "Groups", "root"],
     ["components/settings/settings-page.tsx", "Settings", "root"],
     ["components/notifications/notifications-page.tsx", "Pulse", "root"],
     ["components/invites/invites-page.tsx", "Invites", "root"],
@@ -278,7 +275,7 @@ describe("stage 1b rollout", () => {
     const shell = read("components/app-shell/app-shell.tsx");
     const list = shell.slice(shell.indexOf("const PAGES_WITH_OWN_HEADER"), shell.indexOf("function hasOwnHeader"));
     for (const route of [
-      "/messages", "/moments", "/events", "/groups", "/settings", "/notifications",
+      "/messages", "/moments", "/events", "/settings", "/notifications",
       "/invites", "/drops", "/meeting-pings", "/reminders", "/billing",
       "/buddy-score", "/scan", "/safe-arrival"
     ]) {
