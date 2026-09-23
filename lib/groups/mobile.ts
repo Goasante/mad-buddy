@@ -27,21 +27,9 @@ export const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).optional(),
   /**
-   * Who may FIND the group. Defaults to private, so a client that omits it
-   * can never publish a group by accident.
-   *
-   * Replaces the old `discoverable` boolean, which set visibility AND
-   * join_mode together. Those are separate axes — a public group may still be
-   * invite-only, browsable but not openly joinable — and collapsing them
-   * forced every discoverable group to also accept anyone.
+   * Groups are private messaging conversations. Public discovery and open
+   * joining belonged to the retired Linkr model and are no longer inputs.
    */
-  visibility: z.enum(["private", "public"]).default("private"),
-  /**
-   * Whether anyone who finds it may join without an invitation. Independent
-   * of visibility, and also defaulting to the closed answer.
-   */
-  openToJoin: z.boolean().default(false),
-  /** Optional image, already uploaded through uploadGroupImageAction. */
   imageMediaId: z.string().uuid().optional()
 });
 
@@ -299,10 +287,9 @@ export async function createGroup(userId: string, input: unknown): Promise<Group
       name: parsed.data.name,
       description: parsed.data.description || null,
       // Set at creation. It was previously never written here at all, so a
-      // group could only become public by editing it afterwards — which is
-      // why new groups never appeared on Linkr.
-      visibility: parsed.data.visibility,
-      join_mode: parsed.data.openToJoin ? "link" : "invite",
+      // Groups now live exclusively inside Messages: private and invite-only.
+      visibility: "private",
+      join_mode: "invite",
       image_media_id: parsed.data.imageMediaId ?? null,
       history_visibility: "since_join",
       posting_mode: "all_members"
