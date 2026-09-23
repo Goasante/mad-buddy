@@ -1319,6 +1319,7 @@ export function DashboardPageContent({
                 avatarUrl: selectedFriend.avatarUrl,
                 statusText: selectedFriend.statusText,
                 proximityLevel: selectedFriend.proximityLevel,
+                proximityBand: selectedFriend.proximityBand,
                 glowStrength: selectedFriend.glowStrength,
                 confidence: selectedFriend.confidence,
                 glowColorId: glowColorByFriendId[selectedFriend.friendId] ?? null
