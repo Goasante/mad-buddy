@@ -51,6 +51,7 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   linkr_connection: "/linkr" as Route,
   // Personal milestones
   achievement: "/badges" as Route,
+  friendship_milestone: "/badges?tab=milestones" as Route,
   birthday: "/notifications" as Route,
   // Account
   subscription_update: "/settings/access" as Route

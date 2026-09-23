@@ -25,6 +25,7 @@ export type NotificationType =
   | "circle_nearby"
   | "meetup_request"
   | "subscription_update"
+  | "friendship_milestone"
   | "system_alert";
 
 export type CreateNotificationInput = {
