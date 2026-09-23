@@ -161,12 +161,11 @@ describe("the phone number cannot leak to another user", () => {
 
   it("keeps browser access read-only and routes writes through the server", () => {
     expect(authorityMigration).toContain('drop policy if exists "phone identity owner writes"');
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner reads"');
     expect(authorityMigration).toContain("revoke all");
-    expect(authorityMigration).toContain("from public, anon");
-    expect(authorityMigration).toContain("revoke insert, update, delete");
-    expect(authorityMigration).toContain("from authenticated");
-    expect(authorityMigration).toContain("grant select");
-    expect(authorityMigration).toContain("to authenticated");
+    expect(authorityMigration).toContain("from public, anon, authenticated");
+    expect(authorityMigration).not.toContain("grant select");
+    expect(authorityMigration).not.toContain("to authenticated");
     expect(authorityMigration).toContain("grant all");
     expect(authorityMigration).toContain("to service_role");
   });
