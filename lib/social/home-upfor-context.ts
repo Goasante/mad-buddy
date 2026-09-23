@@ -40,6 +40,8 @@ export type HomeUpForOwnedSession = {
    * that says an UpFor starts at 16:30.
    */
   activityLabel: string;
+  /** Stored lifecycle state; loader supplies it, older test fixtures default to active. */
+  status?: string;
   startsAt: string | null;
   endsAt: string | null;
   /** Requests still waiting on the owner's answer. */
@@ -169,7 +171,11 @@ export async function loadHomeUpForContext(
       .from("hangout_sessions")
       .select("id, activity_type, status, starts_at, ends_at")
       .eq("owner_id", viewerId)
-      .eq("status", "active")
+      /*
+       * Full is still a live owner commitment in the canonical UpFor lifecycle.
+       * Paused is intentionally absent from Home presentation.
+       */
+      .in("status", ["active", "full"])
       .order("starts_at", { ascending: true })
       .limit(12),
     admin
@@ -219,6 +225,7 @@ export async function loadHomeUpForContext(
       id: row.id,
       activityType: row.activity_type as HangoutActivityType,
       activityLabel: activityLabelFor(row.activity_type as HangoutActivityType),
+      status: row.status,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
       pendingRequestCount: countPendingRequests(requests),
@@ -234,7 +241,11 @@ export async function loadHomeUpForContext(
     .filter((session) =>
       session.startsAt
         ? isComingUpUpFor(
-            { status: "active", startsAt: session.startsAt, endsAt: session.endsAt ?? session.startsAt },
+            {
+              status: session.status ?? "active",
+              startsAt: session.startsAt,
+              endsAt: session.endsAt ?? session.startsAt
+            },
             nowMs
           )
         : false
@@ -251,7 +262,7 @@ export async function loadHomeUpForContext(
       if (!session.startsAt || !session.endsAt) return false;
       return (
         upForPhase(
-          { status: "active", startsAt: session.startsAt, endsAt: session.endsAt },
+          { status: session.status ?? "active", startsAt: session.startsAt, endsAt: session.endsAt },
           nowMs
         ) === "live"
       );
@@ -271,7 +282,7 @@ export async function loadHomeUpForContext(
       .from("hangout_sessions")
       .select("id, owner_id, activity_type, status, starts_at, ends_at, audience_type")
       .in("id", joinedSessionIds)
-      .eq("status", "active");
+      .in("status", ["active", "full"]);
 
     /*
      * Status is cleanup state; timestamps are lifecycle truth. A session whose
