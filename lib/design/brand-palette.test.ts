@@ -104,9 +104,10 @@ describe("Linkr branding", () => {
     expect(feed).toContain("Find people nearby who are open to connecting");
   });
 
-  it("attributes the empty states honestly", () => {
-    expect(rails).toContain("Groups are private unless someone lists them");
+  it("attributes the remaining empty state honestly without reviving Group discovery", () => {
     expect(rails).toContain("Linkr brings your upcoming plans here");
+    expect(rails).not.toContain("Groups are private unless someone lists them");
+    expect(rails).not.toContain("No groups to discover");
   });
 
   it("leaves internal identifiers alone", () => {

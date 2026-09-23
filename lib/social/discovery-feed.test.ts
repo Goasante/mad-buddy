@@ -337,9 +337,13 @@ describe("discovery feed", () => {
     expect(reduced).toContain("prefers-reduced-motion");
   });
 
-  it("scrolls the rails horizontally rather than stacking a grid", () => {
-    // The people rail IS the feed, so there is no second vertical list.
-    expect(rails).toContain("snap-x");
+  it("keeps Linkr focused on people rather than restoring the retired Group rail", () => {
+    // People are the discovery surface; Plans are contextual and Groups no
+    // longer participate in Linkr discovery.
+    expect(rails).toContain("PeopleRail");
+    expect(rails).toContain("PlansRail");
+    expect(rails).not.toContain("GroupsRail");
+    expect(rails).not.toContain("Join a Group");
   });
 
   it("keeps 44px targets on chips and the settings control", () => {
