@@ -16,6 +16,9 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const service = stripComments(read("lib/contacts/phone-identity.ts"));
 const normalisation = stripComments(read("lib/contacts/phone-normalization.ts"));
 const migration = read("supabase/migrations/20260809120000_phone_identity.sql");
+const authorityMigration = read(
+  "supabase/migrations/20260923113000_contact_identity_server_authority.sql"
+);
 
 // ---------------------------------------------------------------------------
 // Normalisation
@@ -124,9 +127,14 @@ describe("the phone number cannot leak to another user", () => {
     expect(select.slice(0, 200)).toContain("using (auth.uid() = user_id)");
   });
 
-  it("pins the destination row on write, so an identity cannot be moved", () => {
-    const write = migration.slice(migration.indexOf('create policy "phone identity owner writes"'));
-    expect(write.slice(0, 300)).toContain("with check (auth.uid() = user_id)");
+  it("keeps browser access read-only and routes writes through the server", () => {
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner writes"');
+    expect(authorityMigration).toContain("revoke insert, update, delete");
+    expect(authorityMigration).toContain("from anon, authenticated");
+    expect(authorityMigration).toContain("grant select");
+    expect(authorityMigration).toContain("to authenticated");
+    expect(authorityMigration).toContain("grant all");
+    expect(authorityMigration).toContain("to service_role");
   });
 
   it("never returns a raw number from the service to a caller about someone else", () => {
@@ -149,12 +157,11 @@ describe("no number is presented as verified", () => {
     expect(service).not.toContain("phone_verified_at:");
   });
 
-  it("refuses a client-supplied verification state at the database", () => {
-    // The owner write policy would otherwise let a client set its own
-    // verified timestamp.
+  it("keeps verification server-only even if write authority changes later", () => {
     expect(migration).toContain("reject_client_phone_verification");
     expect(migration).toContain("phone_verified_at is set by verification only");
     expect(migration).toContain("<> 'service_role'");
+    expect(authorityMigration).toContain("server-write-only");
   });
 
   it("keeps the column so OTP can be added without a schema change", () => {
@@ -295,6 +302,15 @@ describe("diagnostics never record the number", () => {
 // ---------------------------------------------------------------------------
 // Server authority
 // ---------------------------------------------------------------------------
+
+describe("the server owns phone-identity mutation", () => {
+  it("does not leave a browser write policy behind", () => {
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner writes"');
+    expect(authorityMigration).not.toContain("grant insert");
+    expect(authorityMigration).not.toContain("grant update");
+    expect(authorityMigration).not.toContain("grant delete");
+  });
+});
 
 describe("the server owns normalisation", () => {
   it("re-normalises rather than trusting a client E.164 string", () => {
