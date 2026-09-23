@@ -32,6 +32,10 @@ import { homeCardBBackground } from "@/lib/visuals/registry";
  */
 
 const HOME_CARD_B_BACKGROUND = homeCardBBackground().path;
+const MAX_BROWSER_TIMEOUT_MS = 2_147_000_000;
+const HEARTBEAT_BOUNDARY_GRACE_MS = 2_000;
+const HEARTBEAT_REFRESH_RETRIES = 2;
+const HEARTBEAT_RETRY_MS = 5_000;
 
 const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>([
   "safe_arrival",
@@ -98,19 +102,59 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   /**
    * The heartbeat must change while Home is OPEN, not only after a manual
    * refresh. Providers stamp the instant their fact stops being true (an Event
-   * starts, an UpFor ends, etc.). At that boundary, ask the server to choose
-   * the next truthful card.
+   * starts, a poll closes, an UpFor ends, etc.). At that boundary, ask the
+   * server to choose the next truthful card.
    *
-   * The browser timeout ceiling is ~24.8 days. Very distant expiries are
-   * harmlessly capped: that refresh simply re-renders the same still-valid card
-   * and schedules the remaining window.
+   * Two edge cases matter here:
+   *   1. browser timeouts cap at ~24.8 days, so a distant Plan invitation must
+   *      WAIT in chunks rather than refresh early and lose its timer;
+   *   2. the phone clock can be a little ahead of the server. A small bounded
+   *      retry window prevents the same expired-looking card from sticking if
+   *      the first refresh lands just before the server's boundary.
    */
   useEffect(() => {
     if (card.expiresAt === undefined) return;
-    const remaining = card.expiresAt - Date.now();
-    const delay = Math.max(100, Math.min(remaining + 75, 2_147_000_000));
-    const timer = window.setTimeout(() => router.refresh(), delay);
-    return () => window.clearTimeout(timer);
+
+    let timer: number | null = null;
+    let cancelled = false;
+    let retries = 0;
+
+    const refreshWithRetry = () => {
+      if (cancelled) return;
+      router.refresh();
+      if (retries >= HEARTBEAT_REFRESH_RETRIES) return;
+      retries += 1;
+      timer = window.setTimeout(refreshWithRetry, HEARTBEAT_RETRY_MS);
+    };
+
+    const scheduleUntilBoundary = () => {
+      if (cancelled) return;
+      const remaining = card.expiresAt! - Date.now();
+
+      if (remaining <= 0) {
+        timer = window.setTimeout(refreshWithRetry, HEARTBEAT_BOUNDARY_GRACE_MS);
+        return;
+      }
+
+      if (remaining > MAX_BROWSER_TIMEOUT_MS) {
+        /* Do not refresh a still-valid card merely because setTimeout cannot
+           hold the whole duration. Wake up at the ceiling and keep waiting. */
+        timer = window.setTimeout(scheduleUntilBoundary, MAX_BROWSER_TIMEOUT_MS);
+        return;
+      }
+
+      timer = window.setTimeout(
+        refreshWithRetry,
+        remaining + HEARTBEAT_BOUNDARY_GRACE_MS
+      );
+    };
+
+    scheduleUntilBoundary();
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [card.expiresAt, router]);
 
   function acknowledgeIfNeeded() {
