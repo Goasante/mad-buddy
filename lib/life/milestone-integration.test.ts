@@ -19,6 +19,8 @@ describe("friendship milestones are a real end-to-end feature", () => {
     expect(actions).toContain("milestoneRemindersEnabled");
     expect(actions).toContain("streaks_enabled");
     expect(actions).toContain("streak_notifications_enabled");
+    expect(actions).toContain("milestonesAvailable");
+    expect(settingsUi).toContain("settings.milestonesAvailable");
     expect(settingsUi).toContain('label="Friendship milestones"');
     expect(settingsUi).toContain('label="Milestone reminders"');
     expect(settingsUi).not.toContain("streaksEnabled");
@@ -33,6 +35,8 @@ describe("friendship milestones are a real end-to-end feature", () => {
     expect(service).toContain("streak_notifications_enabled");
     expect(service).toContain("milestone-reminder:");
     expect(service).toContain("deliverNotification");
+    expect(service).toContain("LIFE_MILESTONES_FLAG");
+    expect(service).toContain("isFeatureEnabled");
   });
 
   it("runs the reconciliation on the real job queue", () => {

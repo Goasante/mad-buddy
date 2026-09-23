@@ -523,12 +523,17 @@ describe("Life ships dark", () => {
     }
   });
 
-  it("defaults to off, with no migration enabling them", () => {
-    // isFeatureEnabled returns false for a key with no row, so an unregistered
-    // Life flag is off in production without any deploy step.
+  it("keeps unfinished Life capabilities dark while launching milestones explicitly", () => {
     expect(flags).toContain("if (error) return false;");
-    const migrations = read("supabase/migrations/20260806220000_life_relationship_notes.sql");
-    expect(migrations).not.toContain("feature_flags");
+    const notesMigration = read("supabase/migrations/20260806220000_life_relationship_notes.sql");
+    expect(notesMigration).not.toContain("feature_flags");
+
+    const milestoneLaunch = read("supabase/migrations/20260923163000_launch_friendship_milestones.sql");
+    expect(milestoneLaunch).toContain("'life_milestones'");
+    expect(milestoneLaunch).toContain("'on'");
+    for (const stillDark of ["life_timeline", "life_relationship_notes", "life_reconnect", "life_birthdays"]) {
+      expect(milestoneLaunch).not.toContain(`'${stillDark}'`);
+    }
   });
 
   it("keeps flags separate from entitlements", () => {

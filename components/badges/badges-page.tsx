@@ -153,7 +153,11 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
 
       {activeTab === "milestones" ? (
         <div className="space-y-3">
-          {!overview.milestonesEnabled ? (
+          {!overview.milestonesAvailable ? (
+            <p className="rounded-xl border border-border/70 bg-card/50 p-4 text-sm text-muted-foreground">
+              Friendship milestones are currently unavailable.
+            </p>
+          ) : !overview.milestonesEnabled ? (
             <p className="rounded-xl border border-border/70 bg-card/50 p-4 text-sm text-muted-foreground">
               Friendship milestones are off. You can turn them on in Focus &amp; balance.
             </p>

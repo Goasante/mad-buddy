@@ -11,6 +11,7 @@ import {
   sanitizeRecapSummary,
   type RecapSummary
 } from "@/lib/engagement/rules";
+import { LIFE_MILESTONES_FLAG, isFeatureEnabled } from "@/lib/features/feature-flags";
 import { loadMilestoneViewsForUser, type MilestoneView } from "@/lib/life/milestone-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -20,6 +21,7 @@ export type EngagementActionState = { ok: boolean; message: string; endsAt?: str
 
 export type EngagementSettings = {
   recapsEnabled: boolean;
+  milestonesAvailable: boolean;
   milestonesEnabled: boolean;
   achievementsEnabled: boolean;
   milestoneRemindersEnabled: boolean;
@@ -49,6 +51,7 @@ async function getAuthedUserId() {
 export async function getEngagementSettingsAction(): Promise<EngagementSettings> {
   const fallback: EngagementSettings = {
     recapsEnabled: true,
+    milestonesAvailable: false,
     milestonesEnabled: true,
     achievementsEnabled: true,
     milestoneRemindersEnabled: true,
@@ -63,16 +66,21 @@ export async function getEngagementSettingsAction(): Promise<EngagementSettings>
   if (!env.url || !env.serviceRoleKey || !userId) return fallback;
 
   const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("engagement_preferences")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (!data) return fallback;
+  const [preferencesResult, milestonesAvailable] = await Promise.all([
+    admin
+      .from("engagement_preferences")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    isFeatureEnabled(admin, LIFE_MILESTONES_FLAG)
+  ]);
+  const data = preferencesResult.data;
+  if (!data) return { ...fallback, milestonesAvailable };
 
   const examUntilMs = data.exam_mode_until ? Date.parse(data.exam_mode_until) : null;
   return {
     recapsEnabled: data.recaps_enabled,
+    milestonesAvailable,
     // Legacy DB column names are retained for rollout compatibility. The
     // product semantics are factual milestones, not streaks.
     milestonesEnabled: data.streaks_enabled,
@@ -138,6 +146,7 @@ export type EngagementOverview = {
     earned: boolean;
     earnedAt: string | null;
   }>;
+  milestonesAvailable: boolean;
   milestonesEnabled: boolean;
   milestones: MilestoneView[];
   recap: {
@@ -150,13 +159,19 @@ export type EngagementOverview = {
 
 /** Everything here is the viewer's own private data, never anyone else's. */
 export async function getEngagementOverviewAction(): Promise<EngagementOverview> {
-  const empty: EngagementOverview = { achievements: [], milestonesEnabled: true, milestones: [], recap: null };
+  const empty: EngagementOverview = {
+    achievements: [],
+    milestonesAvailable: false,
+    milestonesEnabled: false,
+    milestones: [],
+    recap: null
+  };
   const env = getSupabaseServerEnv();
   const userId = await getAuthedUserId();
   if (!env.url || !env.serviceRoleKey || !userId) return empty;
 
   const admin = createSupabaseAdminClient();
-  const [definitionsRes, earnedRes, friendshipsRes, recapRes, preferencesRes] = await Promise.all([
+  const [definitionsRes, earnedRes, friendshipsRes, recapRes, preferencesRes, milestonesAvailable] = await Promise.all([
     admin
       .from("achievement_definitions")
       .select("code, name, description, category")
@@ -181,7 +196,8 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
       .from("engagement_preferences")
       .select("streaks_enabled")
       .eq("user_id", userId)
-      .maybeSingle()
+      .maybeSingle(),
+    isFeatureEnabled(admin, LIFE_MILESTONES_FLAG)
   ]);
 
   const earnedByCode = new Map((earnedRes.data ?? []).map((row) => [row.achievement_code, row.earned_at]));
@@ -195,7 +211,7 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
   }));
 
   const friendships = friendshipsRes.data ?? [];
-  const milestonesEnabled = preferencesRes.data?.streaks_enabled ?? true;
+  const milestonesEnabled = milestonesAvailable && (preferencesRes.data?.streaks_enabled ?? true);
   const milestones = milestonesEnabled
     ? await loadMilestoneViewsForUser(admin, userId, friendships)
     : [];
@@ -211,7 +227,7 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
     };
   }
 
-  return { achievements, milestonesEnabled, milestones, recap };
+  return { achievements, milestonesAvailable, milestonesEnabled, milestones, recap };
 }
 
 /** Legacy compatibility for historical streak rows. New UI uses factual milestones. */
