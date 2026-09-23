@@ -37,7 +37,7 @@ describe("privacy-safe push payloads", () => {
     ).toEqual({
       title: "Mad Buddy",
       body: "You have a new Mad Buddy group message.",
-      url: `/groups/${ID}`
+      url: `/messages?conversation=${ID}`
     });
   });
 
