@@ -269,7 +269,8 @@ describe("Home Smart Card is the social heartbeat", () => {
           planTitle: "Dinner",
           question: "Where should we eat?",
           voterCount: 4,
-          closesAt: "2026-09-23T11:30:00.000Z"
+          closesAt: "2026-09-23T11:30:00.000Z",
+          planEndsAt: "2026-09-23T13:00:00.000Z"
         }
       ]
     });
@@ -294,12 +295,32 @@ describe("Home Smart Card is the social heartbeat", () => {
           planTitle: "Dinner",
           question: "Where should we eat?",
           voterCount: 2,
-          closesAt: "2026-09-23T09:59:59.000Z"
+          closesAt: "2026-09-23T09:59:59.000Z",
+          planEndsAt: "2026-09-23T13:00:00.000Z"
         }
       ]
     });
 
     expect(card?.id).not.toBe("plan_decision");
+  });
+
+  it("retires a Plan Chat decision at the Plan's hard end", () => {
+    const planEnd = "2026-09-23T10:30:00.000Z";
+    const card = pick({
+      planChatDecisions: [
+        {
+          conversationId: "chat-plan",
+          planTitle: "Dinner",
+          question: "Which venue?",
+          planEndsAt: planEnd
+        }
+      ]
+    });
+
+    expect(card).toMatchObject({
+      id: "plan_chat_decision",
+      expiresAt: Date.parse(planEnd)
+    });
   });
 
   it("lets a checked-in Event Linkr offer die with the Event", () => {
