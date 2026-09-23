@@ -24,6 +24,7 @@ const card = stripComments(read("components/socialize/socialize-group-card.tsx")
 const rails = stripComments(read("components/socialize/discovery-rails.tsx"));
 const actions = stripComments(read("app/(app)/group-actions.ts"));
 const migration = read("supabase/migrations/20260807180000_public_group_discovery.sql");
+const retirement = read("supabase/migrations/20260923152500_groups_messages_only.sql");
 
 const group = (overrides: Partial<GroupSummary> = {}): GroupSummary => ({
   id: "11111111-1111-4111-8111-111111111111",
@@ -159,42 +160,26 @@ describe("join state", () => {
 // Visibility model
 // ---------------------------------------------------------------------------
 
-describe("public group discovery", () => {
-  it("adds visibility as its own axis, separate from join_mode", () => {
+describe("retired public group discovery", () => {
+  it("preserves the historical schema but closes every existing public/open group", () => {
     expect(migration).toContain("visibility text not null default 'private'");
-    expect(migration).toContain("check (visibility in ('private', 'public'))");
+    expect(retirement).toContain("visibility = 'private'");
+    expect(retirement).toContain("join_mode = 'invite'");
   });
 
-  it("DEFAULTS TO PRIVATE, so no existing group is retroactively exposed", () => {
-    // Members of existing groups never consented to being listed publicly.
-    expect(migration).toContain("default 'private'");
-    expect(migration).not.toContain("default 'public'");
+  it("makes the retirement authoritative at the database boundary", () => {
+    expect(retirement).toContain("group_settings_private_only");
+    expect(retirement).toContain("check (visibility = 'private')");
+    expect(retirement).toContain("group_settings_invite_only");
+    expect(retirement).toContain("check (join_mode = 'invite')");
   });
 
-  it("only exposes active groups to signed-in users", () => {
-    const policy = migration.slice(migration.indexOf('create policy "public groups discoverable"'));
-    expect(policy).toContain("auth.uid() is not null");
-    expect(policy).toContain("c.status = 'active'");
-  });
-
-  it("grants no membership, history or member list", () => {
-    // The discovery policy touches group_settings only.
-    const policy = migration.slice(migration.indexOf('create policy "public groups discoverable"'));
-    const body = policy.slice(0, policy.indexOf(";"));
-    expect(body).not.toContain("messages");
-    expect(body).not.toContain("conversation_members");
-  });
-
-  it("leaves the existing member policy untouched", () => {
-    expect(migration).not.toContain('drop policy "group settings visible to members"');
-  });
-
-  it("keeps the friend-link path so nothing discoverable disappears", () => {
-    expect(actions).toContain("publicIds.has(row.id) || (row.created_by && friendIds.has(row.created_by))");
-  });
-
-  it("adds no duplicate query — discovery reuses summariesFor", () => {
-    expect(actions).toContain("discoverableGroups = await summariesFor(admin, eligibleIds)");
+  it("creates web groups as private invite-only conversations", () => {
+    const create = actions.slice(actions.indexOf("export async function createGroupAction"));
+    expect(create).toContain('visibility: "private"');
+    expect(create).toContain('join_mode: "invite"');
+    expect(create.slice(0, 3500)).not.toContain("parsed.data.visibility");
+    expect(create.slice(0, 3500)).not.toContain("parsed.data.openToJoin");
   });
 });
 
@@ -248,41 +233,18 @@ describe("group card", () => {
   });
 });
 
-describe("changing visibility after creation", () => {
-  const page = stripComments(read("components/groups/group-detail-page.tsx"));
-
-  it("is OWNER only", () => {
-    // Admins manage people and content; listing a group publicly is a
-    // decision about every member's exposure, so it belongs to the one
-    // person accountable for the group.
-    expect(actions).toContain('membership.role !== "owner"');
-    expect(page).toContain('group.role === "owner" ? (');
-  });
-
-  it("fails neutrally for anyone else", () => {
-    // Never confirm a group exists to someone who is not its owner.
+describe("legacy visibility changes cannot resurrect public Groups", () => {
+  it("accepts only the group id and always writes the closed state", () => {
     const action = actions.slice(actions.indexOf("export async function setGroupVisibilityAction"));
-    expect(action.slice(0, 1600)).toContain("That change isn't available.");
+    expect(action.slice(0, 2200)).toContain('visibility: "private"');
+    expect(action.slice(0, 2200)).toContain('join_mode: "invite"');
+    expect(action.slice(0, 2200)).not.toContain("parsed.data.visibility");
   });
 
-  it("leaves join_mode alone", () => {
-    // Visibility and joining are separate axes: making a group findable must
-    // not silently make it openly joinable.
+  it("revalidates Messages rather than the retired discovery surfaces", () => {
     const action = actions.slice(actions.indexOf("export async function setGroupVisibilityAction"));
-    expect(action.slice(0, 1800)).not.toContain("join_mode");
-  });
-
-  it("says so when a public group still needs an invitation", () => {
-    expect(page).toContain("People can find this group but still need an invitation to join.");
-  });
-
-  it("tells non-owners the state without offering the control", () => {
-    expect(page).toContain("This group is private. Only invited people can find it.");
-  });
-
-  it("revalidates every surface the change affects", () => {
-    const action = actions.slice(actions.indexOf("export async function setGroupVisibilityAction"));
-    expect(action.slice(0, 2200)).toContain('revalidatePath("/discover")');
+    expect(action.slice(0, 2600)).toContain('revalidatePath("/messages")');
+    expect(action.slice(0, 2600)).not.toContain('revalidatePath("/discover")');
   });
 });
 

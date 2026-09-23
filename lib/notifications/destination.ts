@@ -42,8 +42,8 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   moment: "/moments" as Route,
   drop: "/drops" as Route,
   message: "/messages" as Route,
-  group_message: "/groups" as Route,
-  group: "/groups" as Route,
+  group_message: "/messages?filter=groups" as Route,
+  group: "/messages?filter=groups" as Route,
   // Linkr mutual connection. The base form lands on Linkr itself; the
   // id-suffixed form below resolves the pair's CURRENT state instead, so a
   // notification does not freeze into a "Say hi" screen after the chat has
@@ -93,7 +93,7 @@ export function resolveNotificationDestination(type: string): NotificationDestin
       case "message":
         return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
       case "group_message":
-        return { type: "internal", href: `/groups/${entityId}` as Route };
+        return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
       case "hangout":
         return { type: "internal", href: withQuery("/hangout-mode", "hangout", entityId) };
       case "plan":
@@ -101,7 +101,7 @@ export function resolveNotificationDestination(type: string): NotificationDestin
       case "event":
         return { type: "internal", href: withQuery("/events", "event", entityId) };
       case "group":
-        return { type: "internal", href: `/groups/${entityId}` as Route };
+        return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
       case "safe_arrival":
         return { type: "internal", href: withQuery("/safe-arrival", "session", entityId) };
       case "linkr_connection":

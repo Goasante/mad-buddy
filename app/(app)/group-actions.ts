@@ -51,12 +51,9 @@ const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(500).optional(),
   /**
-   * Who can FIND it, and separately whether they can join uninvited. Two
-   * axes, not one: a public group may still be invite-only. Both default to
-   * the closed answer, so an omitted field can never publish a group.
+   * Groups are private messaging conversations. Discovery/public visibility
+   * belonged to the retired Linkr model and is no longer an input.
    */
-  visibility: z.enum(["private", "public"]).default("private"),
-  openToJoin: z.boolean().default(false),
   imageMediaId: z.string().uuid().optional()
 });
 const invitationSchema = z.object({ groupId: uuidSchema, userId: uuidSchema });
@@ -313,13 +310,9 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
       conversation_id: conversation.id,
       name: parsed.data.name,
       description: parsed.data.description || null,
-      // Two axes, set together at creation:
-      //   visibility — who can SEE the group exists
-      //   join_mode  — what happens when they try to join
-      // "Discoverable" now means genuinely public, not merely
-      // link-shareable to the creator's own Muddies.
-      visibility: parsed.data.visibility,
-      join_mode: parsed.data.openToJoin ? "link" : "invite",
+      // Groups now live exclusively inside Messages: private and invite-only.
+      visibility: "private",
+      join_mode: "invite",
       image_media_id: parsed.data.imageMediaId ?? null,
       history_visibility: "since_join",
       posting_mode: "all_members"
@@ -877,20 +870,16 @@ export async function transferGroupOwnershipAction(input: unknown): Promise<Grou
 }
 
 const visibilitySchema = z.object({
-  groupId: uuidSchema,
-  visibility: z.enum(["private", "public"])
+  groupId: uuidSchema
 });
 
 /**
- * Change who can SEE a group exists.
+ * Legacy compatibility action.
  *
- * OWNER ONLY, deliberately. Admins manage people and content; making a group
- * publicly listable is a decision about every member's exposure, and the one
- * person accountable for the group should be the one who makes it.
- *
- * Separate from join_mode, which is left untouched: a public group may still
- * be invite-only, and collapsing the two would silently make every
- * discoverable group openly joinable.
+ * Public Group discovery is retired. If an old client still submits a
+ * visibility change, the only permitted outcome is the canonical private
+ * state. This keeps a stale bundle or bookmarked form from resurrecting the
+ * pre-Linkr-2.0 community model.
  */
 export async function setGroupVisibilityAction(input: unknown): Promise<GroupActionState> {
   if (!serverReady()) return { ok: false, message: "Groups need the server database configuration." };
@@ -907,25 +896,18 @@ export async function setGroupVisibilityAction(input: unknown): Promise<GroupAct
     .eq("user_id", userId)
     .maybeSingle();
 
-  // Neutral on failure: never confirm whether a group exists to someone who
-  // is not its owner.
   if (membership?.status !== "joined" || membership.role !== "owner") {
     return { ok: false, message: "That change isn't available." };
   }
 
   const { error } = await admin
     .from("group_settings")
-    .update({ visibility: parsed.data.visibility, updated_at: new Date().toISOString() })
+    .update({ visibility: "private", join_mode: "invite", updated_at: new Date().toISOString() })
     .eq("conversation_id", parsed.data.groupId);
   if (error) return { ok: false, message: "Couldn't update that Group." };
 
-  revalidatePath(`/groups/${parsed.data.groupId}`);
-  revalidatePath("/groups");
-  revalidatePath("/discover");
-  return {
-    ok: true,
-    message: parsed.data.visibility === "public" ? "Group is now public." : "Group is now private."
-  };
+  revalidatePath("/messages");
+  return { ok: true, message: "Groups are private and managed from Messages." };
 }
 
 

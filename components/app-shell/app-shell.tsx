@@ -25,7 +25,6 @@ import {
   Settings,
   UserRound,
   Users,
-  Users2,
   UsersRound
 } from "lucide-react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
@@ -113,7 +112,6 @@ const navigationItems: Array<{
     | "/plans"
     | "/moments"
     | "/events"
-    | "/groups"
     | "/discover"
     // Linkr 2.0. `/discover` stays in this union: the old route still exists
     // and still redirects, so a saved link or an Event Mode deep link keeps
@@ -150,7 +148,6 @@ const navigationItems: Array<{
      which had no such gate and was therefore removed outright. */
   { href: "/moments", label: "Moments", icon: Images, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
-  { href: "/groups", label: "Groups", icon: Users2, featureIcon: "groups" },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -163,7 +160,7 @@ const navigationItems: Array<{
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
-const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/groups", "/linkr"] as const;
+const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/linkr"] as const;
 
 /**
  * Routes that render their own in-page title instead of the shared AppHeader
@@ -182,7 +179,6 @@ const PAGES_WITH_OWN_HEADER = [
   "/plans",
   "/messages",
   "/events",
-  "/groups",
   "/discover",
   "/linkr",
   "/meeting-pings",
@@ -237,9 +233,9 @@ const IMMERSIVE_HEADER_PAGES: readonly string[] = [
 
 function hasOwnHeader(pathname: string): boolean {
   /* Most entries are exact screens. Treating every entry as a prefix made
-     /friends/:username and /groups/:id inherit a fixed MobilePageHeader they
-     do not render. The shell then reserved an empty header band and stood
-     the real AppHeader down. Settings descendants and the ranked Events
+     /friends/:username must not inherit a fixed MobilePageHeader it does not
+     render. Legacy /groups routes redirect to Messages before rendering a
+     standalone surface. Settings descendants and the ranked Events
      screen are the only current nested routes that render PageHeader
      themselves.
      /settings/access now renders SettingsSubHeader like every other Settings
