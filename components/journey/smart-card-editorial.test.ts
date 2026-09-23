@@ -67,5 +67,8 @@ describe("Smart Card presentation", () => {
     expect(source).toContain("card.expiresAt");
     expect(source).toContain("router.refresh()");
     expect(source).toContain("window.setTimeout");
+    expect(source).toContain("scheduleUntilBoundary");
+    expect(source).toContain("MAX_BROWSER_TIMEOUT_MS");
+    expect(source).toContain("HEARTBEAT_REFRESH_RETRIES");
   });
 });
