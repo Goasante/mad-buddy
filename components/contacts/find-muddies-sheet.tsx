@@ -112,8 +112,10 @@ export function FindMuddiesSheet({
     if (!open) return;
 
     let active = true;
-    setSetupLoading(true);
 
+    // This sheet is mounted only while open, so setupLoading already starts
+    // true. The effect performs the external server read and updates state only
+    // from its async callbacks, avoiding a synchronous effect-state cascade.
     void getPhoneIdentityAction()
       .then((identity) => {
         if (!active) return;
