@@ -110,6 +110,24 @@ describe("batch normalisation suits a real address book", () => {
   });
 });
 
+describe("the stored contact region preserves the person\'s numbering context", () => {
+  it("uses the selected region when its calling code matches the number", () => {
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
+    expect(save).toContain("getCountryCallingCode(region)");
+    expect(save).toContain("selectedCallingCode");
+    expect(save).toContain("phone_region: identityRegion");
+  });
+
+  it("does not rely on parser country inference alone for shared calling codes", () => {
+    const gb = normalisePhoneNumber("+447911123456", "GB");
+    expect(gb.ok && gb.e164).toBe("+447911123456");
+    expect(service).toContain("? region");
+  });
+});
+
 describe("owner-facing display never becomes disclosure", () => {
   it("formats only for the person who owns the number", () => {
     expect(formatPhoneForOwner("+233241234567")).toContain("233");
