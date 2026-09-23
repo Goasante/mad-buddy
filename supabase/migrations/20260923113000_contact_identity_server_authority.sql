@@ -5,28 +5,24 @@
 -- derivation, duplicate-claim checks and rate limits. Browser writes therefore
 -- add no legitimate capability; they only provide a path around those rules.
 --
--- Keep owner SELECT so a signed-in person can inspect their own row if needed,
--- but make every mutation server-authoritative. The service role is retained
--- explicitly for phone save/change/remove and discovery-toggle actions.
+-- The product already reads the owner's masked identity through a server
+-- action, so the browser needs no direct table privilege at all. Keeping the
+-- raw-number table service-role-only also prevents future client code from
+-- accidentally turning an implementation detail into a public API.
 
 drop policy if exists "phone identity owner writes"
   on public.user_phone_identities;
 
+drop policy if exists "phone identity owner reads"
+  on public.user_phone_identities;
+
 revoke all
   on table public.user_phone_identities
-  from public, anon;
-
-revoke insert, update, delete
-  on table public.user_phone_identities
-  from authenticated;
-
-grant select
-  on table public.user_phone_identities
-  to authenticated;
+  from public, anon, authenticated;
 
 grant all
   on table public.user_phone_identities
   to service_role;
 
 comment on table public.user_phone_identities is
-  'Optional phone identity for contact discovery. Owner-readable but server-write-only: application mutations run under service_role so clients cannot bypass normalisation, matching-identifier derivation, duplicate checks or rate limits.';
+  'Optional phone identity for contact discovery. Server-only table: owner-facing masked state is returned through authenticated server actions, while raw numbers and matching identifiers remain inaccessible to browser roles.';
