@@ -130,7 +130,7 @@ describe("rows only navigate where Android can arrive", () => {
        tappable link to the catch-all. */
     const nativeRoutes = new Set([
       "/home", "/muddies", "/messages", "/plans", "/events", "/moments",
-      "/notifications", "/groups", "/pings", "/safety", "/subscription",
+      "/notifications", "/pings", "/safety", "/subscription",
       "/socialize", "/profile", "/settings", "/settings/notifications",
       "/buddy-score", "/help", "/more", "/privacy", "/terms", "/onboarding"
     ]);
