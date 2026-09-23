@@ -11,6 +11,7 @@ const sheet = stripComments(read("components/contacts/find-muddies-sheet.tsx"));
 const settings = stripComments(read("components/settings/contact-discovery-page.tsx"));
 const actions = stripComments(read("app/(app)/contact-actions.ts"));
 const muddiesPage = stripComments(read("components/friends/friends-page.tsx"));
+const regions = stripComments(read("lib/contacts/contact-regions.ts"));
 
 const originalNavigator = globalThis.navigator;
 
@@ -196,7 +197,9 @@ describe("the UI uses the canonical batched endpoint", () => {
   it("posts one batch, never one request per number", () => {
     expect(sheet).toContain('fetch("/api/contacts/match"');
     expect(sheet).toContain('method: "POST"');
-    expect(sheet).toContain("JSON.stringify({ phoneNumbers })");
+    expect(sheet).toContain("phoneNumbers,");
+    expect(sheet).toContain("contactRegionFromLocale");
+    expect(sheet).toContain("setup.region ??");
     // One fetch call in the whole component -- and one submission path, so the
     // demo fixture and the OS picker cannot diverge after selection.
     expect((sheet.match(/fetch\("\/api\/contacts\/match"/g) ?? []).length).toBe(1);
@@ -357,6 +360,28 @@ describe("nothing sensitive reaches or leaves the client", () => {
 // Settings
 // ---------------------------------------------------------------------------
 
+describe("the guided sheet keeps setup and matching continuous", () => {
+  it("can add a number and toggle discoverability without leaving Find Your Muddies", () => {
+    expect(sheet).toContain("savePhoneNumberAction({");
+    expect(sheet).toContain("setContactDiscoveryAction(next)");
+    expect(sheet).toContain("1. Your number");
+    expect(sheet).toContain("2. Let people find you");
+    expect(sheet).toContain("3. Find your people");
+  });
+
+  it("does not require an own number before checking selected contacts", () => {
+    expect(sheet).toContain("You can still find people from your contacts without adding your own number.");
+    const begin = sheet.slice(sheet.indexOf("function begin()"));
+    expect(begin.slice(0, 500)).not.toContain("setup.hasPhone");
+  });
+
+  it("uses the saved account region before a locale fallback for local-format contacts", () => {
+    const post = sheet.slice(sheet.indexOf('fetch("/api/contacts/match"'));
+    expect(post.slice(0, 900)).toContain("setup.region ??");
+    expect(post.slice(0, 900)).toContain("contactRegionFromLocale");
+  });
+});
+
 describe("phone and discovery are separate decisions", () => {
   it("keeps discovery off until deliberately enabled", () => {
     expect(settings).toContain("useState(false)");
@@ -394,9 +419,11 @@ describe("phone and discovery are separate decisions", () => {
     expect(settings).toContain("Your account, Muddies, messages and everything else stay");
   });
 
-  it("supports more than one country", () => {
-    expect(settings).toContain('code: "GB"');
-    expect(settings).toContain('code: "US"');
+  it("supports more than one country from one shared region source", () => {
+    expect(regions).toContain('code: "GB"');
+    expect(regions).toContain('code: "US"');
+    expect(settings).toContain("CONTACT_REGIONS.map");
+    expect(sheet).toContain("CONTACT_REGIONS.map");
     expect(settings).toContain("international number starting with +");
   });
 
