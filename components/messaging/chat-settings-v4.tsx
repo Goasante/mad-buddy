@@ -43,7 +43,6 @@ export function ChatSettingsV4({
   onMute,
   onControlPatch,
   onSearch,
-  onGroupDetails,
   onFeedback
 }: {
   open: boolean;
@@ -59,7 +58,6 @@ export function ChatSettingsV4({
     preferences?: Partial<CachedConversationControls["preferences"]>;
   }) => void;
   onSearch: () => void;
-  onGroupDetails: () => void;
   onFeedback: (message: string) => void;
 }) {
   const [pendingControls, setPendingControls] = useState<Set<string>>(() => new Set());
@@ -184,8 +182,6 @@ export function ChatSettingsV4({
                 <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">View-once is intentionally not offered until Mad Buddy has a dedicated one-view authorization ledger. We do not label 24-hour media as view-once.</p></> : <RowSkeleton label="Syncing chat controls" />}
               </div>
             ) : null}
-
-            {isGroup ? <SettingRow icon={UsersRound} title="Group details" subtitle="Members, roles and shared media" onClick={onGroupDetails} /> : null}
           </section>
 
           {isGroup && canManageGroup && settings ? (
