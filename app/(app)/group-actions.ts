@@ -195,15 +195,9 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
   const joinedIds = (memberships ?? []).filter((row) => row.status === "joined").map((row) => row.conversation_id);
   const invitedIds = (memberships ?? []).filter((row) => row.status === "invited").map((row) => row.conversation_id);
 
-  const [groups, invitationSummaries, friendshipsResult, linkSettingsResult] = await Promise.all([
+  const [groups, invitationSummaries] = await Promise.all([
     summariesFor(admin, joinedIds, roleById),
-    summariesFor(admin, invitedIds, roleById),
-    admin
-      .from("friendships")
-      .select("user_one_id, user_two_id")
-      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
-    admin.from("group_settings").select("conversation_id").eq("join_mode", "link")
+    summariesFor(admin, invitedIds, roleById)
   ]);
 
   const invitations: GroupInvitation[] = [];
@@ -227,58 +221,7 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
     }
   }
 
-  const friendIds = new Set(
-    (friendshipsResult.data ?? []).map((row) => row.user_one_id === userId ? row.user_two_id : row.user_one_id)
-  );
-  const knownMembership = new Map((memberships ?? []).map((row) => [row.conversation_id, row.status]));
-  const linkIds = (linkSettingsResult.data ?? []).map((row) => row.conversation_id);
-
-  /**
-   * Discoverable groups, from two independent sources:
-   *
-   *  1. PUBLIC groups — anyone signed in may see these exist. This is what
-   *     makes discovery real: previously a user with no Muddies could never
-   *     find a community at all.
-   *  2. Link-joinable groups created by a Muddy — the original behaviour,
-   *     kept so nothing a user could already discover disappears.
-   *
-   * Both are filtered through the same membership check, so a group the
-   * viewer already belongs to never appears as something to join.
-   */
-  // Filters on a column from a PENDING migration, so it must fail soft: until
-  // that migration is applied the filter errors, and discovery falls back to
-  // the friend-link path rather than taking the whole page down with it.
-  const { data: publicSettings } = await admin
-    .from("group_settings")
-    .select("conversation_id")
-    .eq("visibility", "public")
-    .limit(60)
-    .then((result) => (result.error ? { data: [] } : result));
-
-  const candidateIds = [
-    ...new Set([...(publicSettings ?? []).map((row) => row.conversation_id), ...linkIds])
-  ];
-
-  let discoverableGroups: GroupSummary[] = [];
-  if (candidateIds.length > 0) {
-    const { data: discoverableConversations } = await admin
-      .from("conversations")
-      .select("id, created_by")
-      .in("id", candidateIds)
-      .eq("conversation_type", "group")
-      .eq("status", "active");
-
-    const publicIds = new Set((publicSettings ?? []).map((row) => row.conversation_id));
-    const eligibleIds = (discoverableConversations ?? [])
-      // A link-only group still requires the creator to be a Muddy; a public
-      // group does not, which is the whole point of the visibility axis.
-      .filter((row) => publicIds.has(row.id) || (row.created_by && friendIds.has(row.created_by)))
-      .filter((row) => !knownMembership.has(row.id) || knownMembership.get(row.id) === "left")
-      .map((row) => row.id);
-    discoverableGroups = await summariesFor(admin, eligibleIds);
-  }
-
-  return { groups, discoverableGroups, invitations };
+  return { groups, discoverableGroups: [], invitations };
 }
 
 export async function createGroupAction(input: unknown): Promise<GroupActionState> {
@@ -335,64 +278,8 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
     const { grantAchievement } = await import("@/lib/engagement/achievements");
     await grantAchievement(admin, userId, "group_founder");
   }
-  revalidatePath("/groups");
+  revalidatePath("/messages");
   return { ok: true, message: "Group created.", groupId: conversation.id };
-}
-
-export async function joinDiscoverableGroupAction(groupId: string): Promise<GroupActionState> {
-  if (!uuidSchema.safeParse(groupId).success) return { ok: false, message: "Group not found." };
-  const userId = await getAuthedUserId();
-  if (!userId) return { ok: false, message: "Log in before joining a Group." };
-  const admin = createSupabaseAdminClient();
-  const [{ data: conversation }, { data: settings }] = await Promise.all([
-    admin.from("conversations").select("id, created_by, status").eq("id", groupId).eq("conversation_type", "group").maybeSingle(),
-    admin
-      .from("group_settings")
-      .select("join_mode, history_visibility, visibility")
-      .eq("conversation_id", groupId)
-      .maybeSingle()
-  ]);
-  if (!conversation || conversation.status !== "active" || settings?.join_mode !== "link" || !conversation.created_by) {
-    return { ok: false, message: "This Group isn't open to join." };
-  }
-
-  /**
-   * A PUBLIC group is joinable by anyone; a merely link-joinable one still
-   * requires a connection to its creator.
-   *
-   * Requiring friendship for public groups made the Join button on every
-   * public group fail — the group was listed precisely so strangers could
-   * find it, then refused them on the grounds that they were strangers.
-   *
-   * Blocks still apply in both cases. Being publicly listed does not oblige
-   * an owner to admit someone either of them has blocked.
-   */
-  const isPublic = (settings as { visibility?: string }).visibility === "public";
-  const blocked = await isBlockedEitherDirection(admin, userId, conversation.created_by);
-  if (blocked) return { ok: false, message: "This Group isn't available." };
-  if (!isPublic) {
-    const approved = await areApprovedMuddies(admin, userId, conversation.created_by);
-    if (!approved) return { ok: false, message: "This Group isn't available." };
-  }
-  const capacity = await groupCapacityAvailable(admin, groupId, conversation.created_by);
-  if (!capacity.allowed) return { ok: false, message: "This Group is full." };
-  const now = new Date().toISOString();
-  const { error } = await admin.from("conversation_members").upsert({
-    conversation_id: groupId,
-    user_id: userId,
-    role: "member",
-    status: "joined",
-    joined_at: now,
-    left_at: null,
-    history_visible_from: settings.history_visibility === "full" ? new Date(0).toISOString() : now
-  }, { onConflict: "conversation_id,user_id" });
-  if (error) return { ok: false, message: "Couldn't join that Group." };
-  {
-    const { grantAchievement } = await import("@/lib/engagement/achievements");
-    await grantAchievement(admin, userId, "group_member");
-  }
-  revalidatePath("/groups");
-  return { ok: true, message: "Joined Group.", groupId };
 }
 
 export async function respondToGroupInvitationAction(input: unknown): Promise<GroupActionState> {
@@ -414,7 +301,8 @@ export async function respondToGroupInvitationAction(input: unknown): Promise<Gr
   if (!parsed.data.accept) {
     await admin.from("conversation_members").update({ status: "left", left_at: new Date().toISOString() })
       .eq("conversation_id", parsed.data.groupId).eq("user_id", userId);
-    revalidatePath("/groups");
+    revalidatePath("/messages");
+    revalidatePath("/invites");
     return { ok: true, message: "Invitation declined." };
   }
 
@@ -438,7 +326,8 @@ export async function respondToGroupInvitationAction(input: unknown): Promise<Gr
     const { grantAchievement } = await import("@/lib/engagement/achievements");
     await grantAchievement(admin, userId, "group_member");
   }
-  revalidatePath("/groups");
+  revalidatePath("/messages");
+  revalidatePath("/invites");
   return { ok: true, message: "Group joined.", groupId: parsed.data.groupId };
 }
 
@@ -498,7 +387,7 @@ export async function inviteGroupMemberAction(input: unknown): Promise<GroupActi
     title: "Group invitation",
     message: `${inviter?.full_name?.trim() || MEMBER_NAME_PLACEHOLDER} invited you to ${settings?.name || "a group"}.`
   });
-  revalidatePath(`/groups/${parsed.data.groupId}`);
+  revalidatePath("/messages");
   return { ok: true, message: "Group invitation sent." };
 }
 
@@ -515,7 +404,7 @@ export async function leaveGroupAction(groupId: string): Promise<GroupActionStat
     .eq("conversation_id", groupId).eq("user_id", userId);
   if (error) return { ok: false, message: "Couldn't leave that Group." };
   await publishGroupRoleEvent(admin, groupId, userId, "participant_left");
-  revalidatePath("/groups");
+  revalidatePath("/messages");
   return { ok: true, message: "You left the Group." };
 }
 
@@ -770,7 +659,7 @@ async function applyRoleChange(change: GroupRoleChange, input: unknown): Promise
     SYSTEM_EVENT_FOR_CHANGE[change as keyof typeof SYSTEM_EVENT_FOR_CHANGE]
   );
 
-  revalidatePath(`/groups/${groupId}`);
+  revalidatePath("/messages");
   return { ok: true, message: "Group updated." };
 }
 
@@ -865,7 +754,7 @@ export async function transferGroupOwnershipAction(input: unknown): Promise<Grou
 
   await recordRoleEvent(admin, "ownership.transferred", groupId, actorId, targetId);
   await publishGroupRoleEvent(admin, groupId, targetId, "ownership_transferred");
-  revalidatePath(`/groups/${groupId}`);
+  revalidatePath("/messages");
   return { ok: true, message: "Ownership transferred." };
 }
 

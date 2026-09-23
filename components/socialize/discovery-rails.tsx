@@ -1,14 +1,11 @@
 "use client";
 
-import { Users } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
 import { SwipeDeck } from "@/components/socialize/swipe-deck";
-import { SocializeGroupCard } from "@/components/socialize/socialize-group-card";
 import { PlanStack } from "@/components/socialize/plan-stack";
 import { Button } from "@/components/ui/button";
-import type { GroupSummary } from "@/lib/groups/types";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import type { SocializePerson } from "@/lib/social/socialize-mobile";
 import { deckCandidates } from "@/lib/social/swipe-deck";
@@ -17,7 +14,7 @@ import { cn } from "@/lib/utils";
 /**
  * The Socialize discovery rails.
  *
- * Three horizontally-scrolling sections — people, groups, plans — each reading
+ * Discovery sections for people and plans, each reading
  * a projection that already exists. Nothing here queries: the page loads the
  * data once and hands it down, so adding these rails costs no round trips.
  *
@@ -56,19 +53,6 @@ function RailSection({
       </h2>
       {children}
     </section>
-  );
-}
-
-/** Shared scroller. Opts out of tab swiping and hides its scrollbar. */
-function Rail({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <ul
-      aria-label={label}
-      data-no-tab-swipe=""
-      className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
-    >
-      {children}
-    </ul>
   );
 }
 
@@ -117,72 +101,6 @@ export function PeopleRail({
         onOpenSkipped={onOpenSkipped}
         pending={pending}
       />
-    </RailSection>
-  );
-}
-
-export function GroupsRail({
-  groups,
-  onJoin,
-  pending = false
-}: {
-  groups: readonly GroupSummary[];
-  onJoin: (group: GroupSummary) => void;
-  pending?: boolean;
-}) {
-  return (
-    <RailSection id="groups-rail-heading" title="Join a Group">
-
-      {groups.length > 0 ? (
-        <Rail label="Groups to join">
-          {groups.map((group, index) => (
-            <li
-              key={group.id}
-              className="socialize-card-in w-[calc((100%-1.5rem)/3)] min-w-[11rem] shrink-0 snap-start"
-              style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
-            >
-              <SocializeGroupCard group={group} onJoin={onJoin} pending={pending} />
-            </li>
-          ))}
-        </Rail>
-      ) : (
-        /* An empty rail is an invitation, not a dead end: there is nothing to
-           browse yet, so the useful thing to offer is starting one. Routes
-           into the EXISTING create-group flow rather than a second path. */
-        <div className="linkr-empty">
-          {/* An abstract mark rather than a stock illustration: three
-              overlapping discs reading as a small group, drawn from the brand
-              palette so it belongs to the page instead of sitting on it.
-              Decorative, so it is hidden from screen readers. */}
-          <span className="linkr-empty-art" aria-hidden="true">
-            <span className="linkr-empty-disc linkr-empty-disc-a" />
-            <span className="linkr-empty-disc linkr-empty-disc-b" />
-            <span className="linkr-empty-disc linkr-empty-disc-c" />
-          </span>
-
-          <div className="linkr-empty-body">
-            <p className="linkr-empty-title">No groups to discover yet</p>
-            {/* Names the usual CAUSE rather than only offering to create
-                another. Groups default to private, and every group made
-                before the visibility control existed still is — so "make one
-                public" is far more often the fix than "make a new one", and
-                an empty rail that only says "create one" reads as a broken
-                feature to someone who already has groups. */}
-            <p className="linkr-empty-copy">
-              Groups are private unless someone lists them. Open a group you
-              own and switch it to public in Settings, and it will show up
-              here for people nearby.
-            </p>
-          </div>
-
-          <Button asChild type="button" variant="outline" className="linkr-empty-cta">
-            <Link href={"/groups" as Route}>
-              My groups
-              <Users className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </Button>
-        </div>
-      )}
     </RailSection>
   );
 }

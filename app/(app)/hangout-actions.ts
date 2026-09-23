@@ -109,17 +109,12 @@ async function canViewHangout(
     .maybeSingle();
   if (profile?.visibility_status === "ghost") return false;
 
-  /* MUTUAL-MUDDY IS REQUIRED FOR EVERY AUDIENCE EXCEPT GROUPS.
+  /* MUTUAL-MUDDY IS REQUIRED FOR EVERY AUDIENCE EXCEPT LEGACY GROUP TARGETS.
    *
-   * It used to be an unconditional gate here, which was right while every
-   * audience was a flavour of "my Muddies". A public Group is the first
-   * audience that deliberately reaches beyond one social hop: the whole point
-   * of posting to a community is that people you have not met can see it.
-   *
-   * So the requirement moves into the switch rather than being dropped --
-   * `selected_groups` proves membership of a genuinely public Group instead,
-   * which is a different and equally real relationship. Every other audience
-   * still refuses a non-Muddy exactly as before. */
+   * Group discovery is retired, but historical UpFors may still carry a
+   * selected_groups audience. Their safe authority is current membership in
+   * the exact targeted private Group, not a visibility flag that no longer
+   * exists. Every other audience still requires the ordinary Muddy relation. */
   if (session.audience_type !== "selected_groups" && !mutual) return false;
 
   switch (session.audience_type) {
@@ -148,17 +143,6 @@ async function canViewHangout(
       return Boolean(target);
     }
     case "selected_groups": {
-      /* Visible inside specific PUBLIC Groups the viewer actually belongs to.
-       *
-       * Three things are checked, and all three matter:
-       *   1. the UpFor targets this conversation,
-       *   2. the conversation is a group whose visibility is 'public' -- a
-       *      private Circle must never become a discovery surface this way,
-       *   3. the viewer is a joined member.
-       *
-       * Membership is checked against the viewer, never inferred from the
-       * target list, so targeting a group the viewer cannot see reveals
-       * nothing. */
       const { data: targets } = await admin
         .from("hangout_audience_targets")
         .select("target_id")
@@ -167,20 +151,21 @@ async function canViewHangout(
       const groupIds = (targets ?? []).map((row) => row.target_id);
       if (groupIds.length === 0) return false;
 
-      const { data: publicGroups } = await admin
-        .from("group_settings")
-        .select("conversation_id")
-        .in("conversation_id", groupIds)
-        .eq("visibility", "public");
-      const publicIds = (publicGroups ?? []).map((row) => row.conversation_id);
-      if (publicIds.length === 0) return false;
+      const { data: activeGroups } = await admin
+        .from("conversations")
+        .select("id")
+        .in("id", groupIds)
+        .eq("conversation_type", "group")
+        .eq("status", "active");
+      const activeGroupIds = (activeGroups ?? []).map((row) => row.id);
+      if (activeGroupIds.length === 0) return false;
 
       const { data: membership } = await admin
         .from("conversation_members")
         .select("conversation_id")
         .eq("user_id", viewerId)
         .eq("status", "joined")
-        .in("conversation_id", publicIds)
+        .in("conversation_id", activeGroupIds)
         .limit(1);
       return (membership ?? []).length > 0;
     }
@@ -1011,10 +996,9 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
     })
   );
 
-  /* Which sessions are reachable through a public Group the viewer has
-   * joined. One read for the viewer's joined conversations, one for the
-   * targets, intersected in memory -- never a per-card query, and never a
-   * claim about a group the viewer is not in. */
+  /* Which sessions are reachable through a private Group the viewer has
+   * joined. The target itself says "group"; current joined membership is the
+   * authority now that public Group discovery no longer exists. */
   const groupSessionIds = new Set<string>();
   {
     const { data: joined } = await admin
@@ -1024,19 +1008,20 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
       .eq("status", "joined");
     const joinedIds = (joined ?? []).map((row) => row.conversation_id);
     if (joinedIds.length > 0) {
-      const { data: publicGroups } = await admin
-        .from("group_settings")
-        .select("conversation_id")
-        .in("conversation_id", joinedIds)
-        .eq("visibility", "public");
-      const publicJoinedIds = (publicGroups ?? []).map((row) => row.conversation_id);
-      if (publicJoinedIds.length > 0) {
+      const { data: joinedGroups } = await admin
+        .from("conversations")
+        .select("id")
+        .in("id", joinedIds)
+        .eq("conversation_type", "group")
+        .eq("status", "active");
+      const joinedGroupIds = (joinedGroups ?? []).map((row) => row.id);
+      if (joinedGroupIds.length > 0) {
         const { data: targets } = await admin
           .from("hangout_audience_targets")
           .select("hangout_session_id, target_id")
           .eq("target_type", "group")
           .in("hangout_session_id", visible.map((session) => session.id))
-          .in("target_id", publicJoinedIds);
+          .in("target_id", joinedGroupIds);
         for (const row of targets ?? []) groupSessionIds.add(row.hangout_session_id);
       }
     }

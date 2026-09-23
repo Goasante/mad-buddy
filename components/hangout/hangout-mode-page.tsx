@@ -97,7 +97,7 @@ const audienceLabel: Record<HangoutAudienceType, string> = {
   close_friends: "your Close Friends",
   selected_circles: "selected circles",
   selected_muddies: "selected Muddies",
-  // Public communities, not private Circles -- the wording keeps them apart.
+  // Legacy rows can still carry this value; access now follows private Group membership.
   selected_groups: "selected groups"
 };
 

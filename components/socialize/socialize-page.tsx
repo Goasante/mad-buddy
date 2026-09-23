@@ -21,8 +21,6 @@ import { PeopleNearbySheet } from "@/components/socialize/people-nearby-sheet";
 import { DiscoveryFeed } from "@/components/socialize/discovery-feed";
 import { SocializeHero } from "@/components/socialize/socialize-hero";
 import { EventModeBanner } from "@/components/socialize/event-mode-banner";
-import type { GroupSummary } from "@/lib/groups/types";
-import { joinDiscoverableGroupAction } from "@/app/(app)/group-actions";
 import { rsvpAction } from "@/app/(app)/plans-actions";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
@@ -167,7 +165,6 @@ const DEFAULT_DISCOVER_DURATION: SocializeDuration = "1h";
 export function SocializePage({
   initialSession,
   initialPeople,
-  initialGroups = [],
   initialPlans = [],
   myAvatarUrl = null,
   myName = "",
@@ -180,8 +177,6 @@ export function SocializePage({
 }: {
   initialSession: SocializeSession | null;
   initialPeople: SocializePerson[];
-  /** Discoverable groups, from the existing groups projection. */
-  initialGroups?: GroupSummary[];
   /** Upcoming plans, from the existing home projection. */
   initialPlans?: HomeUpcomingPlan[];
   myAvatarUrl?: string | null;
@@ -913,17 +908,6 @@ export function SocializePage({
             }
           />
           }
-          groups={initialGroups}
-          onJoinGroup={(group) => {
-            // The canonical join action, unchanged. The card only decides
-            // whether to OFFER it; the server still authorises.
-            if (isPending) return;
-            startTransition(async () => {
-              const result = await joinDiscoverableGroupAction(group.id);
-              showToast(result.message, !result.ok);
-              if (result.ok) router.refresh();
-            });
-          }}
           plans={initialPlans}
           onJoinPlan={(plan) => {
             // The canonical RSVP action, unchanged. The card only decides

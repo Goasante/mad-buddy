@@ -13,9 +13,8 @@ import {
   searchDiscoveryPeople,
 } from "@/lib/social/discovery-filters";
 import type { SocializePerson } from "@/lib/social/socialize-mobile";
-import type { GroupSummary } from "@/lib/groups/types";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
-import { GroupsRail, PeopleRail, PlansRail } from "@/components/socialize/discovery-rails";
+import { PeopleRail, PlansRail } from "@/components/socialize/discovery-rails";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 /**
@@ -39,9 +38,7 @@ export type DiscoveryFeedProps = {
   unreadCount?: number;
   hero?: React.ReactNode;
   eventModeName?: string | null;
-  onJoinGroup?: (group: GroupSummary) => void;
   onJoinPlan?: (plan: HomeUpcomingPlan) => void;
-  groups?: readonly GroupSummary[];
   plans?: readonly HomeUpcomingPlan[];
   /** Opens the shared Quick Controls sheet. Absent hides the control. */
   onOpenQuickControls?: () => void;
@@ -72,11 +69,8 @@ export function DiscoveryFeed({
   hero,
   /** Set when Linkr opened with valid Event context; renames the subtitle. */
   eventModeName = null,
-  /** Canonical join action, supplied by the page. */
-  onJoinGroup,
   /** Canonical RSVP action, supplied by the page. */
   onJoinPlan,
-  groups = [],
   plans = [],
   onOpenQuickControls,
   onWave,
@@ -249,11 +243,8 @@ export function DiscoveryFeed({
 
       <div className="pt-1">{hero}</div>
 
-      {/* The rails: people, groups and plans, each from a projection the
-          page already loaded. Hidden individually when empty. */}
-      {/* Order: people, then plans, then groups. Plans carry a deadline, so
-          they sit above groups — the thing you might miss comes before the
-          thing that will still be there tomorrow. */}
+      {/* Linkr discovers people. Upcoming Plans remain useful context, but
+          Groups no longer participate in discovery. */}
       <PeopleRail
         people={visible}
         onWave={onWave}
@@ -263,7 +254,6 @@ export function DiscoveryFeed({
         pending={pending}
       />
       <PlansRail plans={plans} onJoin={onJoinPlan ?? (() => {})} pending={pending} />
-      <GroupsRail groups={groups} onJoin={onJoinGroup ?? (() => {})} pending={pending} />
 
       {/* The people rail IS the feed. When it has nothing to show, the
           caller's contextual empty state takes its place. */}

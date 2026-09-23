@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { PenSquare, Search } from "lucide-react";
+import { PenSquare, Search, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
@@ -11,6 +11,7 @@ import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { Modal } from "../components/Modal";
 import { api } from "../lib/api";
+import { GroupsManagerContent } from "./GroupsScreen";
 
 type Conversation = {
   id: string;
@@ -33,6 +34,7 @@ export function MessagesScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "unread" | "groups" | "plans">(
     () => requestedFilter === "groups" ? "groups" : "all"
@@ -148,7 +150,23 @@ export function MessagesScreen() {
         </ul>
       )}
 
-      <NewMessageModal open={composing} onOpenChange={setComposing} onOpened={(id, title) => navigate(`/messages/${id}`, { state: { title } })} />
+      <NewMessageModal
+        open={composing}
+        onOpenChange={setComposing}
+        onOpened={(id, title) => navigate(`/messages/${id}`, { state: { title } })}
+        onGroups={() => {
+          setComposing(false);
+          setGroupsOpen(true);
+        }}
+      />
+      <Modal open={groupsOpen} onOpenChange={setGroupsOpen} title="Groups">
+        <GroupsManagerContent
+          onOpenGroup={(group) => {
+            setGroupsOpen(false);
+            navigate(`/messages/${group.id}`, { state: { title: group.name } });
+          }}
+        />
+      </Modal>
     </Screen>
   );
 }
@@ -156,11 +174,13 @@ export function MessagesScreen() {
 function NewMessageModal({
   open,
   onOpenChange,
-  onOpened
+  onOpened,
+  onGroups
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpened: (id: string, title: string) => void;
+  onGroups: () => void;
 }) {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -202,6 +222,19 @@ function NewMessageModal({
       title="New message"
     >
       <div className="space-y-4">
+        <button
+          type="button"
+          onClick={onGroups}
+          className="focus-ring flex w-full items-center gap-3 rounded-xl border border-primary/15 bg-primary/[.07] p-3 text-left"
+        >
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground">
+            <UsersRound className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-sm">Groups</strong>
+            <span className="text-xs text-muted-foreground">Create, manage or open a private Group</span>
+          </span>
+        </button>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Muddies" className="pl-9" />

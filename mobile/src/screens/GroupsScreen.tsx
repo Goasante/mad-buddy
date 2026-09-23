@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Users2, ChevronRight } from "lucide-react";
+import { ChevronRight, Plus, Users2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
 
-type GroupSummary = {
+export type MobileGroupSummary = {
   id: string;
   name: string;
   description: string | null;
@@ -19,21 +18,32 @@ type GroupSummary = {
 };
 
 type GroupsData = {
-  groups: GroupSummary[];
-  discoverableGroups: GroupSummary[];
-  invitations: (GroupSummary & { invitedByName: string })[];
+  groups: MobileGroupSummary[];
+  invitations: (MobileGroupSummary & { invitedByName: string })[];
 };
 
 export function GroupsScreen() {
   const navigate = useNavigate();
-  const [data, setData] = useState<GroupsData>({ groups: [], discoverableGroups: [], invitations: [] });
+  return (
+    <Screen title="Groups">
+      <GroupsManagerContent
+        onOpenGroup={(group) => navigate(`/messages/${group.id}`, { state: { title: group.name } })}
+      />
+    </Screen>
+  );
+}
+
+export function GroupsManagerContent({
+  onOpenGroup
+}: {
+  onOpenGroup: (group: MobileGroupSummary) => void;
+}) {
+  const [data, setData] = useState<GroupsData>({ groups: [], invitations: [] });
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [tab, setTab] = useState<"mine" | "discover" | "requests">("mine");
+  const [tab, setTab] = useState<"mine" | "requests">("mine");
   const [feedback, setFeedback] = useState("");
-
-  // A group IS a conversation, so opening one is the group chat.
-  const openGroup = (group: GroupSummary) => navigate(`/messages/${group.id}`, { state: { title: group.name } });
+  const [respondingId, setRespondingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,79 +57,76 @@ export function GroupsScreen() {
     void load();
   }, [load]);
 
-  async function join(group: GroupSummary) {
-    const result = await api.post<{ ok: boolean; message: string }>(`/api/groups/${group.id}/join`, {});
-    setFeedback(result.ok ? `Joined ${group.name}.` : result.error);
-    if (result.ok) void load();
+  async function respond(group: GroupsData["invitations"][number], accept: boolean) {
+    if (respondingId) return;
+    setRespondingId(group.id);
+    setFeedback("");
+    const result = await api.post<{ ok: boolean; message: string; groupId?: string }>(
+      `/api/groups/${group.id}/invitation`,
+      { accept }
+    );
+    setRespondingId(null);
+    if (!result.ok) {
+      setFeedback(result.error);
+      return;
+    }
+    setFeedback(result.data.message);
+    if (accept && result.data.groupId) {
+      onOpenGroup(group);
+      return;
+    }
+    void load();
   }
 
   return (
-    <Screen
-      title="Groups"
-      action={
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Private Group conversations live inside Messages.</p>
         <Button size="sm" onClick={() => setCreating((value) => !value)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           New
         </Button>
-      }
-    >
+      </div>
+
       {creating ? (
         <CreateGroup
-          onCreated={() => {
+          onCreated={(group) => {
             setCreating(false);
-            void load();
+            onOpenGroup(group);
           }}
         />
       ) : null}
 
-      <nav className="mb-4 overflow-x-auto border-b border-border/70" aria-label="Groups tabs">
+      <nav className="overflow-x-auto border-b border-border/70" aria-label="Groups tabs">
         <div className="flex min-w-max gap-1">
-          {([{ id: "mine", label: "My Groups" }, { id: "discover", label: "Discover" }, { id: "requests", label: "Invitations" }] as const).map((groupTab) => (
+          {([{ id: "mine", label: "My Groups" }, { id: "requests", label: "Invitations" }] as const).map((groupTab) => (
             <button
               key={groupTab.id}
               type="button"
               onClick={() => setTab(groupTab.id)}
-              className={cn(
-                "focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium",
+              className={`focus-ring safe-motion border-b-2 px-4 py-3 text-sm font-medium ${
                 tab === groupTab.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground"
-              )}
+              }`}
             >
               {groupTab.label}
               {groupTab.id === "requests" && data.invitations.length > 0 ? (
-                <span className="ml-1.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{data.invitations.length}</span>
+                <span className="ml-1.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  {data.invitations.length}
+                </span>
               ) : null}
             </button>
           ))}
         </div>
       </nav>
 
-      {feedback ? <p className="mb-3 text-sm text-primary">{feedback}</p> : null}
+      {feedback ? <p className="text-sm text-primary" role="status">{feedback}</p> : null}
 
       {loading ? (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
+        <div className="flex justify-center py-10"><Spinner /></div>
       ) : tab === "mine" ? (
-        <GroupList title="" groups={data.groups} emptyText="You're not in any groups yet." onOpen={openGroup} />
-      ) : tab === "discover" ? (
-        data.discoverableGroups.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">No groups to discover right now.</p>
-        ) : (
-          <ul className="space-y-2">
-            {data.discoverableGroups.map((group) => (
-              <li key={group.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
-                <GroupIcon />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{group.name}</p>
-                  <p className="text-xs text-muted-foreground">{group.memberCount} members</p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => void join(group)}>Join</Button>
-              </li>
-            ))}
-          </ul>
-        )
+        <GroupList groups={data.groups} onOpen={onOpenGroup} />
       ) : data.invitations.length === 0 ? (
-        <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">No group invitations.</p>
+        <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">No Group invitations.</p>
       ) : (
         <ul className="space-y-2">
           {data.invitations.map((group) => (
@@ -129,58 +136,65 @@ export function GroupsScreen() {
                 <p className="truncate text-sm font-semibold">{group.name}</p>
                 <p className="truncate text-xs text-muted-foreground">Invited by {group.invitedByName}</p>
               </div>
+              <div className="flex gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={respondingId !== null}
+                  onClick={() => void respond(group, false)}
+                >
+                  Decline
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={respondingId !== null}
+                  onClick={() => void respond(group, true)}
+                >
+                  Join
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
       )}
-    </Screen>
+    </div>
   );
 }
 
 function GroupList({
-  title,
   groups,
-  emptyText,
   onOpen
 }: {
-  title: string;
-  groups: GroupSummary[];
-  emptyText: string;
-  onOpen: (group: GroupSummary) => void;
+  groups: MobileGroupSummary[];
+  onOpen: (group: MobileGroupSummary) => void;
 }) {
+  if (groups.length === 0) {
+    return <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">You’re not in any Groups yet.</p>;
+  }
   return (
-    <section>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-      {groups.length === 0 ? (
-        <p className="rounded-xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">{emptyText}</p>
-      ) : (
-        <ul className="space-y-2">
-          {groups.map((group) => (
-            <li key={group.id}>
-              <button
-                type="button"
-                onClick={() => onOpen(group)}
-                className="focus-ring flex w-full items-center gap-3 rounded-xl border border-border bg-card/40 p-3 text-left active:bg-secondary"
-              >
-                <GroupIcon />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{group.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {group.lastMessagePreview ?? `${group.memberCount} members`}
-                  </p>
-                </div>
-                {group.role === "owner" ? (
-                  <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-                    Owner
-                  </span>
-                ) : null}
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <ul className="space-y-2">
+      {groups.map((group) => (
+        <li key={group.id}>
+          <button
+            type="button"
+            onClick={() => onOpen(group)}
+            className="focus-ring flex w-full items-center gap-3 rounded-xl border border-border bg-card/40 p-3 text-left active:bg-secondary"
+          >
+            <GroupIcon />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{group.name}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {group.lastMessagePreview ?? `${group.memberCount} members`}
+              </p>
+            </div>
+            {group.role === "owner" ? (
+              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">Owner</span>
+            ) : null}
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -192,43 +206,54 @@ function GroupIcon() {
   );
 }
 
-function CreateGroup({ onCreated }: { onCreated: () => void }) {
+function CreateGroup({
+  onCreated
+}: {
+  onCreated: (group: MobileGroupSummary) => void;
+}) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [discoverable, setDiscoverable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function create() {
-    if (name.trim().length < 2) return setError("Give your group a name.");
+    const trimmedName = name.trim();
+    if (trimmedName.length < 2) {
+      setError("Give your Group a name.");
+      return;
+    }
+
     setBusy(true);
     setError("");
-    const result = await api.post<{ ok: boolean; message: string }>("/api/groups", {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      discoverable
+    const result = await api.post<{ ok: boolean; message: string; groupId?: string }>("/api/groups", {
+      name: trimmedName,
+      description: description.trim() || undefined
     });
     setBusy(false);
-    if (result.ok) onCreated();
-    else setError(result.error);
+
+    if (!result.ok || !result.data.groupId) {
+      setError(result.ok ? result.data.message : result.error);
+      return;
+    }
+
+    onCreated({
+      id: result.data.groupId,
+      name: trimmedName,
+      description: description.trim() || null,
+      memberCount: 1,
+      role: "owner",
+      lastMessagePreview: null
+    });
   }
 
   return (
-    <section className="glass-panel mb-4 space-y-3 rounded-2xl p-4">
-      <Input placeholder="Group name" value={name} onChange={(e) => setName(e.target.value)} />
-      <Textarea placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <label className="flex items-center gap-2 text-sm text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={discoverable}
-          onChange={(e) => setDiscoverable(e.target.checked)}
-          className="h-4 w-4 accent-[hsl(var(--primary))]"
-        />
-        Let my Muddies discover and join this group
-      </label>
+    <section className="glass-panel space-y-3 rounded-2xl p-4">
+      <Input placeholder="Group name" value={name} onChange={(event) => setName(event.target.value)} />
+      <Textarea placeholder="Description (optional)" value={description} onChange={(event) => setDescription(event.target.value)} />
+      <p className="text-xs text-muted-foreground">Groups are private and invitation-only.</p>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button className="w-full" onClick={create} disabled={busy}>
-        {busy ? "Creating…" : "Create group"}
+        {busy ? "Creating…" : "Create Group"}
       </Button>
     </section>
   );

@@ -5,7 +5,6 @@ import { guardAction } from "@/lib/admin/enforcement";
 import { assertWithinLimit } from "@/lib/billing/service";
 import type { GroupInvitation, GroupsPageData, GroupSummary } from "@/lib/groups/types";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
-import { areApprovedMuddies, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { messagePreviewText } from "@/lib/messaging/message-preview";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -176,18 +175,9 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
   const joinedIds = (memberships ?? []).filter((row) => row.status === "joined").map((row) => row.conversation_id);
   const invitedIds = (memberships ?? []).filter((row) => row.status === "invited").map((row) => row.conversation_id);
 
-  const [groups, invitationSummaries, friendshipsResult, linkSettingsResult, publicSettingsResult] = await Promise.all([
+  const [groups, invitationSummaries] = await Promise.all([
     summariesFor(admin, joinedIds, roleById),
-    summariesFor(admin, invitedIds, roleById),
-    admin
-      .from("friendships")
-      .select("user_one_id, user_two_id")
-      // Active friendships only: ended_at IS NULL is the canonical definition of "currently Muddies".
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
-    admin.from("group_settings").select("conversation_id").eq("join_mode", "link"),
-    // Genuinely public groups. Separate from join_mode: a public group may
-    // still be invite-only, which is browsable but not openly joinable.
-    admin.from("group_settings").select("conversation_id").eq("visibility", "public")
+    summariesFor(admin, invitedIds, roleById)
   ]);
 
   const invitations: GroupInvitation[] = [];
@@ -195,13 +185,8 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
     const { data: invitationConversations } = await admin
       .from("conversations")
       .select("id, created_by")
-      .in(
-        "id",
-        invitationSummaries.map((group) => group.id)
-      );
-    const creatorIds = [
-      ...new Set((invitationConversations ?? []).map((row) => row.created_by).filter(Boolean))
-    ] as string[];
+      .in("id", invitationSummaries.map((group) => group.id));
+    const creatorIds = [...new Set((invitationConversations ?? []).map((row) => row.created_by).filter(Boolean))] as string[];
     const { data: creators } = creatorIds.length
       ? await admin.from("profiles").select("user_id, full_name").in("user_id", creatorIds)
       : { data: [] };
@@ -216,47 +201,7 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
     }
   }
 
-  const friendIds = new Set(
-    (friendshipsResult.data ?? []).map((row) => (row.user_one_id === userId ? row.user_two_id : row.user_one_id))
-  );
-  const knownMembership = new Map((memberships ?? []).map((row) => [row.conversation_id, row.status]));
-  /**
-   * Discoverable groups come from TWO independent routes; qualifying by
-   * either one is enough:
-   *
-   *   1. PUBLIC    — the owner listed it, so anyone may find it.
-   *   2. A MUDDY'S — a link-joinable group created by someone you are already
-   *                  connected to. The original behaviour, kept intact.
-   *
-   * Route 1 shipped as a column and an RLS policy but was never read here, so
-   * making a group public had no visible effect — the query still required
-   * the creator to be one of your Muddies, and someone with no Muddies could
-   * never find any group at all.
-   */
-  const linkIds = (linkSettingsResult.data ?? []).map((row) => row.conversation_id);
-  const publicIds = (publicSettingsResult.data ?? []).map((row) => row.conversation_id);
-  const candidateIds = [...new Set([...linkIds, ...publicIds])];
-
-  let discoverableGroups: GroupSummary[] = [];
-  if (candidateIds.length > 0) {
-    const { data: discoverableConversations } = await admin
-      .from("conversations")
-      .select("id, created_by")
-      .in("id", candidateIds)
-      .eq("conversation_type", "group")
-      .eq("status", "active");
-
-    const publicIdSet = new Set(publicIds);
-    const eligibleIds = (discoverableConversations ?? [])
-      .filter((row) => publicIdSet.has(row.id) || (row.created_by && friendIds.has(row.created_by)))
-      // A group you are already in is not a discovery. Someone who left may
-      // find their way back.
-      .filter((row) => !knownMembership.has(row.id) || knownMembership.get(row.id) === "left")
-      .map((row) => row.id);
-    discoverableGroups = await summariesFor(admin, eligibleIds);
-  }
-
-  return { groups, discoverableGroups, invitations };
+  return { groups, discoverableGroups: [], invitations };
 }
 
 export async function createGroup(userId: string, input: unknown): Promise<GroupResult> {
@@ -315,45 +260,56 @@ export async function createGroup(userId: string, input: unknown): Promise<Group
   return { ok: true, message: "Group created.", groupId: conversation.id };
 }
 
-export async function joinDiscoverableGroup(userId: string, groupId: string): Promise<GroupResult> {
-  if (!uuidSchema.safeParse(groupId).success) return { ok: false, message: "Group not found." };
+export async function respondToGroupInvitation(
+  userId: string,
+  groupId: string,
+  accept: boolean
+): Promise<GroupResult> {
+  if (!uuidSchema.safeParse(groupId).success) return { ok: false, message: "Group invitation not found." };
+  const rateLimit = await consumeRateLimit({ action: "invites.resolve", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
   const admin = createSupabaseAdminClient();
-  const [{ data: conversation }, { data: settings }] = await Promise.all([
-    admin
-      .from("conversations")
-      .select("id, created_by, status")
-      .eq("id", groupId)
-      .eq("conversation_type", "group")
-      .maybeSingle(),
-    admin.from("group_settings").select("join_mode, history_visibility").eq("conversation_id", groupId).maybeSingle()
-  ]);
-  if (!conversation || conversation.status !== "active" || settings?.join_mode !== "link" || !conversation.created_by) {
-    return { ok: false, message: "This group isn't open to join." };
+  const { data: membership } = await admin
+    .from("conversation_members")
+    .select("status")
+    .eq("conversation_id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (membership?.status !== "invited") return { ok: false, message: "This invitation is no longer available." };
+
+  if (!accept) {
+    const { error } = await admin
+      .from("conversation_members")
+      .update({ status: "left", left_at: new Date().toISOString() })
+      .eq("conversation_id", groupId)
+      .eq("user_id", userId);
+    return error ? { ok: false, message: "Couldn't decline that invitation." } : { ok: true, message: "Invitation declined." };
   }
-  const [approved, blocked] = await Promise.all([
-    areApprovedMuddies(admin, userId, conversation.created_by),
-    isBlockedEitherDirection(admin, userId, conversation.created_by)
+
+  const [{ data: conversation }, { data: settings }] = await Promise.all([
+    admin.from("conversations").select("created_by, status").eq("id", groupId).eq("conversation_type", "group").maybeSingle(),
+    admin.from("group_settings").select("history_visibility").eq("conversation_id", groupId).maybeSingle()
   ]);
-  if (!approved || blocked) return { ok: false, message: "This group isn't available." };
-  const capacity = await groupCapacityAvailable(admin, groupId, conversation.created_by);
-  if (!capacity.allowed) return { ok: false, message: "This group is full." };
+  if (!conversation?.created_by || conversation.status !== "active") return { ok: false, message: "This Group is no longer available." };
+
+  const capacity = await groupCapacityAvailable(admin, groupId, conversation.created_by, 0);
+  if (!capacity.allowed) return { ok: false, message: "This Group is full." };
+
   const now = new Date().toISOString();
-  const { error } = await admin.from("conversation_members").upsert(
-    {
-      conversation_id: groupId,
-      user_id: userId,
-      role: "member",
+  const { error } = await admin
+    .from("conversation_members")
+    .update({
       status: "joined",
       joined_at: now,
       left_at: null,
-      history_visible_from: settings.history_visibility === "full" ? new Date(0).toISOString() : now
-    },
-    { onConflict: "conversation_id,user_id" }
-  );
-  if (error) return { ok: false, message: "Couldn't join that group." };
-  {
-    const { grantAchievement } = await import("@/lib/engagement/achievements");
-    await grantAchievement(admin, userId, "group_member");
-  }
-  return { ok: true, message: "Joined group.", groupId };
+      history_visible_from: settings?.history_visibility === "full" ? new Date(0).toISOString() : now
+    })
+    .eq("conversation_id", groupId)
+    .eq("user_id", userId);
+  if (error) return { ok: false, message: "Couldn't accept that invitation." };
+
+  const { grantAchievement } = await import("@/lib/engagement/achievements");
+  await grantAchievement(admin, userId, "group_member");
+  return { ok: true, message: "Group joined.", groupId };
 }

@@ -44,7 +44,7 @@ export function InvitesPageContent({
       if (!result.ok) return;
       setInvitations((current) => current.filter((item) => item.id !== invitation.id));
       if (accept && result.groupId) {
-        router.push(`/groups/${result.groupId}`);
+        router.push(`/messages?conversation=${result.groupId}`);
       } else {
         router.refresh();
       }

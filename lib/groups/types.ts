@@ -31,6 +31,7 @@ export type GroupInvitation = GroupSummary & {
 
 export type GroupsPageData = {
   groups: GroupSummary[];
+  /** Compatibility for older mobile builds. Public discovery is retired, so this is always empty. */
   discoverableGroups: GroupSummary[];
   invitations: GroupInvitation[];
 };

@@ -7,7 +7,7 @@ export function OPTIONS(request: Request) {
   return preflightResponse(request);
 }
 
-// My groups + discoverable + invitations.
+// Joined Groups + invitations for the Messages-owned Groups manager.
 export async function GET(request: Request) {
   const auth = await resolveApiUser(request);
   if (!auth) {
