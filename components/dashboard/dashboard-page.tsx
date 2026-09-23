@@ -827,7 +827,9 @@ export function DashboardPageContent({
    * keeps traveller cards whenever another Smart Card is winning.
    */
   const safeArrivalTravellingForSection =
-    smartCard?.id === "safe_arrival" ? [] : safeArrival?.travelling ?? [];
+    smartCard?.id === "safe_arrival"
+      ? safeArrival?.travelling.slice(1) ?? []
+      : safeArrival?.travelling ?? [];
   const hasSafeArrivalSection =
     safeArrival !== null &&
     (safeArrivalTravellingForSection.length > 0 ||
