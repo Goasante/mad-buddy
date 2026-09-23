@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CountryCode } from "libphonenumber-js/min";
+import { getCountryCallingCode, type CountryCode } from "libphonenumber-js/min";
 
 import { DEFAULT_PHONE_REGION, normalisePhoneNumber, phoneHint } from "@/lib/contacts/phone-normalization";
 import { logBackendEvent } from "@/lib/observability/logger";
@@ -28,6 +28,8 @@ export type PhoneIdentity = {
   phoneE164: string;
   /** Last four digits, for owner-facing confirmation copy. Never the number. */
   hint: string;
+  /** Region used to interpret locally-saved contact numbers such as 024… */
+  region: CountryCode | null;
   discoveryEnabled: boolean;
   /** Always null until real verification exists. */
   verifiedAt: string | null;
@@ -90,18 +92,62 @@ export async function savePhoneNumber(
 
   const { e164, country } = normalised;
 
-  // Best-effort: an unconfigured secret must not stop someone saving their
-  // number. It only means discovery cannot match them yet, which the endpoint
-  // reports honestly rather than returning a silently empty result.
+  /*
+   * Keep the person's selected region when it is compatible with the number's
+   * calling code. This matters for shared codes such as +1 (US/CA) and +44
+   * (GB/Guernsey/Jersey/Isle of Man): parser inference alone can choose a
+   * neighbouring numbering plan, which would later misinterpret locally-saved
+   * contacts. If the selected region's calling code does not match the number,
+   * the parsed country is the better fallback for an explicitly international
+   * number.
+   */
+  const selectedCallingCode = getCountryCallingCode(region);
+  const identityRegion: CountryCode | null = e164.startsWith(`+${selectedCallingCode}`)
+    ? region
+    : country ?? null;
+
+  // Best-effort for a NEW/dormant identity: an unconfigured secret must not
+  // stop somebody storing their number. If discovery is ALREADY on, however,
+  // changing the number must also produce a new identifier in the same write
+  // or the UI would remain "on" while the account silently stopped matching.
   const matchIdentifier = matchingConfigured() ? deriveMatchIdentifier(e164) : null;
 
-  // Is another ACTIVE account already discoverable on this number?
-  const { data: existing } = await admin
-    .from("user_phone_identities")
-    .select("user_id")
-    .eq("phone_e164", e164)
-    .eq("contact_discovery_enabled", true)
-    .maybeSingle();
+  const [currentResult, existingResult] = await Promise.all([
+    admin
+      .from("user_phone_identities")
+      .select("contact_discovery_enabled")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    // Is another ACTIVE account already discoverable on this number?
+    admin
+      .from("user_phone_identities")
+      .select("user_id")
+      .eq("phone_e164", e164)
+      .eq("contact_discovery_enabled", true)
+      .maybeSingle()
+  ]);
+
+  if (currentResult.error || existingResult.error) {
+    logBackendEvent("error", {
+      requestId,
+      action: "contacts.phone_save",
+      statusCode: 500,
+      userId,
+      errorType: "phone_identity_preflight_failed"
+    });
+    return { ok: false, reason: "failed", message: "Your number could not be saved. Please try again." };
+  }
+
+  const currentIdentity = currentResult.data;
+  const existing = existingResult.data;
+
+  if (currentIdentity?.contact_discovery_enabled && !matchIdentifier) {
+    return {
+      ok: false,
+      reason: "failed",
+      message: "Contact discovery isn't available right now. Please try changing your number later."
+    };
+  }
 
   if (existing && existing.user_id !== userId) {
     logBackendEvent("warn", {
@@ -127,7 +173,7 @@ export async function savePhoneNumber(
       {
         user_id: userId,
         phone_e164: e164,
-        phone_region: country ?? null,
+        phone_region: identityRegion,
         // Derived here, at write time, so matching never has to touch a raw
         // number. Absent when matching is unconfigured -- the row still saves,
         // it simply cannot produce a match until an identifier exists.
@@ -142,7 +188,7 @@ export async function savePhoneNumber(
       },
       { onConflict: "user_id" }
     )
-    .select("phone_e164, contact_discovery_enabled, phone_verified_at")
+    .select("phone_e164, phone_region, contact_discovery_enabled, phone_verified_at")
     .maybeSingle();
 
   if (error || !data) {
@@ -163,6 +209,7 @@ export async function savePhoneNumber(
     identity: {
       phoneE164: data.phone_e164,
       hint: phoneHint(data.phone_e164),
+      region: (data.phone_region as CountryCode | null) ?? null,
       discoveryEnabled: data.contact_discovery_enabled,
       verifiedAt: data.phone_verified_at
     }
@@ -213,26 +260,50 @@ export async function setContactDiscovery(
   admin: SupabaseClient,
   { userId, enabled, requestId }: { userId: string; enabled: boolean; requestId: string }
 ): Promise<{ ok: boolean; message: string }> {
-  const { data: identity } = await admin
+  const { data: identity, error: identityError } = await admin
     .from("user_phone_identities")
     .select("phone_e164")
     .eq("user_id", userId)
     .maybeSingle();
 
+  if (identityError) {
+    return { ok: false, message: "That setting could not be loaded. Please try again." };
+  }
+
   if (!identity) {
     return { ok: false, message: "Add your phone number first." };
   }
 
+  let matchIdentifier: ReturnType<typeof deriveMatchIdentifier> | null = null;
+
   if (enabled) {
+    /*
+     * "On" must mean actually matchable. A number may have been saved while
+     * the HMAC secret was temporarily unavailable, or before a key rotation.
+     * Re-derive at the moment discoverability is enabled so the UI can never
+     * report success while the row carries no usable matching identifier.
+     */
+    if (!matchingConfigured()) {
+      return {
+        ok: false,
+        message: "Contact discovery isn't available right now. Please try again later."
+      };
+    }
+    matchIdentifier = deriveMatchIdentifier(identity.phone_e164);
+
     // Re-checked at enable time, not only at save time. A number saved while
     // dormant can be claimed by someone else in the meantime, and the partial
     // unique index covers exactly this row becoming active.
-    const { data: clash } = await admin
+    const { data: clash, error: clashError } = await admin
       .from("user_phone_identities")
       .select("user_id")
       .eq("phone_e164", identity.phone_e164)
       .eq("contact_discovery_enabled", true)
       .maybeSingle();
+
+    if (clashError) {
+      return { ok: false, message: "That setting could not be checked. Please try again." };
+    }
 
     if (clash && clash.user_id !== userId) {
       return {
@@ -244,7 +315,16 @@ export async function setContactDiscovery(
 
   const { error } = await admin
     .from("user_phone_identities")
-    .update({ contact_discovery_enabled: enabled, updated_at: new Date().toISOString() })
+    .update({
+      contact_discovery_enabled: enabled,
+      ...(matchIdentifier
+        ? {
+            match_hmac: matchIdentifier.identifier,
+            match_key_version: matchIdentifier.keyVersion
+          }
+        : {}),
+      updated_at: new Date().toISOString()
+    })
     .eq("user_id", userId);
 
   if (error) {
@@ -278,17 +358,24 @@ export async function getPhoneIdentity(
   admin: SupabaseClient,
   userId: string
 ): Promise<PhoneIdentity | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("user_phone_identities")
-    .select("phone_e164, contact_discovery_enabled, phone_verified_at")
+    .select("phone_e164, phone_region, contact_discovery_enabled, phone_verified_at")
     .eq("user_id", userId)
     .maybeSingle();
 
+  /*
+   * A read failure is not "this person has no number". Callers use null to
+   * decide whether to show Add number / a reminder, so collapsing database
+   * uncertainty into null would actively lie in the UI.
+   */
+  if (error) throw new Error("phone_identity_read_failed");
   if (!data) return null;
 
   return {
     phoneE164: data.phone_e164,
     hint: phoneHint(data.phone_e164),
+    region: (data.phone_region as CountryCode | null) ?? null,
     discoveryEnabled: data.contact_discovery_enabled,
     verifiedAt: data.phone_verified_at
   };

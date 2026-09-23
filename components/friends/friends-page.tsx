@@ -964,13 +964,13 @@ export function FriendsPageContent({
               kind={reminderKind}
               onOpenSetup={() => {
                 setReminderKind(null);
-                // TWO DESTINATIONS, because the two variants are missing
-                // different things. Someone without a number sent into Find
-                // Your Muddies would be offered a contact check that cannot
-                // make them findable -- so that card goes to the screen where
-                // a number is added, and the contact card opens the sheet.
-                if (reminderKind === "add_phone") router.push("/settings/contact-discovery");
-                else setFindMuddiesOpen(true);
+                /*
+                 * One setup journey for BOTH reminder variants. The sheet can
+                 * add/change the number, toggle discoverability and then check
+                 * contacts; sending the add-phone variant to Settings used to
+                 * strand people after "Phone number added."
+                 */
+                setFindMuddiesOpen(true);
               }}
               onResolved={() => setReminderKind(null)}
             />

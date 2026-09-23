@@ -13,7 +13,8 @@ import {
   recordPermanentDismissal,
   recordPrivacyChange,
   recordReminderDismissal,
-  recordSetupComplete
+  recordSetupComplete,
+  recordUnsupportedDevice
 } from "@/lib/contacts/reminder-store";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -112,23 +113,32 @@ export async function setContactDiscoveryAction(enabled: boolean): Promise<Conta
  * and a full number on screen is a full number in a screenshot.
  */
 export async function getPhoneIdentityAction(): Promise<{
+  loaded: boolean;
   hasPhone: boolean;
   hint: string;
+  region: string | null;
   discoveryEnabled: boolean;
 }> {
   const user = await getCurrentUserRecord();
-  if (!user) return { hasPhone: false, hint: "", discoveryEnabled: false };
+  if (!user) {
+    return { loaded: false, hasPhone: false, hint: "", region: null, discoveryEnabled: false };
+  }
 
   const admin = createSupabaseAdminClient();
-  const identity = await getPhoneIdentity(admin, user.id);
-
-  return {
-    hasPhone: Boolean(identity),
-    hint: identity?.hint ?? "",
-    discoveryEnabled: identity?.discoveryEnabled ?? false
-    // verifiedAt is deliberately NOT surfaced. It is always null, and sending
-    // it invites a client to render a verification state that does not exist.
-  };
+  try {
+    const identity = await getPhoneIdentity(admin, user.id);
+    return {
+      loaded: true,
+      hasPhone: Boolean(identity),
+      hint: identity?.hint ?? "",
+      region: identity?.region ?? null,
+      discoveryEnabled: identity?.discoveryEnabled ?? false
+      // verifiedAt is deliberately NOT surfaced. It is always null, and sending
+      // it invites a client to render a verification state that does not exist.
+    };
+  } catch {
+    return { loaded: false, hasPhone: false, hint: "", region: null, discoveryEnabled: false };
+  }
 }
 
 /**
@@ -181,6 +191,20 @@ export async function stopContactRemindersAction(): Promise<ContactActionState> 
   });
 
   return { ok: true, message: "We won't ask about this again. You can still find Muddies from Settings." };
+}
+
+/**
+ * Quiet automatic reminders when the current platform proves it cannot expose
+ * contacts. This changes reminder cadence only; it never changes discovery,
+ * the stored number or any relationship.
+ */
+export async function snoozeUnsupportedContactReminderAction(): Promise<ContactActionState> {
+  const user = await getCurrentUserRecord();
+  if (!user) return { ok: false, message: "" };
+
+  const admin = createSupabaseAdminClient();
+  await recordUnsupportedDevice(admin, user.id);
+  return { ok: true, message: "" };
 }
 
 /**

@@ -25,8 +25,9 @@ import type { ContactReminderKind } from "@/lib/contacts/reminder-eligibility";
  * would be the worst possible version of this feature.
  *
  * Two variants, because two different things may be missing -- a number, or
- * the contact step. Asking somebody to connect contacts before they have a
- * number would be out of order.
+ * the contact step. Both now open the same guided sheet: adding your own
+ * number is optional for checking contacts, but it is the step that lets
+ * people who already have you saved find you in the other direction.
  */
 export function ContactReminderCard({
   kind,
@@ -133,7 +134,7 @@ export function ContactReminderCard({
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" size="sm" disabled={isPending} onClick={openSetup}>
-              {isPhonePrompt ? "Add number" : "Find my Muddies"}
+              {isPhonePrompt ? "Set up" : "Find my Muddies"}
             </Button>
             <Button type="button" size="sm" variant="ghost" disabled={isPending} onClick={dismiss}>
               Maybe later

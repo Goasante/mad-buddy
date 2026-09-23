@@ -11,11 +11,15 @@ import {
   normalisePhoneNumbers,
   phoneHint
 } from "@/lib/contacts/phone-normalization";
+import { CONTACT_REGIONS, contactRegionFromLocale } from "@/lib/contacts/contact-regions";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const service = stripComments(read("lib/contacts/phone-identity.ts"));
 const normalisation = stripComments(read("lib/contacts/phone-normalization.ts"));
 const migration = read("supabase/migrations/20260809120000_phone_identity.sql");
+const authorityMigration = read(
+  "supabase/migrations/20260923113000_contact_identity_server_authority.sql"
+);
 
 // ---------------------------------------------------------------------------
 // Normalisation
@@ -77,6 +81,18 @@ describe("numbers normalise to E.164", () => {
   });
 });
 
+describe("contact-region defaults follow the person rather than Ghana blindly", () => {
+  it("uses a locale region and offers that country in the shared selector", () => {
+    expect(contactRegionFromLocale("en-AU")).toBe("AU");
+    expect(CONTACT_REGIONS.some((entry) => entry.code === "AU")).toBe(true);
+  });
+
+  it("uses Ghana only when the locale has no usable region", () => {
+    expect(contactRegionFromLocale("en")).toBe("GH");
+    expect(contactRegionFromLocale(null)).toBe("GH");
+  });
+});
+
 describe("batch normalisation suits a real address book", () => {
   it("drops unusable entries instead of failing the batch", () => {
     // One malformed contact must not make the whole feature unusable.
@@ -91,6 +107,29 @@ describe("batch normalisation suits a real address book", () => {
 
   it("returns an empty list rather than throwing on empty input", () => {
     expect(normalisePhoneNumbers([], "GH")).toEqual([]);
+  });
+});
+
+describe("the stored contact region preserves the person\'s numbering context", () => {
+  it("uses the selected region when its calling code matches the number", () => {
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
+    expect(save).toContain("getCountryCallingCode(region)");
+    expect(save).toContain("selectedCallingCode");
+    expect(save).toContain("phone_region: identityRegion");
+  });
+
+  it("does not rely on parser country inference alone for shared calling codes", () => {
+    const gb = normalisePhoneNumber("+447911123456", "GB");
+    expect(gb.ok && gb.e164).toBe("+447911123456");
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
+    expect(save).toContain('e164.startsWith(`+${selectedCallingCode}`)');
+    expect(save).toContain("? region");
   });
 });
 
@@ -118,15 +157,22 @@ describe("the phone number cannot leak to another user", () => {
     expect(migration).not.toContain("alter table public.profiles");
   });
 
-  it("is readable only by its owner", () => {
+  it("started owner-scoped and is hardened to server-only authority", () => {
     expect(migration).toContain("enable row level security");
     const select = migration.slice(migration.indexOf('create policy "phone identity owner reads"'));
     expect(select.slice(0, 200)).toContain("using (auth.uid() = user_id)");
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner reads"');
   });
 
-  it("pins the destination row on write, so an identity cannot be moved", () => {
-    const write = migration.slice(migration.indexOf('create policy "phone identity owner writes"'));
-    expect(write.slice(0, 300)).toContain("with check (auth.uid() = user_id)");
+  it("removes browser table authority and routes all access through the server", () => {
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner writes"');
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner reads"');
+    expect(authorityMigration).toContain("revoke all");
+    expect(authorityMigration).toContain("from public, anon, authenticated");
+    expect(authorityMigration).not.toContain("grant select");
+    expect(authorityMigration).not.toContain("to authenticated");
+    expect(authorityMigration).toContain("grant all");
+    expect(authorityMigration).toContain("to service_role");
   });
 
   it("never returns a raw number from the service to a caller about someone else", () => {
@@ -135,6 +181,7 @@ describe("the phone number cannot leak to another user", () => {
     expect(service).not.toContain("phone_e164, user_id");
     const getter = service.slice(service.indexOf("export async function getPhoneIdentity"));
     expect(getter).toContain('.eq("user_id", userId)');
+    expect(getter).toContain("phone_region");
   });
 });
 
@@ -149,12 +196,11 @@ describe("no number is presented as verified", () => {
     expect(service).not.toContain("phone_verified_at:");
   });
 
-  it("refuses a client-supplied verification state at the database", () => {
-    // The owner write policy would otherwise let a client set its own
-    // verified timestamp.
+  it("keeps verification server-only even if write authority changes later", () => {
     expect(migration).toContain("reject_client_phone_verification");
     expect(migration).toContain("phone_verified_at is set by verification only");
     expect(migration).toContain("<> 'service_role'");
+    expect(authorityMigration).toContain("Server-only table");
   });
 
   it("keeps the column so OTP can be added without a schema change", () => {
@@ -176,6 +222,16 @@ describe("adding a number does not make anyone discoverable", () => {
     const save = service.slice(service.indexOf("export async function savePhoneNumber"));
     const upsert = save.slice(save.indexOf(".upsert("), save.indexOf(".select("));
     expect(upsert).not.toContain("contact_discovery_enabled");
+  });
+
+  it("cannot leave discovery on with no identifier after changing the number", () => {
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
+    expect(save).toContain('select("contact_discovery_enabled")');
+    expect(save).toContain("currentIdentity?.contact_discovery_enabled && !matchIdentifier");
+    expect(save).toContain("Contact discovery isn't available right now.");
   });
 
   it("refuses to enable discovery with no number saved", () => {
@@ -228,6 +284,16 @@ describe("an unverified number cannot be taken from another account", () => {
     // A dormant number can be claimed by someone else in the meantime.
     const toggle = service.slice(service.indexOf("export async function setContactDiscovery"));
     expect(toggle).toContain("already in use for contact discovery");
+    expect(toggle).toContain("identityError");
+    expect(toggle).toContain("clashError");
+  });
+
+  it("does not report discovery on unless a usable matching identifier exists", () => {
+    const toggle = service.slice(service.indexOf("export async function setContactDiscovery"));
+    expect(toggle).toContain("if (!matchingConfigured())");
+    expect(toggle).toContain("deriveMatchIdentifier(identity.phone_e164)");
+    expect(toggle).toContain("match_hmac: matchIdentifier.identifier");
+    expect(toggle).toContain("match_key_version: matchIdentifier.keyVersion");
   });
 
   it("does not confirm whose account holds a claimed number", () => {
@@ -296,6 +362,15 @@ describe("diagnostics never record the number", () => {
 // Server authority
 // ---------------------------------------------------------------------------
 
+describe("the server owns phone-identity mutation", () => {
+  it("does not leave a browser write policy behind", () => {
+    expect(authorityMigration).toContain('drop policy if exists "phone identity owner writes"');
+    expect(authorityMigration).not.toContain("grant insert");
+    expect(authorityMigration).not.toContain("grant update");
+    expect(authorityMigration).not.toContain("grant delete");
+  });
+});
+
 describe("the server owns normalisation", () => {
   it("re-normalises rather than trusting a client E.164 string", () => {
     // A caller could otherwise send a string that normalises one way for
@@ -303,6 +378,15 @@ describe("the server owns normalisation", () => {
     const save = service.slice(service.indexOf("export async function savePhoneNumber"));
     expect(save).toContain("normalisePhoneNumber(input, region)");
     expect(save).toContain("const { e164, country } = normalised");
+  });
+
+  it("does not treat a failed duplicate/discovery preflight as an empty result", () => {
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
+    expect(save).toContain("currentResult.error || existingResult.error");
+    expect(save).toContain('"phone_identity_preflight_failed"');
   });
 
   it("keeps the identity service server-only", () => {

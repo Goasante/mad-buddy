@@ -4,14 +4,19 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { stripComments } from "@/lib/content/strip-comments";
-import { MAX_CONTACT_BATCH, MIN_CONTACT_BATCH } from "@/lib/contacts/contact-matching";
+import {
+  MATCH_LOOKUP_CHUNK,
+  MAX_CONTACT_BATCH,
+  MIN_CONTACT_BATCH
+} from "@/lib/contacts/contact-matching";
 import {
   ACTIVE_KEY_VERSION,
   MissingMatchSecretError,
   deriveMatchIdentifier,
   deriveMatchIdentifiers,
   identifiersMatch,
-  matchingConfigured
+  matchingConfigured,
+  readableMatchKeyVersions
 } from "@/lib/contacts/match-identifier";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -79,6 +84,10 @@ describe("matching identifiers are keyed, not merely hashed", () => {
   it("records the key version, so rotation does not break matching", () => {
     expect(deriveMatchIdentifier("+233241234567").keyVersion).toBe(ACTIVE_KEY_VERSION);
     expect(migration).toContain("match_key_version smallint not null default 1");
+    expect(readableMatchKeyVersions()).toContain(ACTIVE_KEY_VERSION);
+    expect(matching).toContain("readableMatchKeyVersions()");
+    expect(matching).toContain('.eq("match_key_version", version)');
+    expect(matching).toContain("deriveMatchIdentifiers(normalised, version)");
   });
 
   it("deduplicates a batch without preserving order", () => {
@@ -142,6 +151,12 @@ describe("the endpoint cannot be used to enumerate accounts", () => {
     expect(route).toContain("const bodySchema = z.object({");
   });
 
+  it("chunks HMAC lookups so a valid large address-book batch cannot overflow a query URL", () => {
+    expect(MATCH_LOOKUP_CHUNK).toBeLessThanOrEqual(100);
+    expect(matching).toContain("chunksOf(identifiers, MATCH_LOOKUP_CHUNK)");
+    expect(matching).toContain('.in("match_hmac", identifierChunk)');
+  });
+
   it("rate limits before parsing the body", () => {
     const limitAt = route.indexOf('consumeRateLimit({ action: "contacts.match"');
     const parseAt = route.indexOf("bodySchema.safeParse");
@@ -171,7 +186,7 @@ describe("input is bounded and validated server-side", () => {
     // A client-supplied identifier could be a hash it never derived from a
     // real number; a client-supplied E.164 may differ from the server's.
     expect(matching).toContain("normalisePhoneNumbers(rawNumbers, region)");
-    expect(matching).toContain("deriveMatchIdentifiers(normalised)");
+    expect(matching).toContain("deriveMatchIdentifiers(normalised, version)");
     expect(route).toContain("phoneNumbers: z");
     expect(route).not.toContain("identifiers:");
     expect(route).not.toContain("hmac");
@@ -197,6 +212,13 @@ describe("only eligible accounts are ever returned", () => {
     // A blocked person must not reappear because their number is still saved.
     expect(matching).toContain('.or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`)');
     expect(matching).toContain("blockedIds.has(profile.user_id)");
+  });
+
+  it("fails closed if block or profile privacy evidence cannot be read", () => {
+    expect(matching).toContain("blocksResult.error || profilesResult.error");
+    expect(matching).toContain('"block_filter_failed"');
+    expect(matching).toContain('"profile_filter_failed"');
+    expect(matching).not.toContain("(blocks ?? [])");
   });
 
   it("excludes deleted accounts", () => {
@@ -260,8 +282,8 @@ describe("no phone number is returned or logged", () => {
   it("never selects the number during matching", () => {
     // Matching compares HMACs; the raw column is never read.
     const query = matching.slice(matching.indexOf('from("user_phone_identities")'));
-    expect(query.slice(0, 200)).toContain('.select("user_id")');
-    expect(query.slice(0, 200)).not.toContain("phone_e164");
+    expect(query.slice(0, 500)).toContain('.select("user_id")');
+    expect(query.slice(0, 500)).not.toContain("phone_e164");
   });
 
   it("logs no number, identifier or contact name", () => {
@@ -318,6 +340,13 @@ describe("duplicate dormant claims behave predictably", () => {
 // ---------------------------------------------------------------------------
 // 15, 16, 18. Write protection
 // ---------------------------------------------------------------------------
+
+describe("relationship projection fails closed too", () => {
+  it("does not guess friendship/request state on a database error", () => {
+    expect(matching).toContain("verificationRows.error || friendships.error || requests.error");
+    expect(matching).toContain('"relationship_projection_failed"');
+  });
+});
 
 describe("matching writes nothing", () => {
   it("stores no contact the caller submitted", () => {

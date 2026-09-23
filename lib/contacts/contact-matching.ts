@@ -3,7 +3,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
-import { deriveMatchIdentifiers, matchingConfigured } from "@/lib/contacts/match-identifier";
+import {
+  ACTIVE_KEY_VERSION,
+  deriveMatchIdentifiers,
+  matchingConfigured,
+  readableMatchKeyVersions
+} from "@/lib/contacts/match-identifier";
 import { normalisePhoneNumbers } from "@/lib/contacts/phone-normalization";
 import { logBackendEvent } from "@/lib/observability/logger";
 import { hasVerifiedAccountStatus, type VerificationRow } from "@/lib/trust/verified-account";
@@ -56,6 +61,22 @@ import type { CountryCode } from "libphonenumber-js/min";
 
 /** The most contacts one request may submit. */
 export const MAX_CONTACT_BATCH = 1000;
+
+/**
+ * HMAC values are 64 hex characters and Supabase .in() serialises them into a
+ * query string. Sending all 1,000 in one request can exceed proxy/URL limits
+ * even though the product batch itself is valid, so database lookups are
+ * deliberately chunked. This does not change the privacy model or response.
+ */
+export const MATCH_LOOKUP_CHUNK = 100;
+
+function chunksOf<T>(values: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
 
 /**
  * The fewest.
@@ -163,20 +184,44 @@ export async function matchContacts(
     };
   }
 
-  const identifiers = deriveMatchIdentifiers(normalised);
+  /*
+   * KEY ROTATION COEXISTENCE.
+   *
+   * Rows keep the key version that produced their identifier. During a
+   * rotation, old and new versions may coexist, so derive the selected batch
+   * under every still-configured version and compare only to rows carrying
+   * that same version. This makes the versioning promise real instead of
+   * silently breaking old rows the moment ACTIVE_KEY_VERSION changes.
+   */
+  const readableVersions = readableMatchKeyVersions();
+  if (!readableVersions.includes(ACTIVE_KEY_VERSION)) {
+    return {
+      ok: false,
+      reason: "unconfigured",
+      message: "Contact matching isn't available right now."
+    };
+  }
 
   // ELIGIBILITY, applied in the query rather than after it.
   //
   // Only rows that are discoverable are read at all, so an account that exists
   // but has discovery off is indistinguishable from one that does not exist --
   // no row, no timing difference, nothing to infer.
-  const { data: eligible, error } = await admin
-    .from("user_phone_identities")
-    .select("user_id")
-    .in("match_hmac", identifiers)
-    .eq("contact_discovery_enabled", true);
+  const versionLookups = await Promise.all(
+    readableVersions.flatMap((version) => {
+      const identifiers = deriveMatchIdentifiers(normalised, version);
+      return chunksOf(identifiers, MATCH_LOOKUP_CHUNK).map((identifierChunk) =>
+        admin
+          .from("user_phone_identities")
+          .select("user_id")
+          .in("match_hmac", identifierChunk)
+          .eq("match_key_version", version)
+          .eq("contact_discovery_enabled", true)
+      );
+    })
+  );
 
-  if (error) {
+  if (versionLookups.some((lookup) => lookup.error)) {
     logBackendEvent("error", {
       requestId,
       action: "contacts.match",
@@ -187,9 +232,11 @@ export async function matchContacts(
     return { ok: false, reason: "failed", message: "Contact matching failed. Please try again." };
   }
 
+  const eligible = versionLookups.flatMap((lookup) => (lookup.data ?? []) as EligibleRow[]);
+
   // The viewer's own account is never a match. Their own number is in their
   // own contacts more often than not.
-  const candidateIds = [...new Set((eligible as EligibleRow[] | null ?? []).map((row) => row.user_id))].filter(
+  const candidateIds = [...new Set(eligible.map((row) => row.user_id))].filter(
     (id) => id !== viewerId
   );
 
@@ -203,7 +250,7 @@ export async function matchContacts(
   // Fails closed: anything this cannot positively confirm as visible is
   // dropped. A blocked person reappearing because their number is still in an
   // address book is the specific outcome this prevents.
-  const [{ data: blocks }, { data: profiles }] = await Promise.all([
+  const [blocksResult, profilesResult] = await Promise.all([
     admin
       .from("blocked_users")
       .select("blocker_id, blocked_id")
@@ -214,13 +261,29 @@ export async function matchContacts(
       .in("user_id", candidateIds)
   ]);
 
+  /*
+   * Privacy evidence fails CLOSED. In particular, a failed block read cannot
+   * mean "there are no blocks" -- that would make a blocked account reappear
+   * through contact discovery precisely when the database is unhealthy.
+   */
+  if (blocksResult.error || profilesResult.error) {
+    logBackendEvent("error", {
+      requestId,
+      action: "contacts.match",
+      statusCode: 500,
+      userId: viewerId,
+      errorType: blocksResult.error ? "block_filter_failed" : "profile_filter_failed"
+    });
+    return { ok: false, reason: "failed", message: "Contact matching failed. Please try again." };
+  }
+
   // Either direction hides the person, matching the rule every other surface
   // uses.
   const blockedIds = new Set(
-    (blocks ?? []).flatMap((block) => [block.blocker_id, block.blocked_id])
+    (blocksResult.data ?? []).flatMap((block) => [block.blocker_id, block.blocked_id])
   );
 
-  const visible = (profiles ?? []).filter((profile) => {
+  const visible = (profilesResult.data ?? []).filter((profile) => {
     if (blockedIds.has(profile.user_id)) return false;
     // A soft-deleted account is gone as far as discovery is concerned.
     if (profile.deleted_at) return false;
@@ -242,7 +305,7 @@ export async function matchContacts(
     loadEffectivePlansForUsers(admin, visibleIds),
     visibleIds.length > 0
       ? admin.from("account_verifications").select("user_id, status").in("user_id", visibleIds)
-      : Promise.resolve({ data: [] as { user_id: string; status: string }[] }),
+      : Promise.resolve({ data: [] as { user_id: string; status: string }[], error: null }),
     // ended_at IS NULL is the canonical definition of "currently Muddies";
     // an ended friendship must read as "none" so a fresh request is offered.
     visibleIds.length > 0
@@ -251,15 +314,37 @@ export async function matchContacts(
           .select("user_one_id, user_two_id")
           .or(`user_one_id.eq.${viewerId},user_two_id.eq.${viewerId}`)
           .is("ended_at", null)
-      : Promise.resolve({ data: [] as { user_one_id: string; user_two_id: string }[] }),
+      : Promise.resolve({
+          data: [] as { user_one_id: string; user_two_id: string }[],
+          error: null
+        }),
     visibleIds.length > 0
       ? admin
           .from("friend_requests")
           .select("sender_id, receiver_id")
           .eq("status", "pending")
           .or(`sender_id.eq.${viewerId},receiver_id.eq.${viewerId}`)
-      : Promise.resolve({ data: [] as { sender_id: string; receiver_id: string }[] })
+      : Promise.resolve({
+          data: [] as { sender_id: string; receiver_id: string }[],
+          error: null
+        })
   ]);
+
+  /*
+   * Relationship evidence also fails closed. Showing "Add Muddy" because the
+   * friendship/request read failed creates duplicate or crossing requests and
+   * tells the person something false about an existing relationship.
+   */
+  if (verificationRows.error || friendships.error || requests.error) {
+    logBackendEvent("error", {
+      requestId,
+      action: "contacts.match",
+      statusCode: 500,
+      userId: viewerId,
+      errorType: "relationship_projection_failed"
+    });
+    return { ok: false, reason: "failed", message: "Contact matching failed. Please try again." };
+  }
 
   const verificationByUserId = new Map<string, VerificationRow[]>();
   for (const row of verificationRows.data ?? []) {

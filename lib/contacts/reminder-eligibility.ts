@@ -39,6 +39,16 @@ export const MAX_REMINDER_DISMISSALS = 3;
 export const PRIVACY_CHANGE_QUIET_DAYS = 30;
 
 /**
+ * An unsupported PWA/browser cannot complete contact matching on that device.
+ * Give the account a long quiet period after we discover that, rather than
+ * showing the same automatic suggestion again on every Muddies visit.
+ *
+ * This is NOT a permanent dismissal: the feature remains reachable manually
+ * and the reminder may return later when the person could be on another device.
+ */
+export const UNSUPPORTED_DEVICE_QUIET_DAYS = 30;
+
+/**
  * How long a new account is left alone.
  *
  * Onboarding already asks a lot. A prompt on day zero competes with learning
@@ -201,8 +211,9 @@ export function shouldContactDiscoveryReminderShow(input: ReminderInput): Remind
     }
   }
 
-  // WHICH prompt. No phone means there is nothing to be discoverable by, so
-  // asking someone to connect contacts first would be out of order.
+  // WHICH prompt. We lead with the person's own number when it is missing so
+  // the guided flow can become two-way discovery, but the sheet still lets
+  // them skip that optional step and check contacts immediately.
   return { show: true, kind: input.hasPhone ? "find_muddies" : "add_phone" };
 }
 
@@ -244,6 +255,22 @@ export function afterPrivacyChange(
   return {
     ...state,
     suppressedUntil: new Date(nowMs + PRIVACY_CHANGE_QUIET_DAYS * DAY_MS).toISOString()
+  };
+}
+
+/**
+ * The state after the person's current device proves it cannot access contacts.
+ *
+ * Does not increment dismissCount: platform capability is not a user refusal.
+ */
+export function afterUnsupportedDevice(
+  state: ContactReminderState,
+  nowMs: number = Date.now()
+): ContactReminderState {
+  return {
+    ...state,
+    lastPromptedAt: new Date(nowMs).toISOString(),
+    suppressedUntil: new Date(nowMs + UNSUPPORTED_DEVICE_QUIET_DAYS * DAY_MS).toISOString()
   };
 }
 
