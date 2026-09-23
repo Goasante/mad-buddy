@@ -158,6 +158,7 @@ describe("the phone number cannot leak to another user", () => {
     expect(service).not.toContain("phone_e164, user_id");
     const getter = service.slice(service.indexOf("export async function getPhoneIdentity"));
     expect(getter).toContain('.eq("user_id", userId)');
+    expect(getter).toContain("phone_region");
   });
 });
 
@@ -260,6 +261,8 @@ describe("an unverified number cannot be taken from another account", () => {
     // A dormant number can be claimed by someone else in the meantime.
     const toggle = service.slice(service.indexOf("export async function setContactDiscovery"));
     expect(toggle).toContain("already in use for contact discovery");
+    expect(toggle).toContain("identityError");
+    expect(toggle).toContain("clashError");
   });
 
   it("does not report discovery on unless a usable matching identifier exists", () => {
@@ -352,6 +355,15 @@ describe("the server owns normalisation", () => {
     const save = service.slice(service.indexOf("export async function savePhoneNumber"));
     expect(save).toContain("normalisePhoneNumber(input, region)");
     expect(save).toContain("const { e164, country } = normalised");
+  });
+
+  it("does not treat a failed duplicate/discovery preflight as an empty result", () => {
+    const save = service.slice(
+      service.indexOf("export async function savePhoneNumber"),
+      service.indexOf("export async function removePhoneNumber")
+    );
+    expect(save).toContain("currentResult.error || existingResult.error");
+    expect(save).toContain('"phone_identity_preflight_failed"');
   });
 
   it("keeps the identity service server-only", () => {
