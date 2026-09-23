@@ -145,7 +145,7 @@ export default async function DashboardPage() {
         locationFreshForProximity: activation?.locationFreshForProximity ?? false,
         muddyCount: activation?.muddyCount ?? 0,
         buddyScore,
-        recentAchievement: null,
+        recentAchievement: smartCardProjection?.recentAchievement ?? null,
         suggestionCount: 0,
         upFor: upForContext,
         /* Both are facts Home already owns: the request count feeds its header
