@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { stripComments } from "@/lib/content/strip-comments";
-import { MAX_CONTACT_BATCH, MIN_CONTACT_BATCH } from "@/lib/contacts/contact-matching";
+import {
+  MATCH_LOOKUP_CHUNK,
+  MAX_CONTACT_BATCH,
+  MIN_CONTACT_BATCH
+} from "@/lib/contacts/contact-matching";
 import {
   ACTIVE_KEY_VERSION,
   MissingMatchSecretError,
@@ -145,6 +149,12 @@ describe("the endpoint cannot be used to enumerate accounts", () => {
     // Enforced in the schema, so an oversized array is rejected before
     // normalising every string in it.
     expect(route).toContain("const bodySchema = z.object({");
+  });
+
+  it("chunks HMAC lookups so a valid large address-book batch cannot overflow a query URL", () => {
+    expect(MATCH_LOOKUP_CHUNK).toBeLessThanOrEqual(100);
+    expect(matching).toContain("chunksOf(identifiers, MATCH_LOOKUP_CHUNK)");
+    expect(matching).toContain('.in("match_hmac", identifierChunk)');
   });
 
   it("rate limits before parsing the body", () => {
