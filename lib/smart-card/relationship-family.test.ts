@@ -290,6 +290,25 @@ describe("a Muddy birthday repeats a permitted fact, never a date", () => {
   });
 });
 
+describe("the viewer's own birthday changes state at the real boundary", () => {
+  it("refreshes a tomorrow card at midnight, not at the end of the birthday", () => {
+    const card = pick({ birthday: { birthdayToday: false, birthdayTomorrow: true } });
+    expect(card?.id).toBe("birthday");
+    const expected = new Date(NOW);
+    expected.setDate(expected.getDate() + 1);
+    expected.setHours(0, 0, 0, 0);
+    expect(card?.expiresAt).toBe(expected.getTime());
+  });
+
+  it("keeps today's birthday through the rest of the day", () => {
+    const card = pick({ birthday: { birthdayToday: true, birthdayTomorrow: false } });
+    expect(card?.id).toBe("birthday");
+    const expected = new Date(NOW);
+    expected.setHours(23, 59, 59, 999);
+    expect(card?.expiresAt).toBe(expected.getTime());
+  });
+});
+
 describe("family 3 ranking against the states already proven", () => {
   it("keeps Safe Arrival above every relationship state", () => {
     const card = pick({
