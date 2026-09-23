@@ -51,6 +51,8 @@ export type PlanDecisionForCard = {
   planTitle: string;
   question: string;
   voterCount: number;
+  /** Predictable lifecycle boundary. Null means the poll has no scheduled close. */
+  closesAt: string | null;
 };
 
 /**
