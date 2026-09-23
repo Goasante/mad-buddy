@@ -130,6 +130,7 @@ describe("Event Linkr is offered, never assumed", () => {
   const offer = (over: Partial<EventLinkrOfferForCard> = {}): EventLinkrOfferForCard => ({
     eventId: "e1",
     eventName: "Acoustic Night",
+    endsAt: "2026-08-05T14:00:00.000Z",
     href: "/events?event=e1",
     ...over
   });
@@ -252,7 +253,12 @@ describe("family 3 ranking against the states already proven", () => {
   it("keeps Safe Arrival above every relationship state", () => {
     const card = pick({
       safeArrival: { travelling: true, watcherCount: 2 },
-      eventLinkrOffer: { eventId: "e1", eventName: "Acoustic Night", href: "/events?event=e1" },
+      eventLinkrOffer: {
+        eventId: "e1",
+        eventName: "Acoustic Night",
+        endsAt: "2026-08-05T14:00:00.000Z",
+        href: "/events?event=e1"
+      },
       linkrMutuals: [mutual({ eventName: "Acoustic Night" })],
       muddyBirthdays: [{ userId: "u9", displayName: "Ama" }]
     });
