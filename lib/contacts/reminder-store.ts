@@ -8,6 +8,7 @@ import {
   afterPermanentDismissal,
   afterPrivacyChange,
   afterSetupComplete,
+  afterUnsupportedDevice,
   type ContactReminderState
 } from "@/lib/contacts/reminder-eligibility";
 
@@ -118,6 +119,21 @@ export async function recordPermanentDismissal(
   userId: string
 ): Promise<ContactReminderState> {
   const next = afterPermanentDismissal(await loadReminderState(admin, userId));
+  await saveReminderState(admin, userId, next);
+  return next;
+}
+
+/**
+ * Records that this device cannot offer contact access.
+ *
+ * Capability is not a refusal, so this gets its own quiet-period transition
+ * rather than consuming a "Maybe later" dismissal.
+ */
+export async function recordUnsupportedDevice(
+  admin: SupabaseClient,
+  userId: string
+): Promise<ContactReminderState> {
+  const next = afterUnsupportedDevice(await loadReminderState(admin, userId));
   await saveReminderState(admin, userId, next);
   return next;
 }
