@@ -428,7 +428,8 @@ export async function loadRecentAchievement(
   return {
     code: row.achievement_code,
     title: definition.name,
-    earnedAt: row.earned_at
+    earnedAt: row.earned_at,
+    expiresAt: new Date(Date.parse(row.earned_at) + HOME_ACHIEVEMENT_RECENCY_MS).toISOString()
   };
 }
 
