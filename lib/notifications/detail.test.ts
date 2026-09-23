@@ -45,6 +45,7 @@ describe("actionable notifications navigate", () => {
       "message",
       "group",
       "achievement",
+      "friendship_milestone",
       "linkr_connection"
     ]) {
       const behaviour = resolveNotificationBehaviour({ type, handledInline: false });
@@ -200,6 +201,7 @@ describe("the detail sheet says when and where", () => {
     expect(notificationSourceLabel("event_room:a:b")).toBe("Event Rooms");
     expect(notificationSourceLabel("friend_request_received")).toBe("Muddies");
     expect(notificationSourceLabel("system_alert")).toBe("Mad Buddy");
+    expect(notificationSourceLabel("friendship_milestone")).toBe("Milestones");
   });
 
   it("omits the source for a type it does not recognise", () => {

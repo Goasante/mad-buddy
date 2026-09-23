@@ -112,6 +112,7 @@ const SOURCE_LABELS: Record<string, string> = {
   group: "Groups",
   linkr_connection: "Linkr",
   achievement: "Badges",
+  friendship_milestone: "Milestones",
   birthday: "Birthdays",
   subscription_update: "Billing",
   system_alert: "Mad Buddy"

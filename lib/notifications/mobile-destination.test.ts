@@ -28,6 +28,10 @@ describe("destinations Android does not have", () => {
     expect(adapt(href(path))).toBeNull();
   });
 
+  it("keeps milestone reminders readable instead of linking to an unavailable Badges screen", () => {
+    expect(adapt(resolveNotificationDestination("friendship_milestone"))).toBeNull();
+  });
+
   it("opens nothing for a specific group rather than the group list", () => {
     // Android has /groups but no /groups/<id>. Opening the list would answer a
     // different question from the one the notification asked.
@@ -133,7 +137,7 @@ describe("against real resolver output", () => {
     const types = [
       "friend_request_received", "friend_request_accepted", "friend_nearby",
       "best_buddy_nearby", "circle_nearby", "wave", "subscription_update",
-      "system_alert", "staff_message", `birthday:${UUID}`, `message:${UUID}`,
+      "system_alert", "staff_message", "friendship_milestone", `birthday:${UUID}`, `message:${UUID}`,
       `group_message:${UUID}`, `hangout:${UUID}`, `plan:${UUID}`, `event:${UUID}`,
       `group:${UUID}`, `safe_arrival:${UUID}`, `linkr_connection:${UUID}`,
       `meetup_request:${UUID}`, `event_room:${UUID}:${UUID}`
