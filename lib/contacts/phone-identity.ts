@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CountryCode } from "libphonenumber-js/min";
+import { getCountryCallingCode, type CountryCode } from "libphonenumber-js/min";
 
 import { DEFAULT_PHONE_REGION, normalisePhoneNumber, phoneHint } from "@/lib/contacts/phone-normalization";
 import { logBackendEvent } from "@/lib/observability/logger";
@@ -92,6 +92,20 @@ export async function savePhoneNumber(
 
   const { e164, country } = normalised;
 
+  /*
+   * Keep the person's selected region when it is compatible with the number's
+   * calling code. This matters for shared codes such as +1 (US/CA) and +44
+   * (GB/Guernsey/Jersey/Isle of Man): parser inference alone can choose a
+   * neighbouring numbering plan, which would later misinterpret locally-saved
+   * contacts. If the selected region's calling code does not match the number,
+   * the parsed country is the better fallback for an explicitly international
+   * number.
+   */
+  const selectedCallingCode = getCountryCallingCode(region);
+  const identityRegion: CountryCode | null = e164.startsWith(`+${selectedCallingCode}`)
+    ? region
+    : country ?? null;
+
   // Best-effort for a NEW/dormant identity: an unconfigured secret must not
   // stop somebody storing their number. If discovery is ALREADY on, however,
   // changing the number must also produce a new identifier in the same write
@@ -159,7 +173,7 @@ export async function savePhoneNumber(
       {
         user_id: userId,
         phone_e164: e164,
-        phone_region: country ?? null,
+        phone_region: identityRegion,
         // Derived here, at write time, so matching never has to touch a raw
         // number. Absent when matching is unconfigured -- the row still saves,
         // it simply cannot produce a match until an identifier exists.
