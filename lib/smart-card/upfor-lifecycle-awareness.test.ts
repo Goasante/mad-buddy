@@ -107,8 +107,9 @@ describe("1. a Muddy puts something out, before the viewer has acted", () => {
         opportunities: [opportunity(), opportunity({ id: "s2", ownerId: "o2", ownerName: "Ama" })]
       })
     );
-    expect(card?.subtitle).toBe("2 of your Muddies are UpFor something right now.");
-    expect(card?.subtitle).not.toContain("Ama");
+    expect(card?.subtitle).toBe("You can ask to join while it's live.");
+    expect(card?.socialProof).toBe("2 of your Muddies are UpFor something right now.");
+    expect(card?.socialProof).not.toContain("Ama");
   });
 
   /**
@@ -129,6 +130,7 @@ describe("2. the viewer asks to join", () => {
     );
     expect(card?.id).toBe("upfor_active_muddy");
     expect(card?.meta).toBe("Waiting on them");
+    expect(card?.metaKind).toBe("status");
     expect(card?.cta).not.toBe("See UpFor");
   });
 
