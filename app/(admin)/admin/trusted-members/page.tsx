@@ -63,7 +63,7 @@ export default async function AdminTrustedMembersPage({
     <div className="flex flex-col gap-6">
       <AdminPageHeader
         title="Trusted Members"
-        description={`Applications from members with ${TRUSTED_MEMBER_MIN_PREMIUM_DAYS}+ days of Premium and all ${TRUSTED_MEMBER_REQUIRED_JOURNEYS} journeys complete. Approval recognises standing — it is not an identity check.`}
+        description={`Applications from members with ${TRUSTED_MEMBER_MIN_PREMIUM_DAYS}+ days of paid Access and all ${TRUSTED_MEMBER_REQUIRED_JOURNEYS} active journey steps complete. Approval recognises standing — it is not an identity check.`}
       />
 
       <div className="flex flex-wrap items-center gap-2">

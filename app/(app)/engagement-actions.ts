@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { ACHIEVEMENT_CATALOG } from "@/lib/achievements/achievement-catalog";
 import {
   RECAP_REFLECTION_PROMPT,
   clampNotificationBudget,
@@ -201,7 +202,17 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
   ]);
 
   const earnedByCode = new Map((earnedRes.data ?? []).map((row) => [row.achievement_code, row.earned_at]));
-  const achievements = (definitionsRes.data ?? []).map((definition) => ({
+  // The local catalog is the display-safe fallback. A transient definitions
+  // read must not turn the whole page into the global error screen.
+  const definitions = definitionsRes.error
+    ? ACHIEVEMENT_CATALOG.map((definition) => ({
+        code: definition.id,
+        name: definition.name,
+        description: definition.description,
+        category: definition.category
+      }))
+    : definitionsRes.data ?? [];
+  const achievements = definitions.map((definition) => ({
     code: definition.code,
     name: definition.name,
     description: definition.description,
@@ -210,11 +221,18 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
     earnedAt: earnedByCode.get(definition.code) ?? null
   }));
 
-  const friendships = friendshipsRes.data ?? [];
+  const friendships = friendshipsRes.error ? [] : friendshipsRes.data ?? [];
   const milestonesEnabled = milestonesAvailable && (preferencesRes.data?.streaks_enabled ?? true);
-  const milestones = milestonesEnabled
-    ? await loadMilestoneViewsForUser(admin, userId, friendships)
-    : [];
+  let milestones: MilestoneView[] = [];
+  if (milestonesEnabled) {
+    try {
+      milestones = await loadMilestoneViewsForUser(admin, userId, friendships);
+    } catch {
+      // Milestones are optional supporting content. Achievements and recap
+      // remain usable if their projection is temporarily unavailable.
+      milestones = [];
+    }
+  }
 
   let recap: EngagementOverview["recap"] = null;
   if (recapRes.data) {

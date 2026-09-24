@@ -62,7 +62,8 @@ export async function emitLifeEvent(admin: Admin, input: LifeEventInput): Promis
   const { error } = await admin.from("domain_events").insert({
     event_type: record.eventType,
     resource_type: record.resourceType,
-    resource_id: record.resourceId,
+    resource_id: null,
+    resource_key: record.resourceKey,
     actor_id: record.actorId,
     dedupe_key: record.dedupeKey,
     // The payload is built from primitives only (buildLifeEvent rejects

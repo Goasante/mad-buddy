@@ -40,6 +40,13 @@ const messagesPage = stripComments(read("components/messages/messages-page.tsx")
 // ---------------------------------------------------------------------------
 
 describe("verification comes from one server-authoritative place", () => {
+  it("allows the manual review type used by the admin workflow", () => {
+    const migration = read("supabase/migrations/20260923223657_enable_manual_account_verification.sql");
+    const adminService = read("lib/trust/verified-account-admin.ts");
+    expect(adminService).toContain('MANUAL_VERIFICATION_TYPE = "manual_review"');
+    expect(migration).toContain("'manual_review'");
+  });
+
   it("counts only an actually verified row", () => {
     const cases: Array<[VerificationRow["status"], boolean]> = [
       ["verified", true],

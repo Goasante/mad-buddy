@@ -18,7 +18,9 @@ describe("mobile form controls stay inside their cards", () => {
     const start = source.indexOf('id=\"dateOfBirth\"');
     const block = source.slice(start, source.indexOf("/>", start));
     expect(block).toContain("[min-inline-size:0]");
+    expect(block).toContain("[-webkit-min-logical-width:0]");
     expect(block).toContain("[&::-webkit-date-and-time-value]:min-w-0");
+    expect(source.slice(Math.max(0, start - 200), start)).toContain("overflow-hidden rounded-md");
   });
 
   it("allows shared form labels and hints to wrap instead of forcing horizontal overflow", () => {

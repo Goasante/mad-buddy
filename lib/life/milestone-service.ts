@@ -35,16 +35,16 @@ async function loadEvidence(admin: Admin, relationshipIds: readonly string[]) {
     let from = 0;
     while (ids.length > 0) {
       const { data, error } = await admin.from("domain_events")
-        .select("id, resource_id, event_type, occurred_at")
+        .select("id, resource_key, event_type, occurred_at")
         .eq("resource_type", "relationship")
-        .in("resource_id", ids)
+        .in("resource_key", ids)
         .in("event_type", ["plan.attended_together", "reconnect.completed"])
         .order("id", { ascending: true })
         .range(from, from + EVENT_PAGE - 1);
       if (error) throw error;
       for (const row of data ?? []) {
-        if (!row.resource_id) continue;
-        const evidence = result.get(row.resource_id);
+        if (!row.resource_key) continue;
+        const evidence = result.get(row.resource_key);
         if (!evidence) continue;
         const at = Date.parse(row.occurred_at);
         if (!Number.isFinite(at)) continue;

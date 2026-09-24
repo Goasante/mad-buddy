@@ -69,7 +69,7 @@ export async function loadRelationshipTimeline(
     .from("domain_events")
     .select("event_type, actor_id, occurred_at, payload")
     .eq("resource_type", LIFE_RESOURCE_TYPE)
-    .eq("resource_id", relationship)
+    .eq("resource_key", relationship)
     .order("occurred_at", { ascending: false })
     .limit(limit * 4);
 

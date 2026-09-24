@@ -157,7 +157,7 @@ export type LifeEventInput = {
 export type LifeEventRecord = {
   eventType: LifeEventType;
   resourceType: typeof LIFE_RESOURCE_TYPE;
-  resourceId: string;
+  resourceKey: string;
   actorId: string;
   dedupeKey: string;
   payload: Record<string, unknown>;
@@ -206,7 +206,7 @@ export function buildLifeEvent(input: LifeEventInput): LifeEventRecord {
   return {
     eventType: input.eventType,
     resourceType: LIFE_RESOURCE_TYPE,
-    resourceId: relationship,
+    resourceKey: relationship,
     actorId: input.actorId,
     dedupeKey: lifeDedupeKey(input.eventType, relationship, input.naturalKey),
     // subjectId is recorded so a projection knows the other party without

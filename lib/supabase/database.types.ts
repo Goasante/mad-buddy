@@ -4174,6 +4174,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["push_subscriptions"]["Insert"]>;
         Relationships: [];
       };
+      account_sessions: {
+        Row: {
+          session_id: string;
+          user_id: string;
+          created_at: string;
+          last_seen_at: string;
+          user_agent: string | null;
+          not_after: string | null;
+        };
+        Insert: {
+          session_id: string;
+          user_id: string;
+          created_at: string;
+          last_seen_at: string;
+          user_agent?: string | null;
+          not_after?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["account_sessions"]["Insert"]>;
+        Relationships: [];
+      };
       device_push_tokens: {
         Row: {
           id: string;
@@ -5067,6 +5087,7 @@ export type Database = {
           version: number;
           resource_type: string;
           resource_id: string | null;
+          resource_key: string | null;
           actor_id: string | null;
           payload: Json;
           occurred_at: string;
@@ -5081,6 +5102,7 @@ export type Database = {
           version?: number;
           resource_type: string;
           resource_id?: string | null;
+          resource_key?: string | null;
           actor_id?: string | null;
           payload?: Json;
           occurred_at?: string;

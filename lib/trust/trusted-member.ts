@@ -56,7 +56,7 @@ export function trustedMemberEligibility(input: {
 
   if (input.premiumDays < TRUSTED_MEMBER_MIN_PREMIUM_DAYS) {
     const remaining = TRUSTED_MEMBER_MIN_PREMIUM_DAYS - input.premiumDays;
-    missing.push(`${remaining} more ${remaining === 1 ? "day" : "days"} of Premium`);
+    missing.push(`${remaining} more ${remaining === 1 ? "day" : "days"} of paid Access`);
   }
 
   if (input.journeysComplete < TRUSTED_MEMBER_REQUIRED_JOURNEYS) {

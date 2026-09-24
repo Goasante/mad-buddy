@@ -84,7 +84,7 @@ export default async function AdminVerificationsPage({
     <div className="flex flex-col gap-6">
       <AdminPageHeader
         title="Account verification"
-        description="Mad Buddy has checked who this person is. Separate from Trusted Member, which recognises standing earned in the product, and from Premium, which is a plan."
+        description="Mad Buddy has checked who this person is. Separate from Trusted Member, which recognises standing earned in the product, and from Access, which removes ads."
       />
 
       {/* Search, because there is no application flow yet: a reviewer arrives

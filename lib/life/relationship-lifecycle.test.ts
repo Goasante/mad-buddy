@@ -148,7 +148,7 @@ describe("reactivation", () => {
     const created = buildLifeEvent({ eventType: "relationship.created", actorId: ALICE, subjectId: BOB, naturalKey: "created" });
     const ended = buildLifeEvent({ eventType: "relationship.ended", actorId: BOB, subjectId: ALICE, naturalKey: "ended" });
     const back = buildLifeEvent({ eventType: "relationship.reactivated", actorId: ALICE, subjectId: BOB, naturalKey: "reactivated:r1" });
-    expect(new Set([created.resourceId, ended.resourceId, back.resourceId]).size).toBe(1);
+    expect(new Set([created.resourceKey, ended.resourceKey, back.resourceKey]).size).toBe(1);
   });
 });
 

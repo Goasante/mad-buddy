@@ -268,13 +268,15 @@ export function OnboardingFlow({
                 label="Date of birth"
                 hint="Optional now. Private by default; Linkr needs it."
               >
-                <Input
-                  id="dateOfBirth"
-                  type="date"
-                  value={dateOfBirth}
-                  className="min-w-0 overflow-hidden [inline-size:100%] [min-inline-size:0] [&::-webkit-date-and-time-value]:min-w-0"
-                  onChange={(event) => setDateOfBirth(event.target.value)}
-                />
+                <div className="min-w-0 max-w-full overflow-hidden rounded-md">
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={dateOfBirth}
+                    className="block min-w-0 max-w-full overflow-hidden [inline-size:100%] [min-inline-size:0] [-webkit-min-logical-width:0] [&::-webkit-date-and-time-value]:min-w-0 [&::-webkit-datetime-edit]:min-w-0 [&::-webkit-datetime-edit]:overflow-hidden"
+                    onChange={(event) => setDateOfBirth(event.target.value)}
+                  />
+                </div>
               </FormField>
 
               <div className="space-y-2">

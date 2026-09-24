@@ -324,8 +324,21 @@ export async function revokeOtherSessionsAction(): Promise<SettingsActionState> 
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Log in before managing sessions." };
+  const claimsResult = typeof supabase.auth.getClaims === "function" ? await supabase.auth.getClaims() : null;
+  const currentSessionId =
+    claimsResult?.data?.claims && typeof claimsResult.data.claims.session_id === "string"
+      ? claimsResult.data.claims.session_id
+      : null;
   const { error } = await supabase.auth.signOut({ scope: "others" });
-  return error ? { ok: false, message: "Couldn't log out the other sessions." } : { ok: true, message: "Other sessions logged out." };
+  if (error) return { ok: false, message: "Couldn't log out the other sessions." };
+  if (currentSessionId) {
+    await createSupabaseAdminClient()
+      .from("account_sessions")
+      .delete()
+      .eq("user_id", user.id)
+      .neq("session_id", currentSessionId);
+  }
+  return { ok: true, message: "Other sessions logged out." };
 }
 
 const smartNotificationPreferencesSchema = z.object({
