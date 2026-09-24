@@ -1415,23 +1415,31 @@ export async function markConversationRead(userId: string, conversationId: strin
   const access = await resolveConversationAccess(admin, userId, conversationId);
   if (!access.canView) return { ok: false, message: "Not found." };
 
-  const { data: latest } = await admin
+  const { data: latest, error: latestError } = await admin
     .from("messages")
     .select("id")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (latestError) return { ok: false, message: "Could not load the latest message." };
   if (!latest) return { ok: true, message: "Up to date." };
 
-  await admin
+  const { data: member, error: readError } = await admin
     .from("conversation_members")
     .update({ last_read_message_id: latest.id, updated_at: new Date().toISOString() })
     .eq("conversation_id", conversationId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("status", "joined")
+    .select("user_id")
+    .maybeSingle();
+  if (readError || !member) return { ok: false, message: "Could not mark this conversation as read." };
 
-  const prefs = await loadCommunicationPreferences(admin, userId);
-  if (prefs.readReceiptsEnabled) {
+  // A group has one read cursor per member. Updating the shared message status
+  // for every member's read would be both incorrect and expensive for a busy room.
+  if (access.conversationType === "direct") {
+    const prefs = await loadCommunicationPreferences(admin, userId);
+    if (!prefs.readReceiptsEnabled) return { ok: true, message: "Marked read." };
     await admin
       .from("messages")
       .update({ status: "read" })

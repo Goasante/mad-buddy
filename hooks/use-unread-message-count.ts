@@ -33,10 +33,16 @@ export function useUnreadMessageCount(userId: string | null) {
   const enabled = Boolean(userId);
   const [unreadCount, setUnreadCount] = useState(0);
   const inFlight = useRef<Promise<void> | null>(null);
+  const queuedRefresh = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
-    if (inFlight.current) return inFlight.current;
+    if (inFlight.current) {
+      // A read can complete while the previous count request is still running.
+      // Fetch again afterward so its older response cannot leave a stale badge.
+      queuedRefresh.current = true;
+      return inFlight.current;
+    }
 
     const request = (async () => {
       try {
@@ -53,6 +59,10 @@ export function useUnreadMessageCount(userId: string | null) {
         // Retain the last known count during a temporary network failure.
       } finally {
         inFlight.current = null;
+        if (queuedRefresh.current) {
+          queuedRefresh.current = false;
+          queueMicrotask(() => window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT)));
+        }
       }
     })();
 

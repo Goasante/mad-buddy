@@ -367,6 +367,7 @@ export function MessagesPageV4({
   /* Server-projected Realtime rows that landed while device/network hydration
      was pending. A slower snapshot must merge these rather than erase them. */
   const realtimePatchesRef = useRef<Map<string, Map<string, ChatMessageView>>>(new Map());
+  const inboxRefreshIdRef = useRef(0);
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -381,13 +382,28 @@ export function MessagesPageV4({
   }, []);
 
   const syncConversations = useCallback(async () => {
+    const refreshId = ++inboxRefreshIdRef.current;
     try {
       const server = await withTimeout(getConversationsAction(), { operation: "refresh chats" });
-      if (mountedRef.current) setConversations(server);
+      if (mountedRef.current && refreshId === inboxRefreshIdRef.current) setConversations(server);
     } catch {
       // Keep current inbox when a background refresh fails.
     }
   }, []);
+
+  const acknowledgeConversationRead = useCallback(async (conversationId: string) => {
+    const result = await markConversationReadAction(conversationId).catch(() => ({ ok: false, message: "" }));
+    if (!mountedRef.current) return;
+    if (result.ok) {
+      // A snapshot started before this write must not restore the old badge.
+      ++inboxRefreshIdRef.current;
+      setConversations((current) => current.map((conversation) => conversation.id === conversationId
+        ? { ...conversation, unreadCount: 0 }
+        : conversation));
+      window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT));
+    }
+    void syncConversations();
+  }, [syncConversations]);
 
   const syncInboxPreferences = useCallback(async () => {
     try {
@@ -490,6 +506,13 @@ export function MessagesPageV4({
 
   const loadConversation = useCallback(async (conversationId: string) => {
     const requestId = ++loadRequestIdRef.current;
+    // Read bookkeeping starts on open, including when the cached thread paints
+    // instantly or the message fetch fails. Never gate it behind hydration.
+    void acknowledgeConversationRead(conversationId);
+    setInboxPreferences((current) => current[conversationId]
+      ? { ...current, [conversationId]: { ...current[conversationId], markedUnreadAt: null } }
+      : current);
+    void updateConversationUserPreferencesAction({ conversationId, markedUnread: false }).catch(() => null);
     const cached = readThread(viewerIdRef.current, conversationId);
     const hasCachedThread = Boolean(cached);
     /* THE INSTANT OPEN. A cached thread is the UI's source, not merely an
@@ -583,15 +606,6 @@ export function MessagesPageV4({
         writeThreadReplyContexts(viewerIdRef.current, conversationId, nextReplies);
       });
 
-      void Promise.all([
-        markConversationReadAction(conversationId).catch(() => ({ ok: false, message: "" })),
-        updateConversationUserPreferencesAction({ conversationId, markedUnread: false }).catch(() => ({ ok: false, message: "" }))
-      ]).then(() => {
-        if (!mountedRef.current || requestId !== loadRequestIdRef.current) return;
-        setInboxPreferences((current) => current[conversationId] ? { ...current, [conversationId]: { ...current[conversationId], markedUnreadAt: null } } : current);
-        setConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation));
-        window.dispatchEvent(new Event(MESSAGES_UPDATED_EVENT));
-      });
     } catch (error) {
       if (requestId === loadRequestIdRef.current) setFeedback(failureMessage(error));
     } finally {
@@ -599,7 +613,7 @@ export function MessagesPageV4({
     }
   // See refreshMessages above: canonical settlement is intentionally ref-fed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setFeedback]);
+  }, [acknowledgeConversationRead, setFeedback]);
 
   useEffect(() => {
     void syncConversations();
@@ -672,11 +686,10 @@ export function MessagesPageV4({
         // If its full snapshot is slow, keep the already-rendered chat calm;
         // the next event/open will reconcile again.
         void refreshMessages(selectedId, true, false);
-        void syncConversations();
         /* If the thread is on screen, an incoming message is read now. This is
            intentionally background work; it also drives the sender's Seen
            receipt through the existing message-status Realtime event. */
-        void markConversationReadAction(selectedId).catch(() => ({ ok: false, message: "" }));
+        void acknowledgeConversationRead(selectedId);
       }, 75);
     };
     const refreshPoll = () => {
@@ -718,8 +731,7 @@ export function MessagesPageV4({
           cancelSendConfirmation(projected.clientMessageId);
           updateOptimistic(selectedId, (current) => discardOptimistic(current, projected.clientMessageId!));
         }
-        void syncConversations();
-        void markConversationReadAction(selectedId).catch(() => ({ ok: false, message: "" }));
+        void acknowledgeConversationRead(selectedId);
       }).catch(refreshThread);
     };
     const channel = supabase
