@@ -4,6 +4,7 @@ import { ArrowLeft, Eye, Hand, MapPinOff, ShieldCheck, Users } from "lucide-reac
 
 import { HOW_LINKR_WORKS, LINKR_COPY } from "@/lib/linkr/rules";
 import { LinkrStateArtwork } from "@/components/linkr/linkr-state-artwork";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 
 /**
  * The screens that are moments rather than surfaces: the match, the empty
@@ -21,7 +22,7 @@ import { LinkrStateArtwork } from "@/components/linkr/linkr-state-artwork";
 
 export type MatchScreenProps = {
   me: { displayName: string; photo: string | null };
-  them: { displayName: string; photo: string | null };
+  them: { displayName: string; photo: string | null; isVerifiedAccount?: boolean };
   onSayHi: () => void;
   onKeepDiscovering: () => void;
   /**
@@ -52,6 +53,7 @@ export function LinkrMatchScreen({
       <h1 id="linkr-match-title" className="linkr-match__title">
         {LINKR_COPY.matchTitle} <span aria-hidden>🎉</span>
       </h1>
+      <p className="flex items-center justify-center gap-1.5 font-semibold">{them.displayName}<VerifiedAccountMark isVerifiedAccount={them.isVerifiedAccount} compact /></p>
       <p className="linkr-match__body">{LINKR_COPY.matchBody(them.displayName)}</p>
 
       <button type="button" className="linkr-primary" onClick={onSayHi}>

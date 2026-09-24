@@ -2,10 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Touch-first app chrome should behave like controls, not selectable copy.
- * Keep this scoped to actions and navigation: messages, articles, form fields,
- * and editable content retain the platform's normal selection/copy behavior. */
+/* A PWA has app chrome beyond native buttons (names, cards, headings and
+ * blank surfaces). Keep long-press selection off that chrome, but explicitly
+ * restore it for actual prose, message copy and editable fields. The rule is
+ * scoped to the signed-in app so public pages stay ordinary web pages. */
 @media (pointer: coarse) {
+  [data-app-shell] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  :where([data-app-shell] :is(p, article, blockquote, pre, code, input, textarea, [contenteditable], [role="textbox"], [data-selectable-text], .select-text)) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  :where([data-app-shell] :is(.linkr-deck-name, .linkr-match__body, .muddies-card-identity)) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   :where(button, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], nav a) {
     -webkit-user-select: none;
     user-select: none;

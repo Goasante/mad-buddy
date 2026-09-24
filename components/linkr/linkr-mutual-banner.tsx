@@ -4,6 +4,7 @@ import Image from "next/image";
 import { X } from "lucide-react";
 
 import { LINKR_COPY } from "@/lib/linkr/rules";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 
 /**
  * The mutual signal for the person who clicked FIRST.
@@ -21,10 +22,12 @@ import { LINKR_COPY } from "@/lib/linkr/rules";
  */
 export function LinkrMutualBanner({
   name,
+  isVerifiedAccount,
   onOpen,
   onDismiss
 }: {
   name: string;
+  isVerifiedAccount: boolean;
   onOpen: () => void;
   onDismiss: () => void;
 }) {
@@ -44,7 +47,7 @@ export function LinkrMutualBanner({
       </span>
 
       <button type="button" className="linkr-mutual-banner__body" onClick={onOpen}>
-        <strong>{LINKR_COPY.mutualBanner(name)}</strong>
+        <strong className="flex items-center gap-1.5">{LINKR_COPY.mutualBanner(name)}<VerifiedAccountMark isVerifiedAccount={isVerifiedAccount} compact inControl /></strong>
         <small>{LINKR_COPY.mutualBannerAction}</small>
       </button>
 

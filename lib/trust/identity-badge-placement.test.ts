@@ -8,6 +8,10 @@ const home = read("components/dashboard/dashboard-page.tsx");
 const nearbyRoute = read("app/api/friends/nearby/route.ts");
 const nearbyService = read("lib/proximity/nearby-service.ts");
 const muddies = read("components/friends/friends-page.tsx");
+const muddyLoader = read("app/(app)/friends/page.tsx");
+const linkrCollections = read("components/linkr/linkr-collections.tsx");
+const linkrSettings = read("components/linkr/linkr-settings.tsx");
+const linkrCandidate = read("components/linkr/candidate-card.tsx");
 const profileModal = read("components/glow/muddy-profile-modal.tsx");
 const publicProfile = read("components/friends/muddy-profile-page.tsx");
 const selfProfile = read("components/profile/profile-page.tsx");
@@ -40,7 +44,15 @@ describe("identity badge placement", () => {
     expect(home).toContain("<VerifiedAccountMark isVerifiedAccount={heroFriend.isVerifiedAccount} compact />");
     expect(home).toContain("<VerifiedAccountMark isVerifiedAccount={friend.isVerifiedAccount} compact inControl />");
     expect(muddies).toContain("<VerifiedAccountMark isVerifiedAccount={user.isVerifiedAccount} compact inControl />");
+    expect(muddyLoader.match(/isVerifiedAccount: verifiedByUserId\.get\(profileId\)/g)).toHaveLength(2);
     expect(muddies).not.toContain('import { TrustedMemberMark }');
+  });
+
+  it("shows verification, but not Trusted Member, across Linkr identities", () => {
+    for (const source of [linkrCollections, linkrSettings, linkrCandidate]) {
+      expect(source).toContain("<VerifiedAccountMark");
+      expect(source).not.toContain('import { TrustedMemberMark }');
+    }
   });
 
   it("shows only verification across the live Chats identity surfaces", () => {

@@ -272,9 +272,8 @@ export function CandidateCard({
 
         <div className="linkr-card__body">
           <h2 className="linkr-card__name">
-            {candidate.displayName}
-            {candidate.age !== null ? `, ${candidate.age}` : ""}
-            <VerifiedAccountMark isVerifiedAccount={candidate.isVerifiedAccount} compact />
+            <span className="min-w-0 truncate">{candidate.displayName}{candidate.age !== null ? `, ${candidate.age}` : ""}</span>
+            <VerifiedAccountMark isVerifiedAccount={candidate.isVerifiedAccount} compact inControl />
           </h2>
 
           {/* ONE CONTEXT LINE: what they are here for, and roughly where.

@@ -444,6 +444,7 @@ function AppShellInner({
     // vertical scroll owner and reserves fixed chrome inside that scrolling
     // box; the outer shell must not add either chrome footprint again.
     <div
+      data-app-shell
       className={cn(
         "flex h-[100svh] h-[100dvh] min-h-0 flex-col overflow-hidden bg-background dark:bg-[#111112] md:block md:bg-secondary/25 md:p-4 md:pb-4 dark:md:bg-[#353537]"
       )}

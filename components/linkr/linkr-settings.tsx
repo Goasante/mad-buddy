@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { loadLinkrRewindRequestsAction } from "@/app/(app)/linkr-actions";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 
 import { LINKR_INTENT_LABELS } from "@/lib/linkr/intent";
 import { LINKR_DISTANCE_OPTIONS } from "@/lib/linkr/rules";
@@ -119,7 +120,7 @@ export function LinkrSettings({
                 <div className="linkr-collection__row linkr-collection__row--static">
                   <HiddenFace photo={person.photo} name={person.displayName} />
                   <span className="linkr-collection__text">
-                    <strong>{person.displayName}</strong>
+                    <span className="flex min-w-0 items-center gap-1.5"><strong className="truncate">{person.displayName}</strong><VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact /></span>
                     <small>Hidden from your Linkr discovery</small>
                   </span>
                   <button

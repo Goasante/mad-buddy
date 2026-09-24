@@ -1048,6 +1048,7 @@ export function FriendsPageContent({
                   requestId: person.requestId,
                   displayName: person.displayName,
                   avatarUrl: person.avatarUrl,
+                  isVerifiedAccount: person.isVerifiedAccount,
                   mutualFriends: person.mutualFriends,
                   mutualAvatarUrls: person.mutualAvatarUrls
                 }))}
@@ -1219,7 +1220,7 @@ export function FriendsPageContent({
               <li key={user.id} className="flex items-center gap-3 py-3">
                 <InitialsAvatar name={user.displayName} src={user.avatarUrl} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{user.displayName}</p>
+                  <p className="flex min-w-0 items-center gap-1.5 font-medium"><span className="truncate">{user.displayName}</span><VerifiedAccountMark isVerifiedAccount={user.isVerifiedAccount} compact /></p>
                   <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
                 </div>
                 <Button
@@ -1703,7 +1704,7 @@ function ActiveNowStrip({
                   decorative
                   size="md"
                 />
-                <span className="w-full truncate text-xs font-medium">{friend.displayName}</span>
+                <span className="flex w-full items-center justify-center gap-1 text-xs font-medium"><span className="truncate">{friend.displayName}</span><VerifiedAccountMark isVerifiedAccount={friend.isVerifiedAccount} compact inControl /></span>
                 {proximityText ? (
                   <span className="w-full truncate text-[11px] font-semibold text-primary">
                     {proximityText}
@@ -1803,6 +1804,7 @@ function RequestRow({
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 font-medium leading-tight">
           <span className="truncate">{user.displayName}</span>
+          <VerifiedAccountMark isVerifiedAccount={user.isVerifiedAccount} compact />
           <PremiumPlanBadge plan={user.plan} compact />
         </p>
         <p className="truncate text-xs text-muted-foreground">
@@ -1900,6 +1902,7 @@ function AddMuddyModal({
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 text-sm font-semibold">
                     <span className="truncate">{user.displayName}</span>
+                    <VerifiedAccountMark isVerifiedAccount={user.isVerifiedAccount} compact />
                     <PremiumPlanBadge plan={user.plan} compact />
                   </p>
                   <p className="truncate text-xs text-muted-foreground">@{user.username}</p>

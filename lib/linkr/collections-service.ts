@@ -34,6 +34,7 @@ export type ClickedPerson = {
   connectionId: string;
   displayName: string;
   photo: string | null;
+  isVerifiedAccount: boolean;
   connectedAt: string;
   /** Present only once the pair actually has somewhere to talk. */
   conversationId: string | null;
@@ -59,6 +60,7 @@ export type PendingClick = {
   userId: string;
   displayName: string;
   photo: string | null;
+  isVerifiedAccount: boolean;
   /** When THIS VIEWER chose them. Never anything about the other person. */
   clickedAt: string;
 };
@@ -68,6 +70,7 @@ export type HiddenProfile = {
   userId: string;
   displayName: string;
   photo: string | null;
+  isVerifiedAccount: boolean;
   hiddenAt: string;
 };
 
@@ -91,14 +94,23 @@ function serverReady(): boolean {
 async function describePeople(
   admin: Admin,
   userIds: string[]
-): Promise<Map<string, { displayName: string; photo: string | null }>> {
-  const described = new Map<string, { displayName: string; photo: string | null }>();
+): Promise<Map<string, { displayName: string; photo: string | null; isVerifiedAccount: boolean }>> {
+  const described = new Map<string, { displayName: string; photo: string | null; isVerifiedAccount: boolean }>();
   if (userIds.length === 0) return described;
 
-  const { data: profiles } = await admin
-    .from("profiles")
-    .select("user_id, full_name, username, visibility_status, deleted_at")
-    .in("user_id", userIds);
+  const [{ data: profiles }, { data: verifications }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, full_name, username, visibility_status, deleted_at")
+      .in("user_id", userIds),
+    admin
+      .from("account_verifications")
+      .select("user_id")
+      .in("user_id", userIds)
+      .eq("verification_type", "manual_review")
+      .eq("status", "verified")
+  ]);
+  const verifiedIds = new Set((verifications ?? []).map((row) => row.user_id));
 
   // Media comes from the canonical Profile projection, so a face shown here is
   // the same stranger-safe face the candidate card was allowed to show.
@@ -120,7 +132,8 @@ async function describePeople(
     if (profile.deleted_at) continue;
     described.set(profile.user_id, {
       displayName: profile.full_name?.trim() || profile.username || "Someone",
-      photo: photoByUser.get(profile.user_id) ?? null
+      photo: photoByUser.get(profile.user_id) ?? null,
+      isVerifiedAccount: verifiedIds.has(profile.user_id)
     });
   }
   return described;
@@ -253,6 +266,7 @@ export async function loadClickedPeople(viewerId: string): Promise<ClickedPerson
       connectionId: row.id,
       displayName: person.displayName,
       photo: person.photo,
+      isVerifiedAccount: person.isVerifiedAccount,
       connectedAt: row.connected_at,
       conversationId: row.conversation_id ?? null,
       hasConversation: row.conversation_id ? activity.has(row.conversation_id) : false,
@@ -310,6 +324,7 @@ export async function loadPendingClicks(viewerId: string): Promise<PendingClick[
       userId: row.target_id,
       displayName: person.displayName,
       photo: person.photo,
+      isVerifiedAccount: person.isVerifiedAccount,
       clickedAt: row.created_at
     });
   }
@@ -352,6 +367,7 @@ export async function loadHiddenProfiles(viewerId: string): Promise<HiddenProfil
       userId: row.target_id,
       displayName: person.displayName,
       photo: person.photo,
+      isVerifiedAccount: person.isVerifiedAccount,
       hiddenAt: row.updated_at
     });
   }
@@ -425,4 +441,3 @@ export async function loadLinkrRewindRequests(viewerId: string): Promise<LinkrRe
   }
   return requests;
 }
-

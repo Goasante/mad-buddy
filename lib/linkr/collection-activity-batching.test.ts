@@ -39,6 +39,7 @@ type Fixture = {
   }>;
   /** conversation_id -> last_created_at, exactly as the RPC returns it. */
   previews: Record<string, string | null>;
+  verifiedIds?: string[];
 };
 
 let fixture: Fixture = { connections: [], previews: {} };
@@ -75,6 +76,7 @@ function fakeAdmin() {
           });
         }
         if (table === "blocked_users") return Promise.resolve({ data: [] });
+        if (table === "account_verifications") return Promise.resolve({ data: (fixture.verifiedIds ?? []).map((user_id) => ({ user_id })) });
         if (table === "events") return Promise.resolve({ data: [] });
         return Promise.resolve({ data: [] });
       };
@@ -201,6 +203,15 @@ describe("the activity question is bounded in both directions", () => {
 });
 
 describe("the semantics the CTA depends on survive the batching", () => {
+  it("projects verified identity from one batched lookup", async () => {
+    fixture.connections = [connection({ conversation_id: null })];
+    fixture.verifiedIds = [B];
+
+    const people = await loadClickedPeople(A);
+
+    expect(people[0]?.isVerifiedAccount).toBe(true);
+    expect(calls.filter((call) => call.name === "account_verifications")).toHaveLength(1);
+  });
   it("a conversation with a live message reads as started", async () => {
     fixture.connections = [connection({ conversation_id: CONV_LIVE })];
     fixture.previews = { [CONV_LIVE]: "2026-08-05T09:00:00.000Z" };

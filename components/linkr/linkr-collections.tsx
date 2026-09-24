@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, MessageCircle } from "lucide-react";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 
 import { LINKR_COPY } from "@/lib/linkr/rules";
 import type { ClickedPerson, PendingClick } from "@/lib/linkr/collections-service";
@@ -59,7 +60,7 @@ export function LinkrCollections({
                 >
                   <Face photo={person.photo} name={person.displayName} />
                   <span className="linkr-collection__text">
-                    <strong>{person.displayName}</strong>
+                    <span className="flex min-w-0 items-center gap-1.5"><strong className="truncate">{person.displayName}</strong><VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact inControl /></span>
                     {/* The CTA follows the conversation's real state: once
                         somebody has actually spoken, offering "Say hi" would
                         be offering to start something already started. */}
@@ -92,7 +93,7 @@ export function LinkrCollections({
                 <div className="linkr-collection__row linkr-collection__row--static">
                   <Face photo={person.photo} name={person.displayName} />
                   <span className="linkr-collection__text">
-                    <strong>{person.displayName}</strong>
+                    <span className="flex min-w-0 items-center gap-1.5"><strong className="truncate">{person.displayName}</strong><VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact /></span>
                     {/* Describes the VIEWER's own action, never the other
                         person's. "You clicked" is a fact about you. */}
                     <small>You clicked</small>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ArrowLeft, Camera, Star } from "lucide-react";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 
 import { LINKR_INTENTS, type LinkrIntent } from "@/lib/linkr/intent";
 import { PRIMARY_SLOT, orderedPhotos } from "@/lib/linkr/photos";
@@ -80,6 +81,7 @@ export function LinkrProfileEditor({
           <p className="linkr-profile__name">
             {profile.displayName}
             {profile.age !== null ? `, ${profile.age}` : ""}
+            <VerifiedAccountMark isVerifiedAccount={profile.isVerifiedAccount} compact />
           </p>
         </div>
 

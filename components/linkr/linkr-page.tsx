@@ -113,6 +113,7 @@ function LinkrPageContent({
   const [match, setMatch] = useState<{
     displayName: string;
     photo: string | null;
+    isVerifiedAccount: boolean;
     conversationId?: string;
     hasConversation?: boolean;
   } | null>(null);
@@ -122,6 +123,7 @@ function LinkrPageContent({
    */
   const [mutualBanner, setMutualBanner] = useState<{
     name: string;
+    isVerifiedAccount: boolean;
     connectionId: string;
   } | null>(null);
   // The person completing reciprocity already receives the full mutual
@@ -260,6 +262,7 @@ function LinkrPageContent({
         setMatch({
           displayName: result.matchedWith.displayName,
           photo: result.matchedWith.photo,
+          isVerifiedAccount: Boolean(current?.userId === targetId && current.isVerifiedAccount),
           conversationId: result.conversationId
         });
       }
@@ -321,6 +324,7 @@ function LinkrPageContent({
         setMatch({
           displayName: person?.displayName ?? "Someone",
           photo: person?.photo ?? null,
+          isVerifiedAccount: person?.isVerifiedAccount ?? false,
           conversationId: resolved.conversationId ?? undefined,
           hasConversation: false
         });
@@ -371,7 +375,7 @@ function LinkrPageContent({
         // is already on its way, so a banner behind it would be the same news
         // twice.
         if (person.userId === connectingTargetId.current) return;
-        setMutualBanner({ name: person.displayName, connectionId });
+        setMutualBanner({ name: person.displayName, isVerifiedAccount: person.isVerifiedAccount, connectionId });
       })();
     };
 
@@ -884,7 +888,7 @@ function LinkrPageContent({
       {match ? (
         <LinkrMatchScreen
           me={me}
-          them={{ displayName: match.displayName, photo: match.photo }}
+          them={{ displayName: match.displayName, photo: match.photo, isVerifiedAccount: match.isVerifiedAccount }}
           onSayHi={() => {
             // The canonical conversation, opened directly. `as Route` matches
             // how every other dynamic push in the app satisfies typed routes.
@@ -906,6 +910,7 @@ function LinkrPageContent({
       {mutualBanner && !match ? (
         <LinkrMutualBanner
           name={mutualBanner.name}
+          isVerifiedAccount={mutualBanner.isVerifiedAccount}
           onOpen={() => openMutualPerson(mutualBanner.connectionId)}
           onDismiss={() => setMutualBanner(null)}
         />

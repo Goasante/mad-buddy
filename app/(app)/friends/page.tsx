@@ -13,7 +13,6 @@ import {
   type MutualSummary
 } from "@/lib/friends/mutual-muddies";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
-import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
 import { getPhoneIdentity } from "@/lib/contacts/phone-identity";
 import { loadReminderState } from "@/lib/contacts/reminder-store";
 import {
@@ -247,7 +246,8 @@ async function loadFriendNetwork(): Promise<{
         status: isReceived ? "received" : "sent",
         note: isReceived ? "Wants to connect with you" : "Waiting for a response",
         plan: plans.get(profileId) ?? "free",
-        trustedSince: profile.trusted_member_since ?? null
+        trustedSince: profile.trusted_member_since ?? null,
+        isVerifiedAccount: verifiedByUserId.get(profileId) ?? false
       });
     }
   });
@@ -267,7 +267,8 @@ async function loadFriendNetwork(): Promise<{
         status: "friend",
         note: "Approved Muddy",
         plan: plans.get(profileId) ?? "free",
-        trustedSince: profile.trusted_member_since ?? null
+        trustedSince: profile.trusted_member_since ?? null,
+        isVerifiedAccount: verifiedByUserId.get(profileId) ?? false
       });
     }
   });

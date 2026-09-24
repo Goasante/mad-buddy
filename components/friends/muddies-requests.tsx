@@ -1,12 +1,14 @@
 "use client";
 
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 
 export type MuddyRequestPerson = {
   id: string;
   requestId?: string;
   displayName: string;
   avatarUrl: string | null;
+  isVerifiedAccount?: boolean;
   mutualFriends: number;
   /** Avatars of shared Muddies, for the stack. Empty is fine. */
   mutualAvatarUrls?: readonly string[];
@@ -43,7 +45,7 @@ export function MuddiesRequests({
             <UserAvatar src={person.avatarUrl} name={person.displayName} decorative size="md" />
 
             <div className="muddies-request-body">
-              <p className="muddies-request-name">{person.displayName}</p>
+              <p className="muddies-request-name flex items-center gap-1.5"><span className="truncate">{person.displayName}</span><VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact /></p>
               <p className="muddies-request-copy">Wants to be your Muddy</p>
 
               {person.mutualFriends > 0 ? (
