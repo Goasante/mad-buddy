@@ -17,7 +17,7 @@ import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
 import { HOME_EXCLUDED_SMART_CARD_IDS } from "@/lib/smart-card/home-gate";
 import { isPlanDecisionRsvpEligible } from "@/lib/smart-card/home-context";
 import { loadHomeSmartCardProjection } from "@/lib/smart-card/home-projection";
-import { loadSmartCard } from "@/lib/smart-card/smart-card-service";
+import { loadAcknowledgedSmartCardIds, loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
 import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
@@ -41,6 +41,9 @@ export default async function DashboardPage() {
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUserRecord()]);
   const admin = createSupabaseAdminClient();
   const momentsEnabledPromise = user ? isMomentsEnabled(admin) : Promise.resolve(false);
+  const acknowledgedIdsPromise = user
+    ? loadAcknowledgedSmartCardIds(admin, user.id)
+    : Promise.resolve(new Set<string>());
   const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext, linkrMutuals] = user
     ? await Promise.all([
         ensureProfileForUser(user),
@@ -184,7 +187,8 @@ export default async function DashboardPage() {
            resolution) means that when one of them ranks highest the engine
            returns the next best Card B state instead of a card Home would
            decline to render. */
-        excludedIds: HOME_EXCLUDED_SMART_CARD_IDS
+        excludedIds: HOME_EXCLUDED_SMART_CARD_IDS,
+        acknowledgedIds: await acknowledgedIdsPromise
       })
     : null;
 

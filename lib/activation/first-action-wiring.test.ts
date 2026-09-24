@@ -145,7 +145,7 @@ describe("the projection loads only what it needs", () => {
     /* The lookup is now also needed when somebody IS nearby -- the payoff
      * hero uses the same contextual actions. Still skipped entirely for an
      * account with no Muddies, which is the cost this guards. */
-    expect(projection).toContain("(muddyCount ?? 0) > 0 ? await loadRelationshipFocus");
+    expect(projection).toContain("(muddyCount ?? 0) > 0 ? loadRelationshipFocus(admin, userId) : Promise.resolve(null)");
   });
 });
 

@@ -100,27 +100,28 @@ export async function loadUpcomingAgenda(
           const coverIds = [
             ...new Set(accessible.map((event) => event.cover_media_id).filter(Boolean))
           ] as string[];
-          const coverUrlById = new Map<string, string>();
-          if (coverIds.length > 0) {
-            const { signMediaForAsset } = await import("@/lib/content/service");
-            const signed = await Promise.all(
-              coverIds.map(async (id) => [id, await signMediaForAsset(admin, id, "feed")] as const)
-            );
-            for (const [id, url] of signed) if (url) coverUrlById.set(id, url);
-          }
-
           const hostIds = [...new Set(accessible.map((event) => event.host_id))];
-          const [{ data: hosts }, { data: currentRsvps }] = await Promise.all([
+          // Artwork credentials, host names and RSVP state all depend on the
+          // same access-filtered list, but not on each other. Starting the
+          // latter only after signing every image delayed the Home agenda.
+          const [signed, { data: hosts }, { data: currentRsvps }] = await Promise.all([
+            coverIds.length > 0
+              ? (async () => {
+                  const { signMediaForAsset } = await import("@/lib/content/service");
+                  return Promise.all(
+                    coverIds.map(async (id) => [id, await signMediaForAsset(admin, id, "feed")] as const)
+                  );
+                })()
+              : Promise.resolve([]),
             admin.from("profiles").select("user_id, full_name").in("user_id", hostIds),
             admin
               .from("event_rsvps")
               .select("event_id, status")
               .eq("user_id", userId)
-              .in(
-                "event_id",
-                accessible.map((event) => event.id)
-              )
+              .in("event_id", accessible.map((event) => event.id))
           ]);
+          const coverUrlById = new Map<string, string>();
+          for (const [id, url] of signed) if (url) coverUrlById.set(id, url);
           const hostNames = new Map((hosts ?? []).map((row) => [row.user_id, row.full_name]));
           const rsvpByEvent = new Map((currentRsvps ?? []).map((row) => [row.event_id, row.status]));
 

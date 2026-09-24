@@ -63,15 +63,17 @@ export async function loadSmartCard(
      * useful to show.
      */
     excludedIds?: readonly string[];
+    /** Home starts this independent read alongside its other initial data. */
+    acknowledgedIds?: ReadonlySet<string>;
   }
 ): Promise<SmartCard | null> {
   const now = input.now ?? new Date();
   const env = getSupabaseServerEnv();
 
-  const acknowledgedIds =
+  const acknowledgedIds = input.acknowledgedIds ?? (
     env.url && env.serviceRoleKey
       ? await loadAcknowledgedSmartCardIds(createSupabaseAdminClient(), userId)
-      : new Set<string>();
+      : new Set<string>());
 
   return resolveSmartCard(smartCardProviders({ ...input, now }), {
     now: now.getTime(),

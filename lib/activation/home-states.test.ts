@@ -27,7 +27,7 @@ describe("the state reaches Home", () => {
      * file: the page opens with a small two-item batch for the client and
      * user, and slicing from there measured the wrong call. */
     const start = route.indexOf("const [profile, statusResult");
-    const batch = route.slice(start, route.indexOf("])", start));
+    const batch = route.slice(start, route.indexOf("loadClickedPeople(user.id)", start));
     expect(batch).toContain("loadActivationProjection(user.id)");
     // And exactly once -- a second call would be a second round trip.
     expect(route.split("loadActivationProjection(").length - 1).toBe(1);

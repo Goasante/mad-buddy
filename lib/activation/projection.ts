@@ -477,16 +477,6 @@ export async function loadActivationProjection(userId: string): Promise<Activati
     milestones
   });
 
-  let firstMuddy: ActivationProjection["firstMuddy"] = null;
-  if (acknowledgeFirstMuddy) {
-    const { listMuddies } = await import("@/lib/friends/service");
-    const { muddies } = await listMuddies(userId);
-    const only = muddies[0];
-    if (only) {
-      firstMuddy = { id: only.id, displayName: only.displayName, avatarUrl: only.avatarUrl };
-    }
-  }
-
   /* WHO Home should talk about, loaded only when it will be shown.
    *
    * The relationship card renders in the quiet-evening state, so the lookup is
@@ -498,9 +488,6 @@ export async function loadActivationProjection(userId: string): Promise<Activati
    * uses -- who this person is to you decides whether the moment calls for a
    * hello, a wave or opening a plan. Restricting this to the empty case left
    * the payoff screen with no action at all. */
-  const relationshipFocus =
-    (muddyCount ?? 0) > 0 ? await loadRelationshipFocus(admin, userId) : null;
-
   /* MATURITY EVIDENCE, loaded whenever there is a Muddy at all -- OR whenever
    * the muddy count itself is the thing that failed to load.
    *
@@ -516,19 +503,27 @@ export async function loadActivationProjection(userId: string): Promise<Activati
    * Not folded into loadRelationshipFocus: that only runs on the quiet-evening
    * Home, and Home needs to know how experienced somebody is on every screen --
    * including the one where a Muddy is actually nearby. */
-  const [maturity, unreadConversationCount] =
+  // These three follow-up reads depend on the first batch, but not on each
+  // other. Run them together so a returning member does not wait for the
+  // first-Muddy lookup, then relationship context, then maturity evidence.
+  const [firstMuddy, relationshipFocus, maturity, unreadConversationCount] = await Promise.all([
+    acknowledgeFirstMuddy
+      ? (async (): Promise<ActivationProjection["firstMuddy"]> => {
+          const { listMuddies } = await import("@/lib/friends/service");
+          const { muddies } = await listMuddies(userId);
+          const only = muddies[0];
+          return only ? { id: only.id, displayName: only.displayName, avatarUrl: only.avatarUrl } : null;
+        })()
+      : Promise.resolve(null),
+    (muddyCount ?? 0) > 0 ? loadRelationshipFocus(admin, userId) : Promise.resolve(null),
     (muddyCount ?? 0) > 0 || muddyResult.error
-      ? await Promise.all([
-          loadMaturityEvidence(admin, userId),
-          /* The CANONICAL count (MB-GOD-052), not a second definition. It reads
-           * the same conversation_previews RPC as the inbox and the badge, and
-           * carries a documented `status = 'joined'` correction that a
-           * hand-rolled query here would silently lose. Failing soft: an unread
-           * lookup that errors must never take Home down with it -- the worst
-           * case is the setup nudge the fix suppresses. */
-          getUnreadMessageCount(userId).catch(() => 0)
-        ])
-      : [{ twoSidedConversationCount: 0, planParticipationCount: 0 }, 0];
+      ? loadMaturityEvidence(admin, userId)
+      : Promise.resolve({ twoSidedConversationCount: 0, planParticipationCount: 0 }),
+    // The inbox's canonical joined-member count; an error fails soft.
+    (muddyCount ?? 0) > 0 || muddyResult.error
+      ? getUnreadMessageCount(userId).catch(() => 0)
+      : Promise.resolve(0)
+  ]);
   const inputs: ActivationInputs = {
     muddyCount: muddyCount ?? 0,
     pendingOutgoingCount: pendingOutgoingCount ?? 0,
