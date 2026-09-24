@@ -113,6 +113,8 @@ describe("the server ceiling is untouched", () => {
   it("keeps the client limit as an explanation, not an authority", () => {
     // The client may say why a create failed; it may not be what decides.
     expect(actions).toContain("MAX_ACTIVE_UPFORS");
-    expect(actions).toContain("p_limit: MAX_ACTIVE_UPFORS");
+    expect(actions).toContain('admin.rpc("create_upfor_session_server"');
+    expect(actions).toContain("p_owner_id: userId");
+    expect(actions).not.toContain("p_limit: MAX_ACTIVE_UPFORS");
   });
 });

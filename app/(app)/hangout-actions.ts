@@ -34,7 +34,6 @@ import { announceUpForToAudience } from "@/lib/social/upfor-announce";
 import { resolveHangoutAudience } from "@/lib/social/upfor-audience";
 import { validateLaterToday } from "@/lib/time/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { HANGOUT_ACTIVITY_LABELS, HANGOUT_ACTIVITY_TYPES } from "@/lib/social/plans";
@@ -340,25 +339,19 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
   })();
 
   /**
-   * The ONLY creation path. `create_upfor_session` counts and inserts in one
+   * The ONLY creation path. `create_upfor_session_server` counts and inserts in one
    * statement behind a per-owner advisory lock, so two concurrent requests
    * cannot both pass the ceiling.
    *
-   * Note what is NOT passed: an owner. The function reads `auth.uid()` itself,
-   * so no caller can create an UpFor for somebody else or spend their
-   * allowance. `status` is not passed either -- the function always writes
-   * 'active', so a caller cannot forge a lifecycle state.
+   * The server has already confirmed the real account with Auth.getUser().
+   * The service-only RPC receives that ID; browser tokens cannot execute it.
+   * The concurrency ceiling is fixed inside the database, not caller-supplied.
    *
-   * CALLED WITH THE REQUEST-SCOPED CLIENT, NOT THE ADMIN ONE. This is the whole
-   * reason the function can be trusted: `auth.uid()` is NULL under the
-   * service-role key, so invoking it through `admin` made every creation raise
-   * `not authenticated` and surface as "Couldn't start your UpFor". The admin
-   * client stays for the server-authoritative work around it -- the area
-   * derivation above, the audience targets and announcement below -- where
-   * there is no user context to honour and RLS must not apply.
+   * The previous browser-callable RPC accepted p_limit and area claims directly.
+   * This call keeps validation, rate limiting and area derivation on the server.
    */
-  const authed = await createSupabaseServerClient();
-  const { data: created, error } = await authed.rpc("create_upfor_session", {
+  const { data: created, error } = await admin.rpc("create_upfor_session_server", {
+    p_owner_id: userId,
     p_activity_type: parsed.data.activityType as HangoutActivityType,
     p_message: parsed.data.message ?? null,
     p_audience_type: parsed.data.audienceType as HangoutAudienceType,
@@ -383,8 +376,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
     p_allow_pings: parsed.data.allowPings ?? true,
     p_allow_friend_invites: parsed.data.allowFriendInvites ?? false,
     p_area_tier: derivedArea.tier,
-    p_area_derived_at: derivedArea.derivedAt,
-    p_limit: MAX_ACTIVE_UPFORS
+    p_area_derived_at: derivedArea.derivedAt
   });
 
   const session = Array.isArray(created) ? created[0] : created;
@@ -407,7 +399,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
        with nothing in the logs to say why. The message is recorded, never
        returned -- a database error is not something to put in front of
        somebody trying to meet a friend. */
-    console.error("[upfor] create_upfor_session failed", {
+    console.error("[upfor] create_upfor_session_server failed", {
       code: error?.code,
       message: error?.message,
       userId

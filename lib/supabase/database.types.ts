@@ -5303,6 +5303,26 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["hangout_sessions"]["Row"];
       };
+      create_upfor_session_server: {
+        Args: {
+          p_owner_id: string;
+          p_activity_type: string;
+          p_message: string | null;
+          p_audience_type: string;
+          p_broad_area_text: string | null;
+          p_discovery_scope: string;
+          p_starts_at: string | null;
+          p_ends_at: string | null;
+          p_timezone: string;
+          p_max_participants: number;
+          p_allow_pings: boolean;
+          p_allow_friend_invites: boolean;
+          p_area_tier: string | null;
+          p_area_derived_at: string | null;
+          p_duration?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["hangout_sessions"]["Row"];
+      };
       create_plan_lifecycle: {
         Args: {
           p_actor_id: string;
