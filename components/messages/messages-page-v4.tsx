@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  Forward,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -16,7 +17,6 @@ import {
   Pin,
   Plus,
   Search,
-  Send,
   UsersRound,
   X
 } from "lucide-react";
@@ -139,7 +139,7 @@ type DeleteOperation = {
   phase: "deleting" | "success" | "error";
   message: string;
 } | null;
-type ForwardTarget = { message: ChatMessageView } | null;
+type ForwardTarget = { messages: ChatMessageView[] } | null;
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -282,6 +282,7 @@ export function MessagesPageV4({
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [deleteOperation, setDeleteOperation] = useState<DeleteOperation>(null);
   const [forwardTarget, setForwardTarget] = useState<ForwardTarget>(null);
+  const [forwardSelection, setForwardSelection] = useState<string[]>([]);
   const [reportTarget, setReportTarget] = useState<ChatMessageView | null>(null);
   const [reportPending, setReportPending] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
@@ -825,6 +826,7 @@ export function MessagesPageV4({
   const pinnedIds = useMemo(() => new Set((ultimate?.pins ?? []).map((pin) => pin.messageId)), [ultimate?.pins]);
 
   function openConversation(conversationId: string) {
+    setForwardSelection([]);
     const cached = readThread(viewerId, conversationId);
     setSelectedId(conversationId);
     setMessages(cached?.messages ?? []);
@@ -846,6 +848,7 @@ export function MessagesPageV4({
   }
 
   function closeConversation() {
+    setForwardSelection([]);
     if (selectedId) void leaveConversationPresenceAction(selectedId);
     setSelectedId(null);
     setMessages([]);
@@ -1266,6 +1269,17 @@ export function MessagesPageV4({
                 ) : null}
               </header>
 
+              {forwardSelection.length > 0 ? (
+                <div className="flex shrink-0 items-center gap-2 border-b border-primary/20 bg-primary/10 px-3 py-2" role="status">
+                  <span className="min-w-0 flex-1 text-sm font-semibold">{forwardSelection.length} of 5 {forwardSelection.length === 1 ? "message" : "messages"} selected</span>
+                  <Button size="sm" variant="outline" onClick={() => setForwardSelection([])}>Cancel</Button>
+                  <Button size="sm" onClick={() => {
+                    const chosen = messages.filter((message) => forwardSelection.includes(message.id));
+                    if (chosen.length) setForwardTarget({ messages: chosen });
+                  }}><Forward className="h-4 w-4" />Forward</Button>
+                </div>
+              ) : null}
+
               {pinnedMessage ? (
                 <button type="button" onClick={() => scrollToMessage(pinnedMessage.id)} className="group flex shrink-0 items-center gap-2 border-b border-primary/15 bg-primary/10 px-3 py-2 text-left backdrop-blur-md animate-in slide-in-from-top-2 fade-in">
                   <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary transition-transform group-active:scale-90"><Pin className="h-3.5 w-3.5 fill-current" /></span>
@@ -1303,8 +1317,9 @@ export function MessagesPageV4({
                       <Fragment key={message.id}>
                         {newDay ? <div className="my-4 flex justify-center"><span className="rounded-full bg-muted/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">{dayLabel(message.createdAt)}</span></div> : null}
                         {message.messageType === "system" ? <p data-message-id={message.id} className="mx-auto my-3 max-w-lg text-center text-xs font-normal leading-relaxed text-muted-foreground">{message.text}</p> : (
-                          <div data-message-id={message.id} className={cn("flex transition-[background-color] duration-500", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1")}>
-                            <div className="max-w-[86%] sm:max-w-[78%]">
+                          <div data-message-id={message.id} className={cn("flex items-center gap-2 transition-[background-color] duration-500", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1")}>
+                            {forwardSelection.length > 0 && ["text", "image", "voice_note"].includes(message.messageType) && !message.deleted ? <button type="button" aria-label={`${forwardSelection.includes(message.id) ? "Deselect" : "Select"} message to forward`} aria-pressed={forwardSelection.includes(message.id)} onClick={() => setForwardSelection((current) => current.includes(message.id) ? current.filter((id) => id !== message.id) : current.length < 5 ? [...current, message.id] : current)} className={cn("focus-ring order-last grid h-11 w-11 shrink-0 place-items-center rounded-full border transition-colors", forwardSelection.includes(message.id) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground", message.isMine && "order-first")}><Check className="h-4 w-4" /></button> : null}
+                            <div className={forwardSelection.length > 0 ? "min-w-0 max-w-[calc(100%-3.25rem)]" : "max-w-[86%] sm:max-w-[78%]"}>
                               <MessageBubbleV4
                                 conversationId={selected.id}
                                 message={message}
@@ -1325,7 +1340,8 @@ export function MessagesPageV4({
                                 }}
                                 onSave={() => saveMessage(message.id)}
                                 onPin={() => pinMessage(message.id)}
-                                onForward={() => setForwardTarget({ message })}
+                                onForward={() => setForwardTarget({ messages: [message] })}
+                                onSelectForForward={() => setForwardSelection([message.id])}
                                 onReport={() => setReportTarget(message)}
                                 onOpenMedia={() => setViewerMessageId(message.id)}
                                 onAttachmentRefresh={(attachment: AttachmentView) => setMessages((current) => current.map((item) => item.id === message.id ? { ...item, attachment } : item))}
@@ -1494,15 +1510,15 @@ export function MessagesPageV4({
       <ForwardModal
         target={forwardTarget}
         conversations={displayConversations.filter((conversation) => !inboxPreferences[conversation.id]?.archivedAt)}
-        onClose={() => setForwardTarget(null)}
-        onOpenConversation={(conversationId) => { setForwardTarget(null); openConversation(conversationId); }}
-        onForward={async (targetConversationId) => {
-          if (!forwardTarget) return { ok: false, message: "Choose a message to forward." };
-          const result = await forwardMessageAction({ sourceMessageId: forwardTarget.message.id, targetConversationIds: [targetConversationId] })
-            .catch(() => ({ ok: false as const, message: "Could not forward the message. Try again." }));
-          if (result.ok) {
+        onClose={() => { setForwardTarget(null); setForwardSelection([]); }}
+        onOpenConversation={(conversationId) => { setForwardTarget(null); setForwardSelection([]); openConversation(conversationId); }}
+        onForward={async (targetConversationIds, operationId, retry) => {
+          if (!forwardTarget) return { ok: false, message: "Choose a message to forward.", sent: 0, total: 0 };
+          const result = await forwardMessageAction({ sourceMessageIds: forwardTarget.messages.map((message) => message.id), targetConversationIds, operationId, retry })
+            .catch(() => ({ ok: false as const, message: "Could not confirm the forward. Retry will check what was sent.", sent: 0, total: forwardTarget.messages.length * targetConversationIds.length }));
+          if (result.sent > 0) {
             void syncConversations();
-            if (selectedId === targetConversationId) void refreshMessages(targetConversationId, false, false);
+            if (selectedId && targetConversationIds.includes(selectedId)) void refreshMessages(selectedId, false, false);
           }
           return result;
         }}
@@ -1574,33 +1590,38 @@ function ForwardModal({ target, conversations, onClose, onOpenConversation, onFo
   conversations: ConversationView[];
   onClose: () => void;
   onOpenConversation: (conversationId: string) => void;
-  onForward: (conversationId: string) => Promise<{ ok: boolean; message: string }>;
+  onForward: (conversationIds: string[], operationId: string, retry: boolean) => Promise<{ ok: boolean; message: string; sent: number; total: number }>;
 }) {
   const [query, setQuery] = useState("");
-  const [operation, setOperation] = useState<{ conversationId: string; phase: "sending" | "success" | "error"; message: string } | null>(null);
+  const [recipients, setRecipients] = useState<string[]>([]);
+  const [operation, setOperation] = useState<{ id: string; recipients: string[]; phase: "sending" | "success" | "error"; message: string } | null>(null);
   const sendingRef = useRef(false);
+  const targetKey = target?.messages.map((message) => message.id).join(",") ?? null;
   useEffect(() => {
     setOperation(null);
     setQuery("");
-  }, [target?.message.id]);
+    setRecipients([]);
+  }, [targetKey]);
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
     return term ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(term)) : conversations;
   }, [conversations, query]);
   const sending = operation?.phase === "sending";
   const sent = operation?.phase === "success";
-  const chosen = conversations.find((conversation) => conversation.id === operation?.conversationId);
-  async function forward(conversationId: string) {
+  async function forward() {
     if (sendingRef.current || sent) return;
+    if (!recipients.length) return;
     sendingRef.current = true;
     interactionFeedback.selection();
-    setOperation({ conversationId, phase: "sending", message: "Forwarding…" });
+    const id = operation?.id ?? crypto.randomUUID();
+    const chosen = [...recipients];
+    setOperation({ id, recipients: chosen, phase: "sending", message: `Forwarding ${target?.messages.length ?? 0} ${target?.messages.length === 1 ? "message" : "messages"} to ${chosen.length} ${chosen.length === 1 ? "chat" : "chats"}…` });
     try {
-      const result = await onForward(conversationId);
-      setOperation({ conversationId, phase: result.ok ? "success" : "error", message: result.ok ? "Message forwarded." : result.message });
+      const result = await onForward(chosen, id, Boolean(operation));
+      setOperation({ id, recipients: chosen, phase: result.ok ? "success" : "error", message: result.message });
       if (!result.ok) interactionFeedback.error();
     } catch {
-      setOperation({ conversationId, phase: "error", message: "Could not forward the message. Try again." });
+      setOperation({ id, recipients: chosen, phase: "error", message: "Could not confirm the forward. Retry will check what was sent." });
       interactionFeedback.error();
     } finally {
       sendingRef.current = false;
@@ -1608,16 +1629,18 @@ function ForwardModal({ target, conversations, onClose, onOpenConversation, onFo
   }
   return <Modal open={Boolean(target)} onOpenChange={(open) => !open && !sending && onClose()} title="Forward to" variant="sheet">
     <div className="space-y-3 pb-[max(.5rem,env(safe-area-inset-bottom))]">
+      <p className="text-sm text-muted-foreground">Choose up to five chats for {target?.messages.length ?? 0} {target?.messages.length === 1 ? "message" : "messages"}.</p>
       <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats" aria-label="Search chats" />
-      <ul className="max-h-[55vh] space-y-1 overflow-y-auto">
+      <ul className="max-h-[45vh] space-y-1 overflow-y-auto">
         {visible.length === 0 ? <li className="px-3 py-6 text-center text-sm text-muted-foreground">No chats found.</li> : null}
         {visible.map((conversation) => {
-          const selected = operation?.conversationId === conversation.id;
-          return <li key={conversation.id}><button type="button" disabled={sending || sent} aria-pressed={selected} onClick={() => void forward(conversation.id)} className={cn("focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition-[background-color,border-color,transform,opacity] active:scale-[.98]", selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-secondary/70", (sending || sent) && !selected && "opacity-50")}><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-semibold">{conversation.title}</span>{conversation.kind === "direct" ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact inControl /> : null}</span>{selected && sending ? <span className="block text-xs text-primary">Forwarding…</span> : selected && sent ? <span className="block text-xs text-primary">Sent</span> : null}</span>{selected && sending ? <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" /> : selected && sent ? <Check className="h-4 w-4 text-primary" aria-hidden="true" /> : <Send className="h-4 w-4 text-primary" aria-hidden="true" />}</button></li>;
+          const selected = recipients.includes(conversation.id);
+          return <li key={conversation.id}><button type="button" disabled={sending || sent || Boolean(operation)} aria-pressed={selected} onClick={() => setRecipients((current) => current.includes(conversation.id) ? current.filter((id) => id !== conversation.id) : current.length < 5 ? [...current, conversation.id] : current)} className={cn("focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition-[background-color,border-color,transform,opacity] active:scale-[.98]", selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-secondary/70", (sending || sent) && !selected && "opacity-50")}><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="flex min-w-0 flex-1 items-center gap-1.5"><span className="truncate text-sm font-semibold">{conversation.title}</span>{conversation.kind === "direct" ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact inControl /> : null}</span><span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border", selected ? "border-primary bg-primary text-primary-foreground" : "border-border")} aria-hidden="true">{selected ? <Check className="h-4 w-4" /> : null}</span></button></li>;
         })}
       </ul>
-      {operation ? <p role={operation.phase === "error" ? "alert" : "status"} aria-live="polite" className={cn("rounded-xl px-3 py-2 text-sm font-medium", operation.phase === "error" ? "bg-destructive/10 text-destructive" : operation.phase === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-foreground")}>{operation.phase === "sending" && chosen ? `Forwarding to ${chosen.title}…` : operation.message}</p> : null}
-      {sent && operation ? <Button className="w-full" onClick={() => onOpenConversation(operation.conversationId)}>Open chat</Button> : null}
+      {operation ? <p role={operation.phase === "error" ? "alert" : "status"} aria-live="polite" className={cn("rounded-xl px-3 py-2 text-sm font-medium", operation.phase === "error" ? "bg-destructive/10 text-destructive" : operation.phase === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-foreground")}>{sending ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : null}{operation.message}</p> : null}
+      {!sent ? <Button className="w-full" disabled={sending || recipients.length === 0} onClick={() => void forward()}>{sending ? "Forwarding…" : operation?.phase === "error" ? "Retry" : `Forward to ${recipients.length} ${recipients.length === 1 ? "chat" : "chats"}`}</Button> : null}
+      {sent && operation?.recipients.length === 1 ? <Button className="w-full" onClick={() => onOpenConversation(operation.recipients[0])}>Open chat</Button> : null}
       <Button variant="outline" className="w-full" disabled={sending} onClick={onClose}>{sent ? "Done" : "Cancel"}</Button>
     </div>
   </Modal>;

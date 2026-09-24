@@ -79,6 +79,7 @@ export function MessageBubbleV4({
   onSave,
   onPin,
   onForward,
+  onSelectForForward,
   onReport,
   onOpenMedia,
   onAttachmentRefresh,
@@ -104,6 +105,7 @@ export function MessageBubbleV4({
   onSave: () => void;
   onPin: () => void;
   onForward: () => void;
+  onSelectForForward: () => void;
   onReport: () => void;
   onOpenMedia: () => void;
   onAttachmentRefresh: (attachment: AttachmentView) => void;
@@ -327,7 +329,10 @@ export function MessageBubbleV4({
             <Action icon={Copy} label="Copy" onClick={() => { onCopy(); setActionsOpen(false); }} disabled={!message.text} />
             <Action icon={Bookmark} label={saved ? "Unsave" : "Save"} onClick={() => { onSave(); setActionsOpen(false); }} active={saved} />
             <Action icon={Pin} label={pinned ? "Unpin" : "Pin"} onClick={() => { onPin(); setActionsOpen(false); }} active={pinned} />
-            <Action icon={Forward} label="Forward" onClick={() => { onForward(); setActionsOpen(false); }} />
+            {!message.deleted && ["text", "image", "voice_note"].includes(message.messageType) ? <>
+              <Action icon={Forward} label="Forward" onClick={() => { onForward(); setActionsOpen(false); }} />
+              <Action icon={Check} label="Select messages" onClick={() => { onSelectForForward(); setActionsOpen(false); }} />
+            </> : null}
             {!message.isMine && !message.deleted ? <Action icon={Flag} label="Report" onClick={() => { onReport(); setActionsOpen(false); }} /> : null}
             {message.isMine ? <Action icon={Info} label="Info" onClick={() => { setInfoOpen(true); setActionsOpen(false); }} /> : null}
             {message.isMine && message.messageType === "text" && message.text && !message.deleted ? (

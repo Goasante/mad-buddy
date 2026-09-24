@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 
 import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
@@ -301,7 +302,7 @@ export async function openDirectConversation(userId: string, recipientId: string
 export async function sendMessage(
   userId: string,
   input: unknown,
-  options: { forwardedFromMessageId?: string } = {}
+  options: { forwardedFromMessageId?: string; deferFollowUp?: boolean } = {}
 ): Promise<MessagingResult> {
   const envMessage = serviceRoleEnvMessage();
   if (envMessage) return { ok: false, message: envMessage };
@@ -405,47 +406,52 @@ export async function sendMessage(
     return { ok: false, message: "Couldn't send that message." };
   }
 
-  await admin
-    .from("conversations")
-    .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("id", parsed.data.conversationId);
+  const finishSend = async () => {
+    await admin
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", parsed.data.conversationId);
 
-  /* Speaking in a chat you hid brings it back for you.
-   *
-   * The reappearance rule (last_user_message_at > hidden_at) already covers
-   * the RECIPIENTS of this message. It does not cover the sender, whose
-   * hidden_at is newer than every message that existed when they hid it --
-   * without this, you could message someone and still not see the
-   * conversation in your own inbox. Scoped to the sender's row only. */
-  await admin
-    .from("conversation_members")
-    .update({ hidden_at: null, updated_at: new Date().toISOString() })
-    .eq("conversation_id", parsed.data.conversationId)
-    .eq("user_id", userId)
-    .not("hidden_at", "is", null);
+    /* Speaking in a chat you hid brings it back for you.
+     * The recipient's reappearance rule is independent of the sender's row. */
+    await admin
+      .from("conversation_members")
+      .update({ hidden_at: null, updated_at: new Date().toISOString() })
+      .eq("conversation_id", parsed.data.conversationId)
+      .eq("user_id", userId)
+      .not("hidden_at", "is", null);
 
-  /* Mentions are stored only now, against a message that definitely exists,
-   * so a failed send can never leave orphan rows. persistMentions re-checks
-   * every id against current joined membership and returns the ones it kept,
-   * which is exactly the set the notification step marks -- one source of
-   * truth for "who was mentioned". */
-  const mentionedUserIds = await persistMentions(
-    admin,
-    parsed.data.conversationId,
-    message.id,
-    userId,
-    parsed.data.mentionUserIds ?? []
-  );
+    /* Mentions are stored only after the message exists. */
+    const mentionedUserIds = await persistMentions(
+      admin,
+      parsed.data.conversationId,
+      message.id,
+      userId,
+      parsed.data.mentionUserIds ?? []
+    );
 
-  await notifyOtherMembers(
-    admin,
-    parsed.data.conversationId,
-    userId,
-    messagePreviewText(messageType, parsed.data.text) ?? "",
-    mentionedUserIds
-  );
+    await notifyOtherMembers(
+      admin,
+      parsed.data.conversationId,
+      userId,
+      messagePreviewText(messageType, parsed.data.text) ?? "",
+      mentionedUserIds
+    );
 
-  await recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId);
+    await recordFirstDirectMessageMilestone(admin, userId, parsed.data.conversationId);
+  };
+
+  // Forwarding may create several already-committed messages in one request.
+  // Acknowledge their durable inserts; let Next finish inbox and notification
+  // work after the response, just as the fast regular send route does.
+  if (options.deferFollowUp) {
+    after(async () => {
+      try { await finishSend(); }
+      catch (cause) { console.error("[messaging] forward follow-up failed", cause); }
+    });
+  } else {
+    await finishSend();
+  }
 
   return { ok: true, message: "Sent.", messageId: message.id };
 }
