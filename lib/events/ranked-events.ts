@@ -156,24 +156,6 @@ export async function getRankedUpcomingEvents(
   }
   const myRsvpByEvent = new Map((myRsvps ?? []).map((row) => [row.event_id, row.status]));
 
-  // Cover artwork for the whole page (Stage F). Signed in parallel rather
-  // than one await per event, and only for events that actually have one --
-  // legacy events skip this entirely and fall through to the deterministic
-  // generated fallback below.
-  //
-  // signMediaForAsset is the canonical resolver: it already refuses deleted,
-  // removed and restricted assets, so a moderated cover degrades to the
-  // fallback instead of 404-ing on a public ranked card.
-  const coverIds = [...new Set(visible.map((event) => event.cover_media_id).filter(Boolean))] as string[];
-  const coverUrlById = new Map<string, string>();
-  if (coverIds.length > 0) {
-    const { signMediaForAsset } = await import("@/lib/content/service");
-    const signed = await Promise.all(
-      coverIds.map(async (id) => [id, await signMediaForAsset(admin, id, "feed")] as const)
-    );
-    for (const [id, url] of signed) if (url) coverUrlById.set(id, url);
-  }
-
   const rankable = visible.map((event) => ({
     id: event.id,
     startsAtMs: Date.parse(event.starts_at),
@@ -189,12 +171,27 @@ export async function getRankedUpcomingEvents(
     endsAt: event.ends_at,
     isHost: event.host_id === userId,
     hasCover: Boolean(event.cover_media_id),
-    coverUrl: event.cover_media_id ? coverUrlById.get(event.cover_media_id) ?? null : null,
+    coverMediaId: event.cover_media_id,
     focalX: event.cover_focal_x,
     focalY: event.cover_focal_y
   }));
 
-  return rankEvents(rankable, nowMs, boundedLimit).map((event) => ({
+  // Ranking uses RSVP facts, not artwork. Home needs only five covers even
+  // when the candidate window holds a hundred Events. Sign the winners after
+  // ranking so invisible candidates cannot add dozens of Storage round trips
+  // to the critical path. The full ranked page still signs its selected set.
+  const ranked = rankEvents(rankable, nowMs, boundedLimit);
+  const coverIds = [...new Set(ranked.map((event) => event.coverMediaId).filter(Boolean))] as string[];
+  const coverUrlById = new Map<string, string>();
+  if (coverIds.length > 0) {
+    const { signMediaForAsset } = await import("@/lib/content/service");
+    const signed = await Promise.all(
+      coverIds.map(async (id) => [id, await signMediaForAsset(admin, id, "feed")] as const)
+    );
+    for (const [id, url] of signed) if (url) coverUrlById.set(id, url);
+  }
+
+  return ranked.map((event) => ({
     id: event.id,
     rank: event.rank,
     name: event.name,
@@ -205,7 +202,7 @@ export async function getRankedUpcomingEvents(
     // The canonical cover when the event has one, the deterministic generated
     // fallback when it does not (legacy events, drafts, or a transient initial
     // signing miss). `hasCover` below preserves which fallback is recoverable.
-    media: resolveEventMedia(event.id, event.coverUrl),
+    media: resolveEventMedia(event.id, event.coverMediaId ? coverUrlById.get(event.coverMediaId) : null),
     hasCover: event.hasCover,
     focalPoint: { x: event.focalX, y: event.focalY },
     goingCount: event.goingCount,

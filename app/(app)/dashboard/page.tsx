@@ -40,6 +40,7 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 export default async function DashboardPage() {
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUserRecord()]);
   const admin = createSupabaseAdminClient();
+  const momentsEnabledPromise = user ? isMomentsEnabled(admin) : Promise.resolve(false);
   const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext, linkrMutuals] = user
     ? await Promise.all([
         ensureProfileForUser(user),
@@ -56,13 +57,13 @@ export default async function DashboardPage() {
           .maybeSingle(),
         loadSafeArrivalJourneys(admin, user.id),
         loadFriendGlowColors(admin, user.id),
-        isMomentsEnabled(admin),
+        momentsEnabledPromise,
         loadJourney(admin, user.id),
         countIncomingRequests(user.id),
         admin.from("profile_birth_details").select("date_of_birth").eq("user_id", user.id).maybeSingle(),
         loadBuddyScore(admin, user.id),
-        buildMomentFeed(admin, user.id),
-        buildSpotlightFeed(admin, user.id),
+        momentsEnabledPromise.then((enabled) => enabled ? buildMomentFeed(admin, user.id) : []),
+        momentsEnabledPromise.then((enabled) => enabled ? buildSpotlightFeed(admin, user.id) : []),
         getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }),
         loadActivationProjection(user.id),
         loadHomeUpForContext(admin, user.id),
