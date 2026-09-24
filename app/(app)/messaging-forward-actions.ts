@@ -1,6 +1,5 @@
 "use server";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { guardAction } from "@/lib/admin/enforcement";
 import { prepareForwardedMedia } from "@/lib/messaging/forward-media";
@@ -24,8 +23,7 @@ export async function forwardMessageAction(input: unknown) {
   if (!me) return { ok: false as const, message: "Log in first." };
 
   const admin = createSupabaseAdminClient();
-  const db = admin as unknown as SupabaseClient;
-  const { data: source } = await db
+  const { data: source } = await admin
     .from("messages")
     .select("id, conversation_id, message_type, text_content, media_id, duration_seconds, waveform_data, deleted_at, status, expires_at, kept_at, media_mode")
     .eq("id", parsed.data.sourceMessageId)
@@ -40,16 +38,20 @@ export async function forwardMessageAction(input: unknown) {
     return { ok: false as const, message: "This message type cannot be forwarded yet." };
   }
 
-  const guard = await guardAction(admin, { userId: me, surface: "messaging", control: source.media_id ? "media_uploads" : "messaging" });
-  if (!guard.allowed) return { ok: false as const, message: guard.message };
+  // The canonical sender checks messaging permission and rate limits. Only
+  // attachments need this extra media-upload guard before copying the asset.
+  if (source.media_id) {
+    const guard = await guardAction(admin, { userId: me, surface: "messaging", control: "media_uploads" });
+    if (!guard.allowed) return { ok: false as const, message: guard.message };
+  }
 
   const targets = [...new Set(parsed.data.targetConversationIds)];
   let sent = 0;
   for (const conversationId of targets) {
-    const allowed = await canSendMessage(admin, me, conversationId);
-    if (!allowed.allowed) continue;
     let mediaId: string | undefined;
-    if (source.message_type !== "text") {
+    if (source.message_type === "image" || source.message_type === "voice_note") {
+      const allowed = await canSendMessage(admin, me, conversationId);
+      if (!allowed.allowed) continue;
       if (!source.media_id) continue;
       const prepared = await prepareForwardedMedia(admin, me, {
         mediaId: source.media_id,
@@ -67,13 +69,9 @@ export async function forwardMessageAction(input: unknown) {
       text: source.message_type === "voice_note" ? undefined : source.text_content ?? undefined,
       mediaId,
       clientMessageId: crypto.randomUUID()
-    });
+    }, { forwardedFromMessageId: source.id });
     if (!result.ok) continue;
     sent += 1;
-    if (result.messageId) {
-      await db.from("messages").update({ forwarded_from_message_id: source.id })
-        .eq("id", result.messageId).eq("sender_id", me);
-    }
   }
 
   if (sent === 0) return { ok: false as const, message: "The message could not be forwarded to those chats." };

@@ -26,13 +26,13 @@ beforeEach(() => {
 const forward = () => forwardMessageAction({ sourceMessageId: sourceId, targetConversationIds: [destination] });
 it("sends a fresh audio attachment through the canonical sender", async () => {
   expect((await forward()).ok).toBe(true);
-  expect(mocks.send).toHaveBeenCalledWith("forwarder", expect.objectContaining({ conversationId: destination, mediaId: "new-asset", text: undefined }));
+  expect(mocks.send).toHaveBeenCalledWith("forwarder", expect.objectContaining({ conversationId: destination, mediaId: "new-asset", text: undefined }), { forwardedFromMessageId: sourceId });
 });
 it("preserves text forwarding without preparing media", async () => {
   source.message_type = "text"; source.media_id = null; source.text_content = "Hello";
   expect((await forward()).ok).toBe(true);
   expect(mocks.prepare).not.toHaveBeenCalled();
-  expect(mocks.send).toHaveBeenCalledWith("forwarder", expect.objectContaining({ text: "Hello", mediaId: undefined }));
+  expect(mocks.send).toHaveBeenCalledWith("forwarder", expect.objectContaining({ text: "Hello", mediaId: undefined }), { forwardedFromMessageId: sourceId });
 });
 it.each(["access", "permission", "guard"] as const)("refuses forwarding when %s is denied", async (kind) => {
   mocks[kind].mockResolvedValue({ canView: false, allowed: false, message: "Unavailable" });

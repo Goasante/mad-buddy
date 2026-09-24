@@ -3316,6 +3316,7 @@ export type Database = {
           waveform_data: Json | null;
           status: MessageStatus;
           client_message_id: string | null;
+          forwarded_from_message_id: string | null;
           created_at: string;
           edited_at: string | null;
           deleted_at: string | null;
@@ -3342,6 +3343,7 @@ export type Database = {
           waveform_data?: Json | null;
           status?: MessageStatus;
           client_message_id?: string | null;
+          forwarded_from_message_id?: string | null;
           created_at?: string;
           edited_at?: string | null;
           deleted_at?: string | null;

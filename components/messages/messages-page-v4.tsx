@@ -1491,15 +1491,22 @@ export function MessagesPageV4({
         })();
       }} />
 
-      <ForwardModal target={forwardTarget} conversations={displayConversations.filter((conversation) => !inboxPreferences[conversation.id]?.archivedAt)} pending={isPending} onClose={() => setForwardTarget(null)} onForward={(targetConversationId) => {
-        if (!forwardTarget) return;
-        startTransition(async () => {
+      <ForwardModal
+        target={forwardTarget}
+        conversations={displayConversations.filter((conversation) => !inboxPreferences[conversation.id]?.archivedAt)}
+        onClose={() => setForwardTarget(null)}
+        onOpenConversation={(conversationId) => { setForwardTarget(null); openConversation(conversationId); }}
+        onForward={async (targetConversationId) => {
+          if (!forwardTarget) return { ok: false, message: "Choose a message to forward." };
           const result = await forwardMessageAction({ sourceMessageId: forwardTarget.message.id, targetConversationIds: [targetConversationId] })
-            .catch(() => ({ ok: false, message: "Could not forward the message. Try again." }));
-          setFeedback(result.message);
-          if (result.ok) setForwardTarget(null);
-        });
-      }} />
+            .catch(() => ({ ok: false as const, message: "Could not forward the message. Try again." }));
+          if (result.ok) {
+            void syncConversations();
+            if (selectedId === targetConversationId) void refreshMessages(targetConversationId, false, false);
+          }
+          return result;
+        }}
+      />
 
       <ReportMessageModal
         message={reportTarget}
@@ -1562,13 +1569,58 @@ function DeleteMessageModal({ target, operation, onClose, onDelete }: { target: 
   return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title={`Delete ${item}?`} compact><div className="space-y-2"><button type="button" disabled={busy} aria-pressed={operation?.scope === "me"} onClick={() => onDelete(false)} className={cn("focus-ring w-full rounded-2xl border p-3 text-left transition-[transform,background-color,border-color,opacity] active:scale-[.98]", operation?.scope === "me" ? "border-primary/40 bg-primary/10" : "border-border/70", busy && operation?.scope !== "me" && "opacity-45")}><strong className="flex items-center gap-2 text-sm">{busy && operation?.scope === "me" ? <Loader2 className="h-4 w-4 animate-spin" /> : operation?.phase === "success" && operation.scope === "me" ? <Check className="h-4 w-4" /> : null}{busy && operation?.scope === "me" ? "Deleting for me…" : "Delete for me"}</strong><span className="mt-0.5 block text-xs text-muted-foreground">Hide this {item} only from your chat.</span></button>{everyone ? <button type="button" disabled={busy} aria-pressed={operation?.scope === "everyone"} onClick={() => onDelete(true)} className={cn("focus-ring w-full rounded-2xl border p-3 text-left text-destructive transition-[transform,background-color,border-color,opacity] active:scale-[.98]", operation?.scope === "everyone" ? "border-destructive/45 bg-destructive/12" : "border-destructive/20 bg-destructive/5", busy && operation?.scope !== "everyone" && "opacity-45")}><strong className="flex items-center gap-2 text-sm">{busy && operation?.scope === "everyone" ? <Loader2 className="h-4 w-4 animate-spin" /> : operation?.phase === "success" && operation.scope === "everyone" ? <Check className="h-4 w-4" /> : null}{busy && operation?.scope === "everyone" ? "Deleting for everyone…" : "Delete for everyone"}</strong><span className="mt-0.5 block text-xs opacity-75">Remove this {item} for everyone in this chat.</span></button> : null}{operation ? <p role={operation.phase === "error" ? "alert" : "status"} aria-live="polite" className={cn("rounded-xl px-3 py-2 text-sm font-medium", operation.phase === "error" ? "bg-destructive/10 text-destructive" : operation.phase === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-foreground")}>{operation.message}</p> : null}<Button variant="outline" className="w-full active:scale-[.98]" onClick={onClose} disabled={busy}>{busy ? "Deleting…" : operation?.phase === "error" ? "Close" : "Cancel"}</Button></div></Modal>;
 }
 
-function ForwardModal({ target, conversations, pending, onClose, onForward }: { target: ForwardTarget; conversations: ConversationView[]; pending: boolean; onClose: () => void; onForward: (conversationId: string) => void }) {
+function ForwardModal({ target, conversations, onClose, onOpenConversation, onForward }: {
+  target: ForwardTarget;
+  conversations: ConversationView[];
+  onClose: () => void;
+  onOpenConversation: (conversationId: string) => void;
+  onForward: (conversationId: string) => Promise<{ ok: boolean; message: string }>;
+}) {
   const [query, setQuery] = useState("");
+  const [operation, setOperation] = useState<{ conversationId: string; phase: "sending" | "success" | "error"; message: string } | null>(null);
+  const sendingRef = useRef(false);
+  useEffect(() => {
+    setOperation(null);
+    setQuery("");
+  }, [target?.message.id]);
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
     return term ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(term)) : conversations;
   }, [conversations, query]);
-  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Forward to" variant="sheet"><div className="space-y-3"><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats" /><ul className="max-h-[55vh] space-y-1 overflow-y-auto">{visible.map((conversation) => <li key={conversation.id}><button type="button" disabled={pending} onClick={() => onForward(conversation.id)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/70 active:scale-[.99]"><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="flex min-w-0 flex-1 items-center gap-1.5"><span className="truncate text-sm font-semibold">{conversation.title}</span>{conversation.kind === "direct" ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact inControl /> : null}</span><Send className="h-4 w-4 text-primary" /></button></li>)}</ul></div></Modal>;
+  const sending = operation?.phase === "sending";
+  const sent = operation?.phase === "success";
+  const chosen = conversations.find((conversation) => conversation.id === operation?.conversationId);
+  async function forward(conversationId: string) {
+    if (sendingRef.current || sent) return;
+    sendingRef.current = true;
+    interactionFeedback.selection();
+    setOperation({ conversationId, phase: "sending", message: "Forwarding…" });
+    try {
+      const result = await onForward(conversationId);
+      setOperation({ conversationId, phase: result.ok ? "success" : "error", message: result.ok ? "Message forwarded." : result.message });
+      if (!result.ok) interactionFeedback.error();
+    } catch {
+      setOperation({ conversationId, phase: "error", message: "Could not forward the message. Try again." });
+      interactionFeedback.error();
+    } finally {
+      sendingRef.current = false;
+    }
+  }
+  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && !sending && onClose()} title="Forward to" variant="sheet">
+    <div className="space-y-3 pb-[max(.5rem,env(safe-area-inset-bottom))]">
+      <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats" aria-label="Search chats" />
+      <ul className="max-h-[55vh] space-y-1 overflow-y-auto">
+        {visible.length === 0 ? <li className="px-3 py-6 text-center text-sm text-muted-foreground">No chats found.</li> : null}
+        {visible.map((conversation) => {
+          const selected = operation?.conversationId === conversation.id;
+          return <li key={conversation.id}><button type="button" disabled={sending || sent} aria-pressed={selected} onClick={() => void forward(conversation.id)} className={cn("focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition-[background-color,border-color,transform,opacity] active:scale-[.98]", selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-secondary/70", (sending || sent) && !selected && "opacity-50")}><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-semibold">{conversation.title}</span>{conversation.kind === "direct" ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact inControl /> : null}</span>{selected && sending ? <span className="block text-xs text-primary">Forwarding…</span> : selected && sent ? <span className="block text-xs text-primary">Sent</span> : null}</span>{selected && sending ? <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" /> : selected && sent ? <Check className="h-4 w-4 text-primary" aria-hidden="true" /> : <Send className="h-4 w-4 text-primary" aria-hidden="true" />}</button></li>;
+        })}
+      </ul>
+      {operation ? <p role={operation.phase === "error" ? "alert" : "status"} aria-live="polite" className={cn("rounded-xl px-3 py-2 text-sm font-medium", operation.phase === "error" ? "bg-destructive/10 text-destructive" : operation.phase === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-foreground")}>{operation.phase === "sending" && chosen ? `Forwarding to ${chosen.title}…` : operation.message}</p> : null}
+      {sent && operation ? <Button className="w-full" onClick={() => onOpenConversation(operation.conversationId)}>Open chat</Button> : null}
+      <Button variant="outline" className="w-full" disabled={sending} onClick={onClose}>{sent ? "Done" : "Cancel"}</Button>
+    </div>
+  </Modal>;
 }
 
 function ReportMessageModal({

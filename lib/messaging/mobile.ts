@@ -94,6 +94,7 @@ export type ChatMessageView = {
   /** The viewer's own idempotency key, for reconciling an optimistic bubble. Null on others' messages. */
   clientMessageId: string | null;
   messageType: string;
+  forwarded: boolean;
   text: string | null;
   quickActionType: string | null;
   createdAt: string;
@@ -297,7 +298,11 @@ export async function openDirectConversation(userId: string, recipientId: string
   return { ok: true, message: "Conversation ready.", conversationId: result.conversationId };
 }
 
-export async function sendMessage(userId: string, input: unknown): Promise<MessagingResult> {
+export async function sendMessage(
+  userId: string,
+  input: unknown,
+  options: { forwardedFromMessageId?: string } = {}
+): Promise<MessagingResult> {
   const envMessage = serviceRoleEnvMessage();
   if (envMessage) return { ok: false, message: envMessage };
 
@@ -379,6 +384,7 @@ export async function sendMessage(userId: string, input: unknown): Promise<Messa
       quick_action_type: (parsed.data.quickActionType ?? null) as QuickActionType | null,
       reply_to_message_id: parsed.data.replyToMessageId ?? null,
       client_message_id: parsed.data.clientMessageId,
+      forwarded_from_message_id: options.forwardedFromMessageId ?? null,
       duration_seconds: media?.kind === "voice_note" ? media.durationSeconds : null,
       waveform_data: media?.kind === "voice_note" ? media.waveform : null,
       status: "sent"
@@ -1147,7 +1153,7 @@ export async function listMessages(
   const pageLimit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 200)));
   const baseQuery = admin
     .from("messages")
-    .select("id, sender_id, message_type, text_content, quick_action_type, media_id, status, client_message_id, created_at, edited_at, deleted_at")
+    .select("id, sender_id, message_type, text_content, quick_action_type, media_id, status, client_message_id, forwarded_from_message_id, created_at, edited_at, deleted_at")
     .eq("conversation_id", conversationId)
     .gte("created_at", access.historyVisibleFrom ?? new Date(0).toISOString());
   const { data: messages } = options.messageId
@@ -1379,6 +1385,7 @@ export async function listMessages(
        */
       clientMessageId: row.sender_id === userId ? row.client_message_id : null,
       messageType: row.message_type,
+      forwarded: !row.deleted_at && Boolean(row.forwarded_from_message_id),
       text: row.deleted_at ? null : row.text_content,
       quickActionType: row.quick_action_type,
       createdAt: row.created_at,

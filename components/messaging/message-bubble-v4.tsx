@@ -249,6 +249,11 @@ export function MessageBubbleV4({
             highlighted && "ring-2 ring-[#E88C2B]/70 shadow-[0_0_0_5px_rgba(232,140,43,.08)]",
             actionsOpen && "shadow-[0_16px_44px_rgba(78,4,1,.2)]"
           )}>
+            {message.forwarded && !message.deleted ? (
+              <div className={cn("mb-1 flex items-center gap-1 text-xs font-medium", message.isMine ? "text-white/75" : "text-muted-foreground")}>
+                <Forward className="h-3.5 w-3.5" aria-hidden="true" />Forwarded
+              </div>
+            ) : null}
             {replyContext ? (
               <button type="button" onClick={onReply} className={cn("mb-2 block w-full rounded-xl border-l-2 border-[#E88C2B] px-2.5 py-1.5 text-left text-xs", message.isMine ? "bg-white/10" : "bg-primary/10")}>
                 <strong className={message.isMine ? "text-primary-foreground/80" : "text-primary"}>{replyContext.senderName}</strong>
