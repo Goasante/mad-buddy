@@ -5,6 +5,7 @@ import { activeRestrictions } from "@/lib/admin/service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { loadLatestVerificationRequest, verificationRestrictionReason } from "@/lib/trust/verification-application";
+import { verificationApplicationEligibility } from "@/lib/trust/verification-application-model";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function SettingsVerificationPage() {
 
   const admin = createSupabaseAdminClient();
   const [{ data: profile }, restrictions, request, { data: verification }] = await Promise.all([
-    admin.from("profiles").select("is_onboarded, deleted_at").eq("user_id", user.id).maybeSingle(),
+    admin.from("profiles").select("is_onboarded, deleted_at, avatar_url").eq("user_id", user.id).maybeSingle(),
     activeRestrictions(admin, user.id),
     loadLatestVerificationRequest(admin, user.id),
     admin.from("account_verifications").select("status").eq("user_id", user.id).eq("verification_type", "manual_review").maybeSingle()
@@ -22,13 +23,16 @@ export default async function SettingsVerificationPage() {
 
   const isVerifiedAccount = verification?.status === "verified";
 
-  const eligibilityMessage = isVerifiedAccount
+  const eligibilityMessage = isVerifiedAccount || (request && ["pending", "under_review", "verified"].includes(request.status))
     ? null
     : !user.email_confirmed_at
     ? "Confirm your email before applying."
     : !profile?.is_onboarded || profile.deleted_at
       ? "Complete your active profile before applying."
-      : verificationRestrictionReason(restrictions);
+      : verificationRestrictionReason(restrictions) ?? verificationApplicationEligibility({
+          createdAt: user.created_at,
+          profilePhotoUrl: profile.avatar_url
+        });
 
   return <VerificationPage request={request} eligibilityMessage={eligibilityMessage} isVerifiedAccount={isVerifiedAccount} />;
 }

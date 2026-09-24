@@ -21,6 +21,7 @@ import {
   VERIFICATION_EVIDENCE_KINDS,
   verificationRestrictionReason
 } from "@/lib/trust/verification-application";
+import { verificationApplicationEligibility } from "@/lib/trust/verification-application-model";
 
 export type VerificationActionState = { ok: boolean; message: string };
 
@@ -43,7 +44,7 @@ async function eligibleUser() {
   if (!user.email_confirmed_at) return { ok: false as const, message: "Confirm your email before applying." };
 
   const [{ data: profile }, restrictions] = await Promise.all([
-    admin.from("profiles").select("is_onboarded, deleted_at").eq("user_id", user.id).maybeSingle(),
+    admin.from("profiles").select("is_onboarded, deleted_at, avatar_url").eq("user_id", user.id).maybeSingle(),
     activeRestrictions(admin, user.id)
   ]);
   if (!profile?.is_onboarded || profile.deleted_at) {
@@ -51,6 +52,8 @@ async function eligibleUser() {
   }
   const restrictionMessage = verificationRestrictionReason(restrictions);
   if (restrictionMessage) return { ok: false as const, message: restrictionMessage };
+  const applicationMessage = verificationApplicationEligibility({ createdAt: user.created_at, profilePhotoUrl: profile.avatar_url });
+  if (applicationMessage) return { ok: false as const, message: applicationMessage };
   return { ok: true as const, user, admin };
 }
 

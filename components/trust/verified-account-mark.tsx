@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  *   Premium          -- a Plus/Pro subscription.
  *
  * A person may hold any combination, so the three are drawn differently on
- * purpose. This one is a warm orange seal with a gold crown; Trusted Member and
+ * purpose. This one is a warm orange seal with a clear white check; Trusted Member and
  * Premium keep their own treatments. Nothing here reads plan, tenure or journey
  * progress -- verification comes from account_verifications and only from
  * there.
@@ -27,29 +27,20 @@ import { cn } from "@/lib/utils";
  * and to be unmistakable against the other two identity signals, and no
  * generic glyph does that.
  *
- * DRAWN FOR 14-20px. The full emblem has scalloped edges, a gloss highlight and
- * a three-dimensional crown; every one of those turns to mush beside a name at
- * this size. The geometry below keeps what survives -- the seal silhouette, the
- * gold ring, the crown's three points, a heavy check -- and drops what does
- * not. It carries currentColor nowhere: the colours ARE the identity.
+ * DRAWN FOR 16-20px. Eight shallow lobes and one heavy check remain legible
+ * beside a name, including against a dark card. This is the approved vector
+ * proposal, rendered inline so every surface uses the same crisp shape.
  */
 
 /** One place for the palette, so the inline mark and the full emblem agree. */
 const SEAL_OUTER = "#F97316";
-const SEAL_INNER = "#EA580C";
-const GOLD = "#FBBF24";
-const GOLD_DEEP = "#F59E0B";
-const CHECK = "#FFFFFF";
-
-/**
- * The scalloped seal outline.
- *
- * Twelve lobes on the reference; twelve at 16px is a blur, so this uses eight.
- * The silhouette still reads as a seal rather than a plain circle, which is
- * the part that distinguishes it at a glance.
- */
-const SEAL_PATH =
-  "M12 1.6l2.1 1.5 2.5-.5 1.3 2.2 2.4 1 .1 2.6 1.7 1.9-1.2 2.3.5 2.5-2.2 1.4-1 2.4-2.6.2-1.9 1.7-2.3-1.2-2.5.5-1.4-2.2-2.4-1-.2-2.6L1.6 12l1.2-2.3-.5-2.5 2.2-1.4 1-2.4 2.6-.2L10 1.5l2 .1z";
+const SEAL_INNER = "#E85D10";
+const GOLD = "#FFD05C";
+const CHECK = "#FFFDF8";
+const LOBES = [
+  [19.75, 12], [17.48, 17.48], [12, 19.75], [6.52, 17.48],
+  [4.25, 12], [6.52, 6.52], [12, 4.25], [17.48, 6.52]
+] as const;
 
 export function VerifiedAccountMark({
   isVerifiedAccount = false,
@@ -82,35 +73,15 @@ export function VerifiedAccountMark({
       aria-hidden="true"
       className="shrink-0"
     >
-      {/* Seal. Two tones rather than a gradient: a gradient at 16px is a flat
-          muddy fill, while two solid shapes keep an edge. */}
-      <path d={SEAL_PATH} fill={SEAL_OUTER} />
-      <circle cx="12" cy="12.4" r="7.4" fill={SEAL_INNER} />
-
-      {/* The gold ring, which is what separates this from a plain orange dot
-          at small sizes. */}
-      <circle cx="12" cy="12.4" r="6.2" fill="none" stroke={GOLD} strokeWidth="1.5" />
-
-      {/* Crown: three points and three orbs, simplified from the reference.
-          Sits above the seal, overlapping slightly so the two read as one
-          object rather than a hat balanced on a coin. */}
+      <g fill={SEAL_OUTER}>
+        {LOBES.map(([cx, cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.15" />)}
+        <circle cx="12" cy="12" r="9.55" />
+      </g>
+      <circle cx="12" cy="12" r="8.25" fill={SEAL_INNER} stroke={GOLD} strokeWidth="1.45" />
       <path
-        d="M7.4 5.6l1.7 1.9 1.6-2.4 1.6 2.4 1.7-1.9.7 3.1H6.7z"
-        fill={GOLD}
-        stroke={GOLD_DEEP}
-        strokeWidth="0.4"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="3.4" r="1.15" fill={GOLD} />
-      <circle cx="7.1" cy="5.2" r="0.85" fill={GOLD} />
-      <circle cx="16.9" cy="5.2" r="0.85" fill={GOLD} />
-
-      {/* The check. Deliberately heavy -- it is the one element that must
-          survive at 14px, and a thin stroke is the first thing to disappear. */}
-      <path
-        d="M8.9 12.5l2.1 2.1 4.1-4.4"
+        d="M7.4 12.05 10.55 15.1 16.95 8.9"
         stroke={CHECK}
-        strokeWidth="2.4"
+        strokeWidth="2.7"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

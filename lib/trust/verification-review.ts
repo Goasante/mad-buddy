@@ -6,8 +6,8 @@ import type { Database } from "@/lib/supabase/database.types";
 import type { VerificationDocumentType, VerificationEvidenceKind, VerificationRequestStatus } from "@/lib/trust/verification-application";
 
 type VerificationAdmin = SupabaseClient<Database>;
-type VerificationProfile = Pick<Database["public"]["Tables"]["profiles"]["Row"], "user_id" | "full_name" | "username" | "avatar_url">;
-type VerificationEvidence = Pick<Database["public"]["Tables"]["verification_evidence"]["Row"], "id" | "request_id" | "evidence_kind" | "original_file_name">;
+type VerificationProfile = Pick<Database["public"]["Tables"]["profiles"]["Row"], "user_id" | "full_name" | "username" | "avatar_url" | "bio">;
+type VerificationEvidence = Pick<Database["public"]["Tables"]["verification_evidence"]["Row"], "id" | "request_id" | "evidence_kind" | "original_file_name" | "content_type">;
 
 export type VerificationApplicationEntry = {
   requestId: string;
@@ -15,13 +15,14 @@ export type VerificationApplicationEntry = {
   displayName: string;
   username: string;
   avatarUrl: string | null;
+  profileBio: string | null;
   legalName: string;
   documentType: VerificationDocumentType;
   countryCode: string;
   status: VerificationRequestStatus;
   submittedAt: string | null;
   userMessage: string | null;
-  evidence: Array<{ id: string; kind: VerificationEvidenceKind; fileName: string | null }>;
+  evidence: Array<{ id: string; kind: VerificationEvidenceKind; fileName: string | null; contentType: string }>;
 };
 
 export async function loadVerificationApplications(admin: VerificationAdmin): Promise<VerificationApplicationEntry[]> {
@@ -36,8 +37,8 @@ export async function loadVerificationApplications(admin: VerificationAdmin): Pr
   const requestIds = requests.map((row: { id: string }) => row.id);
   const userIds = [...new Set(requests.map((row: { user_id: string }) => row.user_id))];
   const [{ data: profiles }, { data: evidence }] = await Promise.all([
-    admin.from("profiles").select("user_id, full_name, username, avatar_url").in("user_id", userIds),
-    admin.from("verification_evidence").select("id, request_id, evidence_kind, original_file_name").in("request_id", requestIds).is("deleted_at", null).not("validated_at", "is", null)
+    admin.from("profiles").select("user_id, full_name, username, avatar_url, bio").in("user_id", userIds),
+    admin.from("verification_evidence").select("id, request_id, evidence_kind, original_file_name, content_type").in("request_id", requestIds).is("deleted_at", null).not("validated_at", "is", null)
   ]);
   const profileById = new Map((profiles ?? []).map((row) => [row.user_id, row as VerificationProfile]));
 
@@ -49,6 +50,7 @@ export async function loadVerificationApplications(admin: VerificationAdmin): Pr
       displayName: profile?.full_name?.trim() || "A Muddy",
       username: profile?.username || "muddy",
       avatarUrl: profile?.avatar_url ?? null,
+      profileBio: profile?.bio ?? null,
       legalName: row.legal_name,
       documentType: row.document_type,
       countryCode: row.country_code,
@@ -57,7 +59,7 @@ export async function loadVerificationApplications(admin: VerificationAdmin): Pr
       userMessage: row.user_message,
       evidence: (evidence ?? []).filter((item) => item.request_id === row.id).map((item) => {
         const typed = item as VerificationEvidence;
-        return { id: typed.id, kind: typed.evidence_kind, fileName: typed.original_file_name };
+        return { id: typed.id, kind: typed.evidence_kind, fileName: typed.original_file_name, contentType: typed.content_type };
       })
     };
   });

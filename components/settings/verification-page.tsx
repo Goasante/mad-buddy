@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeCheck, FileCheck2, Loader2, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -137,14 +138,14 @@ export function VerificationPage({
       ) : null}
 
       {eligibilityMessage ? (
-        <Card className="border-amber-500/30 bg-amber-500/10 p-4 text-sm">{eligibilityMessage}</Card>
+        <Card className="border-amber-500/30 bg-amber-500/10 p-4 text-sm">{eligibilityMessage} <Link href="/profile" className="font-semibold underline underline-offset-2">View your profile</Link></Card>
       ) : null}
 
       {!locked ? (
         <Card className="space-y-5 p-4 sm:p-5">
           <div className="flex items-start gap-3 rounded-xl bg-secondary/35 p-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#E88C2B]" aria-hidden="true" />
-            <p className="text-xs leading-5 text-muted-foreground">Your evidence is private, available only to authorised reviewers, and scheduled for deletion after the retention period.</p>
+            <p className="text-xs leading-5 text-muted-foreground">Your account must be at least 30 days old and your profile must show a clear photo of your face. Reviewers compare that photo with your selfie and ID. If they do not match, the application may be declined. Your documents remain private and are scheduled for deletion after the retention period.</p>
           </div>
 
           <label className="block space-y-1.5 text-sm font-medium">

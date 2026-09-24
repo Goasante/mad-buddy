@@ -26,8 +26,8 @@ export const dynamic = "force-dynamic";
  * step towards one implying the other, which every part of this feature has
  * been built to prevent.
  *
- * User applications appear first. Search remains available for corrections
- * and revocations of an existing verification record.
+ * User applications appear first. Search also permits owner/admin grants
+ * and corrections to existing verification records.
  */
 
 export default async function AdminVerificationsPage({
@@ -46,6 +46,7 @@ export default async function AdminVerificationsPage({
   // Checked at the page as well as in the action, so the queue is not even
   // rendered to someone who could not act on it.
   if (!access.permissions.has("admin.verification.review")) redirect("/admin");
+  const allowDiscretionaryGrant = access.role === "owner" || access.role === "admin";
 
   const [applications, reviewed] = await Promise.all([
     loadVerificationApplications(admin),
@@ -86,7 +87,7 @@ export default async function AdminVerificationsPage({
     <div className="flex flex-col gap-6">
       <AdminPageHeader
         title="Account verification"
-        description="Mad Buddy has checked who this person is. Separate from Trusted Member, which recognises standing earned in the product, and from Access, which removes ads."
+        description="Review applications by comparing the profile photo, ID and selfie. Owners and admins can also grant verification directly from account search, with an audited reason."
       />
 
       <section className="flex flex-col gap-3">
@@ -112,7 +113,7 @@ export default async function AdminVerificationsPage({
         ))}
       </section>
 
-      {/* Search remains useful for revoking or correcting existing decisions. */}
+      {/* Search also exposes discretionary grants only to owners and admins. */}
       <form method="get" className="flex flex-wrap items-center gap-2">
         <input
           type="search"
@@ -153,7 +154,7 @@ export default async function AdminVerificationsPage({
                   <p className="truncate text-xs text-muted-foreground">@{result.username}</p>
                 </div>
                 <StatusPill status={result.status} />
-                <VerificationControls userId={result.userId} status={result.status} />
+                <VerificationControls userId={result.userId} status={result.status} allowDiscretionaryGrant={allowDiscretionaryGrant} />
               </Card>
             ))
           )}
@@ -191,7 +192,7 @@ export default async function AdminVerificationsPage({
                 </p>
               </div>
               <StatusPill status={entry.status} />
-              <VerificationControls userId={entry.userId} status={entry.status} />
+              <VerificationControls userId={entry.userId} status={entry.status} allowDiscretionaryGrant={allowDiscretionaryGrant} />
             </Card>
           ))
         )}

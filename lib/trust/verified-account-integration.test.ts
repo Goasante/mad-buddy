@@ -134,7 +134,7 @@ describe("the mark looks like Mad Buddy", () => {
     expect(mark).not.toContain("BadgeCheck");
   });
 
-  it("uses the orange seal and gold crown rather than a blue check", () => {
+  it("uses the approved orange seal and gold ring rather than a blue check", () => {
     // Blue is the convention this deliberately avoids.
     expect(mark).toContain("#F97316");
     expect(mark).toContain("#FBBF24");
@@ -142,15 +142,13 @@ describe("the mark looks like Mad Buddy", () => {
     expect(mark).not.toContain("sky-400");
   });
 
-  it("carries the seal, ring, crown and check as real geometry", () => {
+  it("carries the eight-lobed seal, ring and check as real geometry", () => {
     // Asserted on the DRAWING, not on comment text -- stripComments removes
     // the commentary, so naming the parts there would prove nothing.
-    expect(mark, "seal silhouette").toContain("SEAL_PATH");
-    // Two circles: the inner seal face and the gold ring that separates this
-    // from a plain orange dot at small sizes.
-    expect((mark.match(/<circle/g) ?? []).length, "ring, face and crown orbs").toBeGreaterThanOrEqual(4);
-    // Three <path> elements: seal, crown, check.
-    expect((mark.match(/<path/g) ?? []).length, "seal, crown and check paths").toBeGreaterThanOrEqual(3);
+    expect(mark, "seal lobes").toContain("LOBES.map");
+    expect(mark, "seal shape").toContain('r="9.55"');
+    expect(mark, "inner face and gold ring").toContain('r="8.25" fill={SEAL_INNER} stroke={GOLD}');
+    expect(mark, "approved check geometry").toContain('d="M7.4 12.05 10.55 15.1 16.95 8.9"');
     expect(mark, "white check").toContain("CHECK");
   });
 

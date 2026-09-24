@@ -29,6 +29,12 @@ describe("identity verification application lifecycle", () => {
     expect(userActions).toContain("activeRestrictions");
   });
 
+  it("enforces account age and face-photo eligibility on the server", () => {
+    expect(userActions).toContain("verificationApplicationEligibility");
+    expect(read("app/(app)/settings/verification/page.tsx")).toContain("verificationApplicationEligibility");
+    expect(userPage).toContain("Reviewers compare that photo with your selfie and ID");
+  });
+
   it("requires an ID front and selfie before submission", () => {
     expect(userPage).toContain('files.document_front');
     expect(userPage).toContain('files.selfie');
@@ -43,6 +49,21 @@ describe("identity verification application lifecycle", () => {
     expect(adminActions).toContain("Open and review the ID and selfie before verifying this account.");
     expect(adminActions).toContain("caseReference: evidence.id");
     expect(adminActions).toContain("createSignedUrl(evidence.storage_path, 300)");
+  });
+
+  it("requires a current profile photo and explicit human face-match confirmation before approval", () => {
+    expect(applicationControls).toContain("I compared the current profile photo, ID and selfie");
+    expect(applicationControls).toContain("openVerificationEvidenceAction");
+    expect(adminActions).toContain('profileMatchConfirmed === true');
+    expect(adminActions).toContain('profile?.avatar_url?.trim()');
+    expect(adminActions).toContain('profilePhotoMatched: true');
+  });
+
+  it("allows only owners and admins to grant verification with an audited reason", () => {
+    expect(adminActions).toContain('access.role !== "owner" && access.role !== "admin"');
+    expect(adminActions).toContain('action: "account_verification_admin_grant"');
+    expect(adminActions).toContain('reason: parsed.data.reason');
+    expect(correctionControls).toContain("grantAccountVerificationAction");
   });
 
   it("notifies users and writes the verified account result separately", () => {

@@ -70,11 +70,21 @@ const accountVerificationSchema = z
 const verificationRequestDecisionSchema = z.object({
   requestId: z.string().uuid(),
   decision: z.enum(["under_review", "more_information_required", "verified", "declined"]),
-  note: z.string().trim().max(1000).optional()
+  note: z.string().trim().max(1000).optional(),
+  profileMatchConfirmed: z.boolean().optional(),
+  reviewedProfilePhotoUrl: z.string().max(2048).nullable().optional()
 }).refine(
   (value) => !["more_information_required", "declined"].includes(value.decision) || (value.note?.length ?? 0) >= 3,
   { path: ["note"] }
+).refine(
+  (value) => value.decision !== "verified" || value.profileMatchConfirmed === true,
+  { path: ["profileMatchConfirmed"] }
 );
+
+const discretionaryVerificationSchema = z.object({
+  userId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(300)
+});
 
 const verificationEvidenceSchema = z.object({
   requestId: z.string().uuid(),
@@ -526,9 +536,68 @@ export async function decideAccountVerificationAction(input: unknown): Promise<A
   }
 }
 
+/** Owner/Admin discretion is deliberately separate from evidence-backed application review. */
+export async function grantAccountVerificationAction(input: unknown): Promise<AdminActionState> {
+  const parsed = discretionaryVerificationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Choose an account and add a short reason for the grant." };
+
+  try {
+    const { admin, context } = await requireSafetyAdmin();
+    const access = await getAdminAccess(admin, context);
+    if (access.role !== "owner" && access.role !== "admin") return { ok: false, message: "An owner or admin is required to grant verification." };
+
+    const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
+    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+    const { data: profile } = await admin.from("profiles").select("user_id, deleted_at").eq("user_id", parsed.data.userId).maybeSingle();
+    if (!profile || profile.deleted_at) return { ok: false, message: "That account is unavailable." };
+
+    const { getAccountVerification } = await import("@/lib/trust/verified-account-admin");
+    const previous = await getAccountVerification(admin, parsed.data.userId);
+    if (previous?.status === "verified") return { ok: false, message: "This account is already verified." };
+    const logged = await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: "account_verification_admin_grant",
+      targetType: "user",
+      targetId: parsed.data.userId,
+      previousState: previous ? { status: previous.status } : undefined,
+      newState: { status: "verified", route: "admin_discretion" },
+      reason: parsed.data.reason
+    });
+    if (!logged) return { ok: false, message: "The grant could not be audited, so no change was made." };
+
+    const result = await decideAccountVerification(admin, {
+      userId: parsed.data.userId,
+      decision: "verified",
+      evidenceLabel: "Admin grant"
+    });
+    if (!result.ok) return result;
+
+    const now = new Date().toISOString();
+    await admin.from("verification_requests").update({
+      status: "cancelled",
+      user_message: "Your account was verified by an admin grant.",
+      reviewed_by: context.userId,
+      reviewed_at: now,
+      updated_at: now
+    }).eq("user_id", parsed.data.userId).in("status", ["draft", "pending", "under_review", "more_information_required"]);
+    await deliverNotification(admin, {
+      userId: parsed.data.userId,
+      type: "system_alert",
+      priority: "high",
+      title: "Account verified",
+      message: "Your Verified Account sign is now active."
+    });
+    revalidatePath("/admin/verifications");
+    revalidatePath("/settings/verification");
+    return { ok: true, message: "Verification granted by admin." };
+  } catch {
+    return { ok: false, message: "Admin access is required." };
+  }
+}
+
 export async function reviewVerificationRequestAction(input: unknown): Promise<AdminActionState> {
   const parsed = verificationRequestDecisionSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Add a clear note for that decision." };
+  if (!parsed.success) return { ok: false, message: "Add a clear note or confirm the profile, ID and selfie match before approving." };
 
   try {
     const { admin, context } = await requireSafetyAdmin();
@@ -547,10 +616,17 @@ export async function reviewVerificationRequestAction(input: unknown): Promise<A
     }
 
     if (parsed.data.decision === "verified") {
-      const [{ data: evidence }, restrictions] = await Promise.all([
+      const [{ data: evidence }, { data: profile }, restrictions] = await Promise.all([
         admin.from("verification_evidence").select("id, evidence_kind").eq("request_id", request.id).is("deleted_at", null).not("validated_at", "is", null),
+        admin.from("profiles").select("avatar_url, deleted_at").eq("user_id", request.user_id).maybeSingle(),
         activeRestrictions(admin, request.user_id)
       ]);
+      if (!profile?.avatar_url?.trim() || profile.deleted_at) {
+        return { ok: false, message: "This account needs an active profile with a clear face photo before approval." };
+      }
+      if (profile.avatar_url !== parsed.data.reviewedProfilePhotoUrl) {
+        return { ok: false, message: "The profile photo changed during review. Refresh and compare the new photo before approving." };
+      }
       const evidenceKinds = new Set((evidence ?? []).map((item: { evidence_kind: string }) => item.evidence_kind));
       if (!evidenceKinds.has("document_front") || !evidenceKinds.has("selfie")) {
         return { ok: false, message: "The required ID and selfie evidence are not available." };
@@ -582,7 +658,7 @@ export async function reviewVerificationRequestAction(input: unknown): Promise<A
       targetType: "verification_request",
       targetId: request.id,
       previousState: { status: request.status },
-      newState: { status: parsed.data.decision },
+      newState: { status: parsed.data.decision, ...(parsed.data.decision === "verified" ? { profilePhotoMatched: true } : {}) },
       reason: parsed.data.note || "Identity review"
     });
     if (!logged) return { ok: false, message: "The audit entry could not be recorded, so no change was made." };
@@ -591,7 +667,7 @@ export async function reviewVerificationRequestAction(input: unknown): Promise<A
       const result = await decideAccountVerification(admin, {
         userId: request.user_id,
         decision: "verified",
-        evidenceLabel: `${String(request.document_type).replaceAll("_", " ")}, matched selfie`
+        evidenceLabel: `${String(request.document_type).replaceAll("_", " ")}, matched selfie and profile photo`
       });
       if (!result.ok) return result;
     }

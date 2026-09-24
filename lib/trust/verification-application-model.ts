@@ -1,5 +1,6 @@
 export const VERIFICATION_BUCKET = "verification-evidence";
 export const VERIFICATION_MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const VERIFICATION_MIN_ACCOUNT_AGE_DAYS = 30;
 
 export const VERIFICATION_DOCUMENT_TYPES = [
   "passport",
@@ -42,6 +43,25 @@ export function verificationRestrictionReason(restrictions: readonly string[]): 
   }
   if (restrictions.length > 0) {
     return "Resolve the active restriction on your account before applying for verification.";
+  }
+  return null;
+}
+
+/** The waiting period applies to applications, never to an Admin grant. */
+export function verificationApplicationEligibility(input: {
+  createdAt: string;
+  profilePhotoUrl: string | null;
+  nowMs?: number;
+}): string | null {
+  const joinedAt = Date.parse(input.createdAt);
+  const eligibleAt = joinedAt + VERIFICATION_MIN_ACCOUNT_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const now = input.nowMs ?? Date.now();
+  if (!Number.isFinite(joinedAt) || !Number.isFinite(now)) return "Your account age could not be confirmed. Try again later.";
+  if (now < eligibleAt) {
+    return `You can apply for verification from ${new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(eligibleAt))}, after 30 days on Mad Buddy.`;
+  }
+  if (!input.profilePhotoUrl?.trim()) {
+    return "Add a clear photo of your face to your profile before applying for verification.";
   }
   return null;
 }
