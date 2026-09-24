@@ -24,7 +24,7 @@ import { Spinner } from "../components/Spinner";
  *  - the transport, which uses a Bearer token against the API origin rather
  *    than a Server Action with a session cookie;
  *  - `isBuiltForMobile`, because 17 of the 24 destinations do not exist here:
- *    13 settings-related web features with no native screen, /about, and the
+ *    settings-related web features with no native screen (including About), and the
  *    pre-existing /hangout-mode, /badges and /safety-center. Without it each
  *    rendered as a tappable row that reached the SPA catch-all;
  *  - Sign out and account deletion, in the footer. Both stores require in-app
@@ -193,4 +193,3 @@ function NativeAccountActions({
     </>
   );
 }
-

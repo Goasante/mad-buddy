@@ -417,16 +417,11 @@ export function SettingsPageContent({
             description="Invite friends and track your invites."
             href="/invite"
           />
-          {/* Moved here from Profile (MB-GOD-013). Settings already indexed every
-              other destination Profile's Support block linked to; /about was the
-              one exception, so it is added HERE FIRST — removing the Profile
-              block before this row existed would have left version and legal
-              information unreachable from inside the app. */}
           <SettingsLinkRow
             icon={Info}
             title="About Mad Buddy"
-            description="Version, credits, and legal."
-            href="/about"
+            description="What the app does and how it keeps you in control."
+            href="/settings/about"
           />
         </SettingsSection>
         </div>
@@ -519,7 +514,7 @@ type SettingsLinkRowProps = {
      a route that no longer exists at compile time, which is worth more here
      than the convenience of accepting any string. Extend it deliberately. */
   href:
-    | "/about"
+    | "/settings/about"
     | "/profile"
     | "/friends"
     | "/settings/access"

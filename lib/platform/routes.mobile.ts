@@ -75,12 +75,13 @@ export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
   /* SETTINGS SUB-PAGES. Every one of these is a real web feature with no
      native screen yet. They are listed here rather than left out because the
      shared Settings screen links to all of them: unlisted, each rendered as a
-     tappable row that reached the catch-all -- 13 dead ends on one screen.
+     tappable row that reached the catch-all.
      Listed, they render dimmed and say so.
 
      When one is built for mobile, delete it here and the routes.mobile test
      that asserts it is unmapped will fail, which is the reminder to map it. */
   "/settings/appearance",
+  "/settings/about",
   "/settings/communication",
   "/settings/data-storage",
   "/settings/engagement",

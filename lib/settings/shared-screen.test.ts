@@ -146,7 +146,7 @@ describe("rows only navigate where Android can arrive", () => {
 
   it("all 19 unavailable destinations are listed as not built", () => {
     /* The full set, counted from the screen rather than from the entries this
-       PR happened to add: 13 settings-related pages, /about, and the three
+       PR happened to add: settings-related pages, including in-app About,
        that were already listed. An earlier count said 13 because it looked
        only at the new additions. */
     const unavailable = [
@@ -155,7 +155,7 @@ describe("rows only navigate where Android can arrive", () => {
       "/settings/language", "/settings/privacy", "/settings/privacy-setup",
       "/settings/sessions", "/settings/walkthrough", "/invite", "/reminders",
       "/settings/verification", "/settings/account-status",
-      "/about",
+      "/settings/about",
       // Pre-existing, listed before this PR.
       "/hangout-mode", "/badges", "/safety-center"
     ];

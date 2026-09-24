@@ -70,7 +70,7 @@ const COMMUNITY: SheetRow[] = [
   { href: "/invite", label: "Invite Buddies", subtitle: "Invite people you know", icon: UserPlus },
   { href: "/help", label: "Help & Support", subtitle: "Get help and contact us", icon: HelpCircle },
   { href: "/settings/feedback", label: "Send Feedback", subtitle: "Share your thoughts", icon: LifeBuoy },
-  { href: "/about", label: "About Mad Buddy", subtitle: "Version, legal, and more", icon: Info }
+  { href: "/settings/about", label: "About Mad Buddy", subtitle: "How Mad Buddy works", icon: Info }
 ];
 
 /**

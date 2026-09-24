@@ -60,7 +60,7 @@ describe("account hub destinations", () => {
     ["Invite Buddies", "Invite people you know", "/invite"],
     ["Help & Support", "Get help and contact us", "/help"],
     ["Send Feedback", "Share your thoughts", "/settings/feedback"],
-    ["About Mad Buddy", "Version, legal, and more", "/about"]
+    ["About Mad Buddy", "How Mad Buddy works", "/settings/about"]
   ] as const;
 
   it.each(ROWS)("%s points at %s", (label, subtitle, href) => {

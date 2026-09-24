@@ -904,10 +904,12 @@ export function ProfilePageContent({
               They were removed rather than redesigned, because every row in them
               was already only a LINK to a Settings destination — /settings,
               /settings/appearance, /settings/sessions, /settings/glow-visibility,
-              /help, /settings/feedback, /about. Settings indexes all of them
+              /help, /settings/feedback, /about. Settings now links to the
+              signed-in /settings/about screen instead of the public page;
+              it indexes these destinations
               under Account / Privacy & safety / Preferences / Support & feedback,
               so this was a duplicate index, not a home. Nothing became
-              unreachable: /about was the one destination Settings did not list,
+              unreachable: About was the one destination Settings did not list,
               and it was added there first.
 
               Together they were 28.6% of an identity surface — Support alone was
