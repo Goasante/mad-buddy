@@ -3528,6 +3528,72 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["account_verifications"]["Insert"]>;
         Relationships: [];
       };
+      verification_requests: {
+        Row: {
+          id: string;
+          user_id: string;
+          legal_name: string;
+          document_type: "passport" | "national_id" | "drivers_licence" | "voter_id";
+          country_code: string;
+          status: "draft" | "pending" | "under_review" | "more_information_required" | "verified" | "declined" | "revoked" | "cancelled";
+          submitted_at: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          user_message: string | null;
+          internal_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          legal_name: string;
+          document_type: "passport" | "national_id" | "drivers_licence" | "voter_id";
+          country_code?: string;
+          status?: "draft" | "pending" | "under_review" | "more_information_required" | "verified" | "declined" | "revoked" | "cancelled";
+          submitted_at?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          user_message?: string | null;
+          internal_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["verification_requests"]["Insert"]>;
+        Relationships: [];
+      };
+      verification_evidence: {
+        Row: {
+          id: string;
+          request_id: string;
+          user_id: string;
+          evidence_kind: "document_front" | "document_back" | "selfie";
+          storage_path: string;
+          content_type: string;
+          size_bytes: number;
+          original_file_name: string | null;
+          validated_at: string | null;
+          retention_expires_at: string;
+          deleted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          user_id: string;
+          evidence_kind: "document_front" | "document_back" | "selfie";
+          storage_path: string;
+          content_type: string;
+          size_bytes: number;
+          original_file_name?: string | null;
+          validated_at?: string | null;
+          retention_expires_at?: string;
+          deleted_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["verification_evidence"]["Insert"]>;
+        Relationships: [];
+      };
       account_trust_events: {
         Row: {
           id: string;
@@ -4440,6 +4506,36 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["user_restrictions"]["Insert"]>;
+        Relationships: [];
+      };
+      moderation_strikes: {
+        Row: {
+          id: string;
+          user_id: string;
+          report_kind: "user" | "content";
+          report_id: string;
+          action_type: string;
+          points: number;
+          reason_code: string;
+          created_by: string | null;
+          expires_at: string;
+          reversed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          report_kind: "user" | "content";
+          report_id: string;
+          action_type: string;
+          points: number;
+          reason_code: string;
+          created_by?: string | null;
+          expires_at?: string;
+          reversed_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["moderation_strikes"]["Insert"]>;
         Relationships: [];
       };
       support_tickets: {
@@ -5884,7 +5980,7 @@ export type InviteStatus = "active" | "used" | "revoked" | "expired";
 export type IdentifierType = "phone" | "email";
 export type ContactMatchStatus = "running" | "completed" | "failed" | "deleted";
 
-export type VerificationType = "email" | "phone" | "institution" | "organisation";
+export type VerificationType = "email" | "phone" | "institution" | "organisation" | "manual_review";
 export type VerificationStatus = "pending" | "verified" | "failed" | "expired" | "revoked";
 export type TrustEventType =
   | "request_declined"

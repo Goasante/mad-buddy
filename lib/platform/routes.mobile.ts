@@ -90,6 +90,8 @@ export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
   "/settings/privacy",
   "/settings/privacy-setup",
   "/settings/sessions",
+  "/settings/verification",
+  "/settings/account-status",
   "/settings/walkthrough",
   /* Not settings pages, but linked from Settings and equally absent. */
   "/invite",

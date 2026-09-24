@@ -7,6 +7,7 @@ import { getAdminAccess } from "@/lib/admin/access";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { contentTypeLabel, type ReportKind } from "@/lib/admin/moderation";
+import { activeStrikePoints, escalationForPoints } from "@/lib/admin/moderation-strikes";
 
 type DetailProps = { params: Promise<{ kind: string; id: string }> };
 
@@ -86,7 +87,7 @@ export default async function ReportDetailPage({ params }: DetailProps) {
   }
 
   const now = new Date().toISOString();
-  const [restrictionsRes, userReportCount, contentReportCount, historyRes, auditRes] = await Promise.all([
+  const [restrictionsRes, userReportCount, contentReportCount, historyRes, auditRes, strikePoints] = await Promise.all([
     base.reportedUserId
       ? admin.from("user_restrictions").select("restriction_type, reason_code, ends_at, created_at").eq("user_id", base.reportedUserId).is("lifted_at", null)
       : Promise.resolve({ data: [] as { restriction_type: string; reason_code: string | null; ends_at: string | null; created_at: string }[] }),
@@ -99,7 +100,8 @@ export default async function ReportDetailPage({ params }: DetailProps) {
     kind === "content"
       ? admin.from("moderation_actions").select("id, moderator_id, action_type, reason, created_at").eq("report_id", id).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] as { id: string; moderator_id: string | null; action_type: string; reason: string | null; created_at: string }[] }),
-    admin.from("admin_audit_events").select("id, actor_id, action, created_at").eq("target_id", id).order("created_at", { ascending: false }).limit(25)
+    admin.from("admin_audit_events").select("id, actor_id, action, created_at").eq("target_id", id).order("created_at", { ascending: false }).limit(25),
+    base.reportedUserId ? activeStrikePoints(admin, base.reportedUserId) : Promise.resolve(0)
   ]);
 
   const actorIds = [
@@ -135,6 +137,8 @@ export default async function ReportDetailPage({ params }: DetailProps) {
           username: reportedProfile?.username ?? null,
           avatarUrl: reportedProfile?.avatar_url ?? null,
           totalReports: ((userReportCount.count ?? 0) as number) + ((contentReportCount.count ?? 0) as number),
+          strikePoints,
+          recommendedAction: escalationForPoints(strikePoints).label,
           activeRestrictions: activeRestrictions.map((r) => ({ type: r.restriction_type, endsAt: r.ends_at }))
         }
       : null,

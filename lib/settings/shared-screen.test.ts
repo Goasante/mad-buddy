@@ -144,7 +144,7 @@ describe("rows only navigate where Android can arrive", () => {
     }
   });
 
-  it("all 17 unavailable destinations are listed as not built", () => {
+  it("all 19 unavailable destinations are listed as not built", () => {
     /* The full set, counted from the screen rather than from the entries this
        PR happened to add: 13 settings-related pages, /about, and the three
        that were already listed. An earlier count said 13 because it looked
@@ -154,18 +154,19 @@ describe("rows only navigate where Android can arrive", () => {
       "/settings/engagement", "/settings/feedback", "/settings/glow-visibility",
       "/settings/language", "/settings/privacy", "/settings/privacy-setup",
       "/settings/sessions", "/settings/walkthrough", "/invite", "/reminders",
+      "/settings/verification", "/settings/account-status",
       "/about",
       // Pre-existing, listed before this PR.
       "/hangout-mode", "/badges", "/safety-center"
     ];
-    expect(unavailable).toHaveLength(17);
+    expect(unavailable).toHaveLength(19);
     for (const href of unavailable) {
       expect(isBuiltForMobile(href), `${href} should be marked not built`).toBe(false);
     }
     // And the count is what the screen actually renders, not a stale constant.
     const distinct = [...new Set(destinations)];
-    expect(distinct.filter((href) => !isBuiltForMobile(href))).toHaveLength(17);
-    expect(distinct).toHaveLength(24);
+    expect(distinct.filter((href) => !isBuiltForMobile(href))).toHaveLength(19);
+    expect(distinct).toHaveLength(26);
   });
 });
 

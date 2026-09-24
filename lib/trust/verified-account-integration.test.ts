@@ -381,9 +381,12 @@ describe("verification can be granted without hand-written SQL", () => {
     expect(action.slice(0, 1200)).toContain('consumeRateLimit({ action: "admin.mutate"');
   });
 
-  it("requires a note saying what was checked before verifying", () => {
-    // Otherwise nothing records WHY an account carries the badge.
-    expect(adminAction).toContain('value.decision !== "verified" || (value.evidenceLabel?.trim().length ?? 0) >= 3');
+  it("requires validated ID and selfie evidence before verifying", () => {
+    // Search can revoke a result, but cannot bypass the application review.
+    expect(adminAction).toContain('decision: z.enum(["revoked", "failed"])');
+    expect(adminAction).toContain('evidenceKinds.has("document_front")');
+    expect(adminAction).toContain('evidenceKinds.has("selfie")');
+    expect(adminAction).toContain('matched selfie');
   });
 
   it("stores a label, never the evidence itself", () => {

@@ -60,6 +60,7 @@ export type JobType =
   | "expiry.friend_requests"
   | "expiry.event_circles"
   | "expiry.admin_assignments"
+  | "verification.cleanup_evidence"
   | "notifications.send"
   // Plan/Event reminders (Stage D). `scan` is periodic and enqueues `deliver`
   // jobs at their exact reminder instants; `deliver` is never on SCHEDULE
@@ -217,6 +218,7 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "expiry.friend_requests", everyMinutes: 60 * 12, priority: 6 },
   { jobType: "expiry.event_circles", everyMinutes: 60, priority: 6 },
   { jobType: "expiry.admin_assignments", everyMinutes: 60, priority: 2 },
+  { jobType: "verification.cleanup_evidence", everyMinutes: 60 * 24, priority: 4 },
   /**
    * Reminder discovery (Stage D).
    *

@@ -20,6 +20,7 @@ import {
   type ReportKind
 } from "@/lib/admin/moderation";
 import { recordConfirmedModerationPenalty } from "@/lib/engagement/buddy-score-service";
+import { recordModerationStrike } from "@/lib/admin/moderation-strikes";
 
 export type ModerationActionState = { ok: boolean; message: string };
 
@@ -230,6 +231,25 @@ export async function applyModerationActionAction(input: unknown): Promise<Moder
 
   if (report.reportedUserId && actionType !== "no_action" && actionType !== "escalate") {
     await recordConfirmedModerationPenalty(admin, { userId: report.reportedUserId, reportId, actionType });
+    await recordModerationStrike(admin, {
+      userId: report.reportedUserId,
+      reportKind: kind,
+      reportId,
+      actionType,
+      reasonCode: reason || actionType,
+      actorId
+    });
+    if (!restriction) {
+      await deliverNotification(admin, {
+        userId: report.reportedUserId,
+        type: "system_alert",
+        priority: "high",
+        title: "Moderation decision",
+        message: actionType === "remove_content"
+          ? "Content from your account was removed after a safety review. Repeated confirmed violations may lead to account restrictions."
+          : "Mad Buddy reviewed reported activity on your account and recorded a moderation action."
+      });
+    }
   }
 
   // Resulting report status: no_action dismisses, escalate keeps it in review,

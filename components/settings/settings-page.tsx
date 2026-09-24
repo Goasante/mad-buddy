@@ -1,8 +1,10 @@
 "use client";
 
 import { Link } from "@/lib/platform";
+import type { Route } from "next";
 import {
   Bell,
+  BadgeCheck,
   Blocks,
   BookOpen,
   CalendarClock,
@@ -20,6 +22,7 @@ import {
   Palette,
   PartyPopper,
   ShieldCheck,
+  ShieldAlert,
   RadioTower,
   Trash2,
   Trophy,
@@ -223,6 +226,18 @@ export function SettingsPageContent({
             title="Sessions"
             description="See where you're logged in."
             href="/settings/sessions"
+          />
+          <SettingsLinkRow
+            icon={BadgeCheck}
+            title="Account verification"
+            description="Apply for and track identity verification."
+            href="/settings/verification"
+          />
+          <SettingsLinkRow
+            icon={ShieldAlert}
+            title="Account status"
+            description="Review restrictions and submit an appeal."
+            href="/settings/account-status"
           />
           <SettingsLinkRow
             icon={Trophy}
@@ -519,6 +534,8 @@ type SettingsLinkRowProps = {
     | "/buddy-score"
     | "/reminders"
     | "/settings/sessions"
+    | "/settings/verification"
+    | "/settings/account-status"
     | "/settings/appearance"
     | "/settings/language"
     | "/settings/data-storage"
@@ -576,7 +593,7 @@ function SettingsLinkRow({ icon: Icon, title, description, href }: SettingsLinkR
 
   return (
     <Link
-      href={href}
+      href={href as Route}
       className="focus-ring safe-motion flex min-h-[4.25rem] items-center justify-between gap-4 px-2 py-3 hover:bg-secondary/40"
       aria-label={title}
       title={title}

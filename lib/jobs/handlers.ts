@@ -417,6 +417,29 @@ export const handleMediaDeleteQueued: JobHandler = async (admin) => {
   return deleted;
 };
 
+export const handleVerificationEvidenceCleanup: JobHandler = async (admin) => {
+  const now = new Date().toISOString();
+  const { data: expired, error } = await admin
+    .from("verification_evidence")
+    .select("id, storage_path")
+    .is("deleted_at", null)
+    .lte("retention_expires_at", now)
+    .limit(100);
+  if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
+  if (!expired?.length) return 0;
+
+  const { error: removalError } = await admin.storage
+    .from("verification-evidence")
+    .remove(expired.map((row) => row.storage_path));
+  if (removalError) throw new JobError("STORAGE_UNAVAILABLE", removalError.message);
+  const { error: updateError } = await admin
+    .from("verification_evidence")
+    .update({ deleted_at: now })
+    .in("id", expired.map((row) => row.id));
+  if (updateError) throw new JobError("DATABASE_TIMEOUT", updateError.message);
+  return expired.length;
+};
+
 // ---------------------------------------------------------------------------
 // Scheduled downgrades (batch 10 §44, §47)
 // ---------------------------------------------------------------------------
@@ -1224,6 +1247,7 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "expiry.friend_requests": handleExpireFriendRequests,
   "expiry.event_circles": handleExpireEventCircles,
   "expiry.admin_assignments": handleExpireAdminAssignments,
+  "verification.cleanup_evidence": handleVerificationEvidenceCleanup,
   "reminders.scan": async (admin) => {
     const { scanAndEnqueueReminders } = await import("@/lib/reminders/service");
     return scanAndEnqueueReminders(admin);

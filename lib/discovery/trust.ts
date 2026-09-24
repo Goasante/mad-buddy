@@ -269,6 +269,8 @@ export function verificationTypeLabel(type: VerificationType): string {
       return "University";
     case "organisation":
       return "Organisation";
+    case "manual_review":
+      return "Identity";
   }
 }
 

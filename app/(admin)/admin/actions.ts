@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getAdminAccess, requireAdminPermission } from "@/lib/admin/access";
-import { recordAdminAuditEvent } from "@/lib/admin/service";
+import { activeRestrictions, recordAdminAuditEvent, recordSensitiveAccess } from "@/lib/admin/service";
 import { deliverNotification } from "@/lib/notifications/server";
 import { requireSafetyAdmin } from "@/lib/safety/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { decideAccountVerification } from "@/lib/trust/verified-account-admin";
 
 export type AdminActionState = { ok: boolean; message: string };
 
@@ -57,18 +58,29 @@ const trustedMemberDecisionSchema = z
 const accountVerificationSchema = z
   .object({
     userId: z.string().uuid(),
-    decision: z.enum(["verified", "revoked", "failed"]),
+    // New approvals only come through reviewVerificationRequestAction, where
+    // validated ID + selfie evidence are required. This legacy action remains
+    // for revocation/correction of an existing result.
+    decision: z.enum(["revoked", "failed"]),
     // A few words describing what was checked -- never the evidence itself,
     // which must not be stored on an identity row a reviewer can browse.
     evidenceLabel: z.string().trim().max(120).optional()
-  })
-  .refine(
-    // Approving without saying what was checked leaves no record of WHY an
-    // account carries the badge. Revoking and failing are corrections, so they
-    // do not need one.
-    (value) => value.decision !== "verified" || (value.evidenceLabel?.trim().length ?? 0) >= 3,
-    { path: ["evidenceLabel"] }
-  );
+  });
+
+const verificationRequestDecisionSchema = z.object({
+  requestId: z.string().uuid(),
+  decision: z.enum(["under_review", "more_information_required", "verified", "declined"]),
+  note: z.string().trim().max(1000).optional()
+}).refine(
+  (value) => !["more_information_required", "declined"].includes(value.decision) || (value.note?.length ?? 0) >= 3,
+  { path: ["note"] }
+);
+
+const verificationEvidenceSchema = z.object({
+  requestId: z.string().uuid(),
+  evidenceId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(500)
+});
 
 const userAccessSchema = z.object({
   userId: z.string().uuid(),
@@ -448,7 +460,7 @@ export async function deleteUserAccountAction(input: unknown): Promise<AdminActi
 export async function decideAccountVerificationAction(input: unknown): Promise<AdminActionState> {
   const parsed = accountVerificationSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "Say what was checked before verifying an account." };
+    return { ok: false, message: "Choose a valid verification correction." };
   }
 
   try {
@@ -487,8 +499,162 @@ export async function decideAccountVerificationAction(input: unknown): Promise<A
       reason: parsed.data.evidenceLabel?.trim() || undefined
     });
 
+    if (parsed.data.decision === "revoked") {
+      await admin.from("verification_requests").update({
+        status: "revoked",
+        user_message: "Your account verification was revoked.",
+        reviewed_by: context.userId,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).eq("user_id", parsed.data.userId).eq("status", "verified");
+    }
+    await deliverNotification(admin, {
+      userId: parsed.data.userId,
+      type: "system_alert",
+      priority: "high",
+      title: parsed.data.decision === "revoked" ? "Verification revoked" : "Verification update",
+      message: parsed.data.decision === "revoked"
+          ? "Your Verified Account sign has been removed."
+          : "Your account was not verified."
+    });
+
     revalidatePath("/admin/verifications");
+    revalidatePath("/settings/verification");
     return { ok: true, message: result.message };
+  } catch {
+    return { ok: false, message: "Admin access is required." };
+  }
+}
+
+export async function reviewVerificationRequestAction(input: unknown): Promise<AdminActionState> {
+  const parsed = verificationRequestDecisionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Add a clear note for that decision." };
+
+  try {
+    const { admin, context } = await requireSafetyAdmin();
+    await requireAdminPermission(admin, context, "admin.verification.review");
+    const limit = await consumeRateLimit({ action: "admin.mutate", userId: context.userId });
+    if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+
+    const { data: request } = await admin
+      .from("verification_requests")
+      .select("id, user_id, status, document_type")
+      .eq("id", parsed.data.requestId)
+      .maybeSingle();
+    if (!request) return { ok: false, message: "That verification request is unavailable." };
+    if (!["pending", "under_review", "more_information_required"].includes(request.status)) {
+      return { ok: false, message: "That request has already been decided." };
+    }
+
+    if (parsed.data.decision === "verified") {
+      const [{ data: evidence }, restrictions] = await Promise.all([
+        admin.from("verification_evidence").select("id, evidence_kind").eq("request_id", request.id).is("deleted_at", null).not("validated_at", "is", null),
+        activeRestrictions(admin, request.user_id)
+      ]);
+      const evidenceKinds = new Set((evidence ?? []).map((item: { evidence_kind: string }) => item.evidence_kind));
+      if (!evidenceKinds.has("document_front") || !evidenceKinds.has("selfie")) {
+        return { ok: false, message: "The required ID and selfie evidence are not available." };
+      }
+      if (restrictions.length > 0) {
+        return { ok: false, message: "Resolve this account's active restriction before verifying it." };
+      }
+
+      // A validated upload is not the same as a human review. Require this
+      // reviewer to open both mandatory files before they can award the badge.
+      const requiredEvidenceIds = (evidence ?? [])
+        .filter((item: { evidence_kind: string }) => item.evidence_kind === "document_front" || item.evidence_kind === "selfie")
+        .map((item: { id: string }) => item.id);
+      const { data: reviewedEvidence } = await admin
+        .from("sensitive_access_log")
+        .select("case_reference")
+        .eq("actor_id", context.userId)
+        .eq("category", "verification_document")
+        .in("case_reference", requiredEvidenceIds);
+      const reviewedIds = new Set((reviewedEvidence ?? []).map((item) => item.case_reference));
+      if (requiredEvidenceIds.some((id: string) => !reviewedIds.has(id))) {
+        return { ok: false, message: "Open and review the ID and selfie before verifying this account." };
+      }
+    }
+
+    const logged = await recordAdminAuditEvent(admin, {
+      actorId: context.userId,
+      action: `verification_request_${parsed.data.decision}`,
+      targetType: "verification_request",
+      targetId: request.id,
+      previousState: { status: request.status },
+      newState: { status: parsed.data.decision },
+      reason: parsed.data.note || "Identity review"
+    });
+    if (!logged) return { ok: false, message: "The audit entry could not be recorded, so no change was made." };
+
+    if (parsed.data.decision === "verified") {
+      const result = await decideAccountVerification(admin, {
+        userId: request.user_id,
+        decision: "verified",
+        evidenceLabel: `${String(request.document_type).replaceAll("_", " ")}, matched selfie`
+      });
+      if (!result.ok) return result;
+    }
+
+    const now = new Date().toISOString();
+    const { error } = await admin.from("verification_requests").update({
+      status: parsed.data.decision,
+      reviewed_by: context.userId,
+      reviewed_at: ["verified", "declined"].includes(parsed.data.decision) ? now : null,
+      user_message: parsed.data.note || null,
+      internal_note: parsed.data.note || null,
+      updated_at: now
+    }).eq("id", request.id);
+    if (error) {
+      if (parsed.data.decision === "verified") {
+        await decideAccountVerification(admin, { userId: request.user_id, decision: "revoked" });
+      }
+      return { ok: false, message: "The verification request could not be updated." };
+    }
+
+    const notification = parsed.data.decision === "verified"
+      ? { title: "Account verified", message: "Your identity verification was approved. Your Verified Account sign is now active." }
+      : parsed.data.decision === "declined"
+        ? { title: "Verification declined", message: parsed.data.note || "Your identity verification was not approved." }
+        : parsed.data.decision === "more_information_required"
+          ? { title: "Verification needs more information", message: parsed.data.note || "Open verification settings to continue." }
+          : { title: "Verification review started", message: "Your identity verification is now under review." };
+    await deliverNotification(admin, { userId: request.user_id, type: "system_alert", priority: "high", ...notification });
+
+    revalidatePath("/admin/verifications");
+    revalidatePath("/settings/verification");
+    return { ok: true, message: "Verification request updated." };
+  } catch {
+    return { ok: false, message: "Admin access is required." };
+  }
+}
+
+export async function openVerificationEvidenceAction(input: unknown): Promise<{ ok: boolean; message: string; url?: string }> {
+  const parsed = verificationEvidenceSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Choose valid verification evidence." };
+  try {
+    const { admin, context } = await requireSafetyAdmin();
+    await requireAdminPermission(admin, context, "admin.verification.review");
+    const { data: evidence } = await admin
+      .from("verification_evidence")
+      .select("id, request_id, user_id, storage_path")
+      .eq("id", parsed.data.evidenceId)
+      .eq("request_id", parsed.data.requestId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!evidence) return { ok: false, message: "That evidence is unavailable." };
+
+    const logged = await recordSensitiveAccess(admin, {
+      actorId: context.userId,
+      category: "verification_document",
+      subjectUserId: evidence.user_id,
+      caseReference: evidence.id,
+      reason: parsed.data.reason
+    });
+    if (!logged) return { ok: false, message: "Access could not be audited, so the file was not opened." };
+    const { data, error } = await admin.storage.from("verification-evidence").createSignedUrl(evidence.storage_path, 300);
+    if (error || !data) return { ok: false, message: "The evidence link could not be created." };
+    return { ok: true, message: "Evidence opened for five minutes.", url: data.signedUrl };
   } catch {
     return { ok: false, message: "Admin access is required." };
   }

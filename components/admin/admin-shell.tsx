@@ -42,7 +42,9 @@ type AdminHref =
   | "/admin"
   | "/admin/users"
   | "/admin/trusted-members"
+  | "/admin/verifications"
   | "/admin/reports"
+  | "/admin/appeals"
   | "/admin/support"
   | "/admin/linkr-requests"
   | "/admin/communications"
@@ -85,7 +87,9 @@ const adminNavigationGroups: AdminNavigationGroup[] = [
       { href: "/admin", label: "Overview", icon: Gauge },
       { href: "/admin/users", label: "Users", icon: UsersRound, permission: "admin.users.view_summary" },
       { href: "/admin/trusted-members", label: "Trusted Members", icon: ShieldCheck, permission: "admin.verification.review" },
+      { href: "/admin/verifications", label: "Verifications", icon: ShieldCheck, permission: "admin.verification.review" },
       { href: "/admin/reports", label: "Reports", icon: ShieldAlert, permission: "admin.reports.review" },
+      { href: "/admin/appeals", label: "Appeals", icon: ClipboardList, permission: "admin.appeals.review" },
       { href: "/admin/support", label: "Support", icon: Headphones, permission: "admin.support.manage" },
       { href: "/admin/linkr-requests", label: "Linkr requests", icon: RotateCcw, permission: "admin.support.manage" },
       { href: "/admin/communications", label: "Communications", icon: Megaphone, permission: "admin.support.manage" },

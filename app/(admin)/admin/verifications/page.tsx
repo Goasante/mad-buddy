@@ -3,12 +3,14 @@ import { BadgeCheck } from "lucide-react";
 
 import { AdminEmptyState, AdminPageHeader, formatAdminDate } from "@/components/admin/admin-ui";
 import { VerificationControls } from "@/components/admin/verification-controls";
+import { VerificationApplicationControls } from "@/components/admin/verification-application-controls";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { getAdminAccess } from "@/lib/admin/access";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { loadVerificationQueue } from "@/lib/trust/verified-account-admin";
+import { loadVerificationApplications } from "@/lib/trust/verification-review";
 import type { VerificationStatus } from "@/lib/trust/verified-account";
 import { cn } from "@/lib/utils";
 
@@ -23,13 +25,9 @@ export const dynamic = "force-dynamic";
  * step towards one implying the other, which every part of this feature has
  * been built to prevent.
  *
- * There is no application flow yet -- nobody can request verification -- so
- * this is a SEARCH rather than a queue of pending requests. A reviewer finds
- * the account they were asked about and acts on it. When an application flow
- * exists, pending rows appear here without the page changing shape.
+ * User applications appear first. Search remains available for corrections
+ * and revocations of an existing verification record.
  */
-
-type StatusFilter = "all" | VerificationStatus;
 
 export default async function AdminVerificationsPage({
   searchParams
@@ -48,7 +46,10 @@ export default async function AdminVerificationsPage({
   // rendered to someone who could not act on it.
   if (!access.permissions.has("admin.verification.review")) redirect("/admin");
 
-  const reviewed = await loadVerificationQueue(admin);
+  const [applications, reviewed] = await Promise.all([
+    loadVerificationApplications(admin),
+    loadVerificationQueue(admin)
+  ]);
 
   // Search is a separate read, and only when asked for: the page's default job
   // is showing what has already been decided.
@@ -87,8 +88,30 @@ export default async function AdminVerificationsPage({
         description="Mad Buddy has checked who this person is. Separate from Trusted Member, which recognises standing earned in the product, and from Access, which removes ads."
       />
 
-      {/* Search, because there is no application flow yet: a reviewer arrives
-          knowing which account they were asked to look at. */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">Applications · {applications.length}</h2>
+        {applications.length === 0 ? (
+          <AdminEmptyState icon={BadgeCheck} title="No verification applications" description="New user applications will appear here for review." />
+        ) : applications.map((application) => (
+          <Card key={application.requestId} className="p-4">
+            <div className="flex items-center gap-3">
+              <UserAvatar src={application.avatarUrl} name={application.displayName} size="sm" decorative />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{application.displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">@{application.username} · Legal name: {application.legalName}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {application.documentType.replaceAll("_", " ")} · {application.countryCode}
+                  {application.submittedAt ? ` · Submitted ${formatAdminDate(application.submittedAt)}` : ""}
+                </p>
+              </div>
+              <span className="rounded-full border border-border/70 px-2.5 py-1 text-xs font-medium">{application.status.replaceAll("_", " ")}</span>
+            </div>
+            <VerificationApplicationControls application={application} />
+          </Card>
+        ))}
+      </section>
+
+      {/* Search remains useful for revoking or correcting existing decisions. */}
       <form method="get" className="flex flex-wrap items-center gap-2">
         <input
           type="search"

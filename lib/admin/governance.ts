@@ -348,6 +348,7 @@ export const SENSITIVE_CATEGORIES = [
   "close_friends",
   "circle_membership",
   "private_media",
+  "verification_document",
   "contact_matching_data",
   "payment_credentials",
   "authentication_tokens"

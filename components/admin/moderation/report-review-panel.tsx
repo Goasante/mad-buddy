@@ -38,6 +38,8 @@ export type ReportReviewData = {
     username: string | null;
     avatarUrl: string | null;
     totalReports: number;
+    strikePoints: number;
+    recommendedAction: string;
     activeRestrictions: { type: string; endsAt: string | null }[];
   } | null;
   reporterName: string;
@@ -130,6 +132,7 @@ function ReportedSummary({ reported, reporterName }: { reported: ReportReviewDat
             </div>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">{reported.totalReports} report{reported.totalReports === 1 ? "" : "s"} against this account</p>
+          <p className="mt-1 text-xs text-muted-foreground">{reported.strikePoints} active confirmed penalty point{reported.strikePoints === 1 ? "" : "s"} · Recommended: {reported.recommendedAction}</p>
           {reported.activeRestrictions.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {reported.activeRestrictions.map((restriction) => (
