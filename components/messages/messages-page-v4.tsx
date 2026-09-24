@@ -304,7 +304,9 @@ export function MessagesPageV4({
     const cached = id ? readThread(viewerId, id)?.optimistic ?? [] : [];
     return cached.length > 0 && id ? { [id]: cached } : {};
   });
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [editPending, setEditPending] = useState(false);
+  const [pollPending, setPollPending] = useState(false);
 
   /* Retry drafts carry their own conversationId so a failed send can be
      retried into the thread it came from, not the one currently on screen. */
@@ -468,10 +470,8 @@ export function MessagesPageV4({
 
   const refreshMessages = useCallback(async (conversationId: string, countIncoming = true, reportFailure = true) => {
     try {
-      const [loaded, replies] = await Promise.all([
-        withTimeout(getMessagesAction(conversationId), { operation: "refresh conversation" }),
-        getReplyContextsAction(conversationId).catch(() => ({}))
-      ]);
+      const repliesRequest = getReplyContextsAction(conversationId).catch(() => null);
+      const loaded = await withTimeout(getMessagesAction(conversationId), { operation: "refresh conversation" });
       if (!mountedRef.current) return;
       const patches = realtimePatchesRef.current.get(conversationId);
       const reconciled = loaded.length === 0
@@ -487,9 +487,13 @@ export function MessagesPageV4({
         }
         return reconciled;
       });
-      const nextReplies = replies as Record<string, ReplyContext>;
-      setReplyContexts(nextReplies);
-      writeThreadMessages(viewerIdRef.current, conversationId, reconciled, nextReplies);
+      writeThreadMessages(viewerIdRef.current, conversationId, reconciled);
+      void repliesRequest.then((replies) => {
+        if (!replies || !mountedRef.current || selectedIdRef.current !== conversationId) return;
+        const nextReplies = replies as Record<string, ReplyContext>;
+        setReplyContexts(nextReplies);
+        writeThreadReplyContexts(viewerIdRef.current, conversationId, nextReplies);
+      });
     } catch (error) {
       // A Realtime fallback or post-mutation reconciliation is background work:
       // keep the already-rendered thread instead of telling the user the chat
@@ -1251,7 +1255,8 @@ export function MessagesPageV4({
         interactionFeedback.error();
       }
       invalidateConversationReactionSummaries(conversationId);
-      void refreshMessages(conversationId, false, false);
+      // The bubble and shared reaction summary are already updated; fetching
+      // the entire conversation here made each reaction trigger a slow redraw.
     });
   }
 
@@ -1586,15 +1591,24 @@ export function MessagesPageV4({
         />
       ) : null}
 
-      <EditMessageModal message={editTarget} draft={editDraft} setDraft={setEditDraft} pending={isPending} onClose={() => setEditTarget(null)} onSave={() => {
-        if (!editTarget || !selectedId || !editDraft.trim()) return;
-        startTransition(async () => {
-          const result = await editMessageAction(editTarget.id, editDraft.trim(), editTarget.mentions.map((mention) => mention.userId)).catch(() => ({ ok: false, message: "Could not edit." }));
+      <EditMessageModal message={editTarget} draft={editDraft} setDraft={setEditDraft} pending={editPending} onClose={() => setEditTarget(null)} onSave={() => {
+        if (!editTarget || !selectedId || !editDraft.trim() || editPending) return;
+        const conversationId = selectedId;
+        const messageId = editTarget.id;
+        const text = editDraft.trim();
+        const mentionIds = editTarget.mentions.map((mention) => mention.userId);
+        setEditPending(true);
+        void (async () => {
+          const result = await editMessageAction(messageId, text, mentionIds).catch(() => ({ ok: false, message: "Could not edit." }));
           setFeedback(result.message);
-          if (result.ok) setEditTarget(null);
-          await refreshMessages(selectedId, false);
-          await syncConversations();
-        });
+          setEditPending(false);
+          if (result.ok) {
+            setEditTarget(null);
+            setMessages((current) => current.map((row) => row.id === messageId ? { ...row, text } : row));
+            void refreshMessages(conversationId, false, false);
+            void syncConversations();
+          }
+        })();
       }} />
 
       <DeleteMessageModal target={deleteTarget} operation={deleteOperation} onClose={() => {
@@ -1624,7 +1638,7 @@ export function MessagesPageV4({
             return;
           }
           setDeleteOperation({ messageId, scope, phase: "success", message: forEveryone ? "Deleted for everyone." : "Deleted for you." });
-          await Promise.all([
+          void Promise.all([
             refreshMessages(conversationId, false),
             syncConversations(),
             refreshUltimate(conversationId)
@@ -1674,12 +1688,20 @@ export function MessagesPageV4({
         }}
       />
 
-      {selected ? <CreatePollModal open={pollOpen} onOpenChange={setPollOpen} conversationId={selected.id} pending={isPending} onCreate={(payload) => {
-        startTransition(async () => {
-          const result = await createChatPollAction({ ...payload, conversationId: selected.id, clientMessageId: crypto.randomUUID() });
+      {selected ? <CreatePollModal open={pollOpen} onOpenChange={setPollOpen} conversationId={selected.id} pending={pollPending} onCreate={(payload) => {
+        if (pollPending) return;
+        const conversationId = selected.id;
+        setPollPending(true);
+        void (async () => {
+          const result = await createChatPollAction({ ...payload, conversationId, clientMessageId: crypto.randomUUID() }).catch(() => ({ ok: false, message: "Could not send the poll." }));
           setFeedback(result.message);
-          if (result.ok) { setPollOpen(false); await refreshSelected(); scrollToBottom(); }
-        });
+          setPollPending(false);
+          if (result.ok) {
+            setPollOpen(false);
+            void refreshSelected();
+            scrollToBottom();
+          }
+        })();
       }} /> : null}
 
       <MessageMediaViewer message={messages.find((message) => message.id === viewerMessageId) ?? null} open={Boolean(viewerMessageId)} onClose={() => setViewerMessageId(null)} />
