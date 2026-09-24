@@ -33,12 +33,37 @@ export function DataExportButton({ onExport }: DataExportButtonProps) {
         return;
       }
 
+      const filename = "mad-buddy-export.json";
+      // Installed iPhone web apps can hand a JSON file to Files through the
+      // share sheet. This avoids navigating the PWA to a blob: page.
+      if (/iPhone|iPad|iPod/.test(navigator.userAgent) && navigator.share && navigator.canShare) {
+        const file = new File([result.blob], filename, { type: "application/json" });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: "Mad Buddy data export" });
+            setStatus("Export ready. Save it to Files or share it securely.");
+            return;
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              setStatus("Export ready. Save or share it when you're ready.");
+              return;
+            }
+            // Browsers that lose user activation while preparing the export
+            // still have the normal download path below.
+          }
+        }
+      }
+
       const url = URL.createObjectURL(result.blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "mad-buddy-export.json";
+      link.download = filename;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      // WebKit may resolve the click on a later task. Revoking synchronously
+      // leaves it navigating to an already-invalid blob: URL.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       setStatus("Export downloaded.");
     } catch {
       setStatus("Export failed. Check your connection and try again.");
