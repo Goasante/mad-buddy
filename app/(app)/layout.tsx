@@ -12,7 +12,7 @@ import { readWebAdsConfiguration } from "@/lib/ads/config";
 import { ensureMaintenanceWarm } from "@/lib/maintenance/loader";
 import { shouldBlockForMaintenance } from "@/lib/maintenance/state";
 import { getAdminLinkVisibility } from "@/lib/safety/admin";
-import { getCurrentIdentity } from "@/lib/supabase/auth";
+import { getCurrentIdentity, getCurrentUserRecord } from "@/lib/supabase/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -166,7 +166,14 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // falling back to the default wallpaper.
   const wallpaperPromise: Promise<ResolvedWallpaper | null> =
     user && env.url && env.serviceRoleKey
-      ? withTimeout(resolveWallpaperForRender(createSupabaseAdminClient(), user.id, "free"), {
+      ? withTimeout((async () => {
+          // This read uses service-role authority and may sign a private
+          // Storage URL. Confirm the account is still active before reading.
+          const activeUser = await getCurrentUserRecord();
+          return activeUser?.id === user.id
+            ? resolveWallpaperForRender(createSupabaseAdminClient(), user.id, "free")
+            : defaultResolvedWallpaper();
+        })(), {
           operation: "resolveWallpaperForRender",
           timeoutMs: 3_000
         }).catch((error) => {

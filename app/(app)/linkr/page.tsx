@@ -10,7 +10,7 @@ import {
 import { countEventPool } from "@/lib/linkr/candidate-service";
 import { loadOwnLinkrProfile } from "@/lib/linkr/profile-service";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentIdentity } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { isLinkrIntent } from "@/lib/linkr/intent";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function LinkrRoute({
 }: {
   searchParams: Promise<{ eventId?: string; intent?: string; connection?: string }>;
 }) {
-  const user = await getCurrentIdentity();
+  const user = await getCurrentUserRecord();
   if (!user) redirect("/login");
 
   const admin = createSupabaseAdminClient();

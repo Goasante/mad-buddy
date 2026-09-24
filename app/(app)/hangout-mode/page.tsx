@@ -6,7 +6,7 @@ import {
 } from "@/components/hangout/hangout-mode-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
-import { getCurrentIdentity } from "@/lib/supabase/auth";
+import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
 import { currentActiveHangout, ownedUpForSessions } from "@/lib/social/planning";
 import type { OwnedUpFor } from "@/lib/social/owned-upfors";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * never whether a member may create, discover, join or manage an UpFor.
  */
 export default async function HangoutModeRoute() {
-  const user = await getCurrentIdentity();
+  const user = await getCurrentUserRecord();
 
   const env = getSupabaseServerEnv();
   let activeHangout: ActiveHangout | null = null;
