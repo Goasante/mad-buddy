@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { refreshEventCoverUrlAction } from "@/app/(app)/event-media-actions";
 import { focalObjectPosition } from "@/lib/events/cover";
-import { fallbackGradient, resolveEventMedia } from "@/lib/events/event-media";
+import { eventFallbackTreatment, fallbackGradient, resolveEventMedia } from "@/lib/events/event-media";
 import { cn } from "@/lib/utils";
 
 /**
@@ -78,6 +78,9 @@ export function EventArtwork({
    */
   const inFlightRefreshRef = useRef<Promise<string | null> | null>(null);
   const recoveryAttemptsRef = useRef(new Map<string, number>());
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const lastFailedUrlRef = useRef<string | null>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
 
   const renewCover = useCallback((): Promise<string | null> => {
     const existing = inFlightRefreshRef.current;
@@ -99,13 +102,6 @@ export function EventArtwork({
       : coverUrl;
   const media = resolveEventMedia(eventId, activeCoverUrl);
   const recoveryScope = `${eventId}:${coverUrl ?? "missing"}`;
-
-  function consumeRecoveryAttempt(): boolean {
-    const attempts = recoveryAttemptsRef.current.get(recoveryScope) ?? 0;
-    if (attempts >= MAX_COVER_RECOVERY_ATTEMPTS) return false;
-    recoveryAttemptsRef.current.set(recoveryScope, attempts + 1);
-    return true;
-  }
 
   /*
    * A ranked Event can arrive with `coverUrl === null` for two very different
@@ -135,61 +131,70 @@ export function EventArtwork({
     };
   }, [activeCoverUrl, coverExpected, coverUrl, eventId, recoveryScope, renewCover]);
 
-  async function recoverBrokenCover() {
+  const recoverBrokenCover = useCallback(async (failedUrl: string) => {
+    if (lastFailedUrlRef.current === failedUrl) return;
+    lastFailedUrlRef.current = failedUrl;
     // Always remove a broken credential immediately. Retry exhaustion means
     // "stay on the branded fallback", never "leave the browser's broken-image
     // glyph visible". The attempt cap controls minting, not presentation.
     setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null });
 
-    if (inFlightRefreshRef.current || !consumeRecoveryAttempt()) return;
+    const attempts = recoveryAttemptsRef.current.get(recoveryScope) ?? 0;
+    if (inFlightRefreshRef.current || attempts >= MAX_COVER_RECOVERY_ATTEMPTS) return;
+    recoveryAttemptsRef.current.set(recoveryScope, attempts + 1);
     const renewed = await renewCover();
     if (renewed) {
       setRecovery({ eventId, sourceCoverUrl: coverUrl, url: renewed });
     }
-  }
+  }, [coverUrl, eventId, recoveryScope, renewCover]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (!activeCoverUrl || !image?.complete) return;
+    if (image.naturalWidth > 0) {
+      setLoadedUrl(activeCoverUrl);
+    } else {
+      // The server-rendered img can fail before React attaches onError. In
+      // that case Safari may show its question-mark glyph indefinitely.
+      void recoverBrokenCover(activeCoverUrl);
+    }
+  }, [activeCoverUrl, recoverBrokenCover]);
 
   return (
     <div className={cn("relative overflow-hidden bg-secondary", className)}>
+      <div
+        className="absolute inset-0"
+        style={{ background: fallbackGradient(eventFallbackTreatment(eventId)) }}
+        aria-hidden="true"
+      >
+        <div
+          className="absolute inset-0"
+          style={{ background: "radial-gradient(120% 80% at 28% 18%, rgba(255,255,255,0.20), transparent 62%)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "radial-gradient(75% 55% at 78% 92%, rgba(255,196,120,0.22), transparent 70%)" }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <CalendarDays className="h-1/4 max-h-16 w-1/4 max-w-16 text-white/25" strokeWidth={1.25} />
+        </div>
+      </div>
       {media.kind === "image" ? (
         /* Signed, expiring media URLs from private storage: next/image cannot
            fetch them server-side, so the optimizer is not an option here. */
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          ref={imageRef}
           src={media.url}
           alt={alt ?? ""}
-          className="h-full w-full object-cover"
+          className={cn("absolute inset-0 h-full w-full object-cover", loadedUrl === media.url ? "opacity-100" : "opacity-0")}
           style={{ objectPosition: focalObjectPosition(focalX, focalY) }}
           loading="lazy"
           decoding="async"
-          onError={() => void recoverBrokenCover()}
+          onLoad={() => setLoadedUrl(media.url)}
+          onError={() => void recoverBrokenCover(media.url)}
         />
-      ) : (
-        <div
-          className="relative h-full w-full"
-          style={{ background: fallbackGradient(media.treatment) }}
-          aria-hidden="true"
-        >
-          {/* Off-centre bloom, so the composition has a light source. */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(120% 80% at 28% 18%, rgba(255,255,255,0.20), transparent 62%)"
-            }}
-          />
-          {/* A second, tighter warm core keeps the corners from going flat. */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(75% 55% at 78% 92%, rgba(255,196,120,0.22), transparent 70%)"
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <CalendarDays className="h-1/4 max-h-16 w-1/4 max-w-16 text-white/25" strokeWidth={1.25} />
-          </div>
-        </div>
-      )}
+      ) : null}
 
       {scrim !== "none" ? (
         <div

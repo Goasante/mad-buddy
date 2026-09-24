@@ -82,7 +82,9 @@ describe("signed media URL lifecycle", () => {
   });
 
   it("never leaves an expired Event cover as a browser broken-image glyph", () => {
-    expect(eventArtwork).toContain("onError={() => void recoverBrokenCover()}");
+    expect(eventArtwork).toContain("onError={() => void recoverBrokenCover(media.url)}");
+    expect(eventArtwork).toContain("image.naturalWidth > 0");
+    expect(eventArtwork).toContain("loadedUrl === media.url ? \"opacity-100\" : \"opacity-0\"");
     expect(eventArtwork).toContain("setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null })");
     expect(eventArtwork).toContain("refreshEventCoverUrlAction");
   });
@@ -90,9 +92,9 @@ describe("signed media URL lifecycle", () => {
   it("caps Event cover recovery without keeping the final broken image visible", () => {
     expect(eventArtwork).toContain("MAX_COVER_RECOVERY_ATTEMPTS = 2");
     expect(eventArtwork).toContain("attempts >= MAX_COVER_RECOVERY_ATTEMPTS");
-    const recovery = eventArtwork.indexOf("async function recoverBrokenCover");
+    const recovery = eventArtwork.indexOf("const recoverBrokenCover = useCallback");
     const fallback = eventArtwork.indexOf("setRecovery({ eventId, sourceCoverUrl: coverUrl, url: null })", recovery);
-    const retryGate = eventArtwork.indexOf("!consumeRecoveryAttempt()", recovery);
+    const retryGate = eventArtwork.indexOf("attempts >= MAX_COVER_RECOVERY_ATTEMPTS", recovery);
     expect(fallback).toBeGreaterThan(recovery);
     expect(retryGate).toBeGreaterThan(fallback);
   });
