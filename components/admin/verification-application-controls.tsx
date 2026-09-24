@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { openVerificationEvidenceAction, reviewVerificationRequestAction } from "@/app/(admin)/admin/actions";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import type { VerificationApplicationEntry } from "@/lib/trust/verification-review";
 
 export function VerificationApplicationControls({ application }: { application: VerificationApplicationEntry }) {
+  const router = useRouter();
   const [note, setNote] = useState("");
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
@@ -17,7 +19,12 @@ export function VerificationApplicationControls({ application }: { application: 
     startTransition(async () => {
       const result = await reviewVerificationRequestAction({ requestId: application.requestId, decision, note: note.trim() || undefined });
       setFeedback(result.message);
-      if (result.ok) setNote("");
+      if (result.ok) {
+        setNote("");
+        // Server revalidation invalidates the route, while refresh replaces
+        // the already-mounted admin view so an approval is visible now.
+        router.refresh();
+      }
     });
   }
 

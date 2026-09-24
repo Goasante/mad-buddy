@@ -10,6 +10,8 @@ const userPage = read("components/settings/verification-page.tsx");
 const userActions = read("app/(app)/settings/verification-actions.ts");
 const adminPage = read("app/(admin)/admin/verifications/page.tsx");
 const adminActions = read("app/(admin)/admin/actions.ts");
+const applicationControls = read("components/admin/verification-application-controls.tsx");
+const correctionControls = read("components/admin/verification-controls.tsx");
 
 describe("identity verification application lifecycle", () => {
   it("keeps evidence in a private, bounded bucket with no browser table access", () => {
@@ -49,6 +51,13 @@ describe("identity verification application lifecycle", () => {
     expect(adminActions).toContain("decideAccountVerification(admin");
     expect(adminActions).toContain('title: "Account verified"');
     expect(adminActions).toContain('title: "Verification needs more information"');
+  });
+
+  it("shows an approved badge immediately in the admin identity row", () => {
+    expect(applicationControls).toContain("router.refresh()");
+    expect(correctionControls).toContain("router.refresh()");
+    expect(adminPage).toContain('<VerifiedAccountMark isVerifiedAccount={entry.status === "verified"} compact />');
+    expect(adminPage).toContain('<VerifiedAccountMark isVerifiedAccount={result.status === "verified"} compact />');
   });
 
   it("schedules evidence deletion after the retention period", () => {

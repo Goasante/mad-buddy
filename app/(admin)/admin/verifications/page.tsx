@@ -4,6 +4,7 @@ import { BadgeCheck } from "lucide-react";
 import { AdminEmptyState, AdminPageHeader, formatAdminDate } from "@/components/admin/admin-ui";
 import { VerificationControls } from "@/components/admin/verification-controls";
 import { VerificationApplicationControls } from "@/components/admin/verification-application-controls";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { getAdminAccess } from "@/lib/admin/access";
@@ -145,7 +146,10 @@ export default async function AdminVerificationsPage({
               <Card key={result.userId} className="flex flex-wrap items-center gap-3 p-4">
                 <UserAvatar src={result.avatarUrl} name={result.displayName} size="sm" decorative />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{result.displayName}</p>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <p className="truncate text-sm font-semibold">{result.displayName}</p>
+                    <VerifiedAccountMark isVerifiedAccount={result.status === "verified"} compact />
+                  </div>
                   <p className="truncate text-xs text-muted-foreground">@{result.username}</p>
                 </div>
                 <StatusPill status={result.status} />
@@ -172,7 +176,10 @@ export default async function AdminVerificationsPage({
             <Card key={entry.userId} className="flex flex-wrap items-center gap-3 p-4">
               <UserAvatar src={entry.avatarUrl} name={entry.displayName} size="sm" decorative />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{entry.displayName}</p>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="truncate text-sm font-semibold">{entry.displayName}</p>
+                  <VerifiedAccountMark isVerifiedAccount={entry.status === "verified"} compact />
+                </div>
                 <p className="truncate text-xs text-muted-foreground">
                   @{entry.username}
                   {entry.evidenceLabel ? ` · ${entry.evidenceLabel}` : ""}

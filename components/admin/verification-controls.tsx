@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { decideAccountVerificationAction } from "@/app/(admin)/admin/actions";
@@ -22,6 +23,7 @@ export function VerificationControls({
   /** The current record, or null when this account has never been reviewed. */
   status: VerificationStatus | null;
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState<Pending>(null);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -38,6 +40,7 @@ export function VerificationControls({
       setFeedback(result.message);
       if (result.ok) {
         setPending(null);
+        router.refresh();
       }
     });
   }
