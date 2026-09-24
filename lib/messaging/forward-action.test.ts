@@ -49,6 +49,8 @@ it("forwards several messages to several chats in order within each chat", async
   sources.push({ ...source, id: otherSourceId, text_content: "Second" });
   const result = await forwardMessageAction({ sourceMessageIds: [sourceId, otherSourceId], targetConversationIds: [destination, otherDestination], operationId: crypto.randomUUID() });
   expect(result).toMatchObject({ ok: true, sent: 4, total: 4 });
+  expect(result.sentClientMessageIds).toHaveLength(4);
+  expect(new Set(result.sentClientMessageIds).size).toBe(4);
   expect(mocks.send.mock.calls.map((call) => [call[1].conversationId, call[1].text])).toEqual([
     [destination, "First"], [otherDestination, "First"], [destination, "Second"], [otherDestination, "Second"]
   ]);
@@ -58,7 +60,9 @@ it("reports partial sends and safely retries only missing pairs", async () => {
   mocks.send.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false });
   const operationId = crypto.randomUUID();
   const input = { sourceMessageIds: [sourceId], targetConversationIds: [destination, otherDestination], operationId };
-  expect(await forwardMessageAction(input)).toMatchObject({ ok: false, sent: 1, total: 2 });
+  const partial = await forwardMessageAction(input);
+  expect(partial).toMatchObject({ ok: false, sent: 1, total: 2 });
+  expect(partial.sentClientMessageIds).toEqual([`${operationId}:0:0`]);
   mocks.from.mockImplementation(() => {
     let key = "";
     const q = { select: () => q, eq: (column: string, value: string) => { if (column === "client_message_id") key = value; return q; }, in: async () => ({ data: sources }), maybeSingle: async () => ({ data: key.endsWith(":0:0") ? { conversation_id: destination, forwarded_from_message_id: sourceId } : null }) }; return q;

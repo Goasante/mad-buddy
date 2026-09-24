@@ -20,6 +20,12 @@
 /** What an optimistic row adds to a canonical message. */
 export type OptimisticStatus = "pending" | "sent" | "failed";
 
+export type ForwardBatch = {
+  operationId: string;
+  sourceMessageIds: string[];
+  targetConversationIds: string[];
+};
+
 /**
  * A locally drawn message, keyed by the same idempotency key the send uses.
  *
@@ -43,6 +49,8 @@ export type OptimisticMessage = {
   status: OptimisticStatus;
   /** Set only when the client stopped waiting without a definitive outcome. */
   confirmationState?: "unknown";
+  /** Enough to retry a background forward after the PWA is reopened. */
+  forwardBatch?: ForwardBatch;
 };
 
 /** The shape this module needs from a canonical message. Widened by callers. */

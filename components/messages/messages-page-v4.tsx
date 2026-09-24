@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  Clock3,
   Forward,
   ChevronDown,
   ChevronUp,
@@ -87,6 +88,7 @@ import {
   markFailed,
   markRetrying,
   pruneConfirmed,
+  type ForwardBatch,
   type OptimisticMessage
 } from "@/lib/messaging/optimistic-messages";
 import { sendMessageViaApi } from "@/lib/messaging/send-client";
@@ -316,6 +318,8 @@ export function MessagesPageV4({
   const selectedIdRef = useRef(selectedId);
   const viewerRoleRef = useRef<ViewerRole>(viewerRole);
   const confirmationTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const forwardingRef = useRef(new Set<string>());
+  const selectingForwardRef = useRef(false);
   /* The cache is a module singleton now, not component state -- that is the
      whole point of M1. Held in a ref only so the stable useCallbacks below can
      read the current viewer without taking it as a dependency and tearing down
@@ -331,6 +335,9 @@ export function MessagesPageV4({
     selectedIdRef.current = selectedId;
   }, [selectedId]);
   useEffect(() => {
+    selectingForwardRef.current = forwardSelection.length > 0;
+  }, [forwardSelection.length]);
+  useEffect(() => {
     viewerRoleRef.current = viewerRole;
   }, [viewerRole]);
   useEffect(() => {
@@ -338,7 +345,7 @@ export function MessagesPageV4({
     // row carries the original idempotency key, so retry remains duplicate-safe.
     for (const [conversationId, outgoing] of Object.entries(optimisticByConversation)) {
       for (const message of outgoing) {
-        if (retryDraftsRef.current.has(message.clientMessageId)) continue;
+        if (message.forwardBatch || retryDraftsRef.current.has(message.clientMessageId)) continue;
         retryDraftsRef.current.set(message.clientMessageId, {
           conversationId,
           clientMessageId: message.clientMessageId,
@@ -634,7 +641,12 @@ export function MessagesPageV4({
     const heartbeat = setInterval(() => {
       void heartbeatConversationPresenceAction({ conversationId: selectedId, typing: false });
     }, 20_000);
-    const projection = setInterval(() => void refreshUltimate(selectedId), 4_000);
+    // Realtime keeps active changes fresh. A full projection every four
+    // seconds rerendered the entire 200-message thread while people tapped
+    // through selection, so keep the periodic safety refresh out of that path.
+    const projection = setInterval(() => {
+      if (document.visibilityState === "visible" && !selectingForwardRef.current) void refreshUltimate(selectedId);
+    }, 15_000);
     return () => {
       clearInterval(heartbeat);
       clearInterval(projection);
@@ -743,6 +755,7 @@ export function MessagesPageV4({
     setUnseenIncoming(0);
   }
 
+  const outgoingCount = selectedId ? optimisticByConversation[selectedId]?.length ?? 0 : 0;
   useEffect(() => {
     if (!selectedId || loadingMessages) return;
     if (initialScrollPendingRef.current) {
@@ -751,7 +764,7 @@ export function MessagesPageV4({
       return;
     }
     if (nearBottomRef.current) requestAnimationFrame(() => scrollToBottom("smooth"));
-  }, [loadingMessages, messages.length, selectedId]);
+  }, [loadingMessages, messages.length, outgoingCount, selectedId]);
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
   const selectedContext = selected ? conversationContext(selected) : { subtitle: null, shared: false };
@@ -986,6 +999,30 @@ export function MessagesPageV4({
     []
   );
 
+  // A PWA may be closed while the server action is still running. If the
+  // browser is reopened with a stale pending forward, expose a safe retry;
+  // the server checks the same operation key before sending missing pairs.
+  useEffect(() => {
+    const pending = Object.entries(optimisticByConversation).flatMap(([conversationId, rows]) =>
+      rows.filter((row) => row.forwardBatch && row.status === "pending")
+        .map((row) => ({ conversationId, row }))
+    );
+    if (pending.length === 0) return;
+    const oldest = Math.min(...pending.map(({ row }) => Date.parse(row.createdAt)));
+    const delay = Math.max(0, 90_000 - (Date.now() - oldest));
+    const timer = window.setTimeout(() => {
+      for (const { conversationId, row } of pending) {
+        if (forwardingRef.current.has(row.forwardBatch!.operationId)) continue;
+        updateOptimistic(conversationId, (current) => current.map((item) =>
+          item.clientMessageId === row.clientMessageId && item.status === "pending"
+            ? { ...item, status: "failed", confirmationState: undefined }
+            : item
+        ));
+      }
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [optimisticByConversation, updateOptimistic]);
+
   function confirmationKey(clientMessageId: string) {
     return clientMessageId;
   }
@@ -1073,7 +1110,76 @@ export function MessagesPageV4({
     else cancelSendConfirmation(clientMessageId);
   }
 
+  function startForward(batch: ForwardBatch, sourceMessages?: ChatMessageView[]) {
+    if (forwardingRef.current.has(batch.operationId)) return;
+    forwardingRef.current.add(batch.operationId);
+    if (sourceMessages) {
+      for (const [targetIndex, conversationId] of batch.targetConversationIds.entries()) {
+        const createdAt = new Date().toISOString();
+        const rows: OptimisticMessage[] = sourceMessages.map((message, sourceIndex) => ({
+          clientMessageId: `${batch.operationId}:${targetIndex}:${sourceIndex}`,
+          text: message.messageType === "image" ? `Photo${message.text ? ` · ${message.text}` : ""}` : message.text,
+          kind: message.messageType === "voice_note" ? "voice" : "text",
+          durationSeconds: null,
+          createdAt,
+          status: "pending",
+          forwardBatch: batch
+        }));
+        // Persist before closing the picker: opening a destination chat can
+        // read these rows immediately, even before React commits this update.
+        const previous = readThread(viewerIdRef.current, conversationId)?.optimistic ?? [];
+        writeThreadOptimistic(viewerIdRef.current, conversationId, [...previous, ...rows]);
+        setOptimisticByConversation((current) => ({
+          ...current,
+          [conversationId]: [...(current[conversationId] ?? previous), ...rows]
+        }));
+      }
+    } else {
+      for (const conversationId of batch.targetConversationIds) {
+        updateOptimistic(conversationId, (current) => current.map((row) =>
+          row.forwardBatch?.operationId === batch.operationId && row.status === "failed"
+            ? { ...row, status: "pending", confirmationState: undefined }
+            : row
+        ));
+      }
+    }
+
+    void forwardMessageAction({ ...batch, retry: !sourceMessages }).then((result) => {
+      if (!mountedRef.current) return;
+      const sentKeys = new Set("sentClientMessageIds" in result ? result.sentClientMessageIds : []);
+      for (const conversationId of batch.targetConversationIds) {
+        updateOptimistic(conversationId, (current) => current.map((row) => {
+          if (row.forwardBatch?.operationId !== batch.operationId) return row;
+          if (sentKeys.has(row.clientMessageId)) return { ...row, status: "sent", confirmationState: undefined };
+          return { ...row, status: "failed", confirmationState: undefined };
+        }));
+        if (selectedIdRef.current === conversationId) void refreshMessages(conversationId, false, false);
+      }
+      if (result.sent > 0) {
+        void syncConversations();
+        window.setTimeout(() => { if (mountedRef.current) void syncConversations(); }, 900);
+      }
+      if (!result.ok) { setFeedback(result.message); interactionFeedback.error(); }
+    }).catch(() => {
+      if (!mountedRef.current) return;
+      for (const [targetIndex, conversationId] of batch.targetConversationIds.entries()) {
+        updateOptimistic(conversationId, (current) => current.map((row) =>
+          row.forwardBatch?.operationId === batch.operationId && row.status === "pending"
+            ? { ...row, confirmationState: "unknown" }
+            : row
+        ));
+        for (const sourceIndex of batch.sourceMessageIds.keys()) {
+          scheduleSendConfirmation(conversationId, `${batch.operationId}:${targetIndex}:${sourceIndex}`);
+        }
+      }
+      setFeedback("Still checking the forward. The destination chats show its status.");
+    }).finally(() => { forwardingRef.current.delete(batch.operationId); });
+  }
+
   function retryOptimistic(clientMessageId: string) {
+    const forward = readThread(viewerIdRef.current, selectedIdRef.current ?? "")?.optimistic
+      .find((row) => row.clientMessageId === clientMessageId)?.forwardBatch;
+    if (forward) { startForward(forward); return; }
     const draft = retryDraftsRef.current.get(clientMessageId);
     if (!draft) return;
     /* Retry targets the message's OWN conversation, not whichever one is
@@ -1226,7 +1332,13 @@ export function MessagesPageV4({
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-3">
             {filteredConversations.length === 0 ? <EmptyState icon={MessageCircle} title={activeFilter === "archived" ? "No archived chats" : "No chats here"} description={activeFilter === "archived" ? "Chats you archive will wait here quietly." : "Try another filter or start a new chat."} action={activeFilter === "archived" ? undefined : <Button onClick={() => setNewMessageOpen(true)}>New chat</Button>} /> : (
               <ul className="space-y-1">
-                {filteredConversations.map((conversation) => <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>)}
+                {filteredConversations.map((conversation) => {
+                  const outgoing = optimisticByConversation[conversation.id]?.filter((row) => row.forwardBatch && row.status !== "sent") ?? [];
+                  const pending = outgoing.filter((row) => row.status === "pending").length;
+                  const failed = outgoing.length - pending;
+                  const preview = pending ? `${pending} forwarded ${pending === 1 ? "message" : "messages"} sending…` : failed ? `${failed} forwarded ${failed === 1 ? "message" : "messages"} not sent · Open to retry` : null;
+                  return <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={preview ? { ...conversation, lastMessagePreview: preview } : conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>;
+                })}
               </ul>
             )}
           </div>
@@ -1306,7 +1418,7 @@ export function MessagesPageV4({
                   if (near && unseenIncoming > 0) setUnseenIncoming(0);
                 }}
               >
-                {loadingMessages && messages.length === 0 ? <div className="space-y-3 px-1 py-6" role="status" aria-label="Loading recent messages"><div className="h-14 w-2/3 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /><div className="ml-auto h-11 w-1/2 animate-pulse rounded-[21px] rounded-br-[7px] bg-primary/12" /><div className="h-20 w-3/4 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /></div> : messages.length === 0 ? (
+                {loadingMessages && messages.length === 0 && pendingMessages.length === 0 ? <div className="space-y-3 px-1 py-6" role="status" aria-label="Loading recent messages"><div className="h-14 w-2/3 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /><div className="ml-auto h-11 w-1/2 animate-pulse rounded-[21px] rounded-br-[7px] bg-primary/12" /><div className="h-20 w-3/4 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /></div> : messages.length === 0 && pendingMessages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center px-8 text-center animate-in fade-in zoom-in-95"><UserAvatar name={selected.title} src={selected.avatarUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p>{isGroup ? <div className="mt-4 flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setPollOpen(true)}><BarChart3 className="h-4 w-4" />Create poll</Button><Button size="sm" variant="outline" onClick={() => router.push("/plans" as Route)}>Make a Plan</Button></div> : null}</div>
                 ) : (
                   messages.map((message, index) => {
@@ -1317,9 +1429,10 @@ export function MessagesPageV4({
                       <Fragment key={message.id}>
                         {newDay ? <div className="my-4 flex justify-center"><span className="rounded-full bg-muted/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">{dayLabel(message.createdAt)}</span></div> : null}
                         {message.messageType === "system" ? <p data-message-id={message.id} className="mx-auto my-3 max-w-lg text-center text-xs font-normal leading-relaxed text-muted-foreground">{message.text}</p> : (
-                          <div data-message-id={message.id} className={cn("flex items-center gap-2 transition-[background-color] duration-500", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1")}>
-                            {forwardSelection.length > 0 && ["text", "image", "voice_note"].includes(message.messageType) && !message.deleted ? <button type="button" aria-label={`${forwardSelection.includes(message.id) ? "Deselect" : "Select"} message to forward`} aria-pressed={forwardSelection.includes(message.id)} onClick={() => setForwardSelection((current) => current.includes(message.id) ? current.filter((id) => id !== message.id) : current.length < 5 ? [...current, message.id] : current)} className={cn("focus-ring order-last grid h-11 w-11 shrink-0 place-items-center rounded-full border transition-colors", forwardSelection.includes(message.id) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground", message.isMine && "order-first")}><Check className="h-4 w-4" /></button> : null}
-                            <div className={forwardSelection.length > 0 ? "min-w-0 max-w-[calc(100%-3.25rem)]" : "max-w-[86%] sm:max-w-[78%]"}>
+                          <div data-message-id={message.id} className={cn("flex transition-[background-color] duration-500", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1")}>
+                            {forwardSelection.length > 0 ? (
+                              <button type="button" disabled={message.deleted || !["text", "image", "voice_note"].includes(message.messageType)} aria-label={`${forwardSelection.includes(message.id) ? "Deselect" : "Select"} message to forward`} aria-pressed={forwardSelection.includes(message.id)} onClick={() => { interactionFeedback.selection(); setForwardSelection((current) => current.includes(message.id) ? current.filter((id) => id !== message.id) : current.length < 5 ? [...current, message.id] : current); }} className={cn("focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-colors active:scale-[.99]", forwardSelection.includes(message.id) ? "border-primary/50 bg-primary/10" : "border-border/60 bg-card", message.deleted && "opacity-50")}><span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border", forwardSelection.includes(message.id) ? "border-primary bg-primary text-primary-foreground" : "border-border")}><Check className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-muted-foreground">{message.isMine ? "You" : message.senderName}</span><span className="block truncate text-sm">{message.messageType === "voice_note" ? "Voice message" : message.messageType === "image" ? `Photo${message.text ? ` · ${message.text}` : ""}` : message.text ?? "Message"}</span></span></button>
+                            ) : <div className="max-w-[86%] sm:max-w-[78%]">
                               <MessageBubbleV4
                                 conversationId={selected.id}
                                 message={message}
@@ -1347,7 +1460,7 @@ export function MessagesPageV4({
                                 onAttachmentRefresh={(attachment: AttachmentView) => setMessages((current) => current.map((item) => item.id === message.id ? { ...item, attachment } : item))}
                                 onPollChanged={refreshSelected}
                               />
-                            </div>
+                            </div>}
                           </div>
                         )}
                       </Fragment>
@@ -1357,8 +1470,8 @@ export function MessagesPageV4({
 
                 {pendingMessages.map((message) => (
                   <div key={message.clientMessageId} className="mt-2 flex flex-col items-end animate-in fade-in slide-in-from-bottom-2">
-                    <div className={cn("max-w-[84%] rounded-[21px] rounded-br-[7px] bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground transition-opacity", message.status === "pending" && "opacity-65")}>{message.kind === "voice" ? `Voice message${message.durationSeconds ? ` · ${Math.round(message.durationSeconds)}s` : ""}` : message.text}</div>
-                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.kind === "voice" && !message.mediaId ? "Record again" : "Retry"}</button><button type="button" onClick={() => updateOptimistic(selected.id, (current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : message.status === "sent" ? <span className="inline-flex items-center" title="Sent"><Check className="h-3.5 w-3.5" aria-label="Sent" /></span> : <span>Sending…</span>}</div>
+                    <div className={cn("max-w-[84%] rounded-[21px] rounded-br-[7px] bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground transition-opacity", message.status === "pending" && "opacity-65")}>{message.forwardBatch ? <span className="mb-0.5 flex items-center gap-1 text-xs opacity-75"><Forward className="h-3.5 w-3.5" />Forwarded</span> : null}{message.kind === "voice" ? `Voice message${message.durationSeconds ? ` · ${Math.round(message.durationSeconds)}s` : ""}` : message.text}</div>
+                    <div className="mt-1 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">{message.status === "failed" ? <><span className="text-destructive">Not sent</span><button type="button" onClick={() => retryOptimistic(message.clientMessageId)} className="underline">{message.forwardBatch ? "Retry forward" : message.kind === "voice" && !message.mediaId ? "Record again" : "Retry"}</button><button type="button" onClick={() => updateOptimistic(selected.id, (current) => discardOptimistic(current, message.clientMessageId))} className="underline">Delete</button></> : message.status === "sent" ? <span className="inline-flex items-center" title="Sent"><Check className="h-3.5 w-3.5" aria-label="Sent" /></span> : <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" aria-label="Pending" />Sending…</span>}</div>
                   </div>
                 ))}
               </div>
@@ -1511,16 +1624,17 @@ export function MessagesPageV4({
         target={forwardTarget}
         conversations={displayConversations.filter((conversation) => !inboxPreferences[conversation.id]?.archivedAt)}
         onClose={() => { setForwardTarget(null); setForwardSelection([]); }}
-        onOpenConversation={(conversationId) => { setForwardTarget(null); setForwardSelection([]); openConversation(conversationId); }}
-        onForward={async (targetConversationIds, operationId, retry) => {
-          if (!forwardTarget) return { ok: false, message: "Choose a message to forward.", sent: 0, total: 0 };
-          const result = await forwardMessageAction({ sourceMessageIds: forwardTarget.messages.map((message) => message.id), targetConversationIds, operationId, retry })
-            .catch(() => ({ ok: false as const, message: "Could not confirm the forward. Retry will check what was sent.", sent: 0, total: forwardTarget.messages.length * targetConversationIds.length }));
-          if (result.sent > 0) {
-            void syncConversations();
-            if (selectedId && targetConversationIds.includes(selectedId)) void refreshMessages(selectedId, false, false);
-          }
-          return result;
+        onSend={(targetConversationIds) => {
+          if (!forwardTarget) return;
+          startForward({
+            operationId: crypto.randomUUID(),
+            sourceMessageIds: forwardTarget.messages.map((message) => message.id),
+            targetConversationIds
+          }, forwardTarget.messages);
+          setForwardTarget(null);
+          setForwardSelection([]);
+          if (targetConversationIds.length === 1) openConversation(targetConversationIds[0]);
+          else closeConversation();
         }}
       />
 
@@ -1585,20 +1699,18 @@ function DeleteMessageModal({ target, operation, onClose, onDelete }: { target: 
   return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title={`Delete ${item}?`} compact><div className="space-y-2"><button type="button" disabled={busy} aria-pressed={operation?.scope === "me"} onClick={() => onDelete(false)} className={cn("focus-ring w-full rounded-2xl border p-3 text-left transition-[transform,background-color,border-color,opacity] active:scale-[.98]", operation?.scope === "me" ? "border-primary/40 bg-primary/10" : "border-border/70", busy && operation?.scope !== "me" && "opacity-45")}><strong className="flex items-center gap-2 text-sm">{busy && operation?.scope === "me" ? <Loader2 className="h-4 w-4 animate-spin" /> : operation?.phase === "success" && operation.scope === "me" ? <Check className="h-4 w-4" /> : null}{busy && operation?.scope === "me" ? "Deleting for me…" : "Delete for me"}</strong><span className="mt-0.5 block text-xs text-muted-foreground">Hide this {item} only from your chat.</span></button>{everyone ? <button type="button" disabled={busy} aria-pressed={operation?.scope === "everyone"} onClick={() => onDelete(true)} className={cn("focus-ring w-full rounded-2xl border p-3 text-left text-destructive transition-[transform,background-color,border-color,opacity] active:scale-[.98]", operation?.scope === "everyone" ? "border-destructive/45 bg-destructive/12" : "border-destructive/20 bg-destructive/5", busy && operation?.scope !== "everyone" && "opacity-45")}><strong className="flex items-center gap-2 text-sm">{busy && operation?.scope === "everyone" ? <Loader2 className="h-4 w-4 animate-spin" /> : operation?.phase === "success" && operation.scope === "everyone" ? <Check className="h-4 w-4" /> : null}{busy && operation?.scope === "everyone" ? "Deleting for everyone…" : "Delete for everyone"}</strong><span className="mt-0.5 block text-xs opacity-75">Remove this {item} for everyone in this chat.</span></button> : null}{operation ? <p role={operation.phase === "error" ? "alert" : "status"} aria-live="polite" className={cn("rounded-xl px-3 py-2 text-sm font-medium", operation.phase === "error" ? "bg-destructive/10 text-destructive" : operation.phase === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-foreground")}>{operation.message}</p> : null}<Button variant="outline" className="w-full active:scale-[.98]" onClick={onClose} disabled={busy}>{busy ? "Deleting…" : operation?.phase === "error" ? "Close" : "Cancel"}</Button></div></Modal>;
 }
 
-function ForwardModal({ target, conversations, onClose, onOpenConversation, onForward }: {
+function ForwardModal({ target, conversations, onClose, onSend }: {
   target: ForwardTarget;
   conversations: ConversationView[];
   onClose: () => void;
-  onOpenConversation: (conversationId: string) => void;
-  onForward: (conversationIds: string[], operationId: string, retry: boolean) => Promise<{ ok: boolean; message: string; sent: number; total: number }>;
+  onSend: (conversationIds: string[]) => void;
 }) {
   const [query, setQuery] = useState("");
   const [recipients, setRecipients] = useState<string[]>([]);
-  const [operation, setOperation] = useState<{ id: string; recipients: string[]; phase: "sending" | "success" | "error"; message: string } | null>(null);
-  const sendingRef = useRef(false);
+  const submittedRef = useRef(false);
   const targetKey = target?.messages.map((message) => message.id).join(",") ?? null;
   useEffect(() => {
-    setOperation(null);
+    submittedRef.current = false;
     setQuery("");
     setRecipients([]);
   }, [targetKey]);
@@ -1606,28 +1718,14 @@ function ForwardModal({ target, conversations, onClose, onOpenConversation, onFo
     const term = query.trim().toLowerCase();
     return term ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(term)) : conversations;
   }, [conversations, query]);
-  const sending = operation?.phase === "sending";
-  const sent = operation?.phase === "success";
-  async function forward() {
-    if (sendingRef.current || sent) return;
+  function forward() {
+    if (submittedRef.current) return;
     if (!recipients.length) return;
-    sendingRef.current = true;
+    submittedRef.current = true;
     interactionFeedback.selection();
-    const id = operation?.id ?? crypto.randomUUID();
-    const chosen = [...recipients];
-    setOperation({ id, recipients: chosen, phase: "sending", message: `Forwarding ${target?.messages.length ?? 0} ${target?.messages.length === 1 ? "message" : "messages"} to ${chosen.length} ${chosen.length === 1 ? "chat" : "chats"}…` });
-    try {
-      const result = await onForward(chosen, id, Boolean(operation));
-      setOperation({ id, recipients: chosen, phase: result.ok ? "success" : "error", message: result.message });
-      if (!result.ok) interactionFeedback.error();
-    } catch {
-      setOperation({ id, recipients: chosen, phase: "error", message: "Could not confirm the forward. Retry will check what was sent." });
-      interactionFeedback.error();
-    } finally {
-      sendingRef.current = false;
-    }
+    onSend([...recipients]);
   }
-  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && !sending && onClose()} title="Forward to" variant="sheet">
+  return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Forward to" variant="sheet">
     <div className="space-y-3 pb-[max(.5rem,env(safe-area-inset-bottom))]">
       <p className="text-sm text-muted-foreground">Choose up to five chats for {target?.messages.length ?? 0} {target?.messages.length === 1 ? "message" : "messages"}.</p>
       <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats" aria-label="Search chats" />
@@ -1635,13 +1733,11 @@ function ForwardModal({ target, conversations, onClose, onOpenConversation, onFo
         {visible.length === 0 ? <li className="px-3 py-6 text-center text-sm text-muted-foreground">No chats found.</li> : null}
         {visible.map((conversation) => {
           const selected = recipients.includes(conversation.id);
-          return <li key={conversation.id}><button type="button" disabled={sending || sent || Boolean(operation)} aria-pressed={selected} onClick={() => setRecipients((current) => current.includes(conversation.id) ? current.filter((id) => id !== conversation.id) : current.length < 5 ? [...current, conversation.id] : current)} className={cn("focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition-[background-color,border-color,transform,opacity] active:scale-[.98]", selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-secondary/70", (sending || sent) && !selected && "opacity-50")}><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="flex min-w-0 flex-1 items-center gap-1.5"><span className="truncate text-sm font-semibold">{conversation.title}</span>{conversation.kind === "direct" ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact inControl /> : null}</span><span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border", selected ? "border-primary bg-primary text-primary-foreground" : "border-border")} aria-hidden="true">{selected ? <Check className="h-4 w-4" /> : null}</span></button></li>;
+          return <li key={conversation.id}><button type="button" aria-pressed={selected} onClick={() => { interactionFeedback.selection(); setRecipients((current) => current.includes(conversation.id) ? current.filter((id) => id !== conversation.id) : current.length < 5 ? [...current, conversation.id] : current); }} className={cn("focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition-[background-color,border-color,transform,opacity] active:scale-[.98]", selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-secondary/70")}><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="flex min-w-0 flex-1 items-center gap-1.5"><span className="truncate text-sm font-semibold">{conversation.title}</span>{conversation.kind === "direct" ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact inControl /> : null}</span><span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border", selected ? "border-primary bg-primary text-primary-foreground" : "border-border")} aria-hidden="true">{selected ? <Check className="h-4 w-4" /> : null}</span></button></li>;
         })}
       </ul>
-      {operation ? <p role={operation.phase === "error" ? "alert" : "status"} aria-live="polite" className={cn("rounded-xl px-3 py-2 text-sm font-medium", operation.phase === "error" ? "bg-destructive/10 text-destructive" : operation.phase === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-foreground")}>{sending ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : null}{operation.message}</p> : null}
-      {!sent ? <Button className="w-full" disabled={sending || recipients.length === 0} onClick={() => void forward()}>{sending ? "Forwarding…" : operation?.phase === "error" ? "Retry" : `Forward to ${recipients.length} ${recipients.length === 1 ? "chat" : "chats"}`}</Button> : null}
-      {sent && operation?.recipients.length === 1 ? <Button className="w-full" onClick={() => onOpenConversation(operation.recipients[0])}>Open chat</Button> : null}
-      <Button variant="outline" className="w-full" disabled={sending} onClick={onClose}>{sent ? "Done" : "Cancel"}</Button>
+      <Button className="w-full" disabled={recipients.length === 0} onClick={forward}>Forward to {recipients.length} {recipients.length === 1 ? "chat" : "chats"}</Button>
+      <Button variant="outline" className="w-full" onClick={onClose}>Cancel</Button>
     </div>
   </Modal>;
 }

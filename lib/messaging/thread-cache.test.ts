@@ -12,7 +12,7 @@ import {
   writeThreadOptimistic,
   writeThreadReplyContexts
 } from "@/lib/messaging/thread-cache";
-import type { OptimisticMessage } from "@/lib/messaging/optimistic-messages";
+import { pruneConfirmed, type OptimisticMessage } from "@/lib/messaging/optimistic-messages";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
 import { DEFAULT_CHAT_SETTINGS, DEFAULT_CONVERSATION_USER_PREFERENCES } from "@/lib/messaging/ultimate-types";
 
@@ -58,6 +58,17 @@ beforeEach(() => {
 });
 
 describe("a cached thread survives what a component mount does not", () => {
+  it("holds each destination's forwarded pending row until its own server echo arrives", () => {
+    const batch = { operationId: "operation-1", sourceMessageIds: ["source-1"], targetConversationIds: [CHAT_A, CHAT_B] };
+    writeThreadOptimistic(VIEWER, CHAT_A, [{ ...optimistic("operation-1:0:0"), forwardBatch: batch }]);
+    writeThreadOptimistic(VIEWER, CHAT_B, [{ ...optimistic("operation-1:1:0"), forwardBatch: batch }]);
+    const confirmed = message("real-a", "2026-01-01T00:00:01.000Z", { isMine: true, clientMessageId: "operation-1:0:0" });
+    writeThreadMessages(VIEWER, CHAT_A, [confirmed]);
+    expect(readThread(VIEWER, CHAT_A)?.optimistic).toHaveLength(1);
+    expect(readThread(VIEWER, CHAT_B)?.optimistic[0].forwardBatch).toEqual(batch);
+    expect(pruneConfirmed(readThread(VIEWER, CHAT_A)!.optimistic, [confirmed])).toHaveLength(0);
+    expect(pruneConfirmed(readThread(VIEWER, CHAT_B)!.optimistic, [confirmed])).toHaveLength(1);
+  });
   it("keeps lightweight control state beside the thread without caching presence", () => {
     writeThreadControls(VIEWER, CHAT_A, {
       settings: { ...DEFAULT_CHAT_SETTINGS, messageLifetimeSeconds: 86400 },

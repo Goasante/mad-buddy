@@ -59,7 +59,7 @@ export async function forwardMessageAction(input: unknown) {
 
   // Different chats progress together; messages within each chat stay in order.
   const counts = await Promise.all(targetIds.map(async (conversationId, targetIndex) => {
-    let sent = 0;
+    const sentKeys: string[] = [];
     for (const [sourceIndex, source] of sources.entries()) {
       const clientMessageId = `${parsed.data.operationId}:${targetIndex}:${sourceIndex}`;
       // On retry, check before copying media: a fresh copy has a different id.
@@ -68,7 +68,7 @@ export async function forwardMessageAction(input: unknown) {
           .select("id, conversation_id, forwarded_from_message_id")
           .eq("sender_id", me).eq("client_message_id", clientMessageId).maybeSingle();
         if (existing) {
-          if (existing.conversation_id === conversationId && existing.forwarded_from_message_id === source.id) sent++;
+          if (existing.conversation_id === conversationId && existing.forwarded_from_message_id === source.id) sentKeys.push(clientMessageId);
           continue;
         }
       }
@@ -93,12 +93,13 @@ export async function forwardMessageAction(input: unknown) {
         mediaId,
         clientMessageId
       }, { forwardedFromMessageId: source.id, deferFollowUp: true });
-      if (result.ok) sent++;
+      if (result.ok) sentKeys.push(clientMessageId);
     }
-    return sent;
+    return sentKeys;
   }));
-  const sent = counts.reduce((sum, count) => sum + count, 0);
+  const sentClientMessageIds = counts.flat();
+  const sent = sentClientMessageIds.length;
   return sent === total
-    ? { ok: true as const, message: total === 1 ? "Message forwarded." : `${sent} messages forwarded.`, sent, total }
-    : { ok: false as const, message: sent > 0 ? `${sent} of ${total} messages forwarded. Tap Retry to send the rest.` : "Could not forward those messages. Try again.", sent, total };
+    ? { ok: true as const, message: total === 1 ? "Message forwarded." : `${sent} messages forwarded.`, sent, total, sentClientMessageIds }
+    : { ok: false as const, message: sent > 0 ? `${sent} of ${total} messages forwarded. Retry the unsent messages in their chats.` : "Could not forward those messages. Retry them in their chats.", sent, total, sentClientMessageIds };
 }
