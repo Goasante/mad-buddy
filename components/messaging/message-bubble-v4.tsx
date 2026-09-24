@@ -68,6 +68,7 @@ export function MessageBubbleV4({
   saved,
   pinned,
   highlighted,
+  selectionMode = false,
   voiceInitialSeconds = 0,
   reactionAggregates = [],
   onReply,
@@ -94,6 +95,7 @@ export function MessageBubbleV4({
   saved: boolean;
   pinned: boolean;
   highlighted?: boolean;
+  selectionMode?: boolean;
   voiceInitialSeconds?: number;
   reactionAggregates?: ReactionAggregate[];
   onReply: () => void;
@@ -228,16 +230,17 @@ export function MessageBubbleV4({
           <Reply className={cn("h-5 w-5 transition-transform", thresholdHit && "scale-125")} />
         </div>
         <div
-          onPointerDown={begin}
-          onPointerMove={move}
-          onPointerUp={(event) => finish(event)}
-          onPointerCancel={(event) => finish(event, true)}
+          onPointerDown={selectionMode ? undefined : begin}
+          onPointerMove={selectionMode ? undefined : move}
+          onPointerUp={selectionMode ? undefined : (event) => finish(event)}
+          onPointerCancel={selectionMode ? undefined : (event) => finish(event, true)}
           onContextMenu={(event) => {
             event.preventDefault();
+            if (selectionMode) return;
             clearTimer();
             openActions();
           }}
-          onDoubleClick={() => react("heart")}
+          onDoubleClick={selectionMode ? undefined : () => react("heart")}
           className={cn(
             "touch-pan-y select-none",
             !dragging && "transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",

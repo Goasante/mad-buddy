@@ -1429,13 +1429,19 @@ export function MessagesPageV4({
                       <Fragment key={message.id}>
                         {newDay ? <div className="my-4 flex justify-center"><span className="rounded-full bg-muted/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">{dayLabel(message.createdAt)}</span></div> : null}
                         {message.messageType === "system" ? <p data-message-id={message.id} className="mx-auto my-3 max-w-lg text-center text-xs font-normal leading-relaxed text-muted-foreground">{message.text}</p> : (
-                          <div data-message-id={message.id} className={cn("flex transition-[background-color] duration-500", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1")}>
-                            {forwardSelection.length > 0 ? (
-                              <button type="button" disabled={message.deleted || !["text", "image", "voice_note"].includes(message.messageType)} aria-label={`${forwardSelection.includes(message.id) ? "Deselect" : "Select"} message to forward`} aria-pressed={forwardSelection.includes(message.id)} onClick={() => { interactionFeedback.selection(); setForwardSelection((current) => current.includes(message.id) ? current.filter((id) => id !== message.id) : current.length < 5 ? [...current, message.id] : current); }} className={cn("focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-colors active:scale-[.99]", forwardSelection.includes(message.id) ? "border-primary/50 bg-primary/10" : "border-border/60 bg-card", message.deleted && "opacity-50")}><span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border", forwardSelection.includes(message.id) ? "border-primary bg-primary text-primary-foreground" : "border-border")}><Check className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-muted-foreground">{message.isMine ? "You" : message.senderName}</span><span className="block truncate text-sm">{message.messageType === "voice_note" ? "Voice message" : message.messageType === "image" ? `Photo${message.text ? ` · ${message.text}` : ""}` : message.text ?? "Message"}</span></span></button>
-                            ) : <div className="max-w-[86%] sm:max-w-[78%]">
+                          <div data-message-id={message.id} onClick={forwardSelection.length > 0 && !message.deleted && ["text", "image", "voice_note"].includes(message.messageType) ? (event) => {
+                            // Keep the image viewer, audio player and links usable.
+                            // A tap anywhere else on the message row selects it.
+                            if (event.target instanceof Element && event.target.closest("button, a, input, textarea, [role='button']")) return;
+                            interactionFeedback.selection();
+                            setForwardSelection((current) => current.includes(message.id) ? current.filter((id) => id !== message.id) : current.length < 5 ? [...current, message.id] : current);
+                          } : undefined} className={cn("flex items-center gap-2 rounded-2xl transition-[background-color] duration-150", message.isMine ? "justify-end" : "justify-start", startsRun ? "mt-3" : "mt-1", forwardSelection.includes(message.id) && "bg-primary/10")}>
+                            {forwardSelection.length > 0 && !message.deleted && ["text", "image", "voice_note"].includes(message.messageType) ? <button type="button" aria-label={`${forwardSelection.includes(message.id) ? "Deselect" : "Select"} message to forward`} aria-pressed={forwardSelection.includes(message.id)} onClick={() => { interactionFeedback.selection(); setForwardSelection((current) => current.includes(message.id) ? current.filter((id) => id !== message.id) : current.length < 5 ? [...current, message.id] : current); }} className={cn("focus-ring order-last grid h-11 w-11 shrink-0 place-items-center rounded-full border transition-colors active:scale-95", forwardSelection.includes(message.id) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground", message.isMine && "order-first")}><Check className="h-4 w-4" /></button> : null}
+                            <div className={forwardSelection.length > 0 ? "min-w-0 max-w-[calc(100%-3.25rem)]" : "max-w-[86%] sm:max-w-[78%]"}>
                               <MessageBubbleV4
                                 conversationId={selected.id}
                                 message={message}
+                                selectionMode={forwardSelection.length > 0}
                                 showIdentity={startsRun}
                                 isGroup={Boolean(isGroup)}
                                 replyContext={replyContexts[message.id] ?? null}
@@ -1460,7 +1466,7 @@ export function MessagesPageV4({
                                 onAttachmentRefresh={(attachment: AttachmentView) => setMessages((current) => current.map((item) => item.id === message.id ? { ...item, attachment } : item))}
                                 onPollChanged={refreshSelected}
                               />
-                            </div>}
+                            </div>
                           </div>
                         )}
                       </Fragment>
