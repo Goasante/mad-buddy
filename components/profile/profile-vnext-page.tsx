@@ -13,12 +13,13 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
-  UserRoundCheck,
   UsersRound
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carousel";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -43,6 +44,7 @@ type ProfileVNextPageProps = {
   generalArea?: string | null;
   photos: ProfilePhoto[];
   trustedSince: string | null;
+  isVerifiedAccount: boolean;
   plan: SubscriptionPlan;
   dateOfBirth: string;
   birthdayVisibility: BirthVisibility;
@@ -86,6 +88,7 @@ export function ProfileVNextPage({
   generalArea,
   photos,
   trustedSince,
+  isVerifiedAccount,
   plan,
   dateOfBirth,
   birthdayVisibility,
@@ -141,12 +144,9 @@ export function ProfileVNextPage({
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <h2 className="text-[1.75rem] font-semibold leading-none tracking-tight sm:text-3xl">{displayName}</h2>
+            <VerifiedAccountMark isVerifiedAccount={isVerifiedAccount} compact />
+            <TrustedMemberMark trustedSince={trustedSince} compact />
             <PremiumPlanBadge plan={plan} />
-            {trustedSince ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#E88C2B]/25 bg-[#E88C2B]/10 px-2.5 py-1 text-[11px] font-semibold text-[#7D4313] dark:text-[#F3B56F]">
-                <UserRoundCheck className="h-3.5 w-3.5" aria-hidden="true" /> Trusted Member
-              </span>
-            ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">@{username}</p>
           <p className="mt-3 max-w-xl text-sm leading-6 text-foreground/82">

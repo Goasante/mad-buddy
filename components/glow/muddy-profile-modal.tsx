@@ -9,6 +9,9 @@ import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { feedback } from "@/lib/feedback/feedback";
 import { Button } from "@/components/ui/button";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
+import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import { PROXIMITY_BAND_LABELS, type ProximityBand } from "@/lib/proximity/bands";
 import { Modal } from "@/components/ui/modal";
@@ -30,6 +33,8 @@ export type MuddyProfileSummary = {
   confidence?: ConfidenceLevel;
   glowColorId?: string | null;
   plan?: SubscriptionPlan;
+  isVerifiedAccount?: boolean;
+  trustedSince?: string | null;
 };
 
 export type MuddyProfileModalProps = {
@@ -148,9 +153,14 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
             </div>
 
             <div className="min-w-0 pr-9 sm:pr-10">
-              <h2 className="truncate text-[1.6rem] font-bold leading-tight tracking-[-0.025em] text-foreground sm:text-[2rem]">
-                {muddy.displayName}
-              </h2>
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <h2 className="truncate text-[1.6rem] font-bold leading-tight tracking-[-0.025em] text-foreground sm:text-[2rem]">
+                  {muddy.displayName}
+                </h2>
+                <VerifiedAccountMark isVerifiedAccount={muddy.isVerifiedAccount} compact />
+                <TrustedMemberMark trustedSince={muddy.trustedSince} compact />
+                <PremiumPlanBadge plan={muddy.plan ?? "free"} compact />
+              </div>
               <p className="mt-1 truncate text-sm font-medium text-muted-foreground sm:text-base">@{muddy.username}</p>
 
               {label ? (

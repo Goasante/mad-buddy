@@ -99,17 +99,12 @@ describe("verification is never inferred from something else", () => {
     expect(mark).not.toContain("trustedSince");
   });
 
-  it("keeps three separate marks on the surfaces that show all three", () => {
-    // If these ever collapsed into one component, one signal would start
-    // implying the others.
-    for (const [name, surface] of [
-      ["profile", profilePage],
-      ["group member list", groupPage]
-    ] as const) {
-      expect(surface, `${name} needs the verified mark`).toContain("<VerifiedAccountMark");
-      expect(surface, `${name} needs the trusted mark`).toContain("<TrustedMemberMark");
-      expect(surface, `${name} needs the premium badge`).toContain("<PremiumPlanBadge");
-    }
+  it("keeps all identity marks on profiles and only verification on compact trust surfaces", () => {
+    expect(profilePage).toContain("<VerifiedAccountMark");
+    expect(profilePage).toContain("<TrustedMemberMark");
+    expect(profilePage).toContain("<PremiumPlanBadge");
+    expect(groupPage).toContain("<VerifiedAccountMark");
+    expect(groupPage).not.toContain("<TrustedMemberMark");
   });
 
   it("does not let Trusted Member imply verification", () => {

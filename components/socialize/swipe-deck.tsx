@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { haptic } from "@/lib/device/haptics";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { GlowAvatar } from "@/components/glow/glow-avatar";
 import { presenceLabel } from "@/lib/presence/freshness";
 import {
@@ -567,12 +567,10 @@ function PersonFace({ person, interactive }: { person: SocializePerson; interact
           ) : (
             <span className="truncate">{name}</span>
           )}
-          {/* TWO SEPARATE SIGNALS, never merged into one badge: membership is
-              a plan someone pays for, Trusted Member is standing they earned
-              and staff approved. Both compact, so the name keeps the weight
-              and neither competes with proximity or the action beneath. */}
+          {/* Compact discovery shows verified identity, while Trusted Member
+              remains on the full profile. The plan badge is independent. */}
+          <VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact />
           <PremiumPlanBadge plan={person.plan} compact />
-          <TrustedMemberMark trustedSince={person.trustedSince} compact />
         </p>
 
         {/* Their own words when they wrote any, otherwise proximity. Never an

@@ -173,9 +173,9 @@ export function MuddyProfileVNext({
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <h2 className="text-[1.75rem] font-semibold leading-none tracking-tight sm:text-3xl">{muddy.displayName}</h2>
-            <VerifiedAccountMark isVerifiedAccount={muddy.isVerifiedAccount} compact />
-            <PremiumPlanBadge plan={muddy.plan} />
-            <TrustedMemberMark trustedSince={muddy.trustedSince} />
+                <VerifiedAccountMark isVerifiedAccount={muddy.isVerifiedAccount} compact />
+                <TrustedMemberMark trustedSince={muddy.trustedSince} />
+                <PremiumPlanBadge plan={muddy.plan} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">@{muddy.username}</p>
           {muddy.moodStatus ? (

@@ -29,6 +29,7 @@ type ProfileRow = {
   username: string;
   avatar_url: string | null;
   visibility_status: "visible" | "ghost" | "app_open_only";
+  trusted_member_since: string | null;
 };
 
 export async function loadNearbyForUser(admin: Admin, userId: string): Promise<SafeNearbyFriend[]> {
@@ -50,7 +51,7 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
   );
   if (friendIds.length === 0) return [];
 
-  const [locationsResult, profilesResult, blocksResult, statusesResult] =
+  const [locationsResult, profilesResult, blocksResult, statusesResult, verificationsResult] =
     await Promise.all([
       admin
         .from("user_locations")
@@ -58,7 +59,7 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
         .in("user_id", friendIds),
       admin
         .from("profiles")
-        .select("user_id, full_name, username, avatar_url, visibility_status")
+        .select("user_id, full_name, username, avatar_url, visibility_status, trusted_member_since")
         .in("user_id", friendIds),
       admin
         .from("blocked_users")
@@ -69,7 +70,13 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
         .select("user_id, availability_type, activity_type, custom_text, expires_at")
         .in("user_id", friendIds)
         .eq("visibility_type", "all_muddies")
-        .gt("expires_at", new Date().toISOString())
+        .gt("expires_at", new Date().toISOString()),
+      admin
+        .from("account_verifications")
+        .select("user_id")
+        .in("user_id", friendIds)
+        .eq("verification_type", "manual_review")
+        .eq("status", "verified")
     ]);
 
   const blockedIds = new Set(
@@ -84,6 +91,12 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
   const premiumUserIds = new Set<string>();
   const statusByUserId = new Map(
     (statusesResult.data ?? []).map((status) => [status.user_id, status])
+  );
+  const verifiedUserIds = new Set((verificationsResult.data ?? []).map((row) => row.user_id));
+  const trustedSinceByUserId = new Map(
+    ((profilesResult.data ?? []) as ProfileRow[])
+      .filter((profile) => Boolean(profile.trusted_member_since))
+      .map((profile) => [profile.user_id, profile.trusted_member_since as string])
   );
 
   let glowDeniedIds = new Set<string>();
@@ -101,6 +114,8 @@ export async function loadNearbyForUser(admin: Admin, userId: string): Promise<S
     premiumUserIds,
     locationByUserId,
     profileByUserId,
-    statusByUserId
+    statusByUserId,
+    verifiedUserIds,
+    trustedSinceByUserId
   });
 }

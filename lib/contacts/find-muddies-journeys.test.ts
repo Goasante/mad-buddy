@@ -106,12 +106,12 @@ describe("journey 1: a supported device reaches results and can add someone", ()
   });
 
   it("renders the canonical marks rather than inventing any", () => {
-    for (const mark of ["PremiumPlanBadge", "VerifiedAccountMark", "TrustedMemberMark"]) {
+    for (const mark of ["PremiumPlanBadge", "VerifiedAccountMark"]) {
       expect(sheet, `${mark} must come from the shared component`).toContain(mark);
     }
+    expect(sheet).not.toContain("TrustedMemberMark");
     // Fed from the server projection, never derived from the match itself.
     expect(sheet).toContain("person.isVerifiedAccount");
-    expect(sheet).toContain("person.trustedSince");
   });
 });
 

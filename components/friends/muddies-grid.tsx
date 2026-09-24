@@ -8,7 +8,6 @@ import { useState } from "react";
 import { useLongPress } from "@/hooks/use-long-press";
 
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { type MuddyProximity } from "@/lib/friends/muddies-presentation";
@@ -83,7 +82,6 @@ export function MuddiesGrid({
                 <span className="muddies-card-name">{person.displayName}</span>
                 <PremiumPlanBadge plan={person.plan} compact />
                 <VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount ?? false} compact />
-                <TrustedMemberMark trustedSince={person.trustedSince ?? null} compact />
               </span>
 
               {proximityText ? (

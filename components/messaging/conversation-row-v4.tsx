@@ -4,6 +4,7 @@ import { BellOff, Mail, Star, Archive, X, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import type { ConversationView } from "@/lib/messaging/mobile";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
@@ -169,6 +170,7 @@ export function ConversationRowV4({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <strong className={cn("truncate text-sm", conversation.unreadCount > 0 ? "font-semibold" : "font-medium")}>{conversation.title}</strong>
+            {conversation.kind === "direct" ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact inControl /> : null}
             {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-primary" aria-label="Favorite" /> : null}
             {conversation.muted ? <BellOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Muted" /> : null}
           </div>

@@ -88,22 +88,16 @@ describe("messaging identity carries the mark without N+1", () => {
     expect(messaging).toContain("senderRole");
   });
 
-  it("renders premium and the mark together on the group sender header", () => {
-    // Anchored on the badge itself: senderName also appears on the avatar
-    // above, which is a different element on a different line.
-    const senderLine = groupPage.slice(groupPage.indexOf("<PremiumPlanBadge plan={message.senderPlan}"));
-    expect(senderLine.slice(0, 700)).toContain("<TrustedMemberMark");
-    expect(senderLine.slice(0, 700)).toContain("message.senderRole");
+  it("keeps Trusted Member off the compact group sender header", () => {
+    expect(groupPage).not.toContain("<TrustedMemberMark");
   });
 
   it("renders the verified-account badge beside the sender identity", () => {
     expect(groupPage).toContain("<VerifiedAccountMark isVerifiedAccount={message.senderIsVerifiedAccount} compact />");
   });
 
-  it("uses the compact mark, so a name and three signals fit one line", () => {
-    expect(groupPage).toContain(
-      "<TrustedMemberMark trustedSince={message.senderTrustedSince} compact />"
-    );
+  it("uses only the compact verified mark for trust on that line", () => {
+    expect(groupPage).toContain("<VerifiedAccountMark isVerifiedAccount={message.senderIsVerifiedAccount} compact />");
   });
 });
 
@@ -124,26 +118,21 @@ describe("direct messages carry the mark at the identity surface", () => {
     expect(projection.slice(0, 260)).toContain('conversation.conversation_type === "direct"');
   });
 
-  it("marks identity in the thread header rather than on every bubble", () => {
-    // The other person does not change between messages, so stating it once at
-    // the top says everything repeating it on each bubble would.
-    const header = dm.slice(dm.indexOf('text-[0.9375rem] font-semibold leading-tight'));
-    expect(header.slice(0, 400)).toContain(
-      "<TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />"
-    );
+  it("keeps Trusted Member off the thread header", () => {
+    expect(dm).not.toContain("<TrustedMemberMark");
   });
 
-  it("shows the same standing in the conversation list", () => {
-    const row = dm.slice(dm.indexOf('<span className="truncate text-sm font-semibold">{conversation.title}</span>'));
-    expect(row.slice(0, 400)).toContain("<TrustedMemberMark");
+  it("shows verification instead of Trusted Member in the conversation list", () => {
+    expect(dm).toContain("<VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />");
   });
 
   it("renders the verified-account badge in the conversation list and header", () => {
     expect(dm).toContain("<VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />");
   });
 
-  it("keeps premium and standing as separate marks", () => {
+  it("keeps premium and verification as separate marks", () => {
     expect(dm).toContain("<PremiumPlanBadge plan={conversation.otherPlan} compact />");
+    expect(dm).toContain("<VerifiedAccountMark");
   });
 
   it("does not reorder conversations by standing", () => {
@@ -153,15 +142,16 @@ describe("direct messages carry the mark at the identity surface", () => {
   });
 });
 
-describe("group member lists show standing without reordering", () => {
+describe("group member lists keep standing out of the compact identity row", () => {
   it("extends the existing batched member read", () => {
     expect(groupActions).toContain(
       '.select("user_id, full_name, username, avatar_url, trusted_member_since")'
     );
   });
 
-  it("renders the mark beside the member name", () => {
-    expect(groupPage).toContain("<TrustedMemberMark trustedSince={member.trustedSince} compact />");
+  it("renders verification and not Trusted Member beside the member name", () => {
+    expect(groupPage).toContain("<VerifiedAccountMark isVerifiedAccount={member.isVerifiedAccount} compact />");
+    expect(groupPage).not.toContain("<TrustedMemberMark");
   });
 
   it("leaves ordering as Owner, Admins, Members, then name", () => {

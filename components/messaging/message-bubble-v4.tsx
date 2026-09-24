@@ -16,7 +16,6 @@ import { SafeMessageText } from "@/components/messages/safe-message-text";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Modal } from "@/components/ui/modal";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { ChatMessageView } from "@/lib/messaging/mobile";
@@ -211,9 +210,8 @@ export function MessageBubbleV4({
         <div className="mb-1 flex max-w-full items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
           <UserAvatar src={message.senderAvatarUrl} name={message.senderName} size="xs" decorative />
           <span className="truncate">{message.senderName}</span>
-          <PremiumPlanBadge plan={message.senderPlan} compact />
-          <TrustedMemberMark trustedSince={message.senderTrustedSince} compact />
           <VerifiedAccountMark isVerifiedAccount={message.senderIsVerifiedAccount} compact />
+          <PremiumPlanBadge plan={message.senderPlan} compact />
           {message.senderRole === "owner" || message.senderRole === "admin" ? <span className="font-normal opacity-70">· {message.senderRole === "owner" ? "Owner" : "Admin"}</span> : null}
         </div>
       ) : null}

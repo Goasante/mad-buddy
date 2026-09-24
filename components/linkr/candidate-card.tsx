@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { BadgeCheck, ChevronLeft, ChevronRight, Hand, RotateCcw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Hand, RotateCcw, X } from "lucide-react";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 
 import { nextPhotoIndex, previousPhotoIndex, tapZone } from "@/lib/linkr/photos";
 import { MAX_LINKR_CARD_PHOTOS } from "@/lib/linkr/media-projection-limits";
@@ -273,9 +274,7 @@ export function CandidateCard({
           <h2 className="linkr-card__name">
             {candidate.displayName}
             {candidate.age !== null ? `, ${candidate.age}` : ""}
-            {candidate.isVerifiedAccount ? (
-              <BadgeCheck className="linkr-card__verified" aria-label="Verified account" />
-            ) : null}
+            <VerifiedAccountMark isVerifiedAccount={candidate.isVerifiedAccount} compact />
           </h2>
 
           {/* ONE CONTEXT LINE: what they are here for, and roughly where.

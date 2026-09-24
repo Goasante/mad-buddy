@@ -56,7 +56,10 @@ export const safeNearbyFriendSchema = z.object({
   // never location data. All nullable: absent when no active status.
   muddy_availability: z.string().nullable(),
   muddy_activity: z.string().nullable(),
-  muddy_status_note: z.string().nullable()
+  muddy_status_note: z.string().nullable(),
+  // Public identity state only, with no review evidence or metadata.
+  is_verified_account: z.boolean().default(false),
+  trusted_since: z.string().nullable().default(null)
 });
 
 export const nearbyFriendsResponseSchema = z.object({
@@ -283,6 +286,8 @@ export function buildSafeNearbyFriends(input: {
   locationByUserId: ReadonlyMap<string, NearbyLocationRow>;
   profileByUserId: ReadonlyMap<string, NearbyProfileRow>;
   statusByUserId?: ReadonlyMap<string, MuddyStatusSummary>;
+  verifiedUserIds?: ReadonlySet<string>;
+  trustedSinceByUserId?: ReadonlyMap<string, string>;
   /**
    * The band each friend was last SHOWN in, when the caller tracks it.
    *
@@ -362,6 +367,8 @@ export function buildSafeNearbyFriends(input: {
           is_premium_theme_unlocked: false,
           membership_tier: tierFor(friendId),
           confidence: "low" as const,
+          is_verified_account: input.verifiedUserIds?.has(friendId) ?? false,
+          trusted_since: input.trustedSinceByUserId?.get(friendId) ?? null,
           ...statusFor(friendId)
         }
       ];
@@ -400,8 +407,10 @@ export function buildSafeNearbyFriends(input: {
         last_active_estimate: lastActiveEstimate(location.last_updated),
         freshness_state: getFreshnessState(updatedAt.getTime(), now),
         is_premium_theme_unlocked: input.premiumUserIds.has(friendId),
-          membership_tier: tierFor(friendId),
+        membership_tier: tierFor(friendId),
         confidence: pairConfidence,
+        is_verified_account: input.verifiedUserIds?.has(friendId) ?? false,
+        trusted_since: input.trustedSinceByUserId?.get(friendId) ?? null,
         ...statusFor(friendId)
       }
     ];

@@ -14,6 +14,7 @@ import { loadFieldPrivacy } from "@/lib/profile/service";
 import { getSafetyAdminContext } from "@/lib/safety/admin";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
 
 export const dynamic = "force-dynamic";
 
@@ -49,13 +50,14 @@ export default async function ProfileLabPage() {
     .maybeSingle();
 
   const admin = createSupabaseAdminClient();
-  const [plan, birthDetails, fieldPrivacy, identitySummary, photos, interestRows] = await Promise.all([
+  const [plan, birthDetails, fieldPrivacy, identitySummary, photos, interestRows, verificationRows] = await Promise.all([
     loadEffectivePlan(admin, user.id),
     loadDateOfBirthState(user.id),
     loadFieldPrivacy(admin, user.id),
     loadProfileIdentitySummary(admin, user.id, "self"),
     loadVisibleProfilePhotosFor(admin, user.id, { isOwner: true, isApprovedMuddy: false }),
-    admin.from("user_interests").select("interest").eq("user_id", user.id)
+    admin.from("user_interests").select("interest").eq("user_id", user.id),
+    admin.from("account_verifications").select("status").eq("user_id", user.id)
   ]);
 
   const interests = (interestRows.data ?? []).map((row) => row.interest);
@@ -91,6 +93,7 @@ export default async function ProfileLabPage() {
         generalArea={profile?.general_area ?? null}
         photos={photos}
         trustedSince={profile?.trusted_member_since ?? null}
+        isVerifiedAccount={hasVerifiedAccountStatus(verificationRows.data ?? [])}
         plan={plan}
         dateOfBirth={birthDetails?.dateOfBirth ?? ""}
         birthdayVisibility={fieldPrivacy?.birthday === "approved_muddies" ? "approved_muddies" : "only_me"}

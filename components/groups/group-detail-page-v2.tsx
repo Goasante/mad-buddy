@@ -14,7 +14,6 @@ import {
 } from "@/app/(app)/group-actions";
 import { MessageMediaViewer } from "@/components/messaging/message-media-viewer";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
@@ -188,7 +187,7 @@ export function GroupDetailPageV2({
               const actions = memberActions({ viewerRole: group.role, viewerId: group.viewerId, member, hasProfileRoute: Boolean(member.username) });
               return <li key={member.userId} className="flex min-h-[70px] items-center gap-3 px-3 py-2.5">
                 <UserAvatar src={member.avatarUrl} name={member.displayName} size="sm" />
-                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><strong className="truncate text-sm">{member.displayName}</strong><PremiumPlanBadge plan={member.plan} compact /><TrustedMemberMark trustedSince={member.trustedSince} compact /><VerifiedAccountMark isVerifiedAccount={member.isVerifiedAccount} compact /></div><div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground"><span className="truncate">@{member.username}</span>{roleLabel(member.role) ? <span className="rounded-full bg-[#E88C2B]/10 px-2 py-0.5 font-bold text-[#E88C2B]">{roleLabel(member.role)}</span> : null}{member.userId === group.viewerId ? <span>· You</span> : null}</div></div>
+                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><strong className="truncate text-sm">{member.displayName}</strong><VerifiedAccountMark isVerifiedAccount={member.isVerifiedAccount} compact /><PremiumPlanBadge plan={member.plan} compact /></div><div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground"><span className="truncate">@{member.username}</span>{roleLabel(member.role) ? <span className="rounded-full bg-[#E88C2B]/10 px-2 py-0.5 font-bold text-[#E88C2B]">{roleLabel(member.role)}</span> : null}{member.userId === group.viewerId ? <span>· You</span> : null}</div></div>
                 {actions.length > 0 ? <AppMenu label={`Actions for ${member.displayName}`} align="end" items={actions.map((action) => ({ id: action, label: MEMBER_ACTION_LABELS[action], onSelect: () => runAction(action, member) }))} trigger={<button type="button" className="focus-ring grid h-10 min-w-10 place-items-center rounded-full text-lg font-bold text-muted-foreground" aria-label={`Actions for ${member.displayName}`}>•••</button>} /> : null}
               </li>;
             })}

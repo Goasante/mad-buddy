@@ -54,12 +54,15 @@ const SEAL_PATH =
 export function VerifiedAccountMark({
   isVerifiedAccount = false,
   compact = false,
+  inControl = false,
   size,
   className
 }: {
   isVerifiedAccount?: boolean;
   /** Icon only, for dense identity rows beside a name. */
   compact?: boolean;
+  /** Non-interactive emblem when the surrounding name is already a control. */
+  inControl?: boolean;
   /** Pixel size of the glyph. Defaults to 16 inline, 18 with a label. */
   size?: number;
   className?: string;
@@ -119,6 +122,9 @@ export function VerifiedAccountMark({
   // A `title` alone was desktop-only -- it needs a hover, which a phone cannot
   // produce, so on mobile the mark was unexplained. CompactMark makes it a real
   // button in a popover, reachable by tap, click and keyboard alike.
+  if (compact && inControl) {
+    return <span role="img" aria-label="Verified account" title="Mad Buddy has verified this account." className={cn("inline-flex shrink-0 items-center", className)}>{glyph}</span>;
+  }
   if (compact) {
     return <CompactMark glyph={glyph} className={className} />;
   }

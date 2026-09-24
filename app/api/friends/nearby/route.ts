@@ -31,6 +31,7 @@ type ProfileRow = {
   username: string;
   avatar_url: string | null;
   visibility_status: "visible" | "ghost" | "app_open_only";
+  trusted_member_since: string | null;
 };
 
 // CORS preflight for the native app; a no-op for same-origin web.
@@ -159,7 +160,7 @@ export async function GET(request: Request) {
     return withCors(NextResponse.json(nearbyFriendsResponseSchema.parse({ friends: [] })), request);
   }
 
-  const [locationsResult, profilesResult, blocksResult, statusesResult] =
+  const [locationsResult, profilesResult, blocksResult, statusesResult, verificationsResult] =
     await Promise.all([
       admin
         .from("user_locations")
@@ -167,7 +168,7 @@ export async function GET(request: Request) {
         .in("user_id", friendIds),
       admin
         .from("profiles")
-        .select("user_id, full_name, username, avatar_url, visibility_status")
+        .select("user_id, full_name, username, avatar_url, visibility_status, trusted_member_since")
         .in("user_id", friendIds),
       admin
         .from("blocked_users")
@@ -181,7 +182,13 @@ export async function GET(request: Request) {
         .select("user_id, availability_type, activity_type, custom_text, expires_at")
         .in("user_id", friendIds)
         .eq("visibility_type", "all_muddies")
-        .gt("expires_at", new Date().toISOString())
+        .gt("expires_at", new Date().toISOString()),
+      admin
+        .from("account_verifications")
+        .select("user_id")
+        .in("user_id", friendIds)
+        .eq("verification_type", "manual_review")
+        .eq("status", "verified")
     ]);
 
   if (locationsResult.error || profilesResult.error || blocksResult.error) {
@@ -215,6 +222,12 @@ export async function GET(request: Request) {
   const statusByUserId = new Map(
     (statusesResult.data ?? []).map((status) => [status.user_id, status])
   );
+  const verifiedUserIds = new Set((verificationsResult.data ?? []).map((row) => row.user_id));
+  const trustedSinceByUserId = new Map(
+    (profilesResult.data as ProfileRow[])
+      .filter((profile) => Boolean(profile.trusted_member_since))
+      .map((profile) => [profile.user_id, profile.trusted_member_since as string])
+  );
 
   // Circle Visibility (feature batch 2): a friend who has started a
   // restrictive glow session only appears to their chosen audience. Friends
@@ -237,7 +250,9 @@ export async function GET(request: Request) {
     membershipTierByUserId,
     locationByUserId,
     profileByUserId,
-    statusByUserId
+    statusByUserId,
+    verifiedUserIds,
+    trustedSinceByUserId
   });
 
   const response = nearbyFriendsResponseSchema.parse({ friends });

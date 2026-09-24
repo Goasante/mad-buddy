@@ -527,9 +527,10 @@ describe("a rail card announces itself once", () => {
 });
 
 describe("the card carries identity and one action", () => {
-  it("keeps premium and Trusted as separate marks", () => {
+  it("shows verification, while Trusted stays on the full profile", () => {
     expect(grid).toContain("<PremiumPlanBadge");
-    expect(grid).toContain("<TrustedMemberMark");
+    expect(grid).toContain("<VerifiedAccountMark");
+    expect(grid).not.toContain("<TrustedMemberMark");
   });
 
   it("offers Message on the card rather than two taps away", () => {

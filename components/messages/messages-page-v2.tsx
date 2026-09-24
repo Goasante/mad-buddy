@@ -46,7 +46,6 @@ import { MessageMediaViewer } from "@/components/messaging/message-media-viewer"
 import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
@@ -880,7 +879,6 @@ export function MessagesPageV2({
                               <span className="flex items-center gap-1.5">
                                 <span className={cn("truncate text-[0.95rem]", conversation.unreadCount > 0 ? "font-bold" : "font-semibold")}>{conversation.title}</span>
                                 <PremiumPlanBadge plan={conversation.otherPlan} compact />
-                                <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
                                 <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
                                 {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-[#E88C2B]" aria-label="Favorite" /> : null}
                                 {conversation.muted ? <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Muted" /> : null}
@@ -1053,7 +1051,6 @@ export function MessagesPageV2({
                                   <div className="mb-1 flex items-center gap-2 px-1">
                                     <UserAvatar src={message.senderAvatarUrl} name={message.senderName} size="xs" decorative />
                                     <span className="text-[11px] font-semibold text-muted-foreground">{message.senderName}</span>
-                                    <TrustedMemberMark trustedSince={message.senderTrustedSince} compact />
                                     <VerifiedAccountMark isVerifiedAccount={message.senderIsVerifiedAccount} compact />
                                   </div>
                                 ) : null}
@@ -1190,7 +1187,6 @@ function ConversationIdentityV2({
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[0.98rem] font-bold tracking-[-0.01em]">{conversation.title}</span>
           <PremiumPlanBadge plan={conversation.otherPlan} compact />
-          <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
           <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
         </span>
         <span className={cn("mt-0.5 truncate text-[11px] font-medium", subtitleIsShared ? "text-[#E88C2B]" : "text-muted-foreground")}>

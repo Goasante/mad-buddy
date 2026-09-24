@@ -96,12 +96,10 @@ describe("a pass is reversible", () => {
 });
 
 describe("the deck never invents data about a person", () => {
-  it("shows no age, occupation or verification tick", () => {
-    // None of these exist in the projection. Rendering them would be stating
-    // something untrue about a real person.
+  it("shows no invented age or occupation and uses authoritative verification", () => {
     expect(deck).not.toMatch(/\bage\b/i);
     expect(deck).not.toMatch(/occupation|job title|headline/i);
-    expect(deck).not.toMatch(/verified|verification/i);
+    expect(deck).toContain("<VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact />");
   });
 
   it("shows proximity as a phrase, never an exact distance", () => {

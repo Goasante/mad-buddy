@@ -11,6 +11,7 @@ import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
 import { getTrustedMemberStandingAction } from "@/app/(app)/trusted-member-actions";
 import { isProfileSection, isSafeReturnPath } from "@/lib/navigation/handoff";
+import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export default async function ProfilePage({
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, photos, trustedStanding, interestRows] = user
+  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, photos, trustedStanding, interestRows, verificationRows] = user
     ? await Promise.all([
         loadEffectivePlan(admin, user.id),
         loadDateOfBirthState(user.id),
@@ -67,9 +68,10 @@ export default async function ProfilePage({
         getTrustedMemberStandingAction(),
         // The owner's own interests: no privacy narrowing, you always see
         // everything on your own profile.
-        admin.from("user_interests").select("interest").eq("user_id", user.id)
+        admin.from("user_interests").select("interest").eq("user_id", user.id),
+        admin.from("account_verifications").select("status").eq("user_id", user.id)
       ])
-    : ["free" as const, null, null, null, [], null, null];
+    : ["free" as const, null, null, null, [], null, null, null];
 
   /* Completion comes from the shared authority in lib/profile/rules rather
    * than being counted in the component, so this page and onboarding can
@@ -116,6 +118,7 @@ export default async function ProfilePage({
       generalArea={profile?.general_area ?? null}
       photos={photos}
       trustedSince={profile?.trusted_member_since ?? null}
+      isVerifiedAccount={hasVerifiedAccountStatus(verificationRows?.data ?? [])}
       trustedStanding={trustedStanding}
       initialPlan={effectivePlan}
       initialDateOfBirth={birthDetails?.dateOfBirth ?? ""}

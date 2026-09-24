@@ -46,6 +46,7 @@ import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
 import type { ProximityBand } from "@/lib/proximity/bands";
 import { proximityBandLabel, proximityBandRangeLabel } from "@/lib/proximity/bands";
 import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
 import { ProfileCompletionReminder } from "@/components/profile/profile-completion-reminder";
 import {
@@ -103,6 +104,8 @@ type DashboardFriend = {
   muddyStatusLabel: string | null;
   availability: string | null;
   freshnessState: FreshnessState;
+  isVerifiedAccount: boolean;
+  trustedSince: string | null;
 };
 
 type NearbyFriendApiItem = {
@@ -120,6 +123,8 @@ type NearbyFriendApiItem = {
   muddy_availability: string | null;
   muddy_activity: string | null;
   muddy_status_note: string | null;
+  is_verified_account: boolean;
+  trusted_since: string | null;
 };
 
 type DashboardPageContentProps = {
@@ -1361,7 +1366,9 @@ export function DashboardPageContent({
                 proximityBand: selectedFriend.proximityBand,
                 glowStrength: selectedFriend.glowStrength,
                 confidence: selectedFriend.confidence,
-                glowColorId: glowColorByFriendId[selectedFriend.friendId] ?? null
+                glowColorId: glowColorByFriendId[selectedFriend.friendId] ?? null,
+                isVerifiedAccount: selectedFriend.isVerifiedAccount,
+                trustedSince: selectedFriend.trustedSince
               }
             : null
         }
@@ -1605,8 +1612,9 @@ function NearbyHero({
           </button>
 
           <span className="flex flex-col items-center gap-1">
-            <span className="text-lg font-semibold leading-tight">
-              {capitalize(firstName(heroFriend.displayName || heroFriend.username))}
+            <span className="flex max-w-full items-center justify-center gap-1.5 text-lg font-semibold leading-tight">
+              <span className="truncate">{capitalize(firstName(heroFriend.displayName || heroFriend.username))}</span>
+              <VerifiedAccountMark isVerifiedAccount={heroFriend.isVerifiedAccount} compact />
             </span>
             {/* The state stays readable; the range underneath only teaches
                 what that Mad Buddy term means. Neither is an exact reading. */}
@@ -1702,8 +1710,9 @@ function NearbyHero({
                 </span>
                 {/* First name only, one line — a surname would force either a
                     second line or an ellipsis on almost every entry. */}
-                <span className="w-full truncate text-sm font-semibold leading-none">
-                  {capitalize(firstName(name))}
+                <span className="flex w-full items-center justify-center gap-1 text-sm font-semibold leading-none">
+                  <span className="truncate">{capitalize(firstName(name))}</span>
+                  <VerifiedAccountMark isVerifiedAccount={friend.isVerifiedAccount} compact inControl />
                 </span>
                 {/* The glow already carries proximity; this quietly confirms
                     it. The range stays smaller and lighter than the state. */}
@@ -2341,6 +2350,8 @@ function toDashboardFriend(friend: NearbyFriendApiItem): DashboardFriend {
       note: friend.muddy_status_note
     }),
     availability: friend.muddy_availability,
-    freshnessState: friend.freshness_state
+    freshnessState: friend.freshness_state,
+    isVerifiedAccount: friend.is_verified_account,
+    trustedSince: friend.trusted_since
   };
 }

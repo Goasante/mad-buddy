@@ -10,6 +10,7 @@ import {
   updateConversationUserPreferencesAction
 } from "@/app/(app)/messaging-ultimate-actions";
 import { ChatCollectionsV4 } from "@/components/messaging/chat-collections-v4";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Modal } from "@/components/ui/modal";
 import type { ConversationView } from "@/lib/messaging/mobile";
 import type { CachedConversationControls } from "@/lib/messaging/thread-cache";
@@ -169,7 +170,10 @@ export function ChatSettingsV4({
           <div className="flex items-center gap-3 rounded-[22px] border border-border/60 bg-card/70 p-3">
             <UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
             <div className="min-w-0 flex-1">
-              <strong className="block truncate text-sm font-semibold">{conversation.title}</strong>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <strong className="truncate text-sm font-semibold">{conversation.title}</strong>
+                {!isGroup ? <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact /> : null}
+              </span>
               <span className="text-xs text-muted-foreground">{isGroup ? "Group conversation" : conversation.otherUsername ? `@${conversation.otherUsername}` : "Conversation"}</span>
             </div>
           </div>

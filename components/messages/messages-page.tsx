@@ -42,7 +42,6 @@ import {
 } from "@/lib/messaging/quick-action-eligibility";
 import { isTransientConfirmation, useTransientFeedback } from "@/hooks/use-transient-feedback";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1227,8 +1226,6 @@ export function MessagesPageContent({
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-sm font-semibold">{conversation.title}</span>
                             <PremiumPlanBadge plan={conversation.otherPlan} compact />
-                            <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
-          <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
                             <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
                             {conversation.pinned ? (
                               <Star className="h-3 w-3 shrink-0 fill-primary text-primary" aria-label="Pinned" />
@@ -1823,7 +1820,7 @@ function ConversationIdentity({
               it on every bubble would repeat a fact that does not change
               between messages — which is why groups differ: there, the sender
               changes line to line, so the mark travels with the sender. */}
-          <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
+          <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
         </span>
         {/* Why this conversation exists — a shared plan, an event — or the
             handle. Never a guessed distance or availability. */}

@@ -233,9 +233,9 @@ export function MuddyProfilePage({
             title={<h1 className="truncate">{muddy.displayName}</h1>}
             badge={
               <>
-                <VerifiedAccountMark isVerifiedAccount={muddy.isVerifiedAccount} compact />
-                <PremiumPlanBadge plan={muddy.plan} />
-                <TrustedMemberMark trustedSince={muddy.trustedSince} />
+            <VerifiedAccountMark isVerifiedAccount={muddy.isVerifiedAccount} compact />
+            <TrustedMemberMark trustedSince={muddy.trustedSince} />
+            <PremiumPlanBadge plan={muddy.plan} />
               </>
             }
             meta={

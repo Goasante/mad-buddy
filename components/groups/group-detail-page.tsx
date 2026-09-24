@@ -23,7 +23,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import { useTransientFeedback } from "@/hooks/use-transient-feedback";
@@ -681,7 +680,6 @@ export function GroupDetailPage({
                               product, and the role below is authority in THIS
                               group. Icon-only here so a name, a badge, a mark
                               and a role still fit one line on a phone. */}
-                          <TrustedMemberMark trustedSince={message.senderTrustedSince} compact />
                           <VerifiedAccountMark isVerifiedAccount={message.senderIsVerifiedAccount} compact />
                           {/* Role indicator, deliberately the quietest thing
                               on the line: plain text, muted, no colour and no
@@ -877,7 +875,6 @@ export function GroupDetailPage({
                             Owner → Admins → Members → name; standing never
                             buys a position in it. */}
                         <VerifiedAccountMark isVerifiedAccount={member.isVerifiedAccount} compact />
-                        <TrustedMemberMark trustedSince={member.trustedSince} compact />
                       </p>
                       {/* Authority is stated in words, not colour alone, so it
                           survives a screen reader and a colour-blind viewer. */}

@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Touch-first app chrome should behave like controls, not selectable copy.
+ * Keep this scoped to actions and navigation: messages, articles, form fields,
+ * and editable content retain the platform's normal selection/copy behavior. */
+@media (pointer: coarse) {
+  :where(button, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], nav a) {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
 /* The slim visible scrollbar is a desktop-only affordance (page scroll, modal
  * bodies, flyouts, dropdowns, message/notification lists). Colours use the
  * theme's own --border / --muted-foreground tokens (not a hardcoded white) so

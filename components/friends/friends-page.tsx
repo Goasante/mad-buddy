@@ -43,6 +43,7 @@ import {
 } from "@/app/(app)/circles-actions";
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import dynamic from "next/dynamic";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { haptic } from "@/lib/device/haptics";
 import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
@@ -1369,7 +1370,9 @@ export function FriendsPageContent({
                 glowStrength: proximityByFriendId[profileUser.id]?.glowStrength,
                 confidence: proximityByFriendId[profileUser.id]?.confidence,
                 glowColorId: glowColorByFriendId[profileUser.id] ?? null,
-                plan: profileUser.plan
+                plan: profileUser.plan,
+                isVerifiedAccount: profileUser.isVerifiedAccount,
+                trustedSince: profileUser.trustedSince
               }
             : null
         }
@@ -1561,6 +1564,7 @@ function MuddyRow({
       <button type="button" onClick={onViewProfile} className="focus-ring min-w-0 flex-1 rounded text-left">
         <span className="flex items-center gap-1.5">
           <span className="block truncate font-medium leading-tight">{user.displayName}</span>
+          <VerifiedAccountMark isVerifiedAccount={user.isVerifiedAccount} compact inControl />
           <PremiumPlanBadge plan={user.plan} compact />
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-xs leading-tight">

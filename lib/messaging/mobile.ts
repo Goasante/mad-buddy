@@ -200,6 +200,7 @@ export type MessageableFriend = {
   username: string;
   avatarUrl: string | null;
   plan: SubscriptionPlan;
+  isVerifiedAccount: boolean;
 };
 
 const uuidSchema = z.string().uuid();
@@ -678,13 +679,19 @@ export async function listMessageableFriends(userId: string): Promise<Messageabl
     .filter((id) => !blockedIds.has(id));
   if (friendIds.length === 0) return [];
 
-  const [{ data: profiles }, plans] = await Promise.all([
+  const [{ data: profiles }, plans, { data: verificationRows }] = await Promise.all([
     admin
       .from("profiles")
       .select("user_id, full_name, username, avatar_url")
       .in("user_id", friendIds),
-    loadEffectivePlansForUsers(admin, friendIds)
+    loadEffectivePlansForUsers(admin, friendIds),
+    admin
+      .from("account_verifications")
+      .select("user_id, status")
+      .in("user_id", friendIds)
+      .eq("verification_type", "manual_review")
   ]);
+  const verifiedIds = new Set((verificationRows ?? []).filter((row) => row.status === "verified").map((row) => row.user_id));
 
   return (profiles ?? [])
     .map((profile) => ({
@@ -692,7 +699,8 @@ export async function listMessageableFriends(userId: string): Promise<Messageabl
       displayName: profile.full_name,
       username: profile.username,
       avatarUrl: profile.avatar_url,
-      plan: plans.get(profile.user_id) ?? "free"
+      plan: plans.get(profile.user_id) ?? "free",
+      isVerifiedAccount: verifiedIds.has(profile.user_id)
     }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }

@@ -12,7 +12,6 @@ import {
   snoozeUnsupportedContactReminderAction
 } from "@/app/(app)/contact-actions";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -745,7 +744,6 @@ export function FindMuddiesSheet({
                           here is inferred from the match itself. */}
                       <PremiumPlanBadge plan={person.plan as SubscriptionPlan} compact />
                       <VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact />
-                      <TrustedMemberMark trustedSince={person.trustedSince} compact />
                     </div>
                     <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
                   </div>

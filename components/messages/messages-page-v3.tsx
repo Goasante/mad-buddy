@@ -44,7 +44,6 @@ import { MessageMediaViewer } from "@/components/messaging/message-media-viewer"
 import { VoiceMessageBubble } from "@/components/messaging/voice-message-bubble";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { SafeMessageText } from "@/components/messages/safe-message-text";
-import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { AppMenu } from "@/components/ui/app-dropdown";
 import { Button } from "@/components/ui/button";
@@ -574,7 +573,6 @@ export function MessagesPageV3({
                           <span className="flex items-center gap-1.5">
                             <span className={cn("truncate text-[0.95rem]", conversation.unreadCount > 0 ? "font-bold" : "font-semibold")}>{conversation.title}</span>
                             <PremiumPlanBadge plan={conversation.otherPlan} compact />
-                            <TrustedMemberMark trustedSince={conversation.otherTrustedSince} compact />
                             <VerifiedAccountMark isVerifiedAccount={conversation.otherIsVerifiedAccount} compact />
                             {conversation.pinned ? <Star className="h-3 w-3 shrink-0 fill-[#E88C2B] text-[#E88C2B]" /> : null}
                             {conversation.kind === "plan" || conversation.kind === "event" ? <span className="rounded-md bg-[#E88C2B]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#E88C2B]">{conversation.kind}</span> : null}

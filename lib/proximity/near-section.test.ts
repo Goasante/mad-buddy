@@ -235,7 +235,7 @@ describe("Near section glow", () => {
 describe("Near section labels", () => {
   it("shows the first name only, on one line, ellipsized", () => {
     expect(nearSection).toContain("{capitalize(firstName(name))}");
-    expect(nearSection).toContain("w-full truncate text-sm font-semibold");
+    expect(nearSection).toContain('className="truncate">{capitalize(firstName(name))}</span>');
     expect(home).toContain("function firstName");
   });
 

@@ -279,31 +279,29 @@ describe("tenure stops accruing when premium lapses", () => {
   });
 });
 
-describe("the mark on Linkr discovery cards", () => {
+describe("Trusted Member stays on full profiles, not Linkr discovery cards", () => {
   const deck = stripComments(read("components/socialize/swipe-deck.tsx"));
   const projection = stripComments(read("lib/social/socialize-mobile.ts"));
   const css = read("app/globals.css");
   const mark = stripComments(read("components/trust/trusted-member-mark.tsx"));
 
-  it("reuses the one canonical mark component", () => {
-    expect(deck).toContain('import { TrustedMemberMark } from "@/components/trust/trusted-member-mark"');
+  it("uses verification on the compact Linkr card", () => {
+    expect(deck).toContain('import { VerifiedAccountMark } from "@/components/trust/verified-account-mark"');
   });
 
-  it("sits beside the name, not as its own pill or banner", () => {
+  it("keeps Trusted Member out of the name row", () => {
     const nameRow = deck.slice(deck.indexOf("linkr-deck-name"), deck.indexOf("linkr-deck-note"));
-    expect(nameRow).toContain("<TrustedMemberMark");
+    expect(nameRow).not.toContain("<TrustedMemberMark");
   });
 
-  it("keeps premium and Trusted Member as separate signals", () => {
-    // One is a plan someone pays for; the other is standing they earned.
-    // Merging them into a single badge would make the first imply the second.
+  it("keeps premium and verification as separate signals", () => {
     const nameRow = deck.slice(deck.indexOf("linkr-deck-name"), deck.indexOf("linkr-deck-note"));
     expect(nameRow).toContain("<PremiumPlanBadge");
-    expect(nameRow).toContain("<TrustedMemberMark");
+    expect(nameRow).toContain("<VerifiedAccountMark");
   });
 
-  it("renders compact, so it stays quieter than the name", () => {
-    expect(deck).toContain("<TrustedMemberMark trustedSince={person.trustedSince} compact />");
+  it("renders verification compact, so it stays quieter than the name", () => {
+    expect(deck).toContain("<VerifiedAccountMark isVerifiedAccount={person.isVerifiedAccount} compact />");
   });
 
   it("comes from the server projection, never inferred on the client", () => {

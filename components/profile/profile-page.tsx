@@ -17,6 +17,8 @@ import { ProfilePhotoCarousel } from "@/components/profile/profile-photo-carouse
 import { ProfilePhotoViewer } from "@/components/profile/profile-photo-viewer";
 import { profileViewerSequence } from "@/lib/profile/photo-labels";
 import { TrustedMemberApplyCard } from "@/components/trust/trusted-member-apply-card";
+import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import type { ProfilePhoto } from "@/lib/profile/profile-photos";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import { validateImageSelection } from "@/lib/media/validation";
@@ -65,6 +67,7 @@ type ProfilePageContentProps = {
   photos?: ProfilePhoto[];
   /** Trusted Member approval, or null. */
   trustedSince?: string | null;
+  isVerifiedAccount?: boolean;
   /** Eligibility and application state, for the apply card. */
   trustedStanding?: {
     eligible: boolean;
@@ -118,6 +121,7 @@ export function ProfilePageContent({
   completion = null,
   photos = [],
   trustedSince = null,
+  isVerifiedAccount = false,
   trustedStanding = null,
   initialPlan,
   initialDateOfBirth,
@@ -722,6 +726,8 @@ export function ProfilePageContent({
             <div className="min-w-0 flex-1 text-left">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="truncate text-[1.4rem] font-semibold leading-tight tracking-tight sm:text-2xl">{savedProfile.displayName}</h2>
+                <VerifiedAccountMark isVerifiedAccount={isVerifiedAccount} compact />
+                <TrustedMemberMark trustedSince={trustedSince} compact />
                 <PremiumPlanBadge plan={initialPlan} />
               </div>
               <p className="mt-1 text-sm text-muted-foreground">@{savedProfile.username}</p>
