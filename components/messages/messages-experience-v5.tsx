@@ -16,10 +16,12 @@ import {
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 
 import {
+  getConversationsAction,
   getMessageableFriendsAction,
   openDirectConversationAction,
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
+import { getInboxConversationPreferencesAction } from "@/app/(app)/messaging-inbox-v4-actions";
 import { updateConversationUserPreferencesAction } from "@/app/(app)/messaging-ultimate-actions";
 import { GroupsManagerModal } from "@/components/groups/groups-manager-modal";
 import { MessagesPageV4 } from "@/components/messages/messages-page-v4";
@@ -30,6 +32,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { CountBadge } from "@/components/ui/count-badge";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
 import type { ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
+import { announceChatFavorite, CHAT_FAVORITE_CHANGED_EVENT, isChatFavorite } from "@/lib/messaging/favorite-state";
 import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +62,7 @@ export function MessagesExperienceV5({
     () => new Set(initialConversations.filter((row) => row.pinned).map((row) => row.id))
   );
   const [favoriteManagerOpen, setFavoriteManagerOpen] = useState(false);
+  const [pendingFavoriteIds, setPendingFavoriteIds] = useState<Set<string>>(() => new Set());
   const [favoriteListOpen, setFavoriteListOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
@@ -68,6 +72,15 @@ export function MessagesExperienceV5({
   useEffect(() => {
     void refreshNotifications();
   }, [refreshNotifications]);
+
+  useEffect(() => {
+    const onFavoriteChanged = (event: Event) => {
+      const { conversationId, favorite } = (event as CustomEvent<{ conversationId: string; favorite: boolean }>).detail;
+      setFavoriteIds((current) => toggleSetValue(current, conversationId, favorite));
+    };
+    window.addEventListener(CHAT_FAVORITE_CHANGED_EVENT, onFavoriteChanged);
+    return () => window.removeEventListener(CHAT_FAVORITE_CHANGED_EVENT, onFavoriteChanged);
+  }, []);
 
   const favoriteConversations = useMemo(
     () => initialConversations
@@ -81,11 +94,13 @@ export function MessagesExperienceV5({
   }
 
   function toggleFavorite(conversation: ConversationView) {
+    if (pendingFavoriteIds.has(conversation.id)) return;
     const next = !favoriteIds.has(conversation.id);
-    setFavoriteIds((current) => toggleSetValue(current, conversation.id, next));
+    setPendingFavoriteIds((current) => new Set(current).add(conversation.id));
+    announceChatFavorite(conversation.id, next);
     setFeedback("");
 
-    startTransition(async () => {
+    void (async () => {
       const [legacy, preference] = await Promise.all([
         setConversationPinnedAction(conversation.id, next).catch(() => ({
           ok: false,
@@ -97,13 +112,20 @@ export function MessagesExperienceV5({
         }).catch(() => ({ ok: false, message: "Favorite could not be updated." }))
       ]);
 
+      setPendingFavoriteIds((current) => {
+        const updated = new Set(current);
+        updated.delete(conversation.id);
+        return updated;
+      });
       if (!legacy.ok || !preference.ok) {
-        setFavoriteIds((current) => toggleSetValue(current, conversation.id, !next));
         setFeedback(!legacy.ok ? legacy.message : preference.message);
-        return;
+        // Only partial failures need a fresh projection of both stored flags.
+        void Promise.all([getConversationsAction(), getInboxConversationPreferencesAction()]).then(([rows, prefs]) => {
+          const row = rows.find((item) => item.id === conversation.id);
+          if (row) announceChatFavorite(conversation.id, isChatFavorite(row.pinned, prefs[conversation.id]?.favoriteRank));
+        }).catch(() => announceChatFavorite(conversation.id, !next));
       }
-      router.refresh();
-    });
+    })();
   }
 
   return (
@@ -201,7 +223,7 @@ export function MessagesExperienceV5({
         onOpenChange={setFavoriteManagerOpen}
         conversations={initialConversations}
         favoriteIds={favoriteIds}
-        pending={isPending}
+        pendingIds={pendingFavoriteIds}
         onToggle={toggleFavorite}
       />
       <FavoriteListModal
@@ -386,28 +408,27 @@ function ManageFavoritesModal({
   onOpenChange,
   conversations,
   favoriteIds,
-  pending,
+  pendingIds,
   onToggle
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversations: ConversationView[];
   favoriteIds: ReadonlySet<string>;
-  pending: boolean;
+  pendingIds: ReadonlySet<string>;
   onToggle: (conversation: ConversationView) => void;
 }) {
   const [query, setQuery] = useState("");
   const visible = useMemo(() => {
-    const direct = conversations.filter((row) => row.kind === "direct");
     const term = query.trim().toLowerCase();
-    return term ? direct.filter((row) => row.title.toLowerCase().includes(term)) : direct;
+    return term ? conversations.filter((row) => row.title.toLowerCase().includes(term)) : conversations;
   }, [conversations, query]);
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Favorites" variant="sheet">
       <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">Keep the people you message most one tap away.</p>
-        <SearchField value={query} onChange={setQuery} placeholder="Find a Muddy" />
+        <p className="text-sm text-muted-foreground">Keep important chats one tap away.</p>
+        <SearchField value={query} onChange={setQuery} placeholder="Find a chat or group" />
         <ul className="max-h-[56vh] space-y-1 overflow-y-auto">
           {visible.map((conversation) => {
             const favorite = favoriteIds.has(conversation.id);
@@ -415,7 +436,7 @@ function ManageFavoritesModal({
               <li key={conversation.id}>
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={pendingIds.has(conversation.id)}
                   onClick={() => onToggle(conversation)}
                   className="focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl px-2.5 py-2 text-left transition-colors hover:bg-secondary/65 disabled:opacity-60"
                 >

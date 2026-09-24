@@ -79,6 +79,7 @@ import { useTransientFeedback } from "@/hooks/use-transient-feedback";
 import { MESSAGES_UPDATED_EVENT } from "@/hooks/use-unread-message-count";
 import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { conversationContext, dayLabel, startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
+import { announceChatFavorite, CHAT_FAVORITE_CHANGED_EVENT, isChatFavorite } from "@/lib/messaging/favorite-state";
 import type { AttachmentView } from "@/lib/messaging/attachments";
 import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
 import type { MentionCandidate } from "@/lib/messaging/mentions";
@@ -370,6 +371,8 @@ export function MessagesPageV4({
      was pending. A slower snapshot must merge these rather than erase them. */
   const realtimePatchesRef = useRef<Map<string, Map<string, ChatMessageView>>>(new Map());
   const inboxRefreshIdRef = useRef(0);
+  const inboxPreferencesRefreshIdRef = useRef(0);
+  const pendingFavoritesRef = useRef(new Set<string>());
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -408,12 +411,32 @@ export function MessagesPageV4({
   }, [syncConversations]);
 
   const syncInboxPreferences = useCallback(async () => {
+    const refreshId = ++inboxPreferencesRefreshIdRef.current;
     try {
       const next = await getInboxConversationPreferencesAction();
-      if (mountedRef.current) setInboxPreferences(next as InboxPreferenceMap);
+      if (mountedRef.current && refreshId === inboxPreferencesRefreshIdRef.current) {
+        setInboxPreferences(next as InboxPreferenceMap);
+        for (const [conversationId, pref] of Object.entries(next as InboxPreferenceMap)) {
+          if (pref.favoriteRank !== null && pref.favoriteRank !== undefined) announceChatFavorite(conversationId, true);
+        }
+      }
     } catch {
       // Preferences enhance the inbox; core messaging stays available.
     }
+  }, []);
+
+  useEffect(() => {
+    const onFavoriteChanged = (event: Event) => {
+      const { conversationId, favorite } = (event as CustomEvent<{ conversationId: string; favorite: boolean }>).detail;
+      ++inboxRefreshIdRef.current;
+      ++inboxPreferencesRefreshIdRef.current;
+      setConversations((current) => current.map((row) => row.id === conversationId ? { ...row, pinned: favorite } : row));
+      setInboxPreferences((current) => current[conversationId]
+        ? { ...current, [conversationId]: { ...current[conversationId], favoriteRank: favorite ? 0 : null } }
+        : current);
+    };
+    window.addEventListener(CHAT_FAVORITE_CHANGED_EVENT, onFavoriteChanged);
+    return () => window.removeEventListener(CHAT_FAVORITE_CHANGED_EVENT, onFavoriteChanged);
   }, []);
 
   /**
@@ -806,7 +829,7 @@ export function MessagesPageV4({
     return {
       ...conversation,
       unreadCount: pref?.markedUnreadAt ? Math.max(1, conversation.unreadCount) : conversation.unreadCount,
-      pinned: conversation.pinned || pref?.favoriteRank !== null && pref?.favoriteRank !== undefined,
+      pinned: isChatFavorite(conversation.pinned, pref?.favoriteRank),
       lastMessagePreview: draft ? `Draft: ${draft}` : conversation.lastMessagePreview
     };
   }), [conversations, inboxPreferences]);
@@ -942,20 +965,24 @@ export function MessagesPageV4({
   }
 
   function toggleFavorite(conversation: ConversationView) {
-    const next = !conversation.pinned;
-    setConversations((current) => current.map((row) => row.id === conversation.id ? { ...row, pinned: next } : row));
-    patchInboxPreference(conversation.id, { favoriteRank: next ? 0 : null });
-    startTransition(async () => {
+    if (pendingFavoritesRef.current.has(conversation.id)) return;
+    const next = !isChatFavorite(conversation.pinned, inboxPreferences[conversation.id]?.favoriteRank);
+    pendingFavoritesRef.current.add(conversation.id);
+    ++inboxRefreshIdRef.current;
+    ++inboxPreferencesRefreshIdRef.current;
+    announceChatFavorite(conversation.id, next);
+    void (async () => {
       const [legacy, prefs] = await Promise.all([
         setConversationPinnedAction(conversation.id, next).catch(() => ({ ok: false, message: "Favorite could not be updated." })),
         updateConversationUserPreferencesAction({ conversationId: conversation.id, favoriteRank: next ? 0 : null }).catch(() => ({ ok: false, message: "Favorite could not be updated." }))
       ]);
+      pendingFavoritesRef.current.delete(conversation.id);
       if (!legacy.ok || !prefs.ok) {
-        setConversations((current) => current.map((row) => row.id === conversation.id ? { ...row, pinned: !next } : row));
-        patchInboxPreference(conversation.id, { favoriteRank: !next ? 0 : null });
         setFeedback(!legacy.ok ? legacy.message : prefs.message);
+        void syncConversations();
+        void syncInboxPreferences();
       }
-    });
+    })();
   }
 
   async function setMuteHours(conversation: ConversationView, hours: number) {
