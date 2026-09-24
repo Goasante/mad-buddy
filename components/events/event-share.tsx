@@ -61,12 +61,31 @@ export function EventShare({
   const [outcome, setOutcome] = useState<Outcome>("idle");
   const [detail, setDetail] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [shareImage, setShareImage] = useState<File | null>(null);
 
   const shareUrl = eventShareUrl(eventId);
   const unlisted = visibility === "link";
 
+  useEffect(() => {
+    if (!shareable || typeof File === "undefined") return;
+    let cancelled = false;
+    void fetch(`/events/${encodeURIComponent(eventId)}/preview`)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        if (!blob.type.startsWith("image/")) return null;
+        const extension = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+        return new File([blob], `mad-buddy-event-${eventId}.${extension}`, { type: blob.type });
+      })
+      .then((file) => {
+        if (!cancelled && file) setShareImage(file);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [eventId, shareable]);
+
   async function share() {
-    const result = await shareInvite(shareUrl, `${eventName} — on Mad Buddy`);
+    const result = await shareInvite(shareUrl, `${eventName} — on Mad Buddy`, shareImage);
     setOutcome(result === "unavailable" ? "unavailable" : result === "copied" ? "copied" : "shared");
   }
 

@@ -84,7 +84,8 @@ describe("account confirmation does not depend on project configuration", () => 
 
 describe("a successful signup moves the user forward", () => {
   it("sends web users into onboarding", () => {
-    expect(webAction).toContain('redirectTo: "/onboarding"');
+    expect(webAction).toContain("onboardingDestination");
+    expect(webAction).toContain("/onboarding?next=");
   });
 
   it("establishes the web session before redirecting", () => {
@@ -92,13 +93,13 @@ describe("a successful signup moves the user forward", () => {
     // redirect would land on a guard and bounce straight back to login.
     expect(webAction).toContain("signInWithPassword({ email, password })");
     const session = webAction.slice(webAction.indexOf("signInWithPassword({ email, password })"));
-    expect(session).toContain('redirectTo: "/onboarding"');
+    expect(session).toContain("redirectTo: onboardingDestination");
   });
 
   it("keeps a session failure recoverable rather than fatal", () => {
     // The account exists, so the honest outcome is "log in", not "signup
     // failed".
-    expect(webAction).toContain('message: "Account created. Log in to continue.", redirectTo: "/login"');
+    expect(webAction).toContain('message: "Account created. Log in to continue.", redirectTo: loginDestination');
   });
 
   it("signs native users in rather than showing a notice", () => {

@@ -67,7 +67,7 @@ describe("onboarding resume guard", () => {
        /onboarding sends an already-onboarded profile straight back. */
     const onboarding = readFileSync(join(ROOT, "app/(onboarding)/onboarding/page.tsx"), "utf8");
     expect(onboarding).toContain("if (profile?.is_onboarded)");
-    expect(onboarding).toContain("redirect(POST_LOGIN_ROUTE)");
+    expect(onboarding).toContain("redirect(nextDestination as Route)");
     // And the self-heal for a stranded-but-complete profile must survive.
     expect(onboarding).toContain("recoverOnboardingIfStranded");
   });

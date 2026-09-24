@@ -125,14 +125,60 @@ describe("every published Event can be shared", () => {
   });
 });
 
+describe("a shared Event survives authentication and onboarding", () => {
+  it("preserves the Event destination when login hands a new person to signup", () => {
+    const loginPage = read("app/(auth)/login/page.tsx");
+    const signupPage = read("app/(auth)/signup/page.tsx");
+    const signupForm = read("components/auth/signup-form.tsx");
+    const onboardingPage = read("app/(onboarding)/onboarding/page.tsx");
+    const onboardingFlow = read("components/onboarding/onboarding-flow.tsx");
+
+    expect(loginPage).toContain("/signup?next=");
+    expect(signupPage).toContain("nextDestination={nextDestination}");
+    expect(signupForm).toContain("next: nextDestination");
+    expect(onboardingPage).toContain("nextDestination={nextDestination}");
+    expect(onboardingFlow).toContain("window.location.replace(nextDestination)");
+  });
+});
+
+describe("chat safety and response speed", () => {
+  it("shows direct-chat profile and report controls without duplicating profile blocking", () => {
+    const settings = read("components/messaging/chat-settings-v4.tsx");
+    const messages = read("components/messages/messages-page-v4.tsx");
+    expect(settings).toContain("View profile");
+    expect(settings).toContain("Submit report");
+    expect(settings).not.toContain("blockUserAction");
+    expect(messages).toContain("View ${selected.title}'s profile");
+  });
+
+  it("can report the exact received message from its action sheet", () => {
+    const bubble = read("components/messaging/message-bubble-v4.tsx");
+    const messagingActions = read("app/(app)/messaging-actions.ts");
+    expect(bubble).toContain('label="Report"');
+    expect(messagingActions).toContain("export async function reportMessageAction");
+    expect(messagingActions).toContain('content_type: "message"');
+    expect(messagingActions).toContain("reported_user_id: message.sender_id");
+  });
+
+  it("updates reactions before awaiting the server and can toggle one off", () => {
+    const messages = read("components/messages/messages-page-v4.tsx");
+    const reaction = messages.slice(messages.indexOf("function react(messageId"), messages.indexOf("function saveMessage"));
+    expect(reaction.indexOf("setMessages")).toBeGreaterThan(-1);
+    expect(reaction.indexOf("startTransition")).toBeGreaterThan(reaction.indexOf("setMessages"));
+    expect(reaction).toContain("previousReaction === reaction ? null : reaction");
+    expect(reaction).toContain("removeMessageReactionAction(messageId)");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // In-app sharing
 // ---------------------------------------------------------------------------
 
 describe("sharing into a chat reuses canonical messaging", () => {
-  it("hands the message to sendMessage rather than writing its own", () => {
-    // Membership, blocks, rate limiting and moderation already live there.
-    expect(actions).toContain('const { sendMessage } = await import("@/lib/messaging/mobile");');
+  it("hands the Event to the canonical structured message path", () => {
+    // Membership, blocks, rate limiting and notifications already live there.
+    expect(actions).toContain('const { sendStructuredChatMessageAction } = await import("@/app/(app)/messaging-structured-share-actions");');
+    expect(actions).toContain('refKind: "event"');
     expect(shareFlat).toContain("getConversationsAction()");
   });
 
@@ -149,39 +195,10 @@ describe("sharing into a chat reuses canonical messaging", () => {
     expect(action.slice(0, 1600)).toContain('if (view.status === "draft")');
   });
 
-  it("supplies every field sendMessage requires", () => {
-    /* THE BUG. clientMessageId is REQUIRED by sendMessageSchema and the share
-     * action omitted it, so the whole call failed schema validation and no row
-     * was ever written -- while the sheet showed only "Check your message and
-     * try again." Nothing distinguished it from a message the server refused
-     * on its merits, and no test noticed because the tests read source, not
-     * the messages table.
-     *
-     * Pinned against the SCHEMA rather than a hardcoded list, so a new required
-     * field added to sendMessage fails here instead of silently breaking
-     * sharing again. */
-    const messaging = read("lib/messaging/mobile.ts");
-    const schema = messaging.slice(
-      messaging.indexOf("export const sendMessageSchema"),
-      messaging.indexOf("function serviceRoleEnvMessage")
-    );
-    /* Fields are read as BLOCKS, not lines. A field's `.optional()` frequently
-     * sits several lines below its name (quickActionType spans four), so a
-     * line-wise filter reports optional fields as required and the test fails
-     * on fields the action is right to omit. */
-    const fields = schema.split(/\n  (?=\w+:)/).slice(1);
-    const required = fields
-      .filter((block) => !block.includes(".optional()"))
-      .map((block) => block.split(":")[0].trim());
-
-    expect(required.length).toBeGreaterThan(0);
-    expect(required).toContain("clientMessageId");
-
+  it("supplies every field the structured Event share requires", () => {
     const action = actions.slice(actions.indexOf("export async function shareEventToConversationAction"));
-    const call = action.slice(action.indexOf("await sendMessage("), action.indexOf("await sendMessage(") + 1200);
-    for (const field of required) {
-      expect(call).toContain(field);
-    }
+    const call = action.slice(action.indexOf("await sendStructuredChatMessageAction("), action.indexOf("await sendStructuredChatMessageAction(") + 800);
+    for (const field of ["conversationId", "clientMessageId", "refKind", "refId"]) expect(call).toContain(field);
   });
 
   it("gives each share its own message id rather than a derived one", () => {

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { getStructuredMessagePayloadAction } from "@/app/(app)/messaging-structured-share-actions";
 import { MessageRetentionV4 } from "@/components/messaging/message-retention-v4";
+import { EventArtwork } from "@/components/events/event-artwork";
 import type { StructuredMessagePayload } from "@/lib/messaging/structured-share-v4-types";
 import { cn } from "@/lib/utils";
 
@@ -105,6 +106,16 @@ export function StructuredMessageCardV4({
   return (
     <div>
       <button type="button" onClick={() => router.push(href as Route)} className={cn(cardClass, "focus-ring block w-full transition active:scale-[.99]")}>
+        {payload.refKind === "event" ? (
+          <EventArtwork
+            eventId={payload.refId}
+            coverUrl={payload.coverUrl}
+            focalX={payload.focalX}
+            focalY={payload.focalY}
+            alt={payload.title}
+            className="-mx-3 -mt-3 mb-3 h-32 w-[calc(100%+1.5rem)]"
+          />
+        ) : null}
         <div className="flex items-start gap-3">
           <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl", mine ? "bg-white/12" : "bg-primary/10 text-primary")}><CalendarDays className="h-4.5 w-4.5" /></span>
           <span className="min-w-0 flex-1"><span className="text-xs font-medium opacity-60">{payload.refKind === "plan" ? "Plan" : "Event"}</span><strong className="block truncate text-sm">{payload.title}</strong><span className="mt-0.5 block truncate text-xs opacity-65">{formatDate(payload.startsAt)}</span>{payload.locationLabel ? <span className="mt-1 flex items-center gap-1 truncate text-xs opacity-65"><MapPin className="h-3 w-3" />{payload.locationLabel}</span> : null}</span>

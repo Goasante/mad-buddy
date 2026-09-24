@@ -21,6 +21,7 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     id: "c1",
     title: "swim",
     avatarUrl: null,
+    otherUserId: null,
     otherUsername: null,
     kind: "plan",
     lastMessagePreview: null,

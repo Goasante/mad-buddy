@@ -1,9 +1,10 @@
 "use client";
 
-import { BellOff, Bookmark, ChevronRight, Clock3, Pin, Search, ShieldCheck, Star, UsersRound } from "lucide-react";
+import { AlertTriangle, BellOff, Bookmark, ChevronRight, Clock3, Loader2, Pin, Search, ShieldCheck, Star, UserRound, UsersRound } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useState } from "react";
 
+import { reportUserAction } from "@/app/(app)/actions";
 import {
   updateConversationChatSettingsAction,
   updateConversationUserPreferencesAction
@@ -44,6 +45,7 @@ export function ChatSettingsV4({
   onControlPatch,
   onSearch,
   onGroupDetails,
+  onViewProfile,
   onFeedback
 }: {
   open: boolean;
@@ -60,12 +62,17 @@ export function ChatSettingsV4({
   }) => void;
   onSearch: () => void;
   onGroupDetails: () => void;
+  onViewProfile: () => void;
   onFeedback: (message: string) => void;
 }) {
   const [pendingControls, setPendingControls] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState<"notifications" | "lifetime" | "group" | null>(null);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [collectionTab, setCollectionTab] = useState<CollectionTab>("saved");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [safetyPending, setSafetyPending] = useState(false);
+  const [reportReason, setReportReason] = useState("harassment");
+  const [reportDetails, setReportDetails] = useState("");
   const isGroup = conversation.kind === "group";
   const canManageGroup = viewerRole === "owner" || viewerRole === "admin";
   const settings = controls?.settings;
@@ -132,6 +139,24 @@ export function ChatSettingsV4({
     setCollectionsOpen(true);
   }
 
+  async function submitReport() {
+    if (!conversation.otherUserId || safetyPending) return;
+    setSafetyPending(true);
+    const result = await reportUserAction({
+      targetUserId: conversation.otherUserId,
+      reason: reportReason,
+      description: reportDetails.trim()
+        ? `Reported from a direct chat. ${reportDetails.trim()}`
+        : "Reported from a direct chat."
+    }).catch(() => ({ ok: false, message: "The report could not be submitted." }));
+    setSafetyPending(false);
+    onFeedback(result.message);
+    if (result.ok) {
+      setReportOpen(false);
+      setReportDetails("");
+    }
+  }
+
   return (
     <>
       <Modal
@@ -174,6 +199,8 @@ export function ChatSettingsV4({
             <SettingRow icon={Bookmark} title="Saved messages" subtitle="Private messages and folders only you can see" onClick={() => openCollection("saved")} />
             <SettingRow icon={Pin} title="Pinned messages" subtitle={pinsCount === null ? "Open to view pinned messages" : pinsCount > 0 ? `${pinsCount} pinned in this chat` : "Shared navigation for important messages"} onClick={() => openCollection("pinned")} />
 
+            {!isGroup && conversation.otherUsername ? <SettingRow icon={UserRound} title="View profile" subtitle={`Open @${conversation.otherUsername}'s profile`} onClick={onViewProfile} /> : null}
+
             <SettingRow icon={Clock3} title="Message lifetime" subtitle={settings ? LIFETIMES.find((item) => item.seconds === settings.messageLifetimeSeconds)?.label ?? "Forever" : "Syncing chat controls…"} onClick={() => setExpanded(expanded === "lifetime" ? null : "lifetime")} />
             {expanded === "lifetime" ? (
               <div className="border-t border-border/50 px-3 py-3 animate-in slide-in-from-top-1 fade-in">
@@ -201,6 +228,12 @@ export function ChatSettingsV4({
               ) : null}
             </section>
           ) : null}
+
+          {!isGroup && conversation.otherUserId ? (
+            <section className="overflow-hidden rounded-[22px] border border-border/60 bg-card/60">
+              <SettingRow icon={AlertTriangle} title="Report" subtitle="Send a private safety report to the review team" onClick={() => setReportOpen(true)} />
+            </section>
+          ) : null}
         </div>
       </Modal>
 
@@ -211,6 +244,32 @@ export function ChatSettingsV4({
         initialTab={collectionTab}
         onFeedback={onFeedback}
       />
+
+      <Modal open={reportOpen} onOpenChange={setReportOpen} title={`Report ${conversation.title}`} variant="sheet">
+        <div className="space-y-4 pb-[max(.5rem,env(safe-area-inset-bottom))]">
+          <p className="text-sm leading-relaxed text-muted-foreground">Choose what happened. Your report is private and does not automatically penalize the other person.</p>
+          <label className="block space-y-1.5 text-sm font-medium">
+            <span>Reason</span>
+            <select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="focus-ring min-h-11 w-full rounded-xl border border-border bg-background px-3">
+              <option value="harassment">Harassment or bullying</option>
+              <option value="threats">Threats or unsafe behaviour</option>
+              <option value="hate">Hate or abusive language</option>
+              <option value="sexual_content">Sexual or inappropriate content</option>
+              <option value="spam">Spam or scam</option>
+              <option value="impersonation">Impersonation</option>
+              <option value="other">Something else</option>
+            </select>
+          </label>
+          <label className="block space-y-1.5 text-sm font-medium">
+            <span>What happened? <span className="font-normal text-muted-foreground">Optional</span></span>
+            <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value.slice(0, 1000))} rows={4} placeholder="Describe the messages or behaviour that should be reviewed." className="focus-ring w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5" />
+          </label>
+          <button type="button" disabled={safetyPending} onClick={() => void submitReport()} className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+            {safetyPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {safetyPending ? "Submitting…" : "Submit report"}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

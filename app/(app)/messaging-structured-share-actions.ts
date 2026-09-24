@@ -17,6 +17,7 @@ import type {
 } from "@/lib/messaging/structured-share-v4-types";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
+import { getEventViewForViewer } from "@/lib/events/mobile";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import {
@@ -185,10 +186,24 @@ export async function sendStructuredChatMessageAction(input: unknown) {
   let option: StructuredShareOption | null = null;
   if (parsed.data.kind === "agenda") {
     const agendaInput = parsed.data;
-    const agenda = await loadUpcomingAgenda(userId, 40);
-    option = agenda.items
-      .map(optionFromAgenda)
-      .find((item) => item.kind === agendaInput.refKind && item.id === agendaInput.refId) ?? null;
+    if (agendaInput.refKind === "event") {
+      const event = await getEventViewForViewer(userId, agendaInput.refId);
+      option = event && event.status !== "draft"
+        ? {
+            kind: "event",
+            id: event.id,
+            title: event.name,
+            startsAt: event.startsAt,
+            locationLabel: event.venueLabel,
+            contextLabel: "Event"
+          }
+        : null;
+    } else {
+      const agenda = await loadUpcomingAgenda(userId, 40);
+      option = agenda.items
+        .map(optionFromAgenda)
+        .find((item) => item.kind === "plan" && item.id === agendaInput.refId) ?? null;
+    }
     if (!option) return fail("That Plan or Event is no longer available to share.");
   }
 
@@ -316,19 +331,25 @@ export async function getStructuredMessagePayloadAction(input: unknown): Promise
       refId: plan.id,
       title: plan.title,
       startsAt: plan.start_at,
-      locationLabel: plan.custom_place_text
+      locationLabel: plan.custom_place_text,
+      coverUrl: null,
+      focalX: 0.5,
+      focalY: 0.5
     };
   }
   if (ref.event_id) {
-    const { data: event } = await admin.from("events").select("id, name, starts_at, venue_label").eq("id", ref.event_id).maybeSingle();
+    const event = await getEventViewForViewer(userId, ref.event_id);
     if (!event) return null;
     return {
       kind: "agenda",
       refKind: "event",
       refId: event.id,
       title: event.name,
-      startsAt: event.starts_at,
-      locationLabel: event.venue_label
+      startsAt: event.startsAt,
+      locationLabel: event.venueLabel,
+      coverUrl: event.coverUrl,
+      focalX: event.focalX,
+      focalY: event.focalY
     };
   }
   return null;

@@ -20,6 +20,11 @@ import { resolveUserEntitlements } from "@/lib/billing/service";
 import { guardAction } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { signMediaForAsset } from "@/lib/content/service";
+import {
+  isReportCategory,
+  REPORT_CONFIRMATION_MESSAGE,
+  requiresHumanReview
+} from "@/lib/content/safety";
 import { sniffImageKind, storageKeyFor, uploadValidationMessage, validateImageUpload } from "@/lib/media/validation";
 import type { MediaContentType } from "@/lib/supabase/database.types";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -517,6 +522,61 @@ export async function removeMessageReactionAction(messageId: string): Promise<Me
     .eq("user_id", userId);
   if (error) return { ok: false, message: "Couldn't remove that reaction." };
   return { ok: true, message: "Reaction removed." };
+}
+
+const messageReportSchema = z.object({
+  messageId: uuidSchema,
+  category: z.string().max(64),
+  details: z.string().max(1000).optional()
+});
+
+/**
+ * Reports one received message with its immutable message id. The server
+ * resolves the sender and conversation itself, so a client cannot attach a
+ * report to somebody who did not write the message or to a chat it cannot see.
+ */
+export async function reportMessageAction(input: unknown): Promise<MessagingActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const parsed = messageReportSchema.safeParse(input);
+  if (!parsed.success || !isReportCategory(parsed.data.category)) {
+    return { ok: false, message: "Choose a report reason." };
+  }
+
+  const userId = await getAuthoritativeMessagingUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const rateLimit = await consumeRateLimit({ action: "content.report", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
+  const admin = createSupabaseAdminClient();
+  const { data: message } = await admin
+    .from("messages")
+    .select("id, sender_id, conversation_id, deleted_at")
+    .eq("id", parsed.data.messageId)
+    .maybeSingle();
+  if (!message || message.deleted_at || message.sender_id === userId) {
+    return { ok: false, message: "That message cannot be reported." };
+  }
+
+  const access = await resolveConversationAccess(admin, userId, message.conversation_id);
+  if (!access.canView || access.status !== "active") {
+    return { ok: false, message: "That message cannot be reported." };
+  }
+
+  const { error } = await admin.from("content_reports").insert({
+    reporter_id: userId,
+    content_type: "message",
+    content_id: message.id,
+    reported_user_id: message.sender_id,
+    category: parsed.data.category,
+    details: parsed.data.details?.trim() || null,
+    status: requiresHumanReview(parsed.data.category) ? "under_review" : "received"
+  });
+  if (error) return { ok: false, message: "The report could not be submitted." };
+
+  return { ok: true, message: REPORT_CONFIRMATION_MESSAGE };
 }
 
 // ---------------------------------------------------------------------------

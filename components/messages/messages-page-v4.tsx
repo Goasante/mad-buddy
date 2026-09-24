@@ -37,6 +37,8 @@ import {
   muteConversationAction,
   openDirectConversationAction,
   reactToMessageAction,
+  removeMessageReactionAction,
+  reportMessageAction,
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import { forwardMessageAction } from "@/app/(app)/messaging-forward-actions";
@@ -57,6 +59,10 @@ import { GroupDetailsModal } from "@/components/groups/group-details-modal";
 import { ChatSettingsV4 } from "@/components/messaging/chat-settings-v4";
 import { ConversationRowV4 } from "@/components/messaging/conversation-row-v4";
 import { MessageBubbleV4 } from "@/components/messaging/message-bubble-v4";
+import {
+  invalidateConversationReactionSummaries,
+  optimisticallySetMessageReaction
+} from "@/components/messaging/reaction-summary-cache-v4";
 import { MessageComposerV4Shell } from "@/components/messaging/message-composer-v4-shell";
 import { planChatClosedNotice } from "@/lib/messaging/plan-chat-closure";
 import { canDeleteForEveryone } from "@/lib/messaging/rules";
@@ -275,8 +281,11 @@ export function MessagesPageV4({
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [deleteOperation, setDeleteOperation] = useState<DeleteOperation>(null);
   const [forwardTarget, setForwardTarget] = useState<ForwardTarget>(null);
+  const [reportTarget, setReportTarget] = useState<ChatMessageView | null>(null);
+  const [reportPending, setReportPending] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
   const [unseenIncoming, setUnseenIncoming] = useState(0);
+  const pendingReactionsRef = useRef(new Set<string>());
   /**
    * Outgoing rows for EVERY conversation, keyed by conversation id (M2).
    *
@@ -1093,15 +1102,34 @@ export function MessagesPageV4({
   }
 
   function react(messageId: string, reaction: string) {
-    if (!selectedId) return;
+    const conversationId = selectedId;
+    const message = messages.find((item) => item.id === messageId);
+    if (!conversationId || !message || pendingReactionsRef.current.has(messageId)) return;
+    const previousReaction = message.myReaction;
+    const nextReaction = previousReaction === reaction ? null : reaction;
+    pendingReactionsRef.current.add(messageId);
+    setMessages((current) => current.map((item) => item.id === messageId ? { ...item, myReaction: nextReaction } : item));
+    const rollbackSummary = optimisticallySetMessageReaction({
+      conversationId,
+      messageId,
+      previousReaction,
+      nextReaction
+    });
+    interactionFeedback.selection();
     startTransition(async () => {
-      const result = await reactToMessageAction(messageId, reaction).catch(() => ({ ok: false, message: "Could not react." }));
-      if (result.ok) interactionFeedback.selection();
-      else {
+      const result = await (nextReaction
+        ? reactToMessageAction(messageId, nextReaction)
+        : removeMessageReactionAction(messageId)
+      ).catch(() => ({ ok: false, message: "Could not react." }));
+      pendingReactionsRef.current.delete(messageId);
+      if (!result.ok) {
+        setMessages((current) => current.map((item) => item.id === messageId ? { ...item, myReaction: previousReaction } : item));
+        rollbackSummary();
         setFeedback(result.message);
         interactionFeedback.error();
       }
-      await refreshMessages(selectedId, false);
+      invalidateConversationReactionSummaries(conversationId);
+      void refreshMessages(conversationId, false, false);
     });
   }
 
@@ -1208,7 +1236,7 @@ export function MessagesPageV4({
               <header data-chat-header className="relative z-10 shrink-0 border-b border-black/[0.05] bg-background/95 pt-[max(.35rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] lg:pt-0">
                 <div className="flex min-h-[64px] items-center gap-1.5 px-2.5 md:px-4">
                   <button type="button" onClick={closeConversation} aria-label="Back to Chats" className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full transition-transform active:scale-90 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] lg:hidden"><ArrowLeft className="h-5 w-5" /></button>
-                  <button type="button" onClick={() => setSettingsOpen(true)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl p-1 text-left hover:bg-black/[0.035] dark:hover:bg-white/[0.05]">
+                  <button type="button" onClick={() => selected.otherUsername && !isGroup ? router.push(`/friends/${selected.otherUsername}` as Route) : setSettingsOpen(true)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl p-1 text-left hover:bg-black/[0.035] dark:hover:bg-white/[0.05]" aria-label={selected.otherUsername && !isGroup ? `View ${selected.title}'s profile` : "Open chat details"}>
                     <UserAvatar name={selected.title} src={selected.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-base font-semibold">{selected.title}</span>
@@ -1294,6 +1322,7 @@ export function MessagesPageV4({
                                 onSave={() => saveMessage(message.id)}
                                 onPin={() => pinMessage(message.id)}
                                 onForward={() => setForwardTarget({ message })}
+                                onReport={() => setReportTarget(message)}
                                 onOpenMedia={() => setViewerMessageId(message.id)}
                                 onAttachmentRefresh={(attachment: AttachmentView) => setMessages((current) => current.map((item) => item.id === message.id ? { ...item, attachment } : item))}
                                 onPollChanged={refreshSelected}
@@ -1391,7 +1420,7 @@ export function MessagesPageV4({
         else setActiveFilter("groups");
       }} />
 
-      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => { setSettingsOpen(false); setGroupDetailsOpen(true); }} onFeedback={setFeedback} /> : null}
+      {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => { setSettingsOpen(false); setGroupDetailsOpen(true); }} onViewProfile={() => { if (selected.otherUsername) router.push(`/friends/${selected.otherUsername}` as Route); }} onFeedback={setFeedback} /> : null}
 
       {selected?.kind === "group" ? (
         <GroupDetailsModal
@@ -1468,6 +1497,24 @@ export function MessagesPageV4({
         });
       }} />
 
+      <ReportMessageModal
+        message={reportTarget}
+        pending={reportPending}
+        onClose={() => { if (!reportPending) setReportTarget(null); }}
+        onSubmit={(category, details) => {
+          if (!reportTarget || reportPending) return;
+          const messageId = reportTarget.id;
+          setReportPending(true);
+          void reportMessageAction({ messageId, category, details })
+            .then((result) => {
+              setFeedback(result.message);
+              if (result.ok) setReportTarget(null);
+            })
+            .catch(() => setFeedback("The report could not be submitted."))
+            .finally(() => setReportPending(false));
+        }}
+      />
+
       {selected ? <CreatePollModal open={pollOpen} onOpenChange={setPollOpen} conversationId={selected.id} pending={isPending} onCreate={(payload) => {
         startTransition(async () => {
           const result = await createChatPollAction({ ...payload, conversationId: selected.id, clientMessageId: crypto.randomUUID() });
@@ -1518,6 +1565,59 @@ function ForwardModal({ target, conversations, pending, onClose, onForward }: { 
     return term ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(term)) : conversations;
   }, [conversations, query]);
   return <Modal open={Boolean(target)} onOpenChange={(open) => !open && onClose()} title="Forward to" variant="sheet"><div className="space-y-3"><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats" /><ul className="max-h-[55vh] space-y-1 overflow-y-auto">{visible.map((conversation) => <li key={conversation.id}><button type="button" disabled={pending} onClick={() => onForward(conversation.id)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left hover:bg-secondary/70 active:scale-[.99]"><UserAvatar name={conversation.title} src={conversation.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{conversation.title}</span><Send className="h-4 w-4 text-primary" /></button></li>)}</ul></div></Modal>;
+}
+
+function ReportMessageModal({
+  message,
+  pending,
+  onClose,
+  onSubmit
+}: {
+  message: ChatMessageView | null;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (category: string, details: string) => void;
+}) {
+  const [category, setCategory] = useState("harassment");
+  const [details, setDetails] = useState("");
+
+  useEffect(() => {
+    if (!message) {
+      setCategory("harassment");
+      setDetails("");
+    }
+  }, [message]);
+
+  return (
+    <Modal open={Boolean(message)} onOpenChange={(open) => !open && onClose()} title="Report message" variant="sheet">
+      <div className="space-y-4 pb-[max(.5rem,env(safe-area-inset-bottom))]">
+        <p className="text-sm leading-relaxed text-muted-foreground">Choose what happened. The review team receives the message reference and sender automatically.</p>
+        <label className="block space-y-1.5 text-sm font-medium">
+          <span>Reason</span>
+          <select value={category} onChange={(event) => setCategory(event.target.value)} className="focus-ring min-h-11 w-full rounded-xl border border-border bg-background px-3">
+            <option value="harassment">Harassment or bullying</option>
+            <option value="threat_or_violence">Threats or violence</option>
+            <option value="hate_or_discrimination">Hate or discrimination</option>
+            <option value="sexual_content">Sexual or inappropriate content</option>
+            <option value="spam">Spam</option>
+            <option value="scam">Scam</option>
+            <option value="impersonation">Impersonation</option>
+            <option value="private_information">Private information</option>
+            <option value="unwanted_contact">Unwanted contact</option>
+            <option value="other">Something else</option>
+          </select>
+        </label>
+        <label className="block space-y-1.5 text-sm font-medium">
+          <span>More details <span className="font-normal text-muted-foreground">Optional</span></span>
+          <textarea value={details} onChange={(event) => setDetails(event.target.value.slice(0, 1000))} rows={4} placeholder="Add anything the review team should know." className="focus-ring w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5" />
+        </label>
+        <Button className="w-full" disabled={pending} onClick={() => onSubmit(category, details.trim())}>
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {pending ? "Submitting…" : "Submit report"}
+        </Button>
+      </div>
+    </Modal>
+  );
 }
 
 function CreatePollModal({ open, onOpenChange, conversationId, pending, onCreate }: { open: boolean; onOpenChange: (open: boolean) => void; conversationId: string; pending: boolean; onCreate: (payload: { question: string; options: string[]; allowMultiple: boolean; isAnonymous: boolean }) => void }) {

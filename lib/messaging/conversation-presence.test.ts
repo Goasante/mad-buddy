@@ -30,6 +30,7 @@ function conversation(overrides: Partial<ConversationView> = {}): ConversationVi
     id: "c1",
     title: "Okoro",
     avatarUrl: null,
+    otherUserId: null,
     otherUsername: null,
     kind: "direct",
     lastMessagePreview: null,

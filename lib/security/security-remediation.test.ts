@@ -62,7 +62,7 @@ describe("signup creates confirmed accounts without provider email", () => {
       webSignup.indexOf("export async function signUpAction"),
       webSignup.indexOf("export async function loginAction")
     );
-    expect(signupAction).toContain('redirectTo: "/onboarding"');
+    expect(signupAction).toContain("redirectTo: onboardingDestination");
     expect(signupAction).not.toContain("Check your email and open the confirmation link");
     expect(nativeSignup).not.toContain("requiresEmailConfirmation: true");
   });

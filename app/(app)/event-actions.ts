@@ -791,11 +791,9 @@ export async function updateEventDraftAction(eventId: string, input: unknown): P
  * Sends an Event's link into an existing conversation.
  *
  * REUSES CANONICAL MESSAGING, deliberately. Events does not get a second chat
- * engine: this composes the message and hands it to sendMessage, which already
- * owns membership checks, blocks, rate limiting and moderation. A structured
- * Event attachment (its own message_type with a rendered card) would be the
- * richer version and needs a migration plus a renderer; the link is the part
- * that works today and it opens through the same access authority.
+ * engine: this hands the Event to the structured-share path, which already
+ * owns membership checks, blocks, rate limiting, notifications and the rich
+ * Event card rendered inside the conversation.
  *
  * SHARING IS TRANSPORT, NOT PERMISSION. The recipient still meets whatever
  * canViewEvent says: forwarding an invite-only Event into a Group does not
@@ -823,32 +821,14 @@ export async function shareEventToConversationAction(
     return { ok: false, message: "Publish this event before sharing it." };
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-  const link = `${origin}/events/${eventId}`;
-  const when = new Date(view.startsAt).toLocaleString([], {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit"
-  });
-  const place = [view.venueLabel, view.locality].filter(Boolean).join(", ");
-
-  const { sendMessage } = await import("@/lib/messaging/mobile");
-  const result = await sendMessage(userId, {
+  const { sendStructuredChatMessageAction } = await import("@/app/(app)/messaging-structured-share-actions");
+  const result = await sendStructuredChatMessageAction({
     conversationId,
-    text: [view.name, when, place, link].filter(Boolean).join("\n"),
-    /* REQUIRED by sendMessage, and its absence is why sharing into a chat
-     * silently wrote nothing: the schema rejected the whole call, so the person
-     * saw only "Check your message and try again." while no row was ever
-     * written. Nothing in the UI distinguished that from a real failure.
-     *
-     * Freshly generated per send rather than derived from (sender, event,
-     * conversation). A deterministic key would make the FIRST share permanent
-     * and every later one a silent no-op -- sharing the same Event into the
-     * same chat again next week is a legitimate thing to do, not a duplicate.
-     * A lost response still retries this exact id, which is the case dedupe is
-     * actually for. */
+    kind: "agenda",
+    refKind: "event",
+    refId: eventId,
+    // Fresh per share: posting the same Event again later is intentional, not
+    // a duplicate. A transport retry reuses this value inside the action.
     clientMessageId: crypto.randomUUID()
   });
   return result.ok

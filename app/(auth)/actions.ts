@@ -42,6 +42,7 @@ const signupSchema = z.object({
   password: z.string().min(8),
   acceptedPolicy: z.literal(true),
   policyVersion: z.literal(PRIVACY_POLICY_VERSION),
+  next: z.string().max(2048).optional(),
   // nullable AND optional: the form holds this as `string | null` and sends
   // null whenever Turnstile has not issued a token — including when the site
   // key is unset, which leaves the submit button enabled. A plain .optional()
@@ -235,6 +236,9 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
   }
 
   const { email, password } = parsed.data;
+  const nextDestination = safeAuthNext(parsed.data.next ?? null);
+  const loginDestination = `/login?next=${encodeURIComponent(nextDestination)}`;
+  const onboardingDestination = `/onboarding?next=${encodeURIComponent(nextDestination)}`;
 
   const admin = createSupabaseAdminClient();
 
@@ -255,7 +259,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     if (creation.failure.reason === "duplicate") {
       // Indistinguishable from a fresh sign-up, so the form cannot be used to
       // discover which addresses are registered. Returning users land on login.
-      return { ok: true, message: "Check your details and log in to continue.", redirectTo: "/login" };
+      return { ok: true, message: "Check your details and log in to continue.", redirectTo: loginDestination };
     }
 
     if (creation.failure.reason === "bootstrap") {
@@ -296,7 +300,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
       userId,
       errorType: "auto_signin_failed"
     });
-    return { ok: true, message: "Account created. Log in to continue.", redirectTo: "/login" };
+    return { ok: true, message: "Account created. Log in to continue.", redirectTo: loginDestination };
   }
 
   logBackendEvent("info", {
@@ -306,7 +310,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
     latencyMs: Date.now() - startedAt,
     userId
   });
-  return { ok: true, message: "Account created. Continue onboarding.", redirectTo: "/onboarding" };
+  return { ok: true, message: "Account created. Continue onboarding.", redirectTo: onboardingDestination };
 }
 
 export async function loginAction(input: unknown): Promise<AuthActionState> {

@@ -119,6 +119,8 @@ export type ConversationView = {
   id: string;
   title: string;
   avatarUrl: string | null;
+  /** The other participant in a direct chat. Never populated for shared chats. */
+  otherUserId: string | null;
   otherUsername: string | null;
   kind: string;
   lastMessagePreview: string | null;
@@ -958,10 +960,12 @@ export async function listConversations(userId: string): Promise<ConversationVie
 
   for (const conversation of conversations ?? []) {
     let title = "Conversation";
+    let otherUserId: string | null = null;
     let otherUsername: string | null = null;
     let avatarUrl: string | null = null;
     if (conversation.conversation_type === "direct" && conversation.direct_key) {
       const otherId = otherIdByConversation.get(conversation.id);
+      otherUserId = otherId ?? null;
       const profile = otherId ? profileByUserId.get(otherId) : undefined;
       title = profile?.full_name?.trim() || "A Muddy";
       otherUsername = profile?.username ?? null;
@@ -1014,6 +1018,7 @@ export async function listConversations(userId: string): Promise<ConversationVie
       id: conversation.id,
       title,
       avatarUrl,
+      otherUserId,
       otherUsername,
       kind: conversation.conversation_type,
       lastMessagePreview: preview ? messagePreviewText(preview.last_message_type, preview.last_text) : null,

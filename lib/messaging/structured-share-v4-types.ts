@@ -30,6 +30,9 @@ export type StructuredAgendaPayload = {
   title: string;
   startsAt: string | null;
   locationLabel: string | null;
+  coverUrl: string | null;
+  focalX: number;
+  focalY: number;
 };
 
 export type StructuredMessagePayload =

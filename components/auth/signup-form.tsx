@@ -25,9 +25,10 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 type SignupFormProps = {
   initialError?: string | null;
+  nextDestination?: string;
 };
 
-export function SignupForm({ initialError = null }: SignupFormProps) {
+export function SignupForm({ initialError = null, nextDestination = "/dashboard" }: SignupFormProps) {
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
   const turnstileConfigMissing = process.env.NODE_ENV === "production" && !turnstileSiteKey;
   const [isPending, startTransition] = useTransition();
@@ -63,7 +64,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
     setActionState(null);
     startTransition(async () => {
       try {
-        const result = await withTimeout(signUpAction({ ...values, turnstileToken }), {
+        const result = await withTimeout(signUpAction({ ...values, turnstileToken, next: nextDestination }), {
           operation: "create account",
           timeoutMs: 20_000
         });
@@ -190,7 +191,7 @@ export function SignupForm({ initialError = null }: SignupFormProps) {
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">Log in</Link>
+        <Link href={`/login?next=${encodeURIComponent(nextDestination)}`} className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-foreground hover:text-accent">Log in</Link>
       </p>
     </form>
   );

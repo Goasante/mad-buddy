@@ -1,13 +1,14 @@
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { SignupForm } from "@/components/auth/signup-form";
-import { oauthErrorMessage } from "@/lib/auth/oauth-redirect";
+import { oauthErrorMessage, safeAuthNext } from "@/lib/auth/oauth-redirect";
 
 type SignupPageProps = {
-  searchParams: Promise<{ oauth_error?: string }>;
+  searchParams: Promise<{ oauth_error?: string; next?: string }>;
 };
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
-  const { oauth_error: oauthError } = await searchParams;
+  const { oauth_error: oauthError, next } = await searchParams;
+  const nextDestination = safeAuthNext(next ?? null);
 
   return (
     <AuthLayout
@@ -16,7 +17,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
       footer={null}
       compact
     >
-      <SignupForm initialError={oauthErrorMessage(oauthError)} />
+      <SignupForm initialError={oauthErrorMessage(oauthError)} nextDestination={nextDestination} />
     </AuthLayout>
   );
 }

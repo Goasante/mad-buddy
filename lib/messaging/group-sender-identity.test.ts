@@ -53,8 +53,8 @@ describe("consecutive message grouping", () => {
   it("breaks the run at a date boundary even inside the gap window", () => {
     // Two messages a minute apart across midnight: a run must never straddle
     // the day divider drawn between its own messages.
-    const before = { isMine: false, senderId: AMA, createdAt: "2026-08-07T23:59:30.000Z" };
-    const after = { isMine: false, senderId: AMA, createdAt: "2026-08-08T00:00:10.000Z" };
+    const before = { isMine: false, senderId: AMA, createdAt: new Date(2026, 7, 7, 23, 59, 30).toISOString() };
+    const after = { isMine: false, senderId: AMA, createdAt: new Date(2026, 7, 8, 0, 0, 10).toISOString() };
     expect(startsNewDay(after.createdAt, before.createdAt)).toBe(true);
     expect(startsNewRun(after, before)).toBe(true);
   });

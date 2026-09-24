@@ -71,14 +71,12 @@ describe("the field is genuinely multi-line", () => {
     expect(composer).toContain("composer-field");
   });
 
-  it("sends on Enter and breaks the line on Shift+Enter", () => {
-    // The whole handler, not its first 400 characters: the mention picker
-    // claims Enter/Arrow/Escape first (so Enter chooses a person rather than
-    // sending a half-typed "@am"), which pushed the send branch past that
-    // arbitrary window. The send behaviour itself is unchanged.
+  it("uses Enter for a new line and Ctrl/Cmd+Enter as the keyboard send shortcut", () => {
+    // The mention picker still claims plain Enter while it is open, so a
+    // highlighted person can be selected without inserting a line break.
     const start = composer.indexOf("function handleKeyDown");
     const handler = composer.slice(start, composer.indexOf("\n  }", composer.indexOf("sendText();", start)));
-    expect(handler).toContain('event.key !== "Enter" || event.shiftKey');
+    expect(handler).toContain('event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)');
     expect(handler).toContain("event.preventDefault()");
     expect(handler).toContain("sendText()");
   });

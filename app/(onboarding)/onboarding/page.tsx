@@ -1,5 +1,5 @@
-import { POST_LOGIN_ROUTE } from "@/lib/routes";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
+import type { Route } from "next";
 import type { MoodStatus } from "@/components/onboarding/mood-status-selector";
 import { redirect } from "next/navigation";
 import {
@@ -10,12 +10,16 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recoverOnboardingIfStranded } from "@/lib/onboarding/recovery-service";
+import { safeAuthNext } from "@/lib/auth/oauth-redirect";
+import { POST_LOGIN_ROUTE } from "@/lib/routes";
 
 // Renders per-user billing/onboarding state; never statically prerender
 // (build environments have no Supabase secrets).
 export const dynamic = "force-dynamic";
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
+  const nextDestination = safeAuthNext(next ?? null, POST_LOGIN_ROUTE);
   let initialName = "";
   let initialUsername = "";
   let initialBio = "";
@@ -35,7 +39,7 @@ export default async function OnboardingPage() {
         .eq("user_id", user.id)
         .maybeSingle();
       if (profile?.is_onboarded) {
-        redirect(POST_LOGIN_ROUTE);
+        redirect(nextDestination as Route);
       }
 
       // Self-healing: an account whose completion write partially failed keeps
@@ -48,7 +52,7 @@ export default async function OnboardingPage() {
       if (serverEnv.url && serverEnv.serviceRoleKey) {
         const recovery = await recoverOnboardingIfStranded(createSupabaseAdminClient(), user.id);
         if (recovery.action === "finish") {
-          redirect(POST_LOGIN_ROUTE);
+          redirect(nextDestination as Route);
         }
       }
       const profileName =
@@ -78,6 +82,7 @@ export default async function OnboardingPage() {
       initialBio={initialBio}
       initialMood={initialMood}
       initialDateOfBirth={initialDateOfBirth}
+      nextDestination={nextDestination}
     />
   );
 }

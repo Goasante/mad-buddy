@@ -120,6 +120,7 @@ const AUTHORITATIVE = new Set([
   "messaging-actions::deleteMessageAction",
   "messaging-actions::reactToMessageAction",
   "messaging-actions::removeMessageReactionAction",
+  "messaging-actions::reportMessageAction",
   "messaging-actions::updateCommunicationPreferencesAction",
   "messaging-actions::createMessageAttachmentUploadIntentAction",
   "messaging-actions::createVoiceMessageUploadIntentAction",

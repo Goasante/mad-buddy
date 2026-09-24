@@ -93,7 +93,9 @@ describe("approved product feedback map", () => {
   it("acknowledges message reaction success and real send failure", () => {
     expect(messages).toContain('from "@/lib/feedback/feedback"');
     const reaction = messages.slice(messages.indexOf("function react(messageId"));
-    expect(reaction).toContain("await reactToMessageAction");
+    expect(reaction).toContain("optimisticallySetMessageReaction");
+    expect(reaction).toContain("reactToMessageAction(messageId, nextReaction)");
+    expect(reaction).toContain("removeMessageReactionAction(messageId)");
     expect(reaction).toContain("interactionFeedback.selection()");
     expect(reaction).toContain("interactionFeedback.error()");
 

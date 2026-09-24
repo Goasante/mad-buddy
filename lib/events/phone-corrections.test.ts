@@ -6,11 +6,20 @@ const read = (path: string) => readFileSync(path, "utf8");
 describe("Event phone corrections", () => {
   it("shares through an Event-specific metadata route", () => {
     expect(read("components/events/event-share.tsx")).toContain("/events/${eventId}");
-    expect(read("app/(app)/event-actions.ts")).toContain("/events/${eventId}");
+    expect(read("app/(app)/event-actions.ts")).toContain("sendStructuredChatMessageAction");
     expect(read("app/events/[eventId]/page.tsx")).toContain("generateMetadata");
     const protection = read("lib/security/route-protection.ts");
     expect(protection).toContain("isPublicEventSharePath");
     expect(protection).toContain("(?:\\/preview)?");
+  });
+
+  it("carries Event artwork through native share sheets and in-app chat cards", () => {
+    const share = read("components/events/event-share.tsx");
+    const helper = read("lib/device/invite-share.ts");
+    const card = read("components/messaging/structured-message-card-v4.tsx");
+    expect(share).toContain("shareImage");
+    expect(helper).toContain("navigator.canShare(withImage)");
+    expect(card).toContain("<EventArtwork");
   });
 
   it("does not disclose restricted Event media to preview crawlers", () => {

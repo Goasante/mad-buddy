@@ -222,7 +222,7 @@ export function MessageComposerV3({
         return;
       }
     }
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || event.nativeEvent.isComposing) return;
     event.preventDefault();
     sendText();
   }

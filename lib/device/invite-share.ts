@@ -37,7 +37,8 @@ export async function shareInvite(
   /* What the share sheet says. Defaults to the app invite, so every existing
    * caller is unchanged -- an Event share passes its own line rather than
    * telling somebody to "join Mad Buddy" when they are being sent an Event. */
-  message: string = INVITE_MESSAGE
+  message: string = INVITE_MESSAGE,
+  imageFile?: File | null
 ): Promise<InviteShareOutcome> {
   if (typeof window === "undefined") return "unavailable";
 
@@ -46,7 +47,14 @@ export async function shareInvite(
 
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
-      await navigator.share({ title: "Mad Buddy", text, url: link });
+      const withImage = imageFile
+        ? { title: "Mad Buddy", text: `${text}\n${link}`, files: [imageFile] }
+        : null;
+      if (withImage && typeof navigator.canShare === "function" && navigator.canShare(withImage)) {
+        await navigator.share(withImage);
+      } else {
+        await navigator.share({ title: "Mad Buddy", text, url: link });
+      }
     } catch {
       // Cancelling rejects with AbortError, and so does a share the platform
       // refused. Neither is worth a message, and neither justifies a fallback.

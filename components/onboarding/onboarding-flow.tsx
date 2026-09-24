@@ -37,13 +37,15 @@ export function OnboardingFlow({
   initialUsername = "",
   initialBio = "",
   initialMood = null,
-  initialDateOfBirth = ""
+  initialDateOfBirth = "",
+  nextDestination = "/dashboard"
 }: {
   initialName?: string;
   initialUsername?: string;
   initialBio?: string;
   initialMood?: MoodStatus | null;
   initialDateOfBirth?: string;
+  nextDestination?: string;
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [displayName, setDisplayName] = useState(initialName);
@@ -154,7 +156,7 @@ export function OnboardingFlow({
 
       // A full navigation reads the newly saved server state and is more
       // reliable than a transition-bound client route on mobile Safari/PWAs.
-      window.location.replace("/dashboard");
+      window.location.replace(nextDestination);
     } catch (error) {
       setFeedback(
         error instanceof Error && error.message === "onboarding_finish_timeout"

@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 import { getConversationReactionSummariesAction } from "@/app/(app)/messaging-reaction-summary-action";
-import type { MessageReactionSummaryMap } from "@/lib/messaging/reaction-summary-types";
+import type { MessageReactionSummaryMap, ReactionAggregate } from "@/lib/messaging/reaction-summary-types";
 
 type Entry = {
   data: MessageReactionSummaryMap;
@@ -68,6 +68,46 @@ export function invalidateConversationReactionSummaries(conversationId: string) 
   const entry = entryFor(conversationId);
   entry.fetchedAt = 0;
   void load(conversationId, true);
+}
+
+/**
+ * Paint the viewer's reaction immediately while the server mutation is in
+ * flight. The returned rollback restores the exact prior cache snapshot if
+ * the request fails. Reactor identities are deliberately left for the
+ * authoritative refresh; only the count visible below the bubble is changed.
+ */
+export function optimisticallySetMessageReaction(input: {
+  conversationId: string;
+  messageId: string;
+  previousReaction: string | null;
+  nextReaction: string | null;
+}) {
+  const entry = entryFor(input.conversationId);
+  const previousData = entry.data;
+  const current = [...(previousData[input.messageId] ?? [])];
+
+  function changeCount(reaction: string, delta: number) {
+    const index = current.findIndex((aggregate) => aggregate.reaction === reaction);
+    if (index < 0) {
+      if (delta > 0) {
+        current.push({ reaction: reaction as ReactionAggregate["reaction"], count: delta, reactors: [] });
+      }
+      return;
+    }
+    const nextCount = Math.max(0, current[index].count + delta);
+    if (nextCount === 0) current.splice(index, 1);
+    else current[index] = { ...current[index], count: nextCount };
+  }
+
+  if (input.previousReaction) changeCount(input.previousReaction, -1);
+  if (input.nextReaction) changeCount(input.nextReaction, 1);
+  entry.data = { ...previousData, [input.messageId]: current };
+  for (const listener of entry.listeners) listener();
+
+  return () => {
+    entry.data = previousData;
+    for (const listener of entry.listeners) listener();
+  };
 }
 
 export function useConversationReactionSummaries(conversationId: string) {

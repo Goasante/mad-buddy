@@ -9,6 +9,7 @@ type LoginPageProps = {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { oauth_error: oauthError, next } = await searchParams;
+  const nextDestination = safeAuthNext(next ?? null);
 
   return (
     <AuthShell
@@ -17,13 +18,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       footer={
         <>
           New to Mad Buddy?{" "}
-          <Link href="/signup" className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-[#4E0401] hover:text-[#E88C2B] dark:text-[#FFF8F1]">
+          <Link href={`/signup?next=${encodeURIComponent(nextDestination)}`} className="focus-ring -mx-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-[#4E0401] hover:text-[#E88C2B] dark:text-[#FFF8F1]">
             Create an account
           </Link>
         </>
       }
     >
-      <LoginForm initialError={oauthErrorMessage(oauthError)} nextDestination={safeAuthNext(next ?? null)} />
+      <LoginForm initialError={oauthErrorMessage(oauthError)} nextDestination={nextDestination} />
     </AuthShell>
   );
 }

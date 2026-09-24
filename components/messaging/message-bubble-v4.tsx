@@ -1,13 +1,12 @@
 "use client";
 
-import { Bookmark, Check, CheckCheck, Copy, Forward, Info, Pin, Reply, Trash2, Pencil } from "lucide-react";
+import { Bookmark, Check, CheckCheck, Copy, Flag, Forward, Info, Pin, Reply, Trash2, Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ChatPollCard } from "@/components/messaging/chat-poll-card";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
 import { MessageInfoV4 } from "@/components/messaging/message-info-v4";
 import {
-  invalidateConversationReactionSummaries,
   useConversationReactionSummaries
 } from "@/components/messaging/reaction-summary-cache-v4";
 import { RichMediaMessageV4 } from "@/components/messaging/rich-media-message-v4";
@@ -81,6 +80,7 @@ export function MessageBubbleV4({
   onSave,
   onPin,
   onForward,
+  onReport,
   onOpenMedia,
   onAttachmentRefresh,
   onPollChanged
@@ -105,6 +105,7 @@ export function MessageBubbleV4({
   onSave: () => void;
   onPin: () => void;
   onForward: () => void;
+  onReport: () => void;
   onOpenMedia: () => void;
   onAttachmentRefresh: (attachment: AttachmentView) => void;
   onPollChanged?: () => void | Promise<void>;
@@ -140,10 +141,6 @@ export function MessageBubbleV4({
   }
 
   useEffect(() => () => clearTimer(), []);
-
-  useEffect(() => {
-    invalidateConversationReactionSummaries(conversationId);
-  }, [conversationId, message.myReaction]);
 
   function begin(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
@@ -200,7 +197,6 @@ export function MessageBubbleV4({
   function react(reaction: string) {
     onReact(reaction);
     haptic(5);
-    window.setTimeout(() => invalidateConversationReactionSummaries(conversationId), 250);
   }
 
   function showReactors(aggregate: ReactionAggregate) {
@@ -329,6 +325,7 @@ export function MessageBubbleV4({
             <Action icon={Bookmark} label={saved ? "Unsave" : "Save"} onClick={() => { onSave(); setActionsOpen(false); }} active={saved} />
             <Action icon={Pin} label={pinned ? "Unpin" : "Pin"} onClick={() => { onPin(); setActionsOpen(false); }} active={pinned} />
             <Action icon={Forward} label="Forward" onClick={() => { onForward(); setActionsOpen(false); }} />
+            {!message.isMine && !message.deleted ? <Action icon={Flag} label="Report" onClick={() => { onReport(); setActionsOpen(false); }} /> : null}
             {message.isMine ? <Action icon={Info} label="Info" onClick={() => { setInfoOpen(true); setActionsOpen(false); }} /> : null}
             {message.isMine && message.messageType === "text" && message.text && !message.deleted ? (
               <Action icon={Pencil} label="Edit" disabled={!canEdit} onClick={() => { onEdit(); setActionsOpen(false); }} />
