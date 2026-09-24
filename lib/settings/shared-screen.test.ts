@@ -144,29 +144,29 @@ describe("rows only navigate where Android can arrive", () => {
     }
   });
 
-  it("all 19 unavailable destinations are listed as not built", () => {
+  it("all 17 unavailable destinations are listed as not built", () => {
     /* The full set, counted from the screen rather than from the entries this
        PR happened to add: settings-related pages, including in-app About,
        that were already listed. An earlier count said 13 because it looked
        only at the new additions. */
     const unavailable = [
-      "/settings/appearance", "/settings/communication", "/settings/data-storage",
+      "/settings/appearance", "/settings/communication",
       "/settings/engagement", "/settings/feedback", "/settings/glow-visibility",
-      "/settings/language", "/settings/privacy", "/settings/privacy-setup",
+      "/settings/privacy", "/settings/privacy-setup",
       "/settings/sessions", "/settings/walkthrough", "/invite", "/reminders",
       "/settings/verification", "/settings/account-status",
       "/settings/about",
       // Pre-existing, listed before this PR.
       "/hangout-mode", "/badges", "/safety-center"
     ];
-    expect(unavailable).toHaveLength(19);
+    expect(unavailable).toHaveLength(17);
     for (const href of unavailable) {
       expect(isBuiltForMobile(href), `${href} should be marked not built`).toBe(false);
     }
     // And the count is what the screen actually renders, not a stale constant.
     const distinct = [...new Set(destinations)];
-    expect(distinct.filter((href) => !isBuiltForMobile(href))).toHaveLength(19);
-    expect(distinct).toHaveLength(26);
+    expect(distinct.filter((href) => !isBuiltForMobile(href))).toHaveLength(17);
+    expect(distinct).toHaveLength(24);
   });
 });
 
@@ -210,15 +210,12 @@ describe("no shared Settings control makes a request Android cannot authenticate
     expect(client).toContain("enableLocationForGlow");
   });
 
-  it("Android supplies NO export, so the row renders unavailable", () => {
-    /* Deliberate: the route is cookie-only (no resolveApiUser, no CORS) AND
-       the web flow delivers the file with <a download>, which a WebView
-       ignores. Wiring only the request would produce a control that appears to
-       work and silently delivers nothing. */
+  it("hides export on both platforms while the download experience is unavailable", () => {
     const client = read("mobile/src/lib/settings-client.ts");
     expect(client).not.toContain("exportAccountData:");
-    expect(shared).toContain("client.exportAccountData ?");
-    expect(shared).toContain("<UnavailableRow icon={Download}");
+    expect(webBoundary).not.toContain("exportAccountData:");
+    expect(shared).not.toContain("<DataExportButton");
+    expect(read("components/settings/data-storage-page.tsx")).not.toContain("<DataExportButton");
   });
 });
 

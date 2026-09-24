@@ -9,7 +9,7 @@ import {
 import { SettingsPageContent } from "@/components/settings/settings-page";
 import { PageHeader } from "@/components/app-shell/page-header";
 import type { SettingsClient } from "@/lib/settings/client";
-import { enableLocationForGlowOnWeb, exportAccountDataOnWeb } from "@/lib/settings/web-client";
+import { enableLocationForGlowOnWeb } from "@/lib/settings/web-client";
 
 /**
  * The web app's Settings screen.
@@ -49,10 +49,7 @@ export function WebSettingsPage(props: Props) {
         const result = await updateNotificationPreferenceAction({ nearbyAlerts: enabled });
         return { ok: result.ok, message: result.message };
       },
-      enableLocationForGlow: enableLocationForGlowOnWeb,
-      /* Present on web, absent on Android: the route is cookie-only and the
-         download relies on <a download>, which a WebView ignores. */
-      exportAccountData: exportAccountDataOnWeb
+      enableLocationForGlow: enableLocationForGlowOnWeb
     }),
     []
   );

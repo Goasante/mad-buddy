@@ -9,11 +9,8 @@ import {
   BookOpen,
   CalendarClock,
   ChevronRight,
-  Database,
-  Download,
   Gauge,
   Ghost,
-  Globe,
   HelpCircle,
   Info,
   Laptop,
@@ -39,7 +36,6 @@ import type { SettingsClient } from "@/lib/settings/client";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { PrivacyToggle } from "@/components/settings/privacy-toggle";
-import { DataExportButton } from "@/components/settings/data-export-button";
 import { LocationForGlowSetting } from "@/components/settings/location-for-glow-setting";
 import type { VisibilityStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
@@ -360,32 +356,6 @@ export function SettingsPageContent({
             description="Theme and accent color."
             href="/settings/appearance"
           />
-          <SettingsLinkRow
-            icon={Globe}
-            title="Language & Region"
-            description="Language, time zone, and formats."
-            href="/settings/language"
-          />
-        </SettingsSection>
-
-
-        <SettingsSection title="Data">
-          {/* Export needs BOTH a working request and a way to deliver a file.
-              Android has neither: the route is cookie-only, and <a download>
-              does nothing in a WebView. A platform that cannot do it renders
-              the row as unavailable rather than as a button that appears to
-              work and silently delivers nothing. */}
-          {client.exportAccountData ? (
-            <DataExportButton onExport={client.exportAccountData} />
-          ) : (
-            <UnavailableRow icon={Download} title="Export your data" />
-          )}
-          <SettingsLinkRow
-            icon={Database}
-            title="Data & Storage"
-            description="Manage storage, exports, and cookies."
-            href="/settings/data-storage"
-          />
         </SettingsSection>
 
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_SUPPORT}>
@@ -471,41 +441,6 @@ export function SettingsPageContent({
   );
 }
 
-/**
- * A control this platform cannot offer, shown rather than hidden.
- *
- * Same treatment as a link to a route that does not exist: a real disabled
- * button, dimmed, with the reason in the accessible name. Hiding it would make
- * the two platforms look more different than they are; leaving it live would be
- * a control that appears to work and does nothing.
- */
-function UnavailableRow({
-  icon: Icon,
-  title
-}: {
-  icon: LucideIcon;
-  title: string;
-}) {
-  return (
-    <button
-      type="button"
-      disabled
-      aria-disabled="true"
-      aria-label={`${title}. Not in the Android app yet.`}
-      title={`${title}. Not in the Android app yet.`}
-      className="flex min-h-[4.25rem] w-full cursor-default items-center justify-between gap-4 px-2 py-3 text-left opacity-55"
-    >
-      <div className="flex gap-3">
-        <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div>
-          <p className="text-sm font-semibold">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Not in the Android app yet.</p>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 type SettingsLinkRowProps = {
   icon: LucideIcon;
   title: string;
@@ -532,8 +467,6 @@ type SettingsLinkRowProps = {
     | "/settings/verification"
     | "/settings/account-status"
     | "/settings/appearance"
-    | "/settings/language"
-    | "/settings/data-storage"
     | "/settings/feedback"
     | "/settings/walkthrough"
     | "/help"

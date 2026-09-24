@@ -25,7 +25,6 @@ export const TOUR_ROUTES: TourRouteOption[] = [
   { path: "/settings", label: "Settings" },
   { path: "/settings/privacy", label: "Privacy and safety" },
   { path: "/settings/glow-visibility", label: "Glow and visibility" },
-  { path: "/settings/appearance/wallpaper", label: "Wallpaper" },
 ];
 
 export const TOUR_TARGET_IDS = {

@@ -1,7 +1,4 @@
 import { FileAudio, FileText, Image as ImageIcon, Video } from "lucide-react";
-import { DataExportButton } from "@/components/settings/data-export-button";
-import { exportAccountDataOnWeb } from "@/lib/settings/web-client";
-import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 
 export type StorageUsage = {
@@ -34,7 +31,7 @@ export function DataStoragePage({ usage }: { usage: StorageUsage }) {
   ];
   return (
     <div className="mr-auto max-w-[720px] space-y-6 pt-6">
-      <SettingsSubHeader title="Data & storage" description="Review your stored media and download your account data." />
+      <SettingsSubHeader title="Data & storage" description="Review your stored media." />
       <section className="rounded-xl border border-border/70 bg-card/50 p-4" aria-labelledby="storage-overview-title">
         <div className="flex items-center justify-between gap-4 text-sm">
           <p id="storage-overview-title" className="font-semibold">Storage overview</p>
@@ -54,9 +51,6 @@ export function DataStoragePage({ usage }: { usage: StorageUsage }) {
           <p className="mt-3 text-sm text-muted-foreground">You do not have any stored media.</p>
         )}
       </section>
-      <SettingsSection title="Your data">
-        <DataExportButton onExport={exportAccountDataOnWeb} />
-      </SettingsSection>
     </div>
   );
 }
