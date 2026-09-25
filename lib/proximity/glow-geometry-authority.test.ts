@@ -194,9 +194,7 @@ describe("one proximity identity system", () => {
       "components/onboarding/visibility-preview-card.tsx",
       // Unrouted legacy Messages pages: no route imports them. Listed so the
       // guard stays honest rather than silently passing over dead files.
-      "components/messages/messages-page.tsx",
-      "components/messages/messages-page-v2.tsx",
-      "components/messages/messages-page-v3.tsx"
+      "components/messages/messages-page.tsx"
     ];
     const unexpected = legacy.filter((f) => !allowed.includes(f));
     expect(unexpected, `new legacy Glow callers: ${unexpected.join(", ")}`).toHaveLength(0);

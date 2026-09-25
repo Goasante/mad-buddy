@@ -11,7 +11,6 @@ const eslintConfig = [
   ...nextTypescript,
   {
     files: [
-      "components/messages/messages-page-v3.tsx",
       "components/messages/messages-page-v4.tsx",
       "components/messaging/message-composer-v3.tsx",
       "components/messaging/voice-message-bubble-v4.tsx"
