@@ -38,6 +38,7 @@ import {
   reactToMessageAction,
   removeMessageReactionAction,
   reportMessageAction,
+  setConversationHiddenAction,
   setConversationPinnedAction
 } from "@/app/(app)/messaging-actions";
 import { forwardMessageAction } from "@/app/(app)/messaging-forward-actions";
@@ -377,6 +378,7 @@ export function MessagesPageV4({
   const inboxRefreshIdRef = useRef(0);
   const inboxPreferencesRefreshIdRef = useRef(0);
   const pendingFavoritesRef = useRef(new Set<string>());
+  const pendingHiddenRef = useRef(new Set<string>());
 
   useImmersiveWhile(Boolean(selectedId));
 
@@ -394,10 +396,14 @@ export function MessagesPageV4({
     const refreshId = ++inboxRefreshIdRef.current;
     try {
       const server = await withTimeout(getConversationsAction(), { operation: "refresh chats" });
-      if (mountedRef.current && refreshId === inboxRefreshIdRef.current) setConversations(server);
+      if (mountedRef.current && refreshId === inboxRefreshIdRef.current) {
+        setConversations(server.filter((row) => !pendingHiddenRef.current.has(row.id)));
+        return server;
+      }
     } catch {
       // Keep current inbox when a background refresh fails.
     }
+    return null;
   }, []);
 
   const acknowledgeConversationRead = useCallback(async (conversationId: string) => {
@@ -1021,6 +1027,38 @@ export function MessagesPageV4({
     });
   }
 
+  function hideConversation(conversation: ConversationView) {
+    if (conversation.kind !== "direct" || pendingHiddenRef.current.has(conversation.id)) return;
+    pendingHiddenRef.current.add(conversation.id);
+    ++inboxRefreshIdRef.current;
+    const index = conversations.findIndex((row) => row.id === conversation.id);
+    setConversations((current) => current.filter((row) => row.id !== conversation.id));
+    if (selectedId === conversation.id) closeConversation();
+
+    void withTimeout(setConversationHiddenAction(conversation.id, true), { operation: "hide chat" })
+      .then((result) => {
+        pendingHiddenRef.current.delete(conversation.id);
+        ++inboxRefreshIdRef.current;
+        if (result.ok) return;
+        setConversations((current) => {
+          if (current.some((row) => row.id === conversation.id)) return current;
+          const restored = [...current];
+          restored.splice(Math.max(0, Math.min(index, restored.length)), 0, conversation);
+          return restored;
+        });
+        setFeedback(result.message);
+        void syncConversations();
+      })
+      .catch((error) => {
+        pendingHiddenRef.current.delete(conversation.id);
+        ++inboxRefreshIdRef.current;
+        setConversations((current) => current.some((row) => row.id === conversation.id)
+          ? current : [conversation, ...current]);
+        setFeedback(failureMessage(error));
+        void syncConversations();
+      });
+  }
+
   /**
    * Applies one change to a single conversation's outgoing rows.
    *
@@ -1389,7 +1427,7 @@ export function MessagesPageV4({
                   const pending = outgoing.filter((row) => row.status === "pending").length;
                   const failed = outgoing.length - pending;
                   const preview = pending ? `${pending} forwarded ${pending === 1 ? "message" : "messages"} sending…` : failed ? `${failed} forwarded ${failed === 1 ? "message" : "messages"} not sent · Open to retry` : null;
-                  return <li key={conversation.id}><ConversationRowV4 conversation={preview ? { ...conversation, lastMessagePreview: preview } : conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>;
+                  return <li key={conversation.id}><ConversationRowV4 conversation={preview ? { ...conversation, lastMessagePreview: preview } : conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} onHide={conversation.kind === "direct" ? () => hideConversation(conversation) : undefined} /></li>;
                 })}
               </ul>
             )}
@@ -1602,10 +1640,22 @@ export function MessagesPageV4({
         setNewChatPending(true);
         void (async () => {
           const result = await openDirectConversationAction(friendId).catch(() => ({ ok: false, message: "Could not open chat.", conversationId: undefined }));
+          if (!result.ok || !result.conversationId) {
+            setNewChatPending(false);
+            setFeedback(result.message);
+            return;
+          }
+          if (!conversations.some((conversation) => conversation.id === result.conversationId)) {
+            const refreshed = await syncConversations();
+            if (!refreshed?.some((conversation) => conversation.id === result.conversationId)) {
+              setNewChatPending(false);
+              setNewMessageOpen(false);
+              router.push(`/messages?conversation=${result.conversationId}` as Route);
+              return;
+            }
+          }
           setNewChatPending(false);
-          if (!result.ok || !result.conversationId) { setFeedback(result.message); return; }
           setNewMessageOpen(false);
-          await syncConversations();
           openConversation(result.conversationId);
         })();
       }} onGroups={() => {

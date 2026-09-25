@@ -322,6 +322,7 @@ export function NewChatModal({
       owner="messages-new-chat"
     >
       <div className="space-y-3">
+        {pending ? <p role="status" className="text-sm font-medium text-primary">Opening chat…</p> : null}
         {/* Do not summon the software keyboard just because the sheet opened.
             The member list is useful before search, and avoiding autoFocus also
             prevents the keyboard opening during the sheet's entrance geometry. */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, Mail, Star, Archive, X, UsersRound } from "lucide-react";
+import { BellOff, Mail, Star, Archive, EyeOff, X, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -28,7 +28,8 @@ export function ConversationRowV4({
   onMarkUnread,
   onFavorite,
   onMute,
-  onArchive
+  onArchive,
+  onHide
 }: {
   conversation: ConversationView;
   onIntent?: () => void;
@@ -37,6 +38,7 @@ export function ConversationRowV4({
   onFavorite: () => void;
   onMute: () => void;
   onArchive: () => void;
+  onHide?: () => void;
 }) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -185,16 +187,17 @@ export function ConversationRowV4({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5 pl-1">
           <span className={cn("text-xs", conversation.unreadCount > 0 ? "font-semibold text-primary" : "text-muted-foreground")}>{conversation.lastMessageAt ? formatRelativeTime(conversation.lastMessageAt) : ""}</span>
-          {conversation.unreadCount > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground transition-transform animate-in zoom-in-75">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span> : null}
+          {conversation.unreadCount > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span> : null}
         </div>
       </div>
 
       {actionsOpen ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-end gap-1.5 rounded-[20px] bg-background/95 px-2 shadow-lg backdrop-blur-md animate-in fade-in zoom-in-95" role="toolbar" aria-label={`Actions for ${conversation.title}`}>
+        <div className="absolute inset-0 z-20 flex items-center justify-end gap-1.5 rounded-[20px] bg-background/95 px-2 shadow-lg backdrop-blur-md" role="toolbar" aria-label={`Actions for ${conversation.title}`}>
           <button type="button" onClick={() => { onMarkUnread(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-secondary px-3 text-xs font-semibold"><Mail className="h-4 w-4" /></button>
           <button type="button" onClick={() => { onFavorite(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-secondary px-3 text-xs font-semibold"><Star className="h-4 w-4" /></button>
           <button type="button" onClick={() => { onMute(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-secondary px-3 text-xs font-semibold"><BellOff className="h-4 w-4" /></button>
           <button type="button" onClick={() => { onArchive(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-foreground px-3 text-xs font-semibold text-background"><Archive className="h-4 w-4" /></button>
+          {conversation.kind === "direct" && onHide ? <button type="button" onClick={() => { onHide(); setActionsOpen(false); }} className="grid h-11 min-w-11 place-items-center rounded-full bg-secondary px-3 text-xs font-semibold" aria-label="Hide chat" title="Hide chat"><EyeOff className="h-4 w-4" /></button> : null}
           <button type="button" onClick={() => setActionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-full text-muted-foreground" aria-label="Close actions"><X className="h-4 w-4" /></button>
         </div>
       ) : null}
