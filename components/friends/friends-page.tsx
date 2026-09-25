@@ -251,6 +251,14 @@ export function FriendsPageContent({
   const [activeCircleId, setActiveCircleId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState("");
+  // Feedback is a transient confirmation, not a permanent overlay on the app.
+  // Each new message restarts the timer; cleanup prevents an earlier message
+  // from dismissing a newer one or updating state after unmount.
+  useEffect(() => {
+    if (!feedback) return;
+    const timeout = window.setTimeout(() => setFeedback(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [feedback]);
   // Shared shell chrome: one menu sheet, one unread count.
   const openAppMenu = useAppMenu();
   const unreadNotificationCount = useUnreadNotifications();

@@ -31,6 +31,25 @@ describe("friend actions acknowledge a tap before the network finishes", () => {
     expect(button).toContain('motion-reduce:active:scale-100');
     expect(cards).toContain('active:scale-[0.98]');
   });
+
+  it("dismisses the request confirmation instead of leaving it over the page", () => {
+    expect(page).toContain('if (!feedback) return;');
+    expect(page).toContain('window.setTimeout(() => setFeedback(""), 3500)');
+    expect(page).toContain('window.clearTimeout(timeout)');
+  });
+
+  it("dismisses short-lived confirmations on Muddy profiles too", () => {
+    const profile = source("components/friends/muddy-profile-page.tsx");
+    const nextProfile = source("components/friends/muddy-profile-vnext.tsx");
+    const sheet = source("components/glow/muddy-profile-modal.tsx");
+    expect(profile).toContain('window.setTimeout(() => setWaveFeedback(""), 3500)');
+    expect(profile).toContain('window.setTimeout(() => setGlowFeedback(""), 5000)');
+    expect(nextProfile).toContain('window.setTimeout(() => setFeedback(""), 3500)');
+    expect(sheet).toContain('window.setTimeout(() => setWaveFeedback(""), 3500)');
+    for (const component of [profile, nextProfile, sheet]) {
+      expect(component).toContain('window.clearTimeout(timeout)');
+    }
+  });
 });
 
 describe("a committed friendship is not held hostage by optional followups", () => {

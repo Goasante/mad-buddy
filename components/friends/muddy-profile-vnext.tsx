@@ -18,7 +18,7 @@ import {
   UsersRound
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { clearFriendGlowColorAction, setFriendGlowColorAction } from "@/app/(app)/glow-color-actions";
@@ -62,6 +62,11 @@ export function MuddyProfileVNext({
 }) {
   const router = useRouter();
   const [feedback, setFeedback] = useState("");
+  useEffect(() => {
+    if (!feedback) return;
+    const timeout = window.setTimeout(() => setFeedback(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [feedback]);
   const [waveSent, setWaveSent] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);

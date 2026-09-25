@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { ArrowRight, Bell, Hand, MapPin, MessagesSquare, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
@@ -70,6 +70,11 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
   const [pingOpen, setPingOpen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
+  useEffect(() => {
+    if (!waveFeedback) return;
+    const timeout = window.setTimeout(() => setWaveFeedback(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [waveFeedback]);
   const [isWavePending, startWaveTransition] = useTransition();
   const [isMessagePending, startMessageTransition] = useTransition();
   const router = useRouter();

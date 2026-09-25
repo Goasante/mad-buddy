@@ -6,7 +6,7 @@ import { conversationHref } from "@/lib/messaging/open-conversation";
 import Image from "next/image";
 import { Award, BadgeCheck, Ban, CalendarPlus, Check, ChevronLeft, Flag, Hand, MessageCircle, Palette, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
@@ -83,6 +83,11 @@ export function MuddyProfilePage({
   const [heroFullScreen, setHeroFullScreen] = useState(false);
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
+  useEffect(() => {
+    if (!waveFeedback) return;
+    const timeout = window.setTimeout(() => setWaveFeedback(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [waveFeedback]);
   const [isWavePending, startWaveTransition] = useTransition();
   const [isActionPending, startActionTransition] = useTransition();
   const [requestSent, setRequestSent] = useState(false);
@@ -90,6 +95,11 @@ export function MuddyProfilePage({
   const [reportDescription, setReportDescription] = useState("");
   const [glowColorId, setGlowColorId] = useState<string | null>(initialGlowColorId);
   const [glowFeedback, setGlowFeedback] = useState("");
+  useEffect(() => {
+    if (!glowFeedback) return;
+    const timeout = window.setTimeout(() => setGlowFeedback(""), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [glowFeedback]);
   const [isGlowPending, startGlowTransition] = useTransition();
 
   function chooseGlowColor(nextId: string | null) {
