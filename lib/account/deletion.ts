@@ -86,7 +86,8 @@ export async function markDeletionRequested(
       stage: "requested" satisfies DeletionStage,
       requested_at: new Date().toISOString()
     },
-    { onConflict: "user_id" }
+    // A retry must preserve the last completed stage and original request.
+    { onConflict: "user_id", ignoreDuplicates: true }
   );
 
   if (error) {
@@ -146,14 +147,129 @@ export async function purgeUserData(
     // LIFE-HARD-DELETE: account erasure must remove relationship identity.
     ["friendships", admin.from("friendships").delete().or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)],
     ["subscriptions", admin.from("subscriptions").delete().eq("user_id", userId)],
-    ["consent_logs", admin.from("consent_logs").delete().eq("user_id", userId)],
-    ["profiles", admin.from("profiles").delete().eq("user_id", userId)]
+    ["consent_logs", admin.from("consent_logs").delete().eq("user_id", userId)]
   ];
 
   const results = await Promise.all(scoped.map(async ([table, query]) => ({ table, error: (await query).error })));
   const failed = results.find((result) => result.error);
+  if (failed) return { ok: false, failedTable: failed.table };
 
-  return failed ? { ok: false, failedTable: failed.table } : { ok: true };
+  // Delete the profile last: other tables may still refer to it while their
+  // own deletes are in flight.
+  const { error: profileError } = await admin.from("profiles").delete().eq("user_id", userId);
+  return profileError ? { ok: false, failedTable: "profiles" } : { ok: true };
+}
+
+/** Remove every owned file, including unreferenced uploads and nested folders. */
+export async function removeUserStorage(admin: SupabaseClient, userId: string): Promise<{ ok: boolean; bucket?: string }> {
+  for (const bucket of ["avatars", "media", "wallpapers", "verification-evidence"] as const) {
+    const directories = [userId];
+    const visited = new Set<string>();
+    const files: string[] = [];
+    while (directories.length) {
+      const directory = directories.pop()!;
+      if (visited.has(directory)) continue;
+      visited.add(directory);
+      let offset = 0;
+      while (true) {
+        const { data, error } = await admin.storage.from(bucket).list(directory, {
+          limit: 100,
+          offset,
+          sortBy: { column: "name", order: "asc" }
+        });
+        if (error) return { ok: false, bucket };
+        for (const entry of data ?? []) {
+          const path = `${directory}/${entry.name}`;
+          if (entry.id === null) directories.push(path);
+          else files.push(path);
+        }
+        if (!data || data.length < 100) break;
+        offset += data.length;
+      }
+    }
+    for (let index = 0; index < files.length; index += 100) {
+      const { error } = await admin.storage.from(bucket).remove(files.slice(index, index + 100));
+      if (error) return { ok: false, bucket };
+    }
+  }
+  return { ok: true };
+}
+
+/** The single deletion workflow used by web and native clients. */
+export async function deleteAccountForUser(
+  admin: SupabaseClient,
+  userId: string,
+  reason: string | null
+): Promise<DeletionOutcome> {
+  const intent = await markDeletionRequested(admin, userId, reason);
+  if (!intent.ok) return { ok: false, stage: "requested", resumable: false, message: intent.message! };
+
+  const subscriptionResult = await admin.from("subscriptions")
+      .select("provider, stripe_customer_id, stripe_subscription_id, paystack_customer_code, paystack_subscription_code, plan, status")
+      .eq("user_id", userId).maybeSingle();
+  if (subscriptionResult.error) {
+    return { ok: false, stage: "requested", resumable: true, message: "Your account could not be prepared for deletion." };
+  }
+
+  const { error: reportError } = await admin.rpc("prepare_deleted_user_reports", { target_user_id: userId });
+  if (reportError) {
+    return { ok: false, stage: "requested", resumable: true, message: "Your account could not be prepared for deletion." };
+  }
+  await recordDeletionStage(admin, userId, "reports_anonymised");
+
+  const storage = await removeUserStorage(admin, userId);
+  if (!storage.ok) {
+    return { ok: false, stage: "reports_anonymised", resumable: true, message: "Your stored media could not be removed." };
+  }
+
+  const purge = await purgeUserData(admin, userId);
+  if (!purge.ok) {
+    return { ok: false, stage: "reports_anonymised", resumable: true, message: "Your account data could not be removed." };
+  }
+  await recordDeletionStage(admin, userId, "data_purged");
+
+  const subscription = subscriptionResult.data;
+  const billingReference = subscription ? JSON.stringify({
+    stripeCustomerId: subscription.stripe_customer_id,
+    stripeSubscriptionId: subscription.stripe_subscription_id,
+    provider: subscription.provider,
+    paystackCustomerCode: subscription.paystack_customer_code,
+    paystackSubscriptionCode: subscription.paystack_subscription_code,
+    plan: subscription.plan,
+    status: subscription.status
+  }) : null;
+
+  // A retry after a successful audit must not create a second audit entry.
+  const existingAudit = await admin.from("deletion_audit_logs").select("id")
+    .eq("user_id", userId).limit(1).maybeSingle();
+  if (existingAudit.error) {
+    return { ok: false, stage: "data_purged", resumable: true, message: "The deletion audit record could not be checked." };
+  }
+  if (!existingAudit.data) {
+    const { error } = await admin.from("deletion_audit_logs").insert({
+      user_id: userId,
+      deleted_user_label: "Deleted User",
+      deletion_reason: reason,
+      retained_billing_reference: billingReference,
+      retained_report_reference: "reports anonymized with prepare_deleted_user_reports"
+    });
+    if (error) return { ok: false, stage: "data_purged", resumable: true, message: "The deletion audit record could not be saved." };
+  }
+  await recordDeletionStage(admin, userId, "audited");
+
+  const { error: authError } = await admin.auth.admin.deleteUser(userId);
+  if (authError) {
+    return {
+      ok: false,
+      stage: "audited",
+      resumable: true,
+      message: "Your data has been deleted, but your sign-in could not be removed yet. Try again to finish deleting your account."
+    };
+  }
+
+  await recordDeletionStage(admin, userId, "auth_removed");
+  await admin.from("account_deletion_requests").delete().eq("user_id", userId);
+  return { ok: true, stage: "auth_removed" };
 }
 
 /**

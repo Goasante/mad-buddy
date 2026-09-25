@@ -79,41 +79,38 @@ describe("a half-finished deletion is recoverable", () => {
   it("records intent before anything is destroyed", () => {
     // Without this row, a failure after the first destructive step left no
     // evidence the user ever asked.
-    const web = webAction.slice(webAction.indexOf("export async function deleteAccountAction"));
-    const intentAt = web.indexOf("markDeletionRequested");
-    const purgeAt = web.indexOf("prepare_deleted_user_reports");
+    const workflow = service.slice(service.indexOf("export async function deleteAccountForUser"));
+    const intentAt = workflow.indexOf("markDeletionRequested");
+    const purgeAt = workflow.indexOf("prepare_deleted_user_reports");
     expect(intentAt).toBeGreaterThan(-1);
     expect(intentAt).toBeLessThan(purgeAt);
+    expect(webAction).toContain("deleteAccountForUser(");
+    expect(nativeRoute).toContain("deleteAccountForUser(");
   });
 
   it("makes a repeated request idempotent rather than a second workflow", () => {
-    expect(service).toContain('{ onConflict: "user_id" }');
+    expect(service).toContain('{ onConflict: "user_id", ignoreDuplicates: true }');
     expect(migration).toContain("user_id uuid not null unique");
   });
 
   it("advances the stage after each completed step", () => {
     for (const stage of ["reports_anonymised", "data_purged", "audited"]) {
-      expect(webAction, `web flow should record ${stage}`).toContain(`recordDeletionStage(admin, userId, "${stage}")`);
-      expect(nativeRoute, `native flow should record ${stage}`).toContain(
-        `recordDeletionStage(admin, userId, "${stage}")`
-      );
+      expect(service, `shared workflow should record ${stage}`).toContain(`recordDeletionStage(admin, userId, "${stage}")`);
     }
   });
 
   it("tells the truth when the data is gone but the login remains", () => {
     // This is the state the whole workflow exists for. Reporting it as a plain
     // failure told the user nothing had happened when everything had.
-    for (const source of [webAction, nativeRoute]) {
-      expect(source).toContain("Your data has been deleted");
-    }
+    expect(service).toContain("Your data has been deleted");
+    expect(nativeRoute).toContain("outcome.message");
+    expect(webAction).toContain("outcome.message");
   });
 
   it("clears the intent row only on success", () => {
-    for (const source of [webAction, nativeRoute]) {
-      const cleanup = source.indexOf('from("account_deletion_requests").delete()');
-      const authDelete = source.indexOf("auth.admin.deleteUser");
-      expect(cleanup).toBeGreaterThan(authDelete);
-    }
+    const cleanup = service.indexOf('from("account_deletion_requests").delete()');
+    const authDelete = service.indexOf("auth.admin.deleteUser");
+    expect(cleanup).toBeGreaterThan(authDelete);
   });
 
   it("never advances the stage past work actually done", () => {

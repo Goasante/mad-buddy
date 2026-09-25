@@ -1028,7 +1028,8 @@ export function MessagesPageV4({
   }
 
   function hideConversation(conversation: ConversationView) {
-    if (conversation.kind !== "direct" || pendingHiddenRef.current.has(conversation.id)) return;
+    const isDirect = conversation.kind === "direct";
+    if (!isDirect || pendingHiddenRef.current.has(conversation.id)) return;
     pendingHiddenRef.current.add(conversation.id);
     ++inboxRefreshIdRef.current;
     const index = conversations.findIndex((row) => row.id === conversation.id);

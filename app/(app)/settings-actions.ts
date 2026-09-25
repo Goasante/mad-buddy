@@ -1,9 +1,8 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { markDeletionRequested, recordDeletionStage } from "@/lib/account/deletion";
+import { deleteAccountForUser } from "@/lib/account/deletion";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -61,211 +60,29 @@ async function getAuthedUser() {
   return user;
 }
 
-async function removeAvatarFolder(userId: string): Promise<string | null> {
-  const admin = createSupabaseAdminClient();
-  const { data, error: listError } = await admin.storage.from("avatars").list(userId);
-  if (listError) return listError.message;
-
-  const files = data?.map((file) => `${userId}/${file.name}`) ?? [];
-
-  if (files.length > 0) {
-    const { error: removeError } = await admin.storage.from("avatars").remove(files);
-    if (removeError) return removeError.message;
-  }
-
-  return null;
-}
-
-async function removePrivateMedia(userId: string): Promise<string | null> {
-  const admin = createSupabaseAdminClient();
-  const { data: assets, error: assetError } = await admin
-    .from("media_assets")
-    .select("id, storage_key")
-    .eq("owner_id", userId);
-
-  if (assetError) return assetError.message;
-  if (!assets || assets.length === 0) return null;
-
-  const assetIds = assets.map((asset) => asset.id);
-  const { data: variants, error: variantError } = await admin
-    .from("media_variants")
-    .select("storage_key")
-    .in("media_asset_id", assetIds);
-
-  if (variantError) return variantError.message;
-
-  const keys = [
-    ...assets.map((asset) => asset.storage_key),
-    ...(variants ?? []).map((variant) => variant.storage_key)
-  ];
-
-  for (let index = 0; index < keys.length; index += 100) {
-    const { error: removeError } = await admin.storage
-      .from("media")
-      .remove(keys.slice(index, index + 100));
-    if (removeError) return removeError.message;
-  }
-
-  return null;
-}
-
 export async function deleteAccountAction(input: unknown): Promise<SettingsActionState> {
   const missingEnv = missingSupabaseState();
-
-  if (missingEnv) {
-    return missingEnv;
-  }
+  if (missingEnv) return missingEnv;
 
   const parsed = deleteAccountSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return { ok: false, message: "Confirm deletion before deleting your account." };
-  }
+  if (!parsed.success) return { ok: false, message: "Confirm deletion before deleting your account." };
 
   const user = await getAuthedUser();
-
-  if (!user) {
-    return { ok: false, message: "Log in before deleting your account." };
-  }
+  if (!user) return { ok: false, message: "Log in before deleting your account." };
 
   const rateLimit = await consumeRateLimit({ action: "account.delete", userId: user.id });
   if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
 
-  const admin = createSupabaseAdminClient();
-  const userId = user.id;
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("full_name, username")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const { data: subscription } = await admin
-    .from("subscriptions")
-    .select("provider, stripe_customer_id, stripe_subscription_id, paystack_customer_code, paystack_subscription_code, plan, status")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const outcome = await deleteAccountForUser(
+    createSupabaseAdminClient(), user.id, parsed.data.reason || null
+  );
+  if (!outcome.ok) return { ok: false, message: outcome.message };
 
-  // INTENT FIRST, before anything is destroyed.
-  //
-  // Deletion spans Postgres, storage and the Auth registry -- three systems
-  // that cannot share a transaction, so some step always runs second. This row
-  // is what makes a half-finished run recoverable: without it, a failure after
-  // the first destructive step left no evidence the user had ever asked, and
-  // the workflow could not be resumed or swept.
-  //
-  // Idempotent on user_id, so a double tap or a retried request re-asserts the
-  // same intent instead of starting a second workflow.
-  const intent = await markDeletionRequested(admin, userId, parsed.data.reason || null);
-  if (!intent.ok) {
-    return { ok: false, message: intent.message ?? "Your deletion request could not be recorded." };
-  }
-
-  const { error: reportPreparationError } = await admin.rpc("prepare_deleted_user_reports", {
-    target_user_id: userId
-  });
-  if (reportPreparationError) {
-    // Nothing destroyed yet, and the intent row survives, so a retry starts
-    // cleanly from here.
-    return { ok: false, message: "Your account could not be prepared for deletion." };
-  }
-  await recordDeletionStage(admin, userId, "reports_anonymised");
-
-  const [avatarRemovalError, mediaRemovalError] = await Promise.all([
-    removeAvatarFolder(userId),
-    removePrivateMedia(userId)
-  ]);
-  const storageRemovalError = avatarRemovalError ?? mediaRemovalError;
-  if (storageRemovalError) {
-    return { ok: false, message: "Your stored media could not be removed." };
-  }
-
-  const deletions = await Promise.all([
-    admin.from("proximity_events").delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`),
-    admin.from("notifications").delete().eq("user_id", userId),
-    admin.from("meetup_requests").delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
-    admin.from("best_buddies").delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`),
-    admin.from("event_modes").delete().eq("user_id", userId),
-    admin.from("circle_members").delete().eq("friend_id", userId),
-    admin.from("friend_circles").delete().eq("user_id", userId),
-    admin.from("privacy_zones").delete().eq("user_id", userId),
-    admin.from("user_preferences").delete().eq("user_id", userId),
-    admin.from("user_locations").delete().eq("user_id", userId),
-    admin.from("blocked_users").delete().or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`),
-    admin.from("friend_requests").delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
-    // LIFE-HARD-DELETE: account erasure.
-    // HARD delete, deliberately, and the only surviving one. Removing a Muddy
-    // soft-ends the row so the relationship can resume; deleting an ACCOUNT
-    // must actually erase the data. A soft ending here would retain one user's
-    // id inside another user's rows after that user asked to be forgotten,
-    // which is the opposite of what deletion means.
-    admin.from("friendships").delete().or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`),
-    admin.from("subscriptions").delete().eq("user_id", userId),
-    admin.from("consent_logs").delete().eq("user_id", userId),
-    admin.from("profiles").delete().eq("user_id", userId)
-  ]);
-
-  const failedDeletion = deletions.find((result) => result.error);
-
-  if (failedDeletion?.error) {
-    // Partial purge. Every delete above is idempotent -- removing rows that are
-    // already gone is a no-op -- so retrying repeats the whole step safely
-    // rather than needing to know exactly where it stopped.
-    return { ok: false, message: "Your account data could not be removed." };
-  }
-  await recordDeletionStage(admin, userId, "data_purged");
-
-  const billingReference = subscription
-    ? JSON.stringify({
-        stripeCustomerId: subscription.stripe_customer_id,
-        stripeSubscriptionId: subscription.stripe_subscription_id,
-        provider: subscription.provider,
-        paystackCustomerCode: subscription.paystack_customer_code,
-        paystackSubscriptionCode: subscription.paystack_subscription_code,
-        plan: subscription.plan,
-        status: subscription.status
-      })
-    : null;
-
-  const deletedUserLabel = profile?.username
-    ? `Deleted User (@${profile.username})`
-    : profile?.full_name
-      ? `Deleted User (${profile.full_name})`
-      : "Deleted User";
-
-  const { error: auditError } = await admin.from("deletion_audit_logs").insert({
-    user_id: userId,
-    deleted_user_label: deletedUserLabel,
-    deletion_reason: parsed.data.reason || null,
-    retained_billing_reference: billingReference,
-    retained_report_reference: "reports anonymized with prepare_deleted_user_reports"
-  });
-
-  if (auditError) {
-    return { ok: false, message: "The deletion audit record could not be saved." };
-  }
-  await recordDeletionStage(admin, userId, "audited");
-
-  const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
-
-  if (authDeleteError) {
-    // THE STATE THIS WHOLE WORKFLOW EXISTS FOR.
-    //
-    // The data is already gone; only the login remains. Previously this said
-    // deletion had failed, which was the opposite of the truth and left the
-    // user with no way to finish. The intent row is still at 'audited', so a
-    // retry -- or a sweeper -- resumes at exactly this step, and the message
-    // now describes what actually happened.
-    return {
-      ok: false,
-      message:
-        "Your data has been deleted, but your sign-in could not be removed yet. We'll finish this shortly; signing in again will complete it."
-    };
-  }
-
-  // Completed: the intent row has done its job and would otherwise outlive the
-  // account it describes. The audit record is the durable history, not this.
-  await admin.from("account_deletion_requests").delete().eq("user_id", userId);
-
-  redirect("/signup");
+  // Auth deletion invalidates refresh tokens; local sign-out also removes the
+  // SSR session cookie so the browser cannot reopen the app with a stale JWT.
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut({ scope: "local" });
+  return { ok: true, message: "Your account has been deleted." };
 }
 
 export async function updateVisibilityStatusAction(input: unknown): Promise<SettingsActionState> {

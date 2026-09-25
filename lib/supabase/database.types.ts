@@ -3736,7 +3736,7 @@ export type Database = {
           id: string;
           starts_at: string;
           expires_at: string | null;
-          created_by: string;
+          created_by: string | null;
           reason: string;
           revoked_at: string | null;
           revoked_by: string | null;

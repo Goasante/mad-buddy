@@ -91,9 +91,9 @@ describe("soft ending", () => {
   }, 15_000);
 
   it("account deletion still hard-deletes, because erasure must erase", () => {
-    const settings = read("app/(app)/settings-actions.ts");
-    expect(settings).toContain(HARD_DELETE_ANNOTATION);
-    expect(settings).toContain('admin.from("friendships").delete()');
+    const deletion = read("lib/account/deletion.ts");
+    expect(deletion).toContain(HARD_DELETE_ANNOTATION);
+    expect(deletion).toContain('admin.from("friendships").delete()');
   });
 });
 
