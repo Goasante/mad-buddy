@@ -487,7 +487,7 @@ describe("every ranked surface resolves one canonical cover", () => {
     expect(artwork).toContain("focalObjectPosition(focalX, focalY)");
 
     for (const path of [
-      "components/events/ranked-events-accordion.tsx",
+      "components/events/ranked-events-carousel.tsx",
       "components/events/top-events-list.tsx"
     ]) {
       const surface = stripComments(read(path));

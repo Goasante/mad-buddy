@@ -381,7 +381,7 @@ describe("presentation fundamentals", () => {
   });
 
   it("falls back to a branded treatment rather than an empty box", () => {
-    expect(artwork).toContain("fallbackGradient(media.treatment)");
+    expect(artwork).toContain("fallbackGradient(eventFallbackTreatment(eventId))");
     expect(artwork).not.toContain("bg-gray");
   });
 

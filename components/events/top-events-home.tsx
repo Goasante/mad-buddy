@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
-import { RankedEventsAccordion } from "@/components/events/ranked-events-accordion";
+import { RankedEventsCarousel } from "@/components/events/ranked-events-carousel";
 import type { RankedEvent } from "@/lib/events/ranked-events";
 
 /**
@@ -29,7 +29,7 @@ export function TopEventsHome({ events }: { events: RankedEvent[] }) {
         href="/events/top"
         actionAriaLabel="See top events"
       />
-      <RankedEventsAccordion
+      <RankedEventsCarousel
         events={events}
         // Opens the CANONICAL event detail, the same ?event= deep link the
         // events page and notification routing already use. Discovery hands

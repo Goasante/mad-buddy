@@ -18,14 +18,14 @@ import {
   type RankableEvent
 } from "@/lib/events/ranking";
 import { EVENT_FALLBACK_TREATMENTS, resolveEventMedia } from "@/lib/events/event-media";
+import { nextTrendingIndex, trendingSwipeDirection } from "@/lib/events/trending-carousel";
 
 /**
  * Ranked Events Discovery.
  *
  * The ranking and media layers are PURE, so these are real behavioural tests
  * -- actual inputs, actual outputs. The component and projection assertions
- * at the bottom are source-text (vitest runs environment: "node", so there is
- * no DOM to mount a client accordion into), following the same pattern the
+ * at the bottom are source-text (vitest runs environment: "node"), following the
  * rest of this codebase uses for server-only and client-only modules.
  */
 
@@ -373,7 +373,7 @@ describe("event media", () => {
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const projection = stripComments(read("lib/events/ranked-events.ts"));
-const accordion = stripComments(read("components/events/ranked-events-accordion.tsx"));
+const carousel = stripComments(read("components/events/ranked-events-carousel.tsx"));
 const homeModule = stripComments(read("components/events/top-events-home.tsx"));
 const rankedPage = stripComments(read("app/(app)/events/top/page.tsx"));
 const dashboardLoader = stripComments(read("app/(app)/dashboard/page.tsx"));
@@ -441,92 +441,46 @@ describe("both ranked surfaces open the canonical event detail", () => {
   });
 
   it("builds no RSVP or check-in controls inside discovery", () => {
-    for (const [name, source] of [["accordion", accordion], ["home", homeModule]] as const) {
+    for (const [name, source] of [["carousel", carousel], ["home", homeModule]] as const) {
       expect(source, name).not.toContain("setEventRsvpAction");
       expect(source, name).not.toContain("checkInToEventAction");
     }
   });
 });
 
-describe("accordion interaction contract", () => {
-  it("expands on first press and opens only on the second", () => {
-    expect(accordion).toContain("if (event.id === activeEventId)");
-    expect(accordion).toContain("onOpenEvent(event)");
-    // Panels are buttons, not links: a link would navigate on the first tap.
-    expect(accordion).not.toMatch(/<a\s/);
-    expect(accordion).toContain('type="button"');
+describe("Trending Home carousel", () => {
+  it("keeps the server's ranked order, beginning with #1", () => {
+    expect(carousel).not.toContain("arrangeForAccordion");
+    expect(carousel).toContain("const event = events[activeIndex]");
+    expect(carousel).toContain("#{event.rank} trending");
   });
 
-  it("expands on hover only where a real pointer exists", () => {
-    expect(accordion).toContain("finePointer ? () => setActiveId(event.id) : undefined");
-    expect(accordion).toContain("FINE_POINTER_QUERY");
+  it("uses the correct cover and focal point for each active Event", () => {
+    expect(carousel).toContain("key={event.id}");
+    expect(carousel).toContain("coverExpected={event.hasCover}");
+    expect(carousel).toContain("focalX={event.focalPoint.x}");
+    expect(carousel).toContain("focalY={event.focalPoint.y}");
   });
 
-  it("never opens an event from hover alone", () => {
-    const hoverHandler = accordion.slice(accordion.indexOf("onMouseEnter"));
-    expect(hoverHandler.slice(0, 120)).not.toContain("onOpenEvent");
+  it("navigates five real cards with dots, an arrow, touch, and keyboard", () => {
+    expect(carousel).toContain("events.map((item, index)");
+    expect(carousel).toContain("aria-current={index === activeIndex");
+    expect(carousel).toContain('aria-label="Next trending event"');
+    expect(carousel).toContain("onTouchEnd=");
+    expect(carousel).toContain('keyboardEvent.key === "ArrowRight"');
+    expect(carousel).toContain('keyboardEvent.key === "ArrowLeft"');
+    expect(carousel).toContain("onOpenEvent(event)");
+    expect(homeModule).toContain('href="/events/top"');
   });
 
-  it("tracks the active panel by identity so it survives a rerender", () => {
-    // Index would point at a different event across the mobile breakpoint.
-    expect(accordion).toContain("const [activeId, setActiveId] = useState<string | null>(null)");
-    expect(accordion).toContain("panels.some((event) => event.id === activeId)");
-  });
-
-  it("supports keyboard navigation and focus", () => {
-    for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
-      expect(accordion, key).toContain(`"${key}"`);
-    }
-    expect(accordion).toContain("onFocus");
-    expect(accordion).toContain("buttonRefs.current[nextIndex]?.focus()");
-  });
-
-  it("marks the active panel for assistive technology, not by animation alone", () => {
-    expect(accordion).toContain('aria-current={isActive ? "true" : undefined}');
-    // The rank is real text on every panel, expanded or collapsed.
-    expect(accordion).toContain("{event.rank}");
-    expect(accordion).toContain("aria-label=");
-  });
-
-  it("respects reduced motion", () => {
-    expect(accordion).toContain("useReducedMotion");
-    expect(accordion).toContain("reducedMotion && \"transition-none\"");
-  });
-
-  it("keeps a 44px minimum touch target on collapsed rails", () => {
-    expect(accordion).toContain('min-w-[2.75rem]');
-  });
-
-  it("cannot overflow the page horizontally", () => {
-    // Percentage flex-basis keeps the row summing to its container.
-    expect(accordion).toContain('flexBasis: isActive ? "52%" : "0%"');
-    expect(accordion).not.toContain("overflow-x-auto");
-    expect(accordion).not.toContain("100vw");
-  });
-
-  it("does not stack into a plain vertical list on mobile", () => {
-    // The reference component collapses to a column under 520px, which is the
-    // outcome the brief rules out. The ROW stays a row at every width -- note
-    // this checks the container, not the panel's own content stack, which is
-    // legitimately a column.
-    expect(accordion).toContain('className="flex items-stretch gap-1.5 sm:gap-2"');
-    const rowClasses = accordion.slice(
-      accordion.indexOf('className="flex items-stretch'),
-      accordion.indexOf('role="group"')
-    );
-    expect(rowClasses).not.toContain("flex-col");
-  });
-
-  it("keeps every rank reachable below the five-panel breakpoint", () => {
-    // Ranks that lose a rail become edge peeks that promote on tap.
-    expect(accordion).toContain("NARROW_RANKS");
-    expect(accordion).toContain("peeks.map");
-    expect(accordion).toContain("ACCORDION_FIVE_PANEL_MIN_WIDTH = 360");
-  });
-
-  it("adds no animation dependency for a width tween", () => {
-    expect(accordion).not.toContain("gsap");
-    expect(accordion).not.toContain("framer-motion");
+  it("wraps navigation and ignores vertical scrolling", () => {
+    expect(nextTrendingIndex(4, 5, 1)).toBe(0);
+    expect(nextTrendingIndex(0, 5, -1)).toBe(4);
+    expect(nextTrendingIndex(0, 0, 1)).toBe(0);
+    expect(trendingSwipeDirection(-80, 5)).toBe(1);
+    expect(trendingSwipeDirection(80, 5)).toBe(-1);
+    expect(trendingSwipeDirection(8, 0)).toBe(0);
+    expect(trendingSwipeDirection(70, 80)).toBe(0);
   });
 });
 

@@ -24,6 +24,7 @@ export type EventCardFacts = {
   id: string;
   name: string;
   coverUrl: string | null;
+  hasCover?: boolean;
   focalX: number;
   focalY: number;
   venueLabel: string | null;
@@ -79,6 +80,8 @@ export function EventHeroCard({
       <EventArtwork
         eventId={facts.id}
         coverUrl={facts.coverUrl}
+        coverExpected={facts.hasCover}
+        loading="eager"
         focalX={facts.focalX}
         focalY={facts.focalY}
         alt={facts.name}
@@ -131,6 +134,7 @@ export function EventDiscoveryCard({
         <EventArtwork
           eventId={facts.id}
           coverUrl={facts.coverUrl}
+          coverExpected={facts.hasCover}
           focalX={facts.focalX}
           focalY={facts.focalY}
           alt={facts.name}
@@ -182,6 +186,7 @@ export function EventCompactRow({
           <EventArtwork
             eventId={facts.id}
             coverUrl={facts.coverUrl}
+            coverExpected={facts.hasCover}
             focalX={facts.focalX}
             focalY={facts.focalY}
             alt={facts.name}

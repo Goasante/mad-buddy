@@ -78,6 +78,7 @@ export function EventHostTools({
   eventName,
   eventWhen,
   eventCoverUrl,
+  eventHasCover,
   eventFocalX,
   eventFocalY,
   roomCount,
@@ -95,6 +96,7 @@ export function EventHostTools({
   eventName: string;
   eventWhen: string;
   eventCoverUrl: string | null;
+  eventHasCover?: boolean;
   eventFocalX: number;
   eventFocalY: number;
   roomCount: number;
@@ -117,6 +119,7 @@ export function EventHostTools({
         <EventArtwork
           eventId={eventId}
           coverUrl={eventCoverUrl}
+          coverExpected={eventHasCover}
           focalX={eventFocalX}
           focalY={eventFocalY}
           alt=""

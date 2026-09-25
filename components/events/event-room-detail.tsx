@@ -70,6 +70,7 @@ function timeLabel(iso: string): string {
 export function EventRoomDetail({
   room,
   eventCoverUrl,
+  eventHasCover,
   eventFocalX,
   eventFocalY,
   onOpenSettings,
@@ -78,6 +79,7 @@ export function EventRoomDetail({
 }: {
   room: RoomView;
   eventCoverUrl: string | null;
+  eventHasCover?: boolean;
   eventFocalX: number;
   eventFocalY: number;
   onOpenSettings: () => void;
@@ -244,6 +246,8 @@ export function EventRoomDetail({
         <EventArtwork
           eventId={room.eventId ?? room.id}
           coverUrl={eventCoverUrl}
+          coverExpected={eventHasCover}
+          loading="eager"
           focalX={eventFocalX}
           focalY={eventFocalY}
           alt=""

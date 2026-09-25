@@ -17,11 +17,39 @@ describe("ranked Event cover initial-signing recovery", () => {
 
   it("tells every ranked artwork surface whether a cover is expected", () => {
     for (const path of [
-      "components/events/ranked-events-accordion.tsx",
+      "components/events/ranked-events-carousel.tsx",
       "components/events/top-events-list.tsx"
     ]) {
       expect(read(path), path).toContain("coverExpected={event.hasCover}");
     }
+  });
+
+  it("keeps cover presence when an ordinary Event's first signing fails", () => {
+    const service = read("lib/events/mobile.ts");
+    expect(service).toContain("hasCover: Boolean(event.cover_media_id)");
+    expect(service).toContain("hasCover: Boolean(cover?.cover_media_id)");
+
+    for (const path of [
+      "components/events/events-home.tsx",
+      "components/events/events-discover.tsx",
+      "components/events/events-yours.tsx",
+      "components/events/events-hosting.tsx"
+    ]) {
+      expect(read(path), path).toContain("hasCover: event.hasCover");
+    }
+    expect(read("components/events/event-cards.tsx")).toContain("coverExpected={facts.hasCover}");
+    expect(read("components/events/event-detail.tsx")).toContain("coverExpected={event.hasCover}");
+    expect(read("components/events/event-rooms.tsx")).toContain("coverExpected={eventHasCover}");
+    expect(read("components/events/event-room-detail.tsx")).toContain("coverExpected={eventHasCover}");
+  });
+
+  it("loads visible heroes promptly while leaving rows lazy", () => {
+    const artwork = read("components/events/event-artwork.tsx");
+    expect(artwork).toContain('loading = "lazy"');
+    expect(artwork).toContain("loading={loading}");
+    expect(read("components/events/event-detail.tsx")).toContain('loading="eager"');
+    expect(read("components/events/ranked-events-carousel.tsx")).toContain('loading="eager"');
+    expect(read("components/events/event-cards.tsx")).toContain('loading="eager"');
   });
 
   it("renews a missing initial credential only when canonical cover truth says one exists", () => {

@@ -301,6 +301,8 @@ export function EventDetail({
         <EventArtwork
           eventId={event.id}
           coverUrl={event.coverUrl}
+          coverExpected={event.hasCover}
+          loading="eager"
           focalX={event.focalX}
           focalY={event.focalY}
           alt={event.name}
@@ -565,6 +567,7 @@ export function EventDetail({
       <EventRoomsSection
         rooms={rooms}
         eventCoverUrl={event.coverUrl}
+        eventHasCover={event.hasCover}
         eventFocalX={event.focalX ?? 0.5}
         eventFocalY={event.focalY ?? 0.5}
         canCreate={event.isHost}

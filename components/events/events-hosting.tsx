@@ -28,6 +28,7 @@ function toFacts(event: EventView, nowMs: number): EventCardFacts {
     id: event.id,
     name: event.name,
     coverUrl: event.coverUrl,
+    hasCover: event.hasCover,
     focalX: event.focalX,
     focalY: event.focalY,
     venueLabel: event.venueLabel,

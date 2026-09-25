@@ -1264,6 +1264,7 @@ export function EventsPageContent({
               minute: "2-digit"
             })}
             eventCoverUrl={selectedEvent.coverUrl}
+            eventHasCover={selectedEvent.hasCover}
             eventFocalX={selectedEvent.focalX ?? 0.5}
             eventFocalY={selectedEvent.focalY ?? 0.5}
             roomCount={rooms.length}
@@ -1351,6 +1352,7 @@ export function EventsPageContent({
             <EventRoomsSection
               rooms={rooms}
               eventCoverUrl={selectedEvent.coverUrl}
+              eventHasCover={selectedEvent.hasCover}
               eventFocalX={selectedEvent.focalX ?? 0.5}
               eventFocalY={selectedEvent.focalY ?? 0.5}
               canCreate={selectedEvent.isHost}
@@ -1408,6 +1410,7 @@ export function EventsPageContent({
           <EventRoomDetail
             room={openRoom}
             eventCoverUrl={selectedEvent.coverUrl}
+            eventHasCover={selectedEvent.hasCover}
             eventFocalX={selectedEvent.focalX ?? 0.5}
             eventFocalY={selectedEvent.focalY ?? 0.5}
             onOpenSettings={() => setRoomSettingsId(openRoom.id)}

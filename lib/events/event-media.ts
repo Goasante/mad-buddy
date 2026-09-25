@@ -1,17 +1,10 @@
 /**
  * Event artwork resolution (Ranked Events Discovery).
  *
- * WHY THIS EXISTS AS A FALLBACK-ONLY MODULE. The `events` table has no image
- * column today -- audited: id, host_id, name, description, venue_label,
- * starts_at, ends_at, checkin_opens_minutes_before, visibility, status. There
- * is no upload path, so no event can have artwork yet and EVERY event
- * currently resolves to the designed fallback below.
- *
- * The `imageUrl` parameter is therefore not speculative API surface, it is
- * the seam: when a cover image column and its upload pipeline land, they feed
- * this one function and every ranked surface picks the real artwork up
- * without a component changing. Until then nothing renders a broken <img>,
- * because nothing renders an <img> at all.
+ * Covers are private media assets referenced by events.cover_media_id. A
+ * signed URL may be temporarily absent even when the cover still exists;
+ * EventArtwork renders this fallback while it renews that credential.
+ * Legacy events without a cover use the same treatment permanently.
  *
  * DETERMINISTIC BY EVENT ID. The same event always draws the same treatment,
  * on every device, on every render, server and client alike. A palette picked
@@ -22,7 +15,7 @@
 /**
  * Fallback treatments, built from existing brand tokens rather than new
  * colours. Each is a gradient pair already present in the design system's
- * vocabulary, so the accordion reads as Mad Buddy rather than as a stock
+ * vocabulary, so each Events surface reads as Mad Buddy rather than as a stock
  * placeholder set.
  */
 export const EVENT_FALLBACK_TREATMENTS = [

@@ -43,6 +43,7 @@ export function EventArtwork({
   focalY = 0.5,
   alt,
   className,
+  loading = "lazy",
   /** Scrim strength. Text sits over artwork on the hero and detail header; a
    *  bare thumbnail carries no text and needs no darkening. */
   scrim = "none"
@@ -59,6 +60,8 @@ export function EventArtwork({
   focalY?: number;
   alt?: string;
   className?: string;
+  /** Eager only for visible hero artwork; lists keep native lazy loading. */
+  loading?: "eager" | "lazy";
   scrim?: "none" | "soft" | "strong";
 }) {
   const [recovery, setRecovery] = useState<{
@@ -189,7 +192,7 @@ export function EventArtwork({
           alt={alt ?? ""}
           className={cn("absolute inset-0 h-full w-full object-cover", loadedUrl === media.url ? "opacity-100" : "opacity-0")}
           style={{ objectPosition: focalObjectPosition(focalX, focalY) }}
-          loading="lazy"
+          loading={loading}
           decoding="async"
           onLoad={() => setLoadedUrl(media.url)}
           onError={() => void recoverBrokenCover(media.url)}

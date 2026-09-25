@@ -84,6 +84,7 @@ function memberLabel(count: number): string {
 export function EventRoomRow({
   room,
   eventCoverUrl,
+  eventHasCover,
   eventFocalX,
   eventFocalY,
   onJoin,
@@ -92,6 +93,7 @@ export function EventRoomRow({
 }: {
   room: RoomView;
   eventCoverUrl: string | null;
+  eventHasCover?: boolean;
   eventFocalX: number;
   eventFocalY: number;
   onJoin: (roomId: string) => void;
@@ -110,6 +112,7 @@ export function EventRoomRow({
       <EventArtwork
         eventId={room.eventId ?? room.id}
         coverUrl={eventCoverUrl}
+        coverExpected={eventHasCover}
         focalX={eventFocalX}
         focalY={eventFocalY}
         alt=""
@@ -184,6 +187,7 @@ export function EventRoomRow({
 export function EventRoomsSection({
   rooms,
   eventCoverUrl,
+  eventHasCover,
   eventFocalX,
   eventFocalY,
   canCreate,
@@ -196,6 +200,7 @@ export function EventRoomsSection({
 }: {
   rooms: RoomView[];
   eventCoverUrl: string | null;
+  eventHasCover?: boolean;
   eventFocalX: number;
   eventFocalY: number;
   canCreate: boolean;
@@ -247,6 +252,7 @@ export function EventRoomsSection({
               key={room.id}
               room={room}
               eventCoverUrl={eventCoverUrl}
+              eventHasCover={eventHasCover}
               eventFocalX={eventFocalX}
               eventFocalY={eventFocalY}
               onJoin={onJoin}

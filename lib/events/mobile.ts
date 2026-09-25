@@ -61,6 +61,8 @@ export type EventView = {
    * programme information the host published; where a person is standing is
    * not. attendance-surfacing.test.ts pins that boundary. */
   coverUrl: string | null;
+  /** Canonical cover presence, even when initial signed URL minting fails. */
+  hasCover?: boolean;
   focalX: number;
   focalY: number;
   /** Published venue locality ("Osu, Accra"), never a viewer-relative distance. */
@@ -410,6 +412,7 @@ export async function listEvents(userId: string): Promise<EventView[]> {
       myGlowEnabled: checkIn?.event_glow_enabled ?? false,
       myRsvp: rsvpStatus && isEventRsvpStatus(rsvpStatus) ? rsvpStatus : null,
       coverUrl: event.cover_media_id ? coverUrlById.get(event.cover_media_id) ?? null : null,
+      hasCover: Boolean(event.cover_media_id),
       focalX: event.cover_focal_x ?? 0.5,
       focalY: event.cover_focal_y ?? 0.5,
       locality: localityByEvent.get(event.id) ?? null,
@@ -788,6 +791,7 @@ export async function getEventViewForViewer(userId: string, eventId: string): Pr
     myGlowEnabled: checkIn?.event_glow_enabled ?? false,
     myRsvp: rsvpStatus && isEventRsvpStatus(rsvpStatus) ? rsvpStatus : null,
     coverUrl,
+    hasCover: Boolean(cover?.cover_media_id),
     focalX: cover?.cover_focal_x ?? 0.5,
     focalY: cover?.cover_focal_y ?? 0.5,
     locality: localityLabel || null,
