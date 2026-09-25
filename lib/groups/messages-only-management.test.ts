@@ -10,12 +10,12 @@ const groups = read("components/groups/groups-page.tsx");
 const manager = read("components/groups/groups-manager-modal.tsx");
 const details = read("components/groups/group-details-modal.tsx");
 const messages = read("components/messages/messages-page-v4.tsx");
-const shell = read("components/messages/messages-experience-v5.tsx");
+const shell = read("components/messages/messages-shortcuts.tsx");
 const settings = read("components/messaging/chat-settings-v4.tsx");
 
 describe("Messages owns the complete Group experience", () => {
   it("keeps creation and invitations reachable without restoring a standalone page", () => {
-    expect(shell).toContain("<GroupsManagerModal");
+    expect(messages).toContain("<GroupsManagerModal");
     expect(shell).toContain("Create, manage or open a private Group");
     expect(manager).toContain("<GroupsPageContent");
     expect(groups).toContain("Create Group");

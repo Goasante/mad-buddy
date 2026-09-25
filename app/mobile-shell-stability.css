@@ -27,23 +27,18 @@
 /*
  * Messages owns its scroll inside the inbox list on phone/tablet layouts.
  *
- * The V5 title/shortcut area and V4 search/filter header are chrome; they must
- * remain in place while only the conversation rows move. The V4 list already
+ * The title/shortcut area and search/filter header are chrome; they must
+ * remain in place while only the conversation rows move. The inbox list already
  * declares `overflow-y-auto`, but its mobile aside was not a constrained flex
  * column, so the app-shell scroll owner could take over. That made the header
  * move and could leave the final conversation clipped at the bottom.
  */
 @media (max-width: 1023px) {
-  .messages-experience-v5 [data-v4-host] {
+  .messages-page [data-chat-inbox] {
     overflow: hidden;
   }
 
-  .messages-experience-v5 [data-v4-host] > div {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .messages-experience-v5 [data-v4-host] aside:not(.hidden) {
+  .messages-page [data-chat-inbox] aside:not(.hidden) {
     display: flex;
     height: 100%;
     min-height: 0;
@@ -51,7 +46,7 @@
     overflow: hidden;
   }
 
-  .messages-experience-v5 [data-v4-host] aside:not(.hidden) > div:last-child {
+  .messages-page [data-chat-inbox] aside:not(.hidden) > div:last-child {
     min-height: 0;
     flex: 1 1 0%;
     overflow-y: auto;

@@ -6,8 +6,8 @@ const css = readFileSync(join(process.cwd(), "app/mobile-shell-stability.css"), 
 
 describe("Messages mobile scroll ownership", () => {
   it("keeps the Messages chrome outside the scrolling conversation list", () => {
-    expect(css).toContain(".messages-experience-v5 [data-v4-host]");
-    expect(css).toContain(".messages-experience-v5 [data-v4-host] aside:not(.hidden)");
+    expect(css).toContain(".messages-page [data-chat-inbox]");
+    expect(css).toContain(".messages-page [data-chat-inbox] aside:not(.hidden)");
     expect(css).toContain("flex-direction: column");
     expect(css).toContain("overflow: hidden");
   });

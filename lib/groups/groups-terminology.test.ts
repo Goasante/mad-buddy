@@ -9,7 +9,7 @@ const source = (path: string) => stripComments(read(path));
 
 const mobileProjection = source("lib/messaging/mobile.ts");
 const messagesV4 = source("components/messages/messages-page-v4.tsx");
-const messagesV5 = source("components/messages/messages-experience-v5.tsx");
+const messagesV5 = source("components/messages/messages-shortcuts.tsx");
 const groupsRoute = source("app/(app)/groups/page.tsx");
 const groupDetailRoute = source("app/(app)/groups/[id]/page.tsx");
 const appShell = source("components/app-shell/app-shell.tsx");

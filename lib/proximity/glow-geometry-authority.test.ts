@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -176,6 +176,7 @@ describe("one proximity identity system", () => {
     return execSync(`git ls-files ${PRODUCTION_GLOB.join(" ")}`, { encoding: "utf8" })
       .split("\n")
       .filter((f) => f.endsWith(".tsx"))
+      .filter((f) => existsSync(join(process.cwd(), f)))
       .filter((f) => !/vnext|profile-lab|chats-lab|\/dev\//.test(f));
   }
 

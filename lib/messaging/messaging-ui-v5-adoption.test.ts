@@ -7,17 +7,18 @@ function read(path: string) {
 }
 
 const route = read("app/(app)/messages/page.tsx");
-const shell = read("components/messages/messages-experience-v5.tsx");
+const shell = read("components/messages/messages-shortcuts.tsx");
 const v4 = read("components/messages/messages-page-v4.tsx");
 const row = read("components/messaging/conversation-row-v4.tsx");
 const bubble = read("components/messaging/message-bubble-v4.tsx");
 const composer = read("components/messaging/message-composer-v3.tsx");
 
-describe("Messages V5 concept adoption", () => {
-  it("keeps V4 as the messaging authority and adds the V5 presentation shell", () => {
-    expect(route).toContain('MessagesExperienceV5');
-    expect(shell).toContain('MessagesPageV4');
-    expect(shell).toContain('initialConversations={initialConversations}');
+describe("Unified Messages experience", () => {
+  it("uses one page for inbox and threads, with shortcuts derived from its conversations", () => {
+    expect(route).toContain('MessagesPageV4');
+    expect(route).not.toContain('MessagesExperienceV5');
+    expect(v4).toContain('conversations={displayConversations}');
+    expect(shell).not.toContain('setConversationPinnedAction');
   });
 
   it("uses the agreed inbox hierarchy without the unwanted greeting", () => {
@@ -25,15 +26,15 @@ describe("Messages V5 concept adoption", () => {
     expect(shell).not.toContain("Good morning");
     expect(shell).toContain('href="/notifications"');
     expect(shell).toContain('href="/profile"');
-    expect(shell).toContain('aria-label="New chat"');
+    expect(v4).toContain('aria-label="New chat"');
   });
 
   it("makes favorites a real persisted feature, not decorative avatars", () => {
     expect(shell).toContain('aria-label="Favorite chats"');
     expect(shell).toContain('label="Add"');
     expect(shell).toContain('label="More"');
-    expect(shell).toContain('setConversationPinnedAction');
-    expect(shell).toContain('favoriteRank: next ? 0 : null');
+    expect(v4).toContain('setConversationPinnedAction');
+    expect(v4).toContain('favoriteRank: next ? 0 : null');
   });
 
   it("keeps mute visible and distinguishes multi-person conversations", () => {
@@ -53,8 +54,8 @@ describe("Messages V5 concept adoption", () => {
   it("keeps the real attachment and microphone composer and applies the new visual shell", () => {
     expect(composer).toContain('AttachmentPicker');
     expect(composer).toContain('<Mic className="h-5 w-5" />');
-    expect(shell).toContain('.messages-experience-v5 .composer-bubble');
-    expect(shell).toContain('.messages-experience-v5 .composer-action');
+    expect(shell).toContain('.messages-page .composer-bubble');
+    expect(shell).toContain('.messages-page .composer-action');
   });
 
   it("does not introduce call or video-call controls", () => {

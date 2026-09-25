@@ -18,7 +18,6 @@ import {
   Pin,
   Plus,
   Search,
-  UsersRound,
   X
 } from "lucide-react";
 import type { CSSProperties } from "react";
@@ -30,7 +29,6 @@ import {
   getConversationsAction,
   getMessageAction,
   getMessageByClientMessageIdAction,
-  getMessageableFriendsAction,
   getMessagesAction,
   getMentionCandidatesAction,
   getRecentMessagesAction,
@@ -55,6 +53,8 @@ import {
   updateConversationUserPreferencesAction
 } from "@/app/(app)/messaging-ultimate-actions";
 import { getReplyContextsAction } from "@/app/(app)/messaging-v3-actions";
+import { GroupsManagerModal } from "@/components/groups/groups-manager-modal";
+import { MessagesShortcuts, MessagesStyles, NewChatModal } from "@/components/messages/messages-shortcuts";
 import { useImmersiveWhile } from "@/components/app-shell/immersive-mode";
 import { GroupDetailsModal } from "@/components/groups/group-details-modal";
 import { ChatSettingsV4 } from "@/components/messaging/chat-settings-v4";
@@ -81,7 +81,7 @@ import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { conversationContext, dayLabel, startsNewDay, startsNewRun } from "@/lib/messaging/conversation-presence";
 import { announceChatFavorite, CHAT_FAVORITE_CHANGED_EVENT, isChatFavorite } from "@/lib/messaging/favorite-state";
 import type { AttachmentView } from "@/lib/messaging/attachments";
-import type { ChatMessageView, ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
+import type { ChatMessageView, ConversationView } from "@/lib/messaging/mobile";
 import type { MentionCandidate } from "@/lib/messaging/mentions";
 import {
   discardOptimistic,
@@ -219,13 +219,15 @@ export function MessagesPageV4({
   initialConversations = [],
   voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 },
   viewerId = null,
-  onManageGroups
+  viewerDisplayName = "You",
+  viewerAvatarUrl = null
 }: {
   initialConversations?: ConversationView[];
   voiceRecorderConfig?: VoiceRecorderConfig;
   /** Scopes the thread cache to this account. Presentation only, never access. */
   viewerId?: string | null;
-  onManageGroups?: () => void;
+  viewerDisplayName?: string;
+  viewerAvatarUrl?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -274,6 +276,8 @@ export function MessagesPageV4({
      thread. The hook is a drop-in for useState. */
   const [feedback, setFeedback] = useTransientFeedback();
   const [newMessageOpen, setNewMessageOpen] = useState(false);
+  const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
+  const [newChatPending, setNewChatPending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupDetailsOpen, setGroupDetailsOpen] = useState(false);
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
@@ -643,9 +647,10 @@ export function MessagesPageV4({
   }, [acknowledgeConversationRead, setFeedback]);
 
   useEffect(() => {
-    void syncConversations();
+    // The server route already supplied this inbox snapshot. Refreshing it
+    // immediately on hydration duplicates the most expensive inbox read.
     void syncInboxPreferences();
-  }, [syncConversations, syncInboxPreferences]);
+  }, [syncInboxPreferences]);
 
   useEffect(() => {
     const candidates = selectWarmConversations(conversations, selectedId);
@@ -1334,20 +1339,23 @@ export function MessagesPageV4({
   const peopleHere = ultimate?.presence.filter((person) => person.isInChat).slice(0, 3) ?? [];
 
   return (
-    <div className="mx-auto h-full min-h-0 w-full max-w-[1240px] overflow-hidden bg-background text-foreground dark:bg-[#111112] md:pb-3">
+    <div className="messages-page mx-auto flex h-full min-h-0 w-full max-w-[1240px] flex-col overflow-hidden bg-background text-foreground dark:bg-[#111112] md:pb-3">
+      <MessagesStyles />
+      {!selectedId ? <MessagesShortcuts conversations={displayConversations} viewerDisplayName={viewerDisplayName} viewerAvatarUrl={viewerAvatarUrl} onOpenConversation={openConversation} onToggleFavorite={toggleFavorite} /> : null}
       {/* Keep feedback visible over the full-screen chat without covering its
           back button or intercepting navigation. Action refusals expire. */}
       {feedback ? (
         <div
           role="status"
-          className="pointer-events-none fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+7rem)] z-[70] mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 md:inset-x-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2"
+          className="pointer-events-none fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+7rem)] z-[70] mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 text-sm text-foreground shadow-[0_12px_34px_rgba(78,4,1,.18)] backdrop-blur-xl md:inset-x-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2"
         >
           <span className="min-w-0 flex-1">{feedback}</span>
           <button type="button" aria-label="Dismiss message" onClick={() => setFeedback("")} className="pointer-events-auto -mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>
       ) : null}
 
-      <div className="grid h-full min-h-0 overflow-hidden md:min-h-[620px] md:rounded-[28px] md:border md:border-border/60 md:bg-card/45 md:shadow-[0_24px_80px_rgba(78,4,1,0.08)] lg:grid-cols-[390px_minmax(0,1fr)]">
+      <div data-chat-inbox className="relative grid min-h-0 flex-1 overflow-hidden md:min-h-[620px] md:rounded-[28px] md:border md:border-border/60 md:bg-card/45 md:shadow-[0_24px_80px_rgba(78,4,1,0.08)] lg:grid-cols-[390px_minmax(0,1fr)]">
+        {!selectedId ? <button type="button" data-new-chat-trigger onClick={() => setNewMessageOpen(true)} className="focus-ring absolute z-20 grid h-11 w-11 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_22px_rgba(78,4,1,.14)] active:scale-95 lg:hidden" aria-label="New chat" title="New chat"><PenSquare className="h-[18px] w-[18px]" aria-hidden="true" /></button> : null}
         <aside className={cn("min-w-0 bg-background dark:bg-[#111112] lg:border-r lg:border-border/60", selectedId && "hidden lg:flex lg:flex-col")}>
           <div className="sticky top-0 z-10 border-b border-black/[0.04] bg-background/95 px-3 pb-3 pt-[max(.55rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/[0.06] dark:bg-background/95 sm:px-4 md:px-5">
             <div className="flex items-center justify-between gap-3">
@@ -1358,7 +1366,7 @@ export function MessagesPageV4({
             <nav aria-label="Chat filters" className="no-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
               {PRIMARY_FILTERS.map((filter) => {
                 const active = activeFilter === filter.id;
-                return <button key={filter.id} type="button" onClick={() => setActiveFilter(filter.id)} aria-current={active ? "page" : undefined} className={cn("focus-ring relative inline-flex min-h-10 shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-3.5 text-sm font-medium transition-all duration-250 active:scale-95", active ? "border-primary/35 bg-primary/10 text-foreground shadow-sm" : "border-border/60 bg-card/65 text-muted-foreground hover:bg-card")}>{filter.label}{filter.id === "unread" && unreadChats > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground animate-in zoom-in-75">{unreadChats}</span> : null}</button>;
+                return <button key={filter.id} type="button" onClick={() => setActiveFilter(filter.id)} aria-current={active ? "page" : undefined} className={cn("focus-ring relative inline-flex min-h-10 shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-3.5 text-sm font-medium transition-colors active:scale-95", active ? "border-primary/35 bg-primary/10 text-foreground shadow-sm" : "border-border/60 bg-card/65 text-muted-foreground hover:bg-card")}>{filter.label}{filter.id === "unread" && unreadChats > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">{unreadChats}</span> : null}</button>;
               })}
               <AppMenu
                 label="More chat filters"
@@ -1381,7 +1389,7 @@ export function MessagesPageV4({
                   const pending = outgoing.filter((row) => row.status === "pending").length;
                   const failed = outgoing.length - pending;
                   const preview = pending ? `${pending} forwarded ${pending === 1 ? "message" : "messages"} sending…` : failed ? `${failed} forwarded ${failed === 1 ? "message" : "messages"} not sent · Open to retry` : null;
-                  return <li key={conversation.id} className="animate-in fade-in slide-in-from-bottom-1"><ConversationRowV4 conversation={preview ? { ...conversation, lastMessagePreview: preview } : conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>;
+                  return <li key={conversation.id}><ConversationRowV4 conversation={preview ? { ...conversation, lastMessagePreview: preview } : conversation} onIntent={() => { void warmConversation(conversation); }} onOpen={() => openConversation(conversation.id)} onMarkUnread={() => markUnread(conversation)} onFavorite={() => toggleFavorite(conversation)} onMute={() => toggleMute(conversation)} onArchive={() => toggleArchive(conversation)} /></li>;
                 })}
               </ul>
             )}
@@ -1589,19 +1597,22 @@ export function MessagesPageV4({
         </main>
       </div>
 
-      <NewChatV4 open={newMessageOpen} onOpenChange={setNewMessageOpen} onSelect={(friendId) => {
-        setNewMessageOpen(false);
-        startTransition(async () => {
+      <NewChatModal open={newMessageOpen} onOpenChange={setNewMessageOpen} pending={newChatPending} onSelect={(friendId) => {
+        if (newChatPending) return;
+        setNewChatPending(true);
+        void (async () => {
           const result = await openDirectConversationAction(friendId).catch(() => ({ ok: false, message: "Could not open chat.", conversationId: undefined }));
+          setNewChatPending(false);
           if (!result.ok || !result.conversationId) { setFeedback(result.message); return; }
+          setNewMessageOpen(false);
           await syncConversations();
           openConversation(result.conversationId);
-        });
-      }} onOpenGroups={() => {
+        })();
+      }} onGroups={() => {
         setNewMessageOpen(false);
-        if (onManageGroups) onManageGroups();
-        else setActiveFilter("groups");
+        setGroupsManagerOpen(true);
       }} />
+      <GroupsManagerModal open={groupsManagerOpen} onOpenChange={setGroupsManagerOpen} />
 
       {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => { setSettingsOpen(false); setGroupDetailsOpen(true); }} onViewProfile={() => { if (selected.otherUsername) router.push(`/friends/${selected.otherUsername}` as Route); }} onFeedback={setFeedback} /> : null}
 
@@ -1734,21 +1745,6 @@ export function MessagesPageV4({
       <MessageMediaViewer message={messages.find((message) => message.id === viewerMessageId) ?? null} open={Boolean(viewerMessageId)} onClose={() => setViewerMessageId(null)} />
     </div>
   );
-}
-
-function NewChatV4({ open, onOpenChange, onSelect, onOpenGroups }: { open: boolean; onOpenChange: (open: boolean) => void; onSelect: (friendId: string) => void; onOpenGroups: () => void }) {
-  const [friends, setFriends] = useState<MessageableFriend[] | null>(null);
-  const [query, setQuery] = useState("");
-  useEffect(() => {
-    if (!open || friends !== null) return;
-    void getMessageableFriendsAction().then(setFriends);
-  }, [friends, open]);
-  const visible = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!friends) return [];
-    return term ? friends.filter((friend) => `${friend.displayName} ${friend.username}`.toLowerCase().includes(term)) : friends;
-  }, [friends, query]);
-  return <Modal open={open} onOpenChange={onOpenChange} title="New Chat" variant="sheet"><div className="space-y-3"><div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Muddies or usernames" autoFocus className="h-11 rounded-2xl pl-10" /></div><button type="button" onClick={onOpenGroups} className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-primary/15 bg-primary/8 p-3 text-left active:scale-[.99]"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#4E0401] text-[#FEFBF3]"><UsersRound className="h-4 w-4" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">Groups</strong><span className="text-xs text-muted-foreground">Open or create a group</span></span></button>{friends === null ? <div className="grid py-8 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : visible.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No Muddies match your search.</p> : <ul className="max-h-[55vh] space-y-1 overflow-y-auto">{visible.map((friend) => <li key={friend.friendId}><button type="button" onClick={() => onSelect(friend.friendId)} className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition active:scale-[.99] hover:bg-secondary/70"><UserAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><span className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><strong className="truncate text-sm">{friend.displayName}</strong><VerifiedAccountMark isVerifiedAccount={friend.isVerifiedAccount} compact inControl /></span><span className="block truncate text-xs text-muted-foreground">@{friend.username}</span></span></button></li>)}</ul>}</div></Modal>;
 }
 
 function EditMessageModal({ message, draft, setDraft, pending, onClose, onSave }: { message: ChatMessageView | null; draft: string; setDraft: (value: string) => void; pending: boolean; onClose: () => void; onSave: () => void }) {

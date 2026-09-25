@@ -6,7 +6,8 @@ function read(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
 }
 
-const experience = read("components/messages/messages-experience-v5.tsx");
+const experience = read("components/messages/messages-shortcuts.tsx");
+const page = read("components/messages/messages-page-v4.tsx");
 /* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
    the Capacitor SPA can render the SAME navigation. The shell source is read
    as both files together: these assertions are unchanged, only the bar's
@@ -15,19 +16,13 @@ const shell = read("components/app-shell/app-shell.tsx") + read("components/app-
 
 describe("Messages V5 follow-up polish", () => {
   it("keeps the mobile top row to Messages, notifications and profile, with New Chat beside Search", () => {
-    const top = experience.slice(
-      experience.indexOf('aria-label="Messages shortcuts"'),
-      experience.indexOf('<div data-v4-host')
-    );
-    const host = experience.slice(
-      experience.indexOf('<div data-v4-host'),
-      experience.indexOf('<ManageFavoritesModal')
-    );
+    const top = experience.slice(experience.indexOf('aria-label="Messages shortcuts"'), experience.indexOf('<ManageFavoritesModal'));
+    const host = page.slice(page.indexOf('<div data-chat-inbox'), page.indexOf('<NewChatModal'));
 
     expect(top).toContain('href="/notifications"');
     expect(top).toContain('href="/profile"');
     expect(top).not.toContain('aria-label="New chat"');
-    expect(host).toContain("data-v5-new-chat-trigger");
+    expect(host).toContain("data-new-chat-trigger");
     expect(host).toContain('aria-label="New chat"');
     expect(experience).toContain("margin-right: 3.25rem");
     expect(experience).toContain("top: 1.05rem");

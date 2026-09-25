@@ -1,313 +1,99 @@
 "use client";
 
 import Link from "next/link";
-import type { Route } from "next";
-import { useRouter } from "next/navigation";
-import {
-  Bell,
-  Loader2,
-  MoreHorizontal,
-  PenSquare,
-  Plus,
-  Search,
-  Star,
-  UsersRound
-} from "lucide-react";
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
-
-import {
-  getConversationsAction,
-  getMessageableFriendsAction,
-  openDirectConversationAction,
-  setConversationPinnedAction
-} from "@/app/(app)/messaging-actions";
-import { getInboxConversationPreferencesAction } from "@/app/(app)/messaging-inbox-v4-actions";
-import { updateConversationUserPreferencesAction } from "@/app/(app)/messaging-ultimate-actions";
-import { GroupsManagerModal } from "@/components/groups/groups-manager-modal";
-import { MessagesPageV4 } from "@/components/messages/messages-page-v4";
+import { Bell, Loader2, MoreHorizontal, Plus, Search, Star, UsersRound } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { getMessageableFriendsAction } from "@/app/(app)/messaging-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { CountBadge } from "@/components/ui/count-badge";
+import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { useUnreadNotificationCount } from "@/hooks/use-unread-notification-count";
 import type { ConversationView, MessageableFriend } from "@/lib/messaging/mobile";
-import { announceChatFavorite, CHAT_FAVORITE_CHANGED_EVENT, isChatFavorite } from "@/lib/messaging/favorite-state";
-import type { VoiceRecorderConfig } from "@/lib/messaging/voice-recording";
 import { cn } from "@/lib/utils";
 
-/**
- * Presentation shell for the 2026 Messages refresh.
- *
- * Chats V4 remains the single authority for threads, drafts, presence,
- * reactions, polls, media, replies and delivery. This shell only changes the
- * inbox presentation and entry controls around that authority.
- */
-export function MessagesExperienceV5({
-  initialConversations = [],
-  voiceRecorderConfig = { enabled: false, maxDurationSeconds: 0 },
-  viewerId = null,
-  viewerDisplayName = "You",
-  viewerAvatarUrl = null
+/** Inbox shortcuts are presentational. MessagesPage owns the conversation list and favorite writes. */
+export function MessagesShortcuts({
+  conversations, viewerDisplayName, viewerAvatarUrl, onOpenConversation, onToggleFavorite
 }: {
-  initialConversations?: ConversationView[];
-  voiceRecorderConfig?: VoiceRecorderConfig;
-  viewerId?: string | null;
-  viewerDisplayName?: string;
-  viewerAvatarUrl?: string | null;
+  conversations: ConversationView[];
+  viewerDisplayName: string;
+  viewerAvatarUrl: string | null;
+  onOpenConversation: (id: string) => void;
+  onToggleFavorite: (conversation: ConversationView) => void;
 }) {
-  const router = useRouter();
   const { unreadCount, refresh: refreshNotifications } = useUnreadNotificationCount();
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(
-    () => new Set(initialConversations.filter((row) => row.pinned).map((row) => row.id))
-  );
   const [favoriteManagerOpen, setFavoriteManagerOpen] = useState(false);
-  const [pendingFavoriteIds, setPendingFavoriteIds] = useState<Set<string>>(() => new Set());
   const [favoriteListOpen, setFavoriteListOpen] = useState(false);
-  const [newChatOpen, setNewChatOpen] = useState(false);
-  const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const favorites = useMemo(() => conversations.filter((row) => row.pinned), [conversations]);
+  const favoriteIds = useMemo(() => new Set(favorites.map((row) => row.id)), [favorites]);
 
-  useEffect(() => {
-    void refreshNotifications();
-  }, [refreshNotifications]);
+  useEffect(() => { void refreshNotifications(); }, [refreshNotifications]);
 
-  useEffect(() => {
-    const onFavoriteChanged = (event: Event) => {
-      const { conversationId, favorite } = (event as CustomEvent<{ conversationId: string; favorite: boolean }>).detail;
-      setFavoriteIds((current) => toggleSetValue(current, conversationId, favorite));
-    };
-    window.addEventListener(CHAT_FAVORITE_CHANGED_EVENT, onFavoriteChanged);
-    return () => window.removeEventListener(CHAT_FAVORITE_CHANGED_EVENT, onFavoriteChanged);
-  }, []);
-
-  const favoriteConversations = useMemo(
-    () => initialConversations
-      .filter((row) => favoriteIds.has(row.id))
-      .sort((a, b) => (Date.parse(b.lastMessageAt ?? "") || 0) - (Date.parse(a.lastMessageAt ?? "") || 0)),
-    [favoriteIds, initialConversations]
-  );
-
-  function openConversation(conversationId: string) {
-    router.push(`/messages?conversation=${conversationId}` as Route);
-  }
-
-  function toggleFavorite(conversation: ConversationView) {
-    if (pendingFavoriteIds.has(conversation.id)) return;
-    const next = !favoriteIds.has(conversation.id);
-    setPendingFavoriteIds((current) => new Set(current).add(conversation.id));
-    announceChatFavorite(conversation.id, next);
-    setFeedback("");
-
-    void (async () => {
-      const [legacy, preference] = await Promise.all([
-        setConversationPinnedAction(conversation.id, next).catch(() => ({
-          ok: false,
-          message: "Favorite could not be updated."
-        })),
-        updateConversationUserPreferencesAction({
-          conversationId: conversation.id,
-          favoriteRank: next ? 0 : null
-        }).catch(() => ({ ok: false, message: "Favorite could not be updated." }))
-      ]);
-
-      setPendingFavoriteIds((current) => {
-        const updated = new Set(current);
-        updated.delete(conversation.id);
-        return updated;
-      });
-      if (!legacy.ok || !preference.ok) {
-        setFeedback(!legacy.ok ? legacy.message : preference.message);
-        // Only partial failures need a fresh projection of both stored flags.
-        void Promise.all([getConversationsAction(), getInboxConversationPreferencesAction()]).then(([rows, prefs]) => {
-          const row = rows.find((item) => item.id === conversation.id);
-          if (row) announceChatFavorite(conversation.id, isChatFavorite(row.pinned, prefs[conversation.id]?.favoriteRank));
-        }).catch(() => announceChatFavorite(conversation.id, !next));
-      }
-    })();
-  }
-
-  return (
-    <div className="messages-experience-v5 flex h-full min-h-0 flex-col">
-      <MessagesV5Styles />
-
-      <section
-        aria-label="Messages shortcuts"
-        className="shrink-0 border-b border-black/[0.045] bg-background px-3 pb-2.5 pt-[max(.6rem,env(safe-area-inset-top))] dark:border-white/[0.06] lg:hidden"
-      >
-        <div className="flex min-h-11 items-center gap-2">
-          <h1 className="min-w-0 flex-1 text-[1.55rem] font-semibold tracking-tight">Messages</h1>
-
-          <Link
-            href="/notifications"
-            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
-            title="Notifications"
-            className="focus-ring relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/55 bg-card/75 text-foreground shadow-sm transition-transform active:scale-95"
-          >
-            <Bell className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
-            {unreadCount > 0 ? <CountBadge count={unreadCount} tone="primary" /> : null}
-          </Link>
-
-          <Link
-            href="/profile"
-            aria-label="Open my profile"
-            title="My profile"
-            className="focus-ring rounded-full transition-transform active:scale-95"
-          >
-            <UserAvatar
-              name={viewerDisplayName || "You"}
-              src={viewerAvatarUrl}
-              size="sm"
-              decorative
-              className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_6px_18px_hsl(var(--shadow)/0.14)]"
-            />
-          </Link>
-        </div>
-
-        <div className="mt-2.5 flex items-end gap-2.5 overflow-x-auto pb-1 no-scrollbar" aria-label="Favorite chats">
-          <FavoriteShortcut
-            label="Add"
-            onClick={() => setFavoriteManagerOpen(true)}
-            icon={<Plus className="h-5 w-5" aria-hidden="true" />}
-          />
-          {favoriteConversations.slice(0, 5).map((conversation) => (
-            <FavoritePerson
-              key={conversation.id}
-              conversation={conversation}
-              onClick={() => openConversation(conversation.id)}
-            />
-          ))}
-          <FavoriteShortcut
-            label="More"
-            onClick={() => setFavoriteListOpen(true)}
-            icon={<MoreHorizontal className="h-5 w-5" aria-hidden="true" />}
-            badge={favoriteConversations.length > 5 ? favoriteConversations.length : undefined}
-          />
-        </div>
-      </section>
-
-      {feedback ? (
-        <p className="shrink-0 px-4 py-1.5 text-xs font-medium text-destructive lg:hidden" role="status">
-          {feedback}
-        </p>
-      ) : null}
-
-      {/*
-        The V4 search/filter block remains canonical. New Chat is absolutely
-        anchored to THIS host, not to the viewport, so it can sit in the same
-        row as V4 Search without duplicating or forking V4's query state.
-      */}
-      <div data-v4-host className="relative min-h-0 flex-1">
-        <button
-          type="button"
-          data-v5-new-chat-trigger
-          onClick={() => setNewChatOpen(true)}
-          className="focus-ring absolute z-20 grid h-11 w-11 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_22px_rgba(78,4,1,.14)] transition-transform active:scale-90 lg:hidden"
-          aria-label="New chat"
-          title="New chat"
-        >
-          <PenSquare className="h-[18px] w-[18px]" aria-hidden="true" />
-        </button>
-
-        <MessagesPageV4
-          initialConversations={initialConversations}
-          voiceRecorderConfig={voiceRecorderConfig}
-          viewerId={viewerId}
-          onManageGroups={() => setGroupsManagerOpen(true)}
-        />
+  return <>
+    <section aria-label="Messages shortcuts" className="shrink-0 border-b border-black/[0.045] bg-background px-3 pb-2.5 pt-[max(.6rem,env(safe-area-inset-top))] dark:border-white/[0.06] lg:hidden">
+      <div className="flex min-h-11 items-center gap-2">
+        <h1 className="min-w-0 flex-1 text-[1.55rem] font-semibold tracking-tight">Messages</h1>
+        <Link href="/notifications" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"} title="Notifications" className="focus-ring relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/55 bg-card/75 text-foreground shadow-sm active:scale-95">
+          <Bell className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+          {unreadCount > 0 ? <CountBadge count={unreadCount} tone="primary" /> : null}
+        </Link>
+        <Link href="/profile" aria-label="Open my profile" title="My profile" className="focus-ring rounded-full active:scale-95">
+          <UserAvatar name={viewerDisplayName || "You"} src={viewerAvatarUrl} size="sm" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_6px_18px_hsl(var(--shadow)/0.14)]" />
+        </Link>
       </div>
-
-      <ManageFavoritesModal
-        open={favoriteManagerOpen}
-        onOpenChange={setFavoriteManagerOpen}
-        conversations={initialConversations}
-        favoriteIds={favoriteIds}
-        pendingIds={pendingFavoriteIds}
-        onToggle={toggleFavorite}
-      />
-      <FavoriteListModal
-        open={favoriteListOpen}
-        onOpenChange={setFavoriteListOpen}
-        conversations={favoriteConversations}
-        onOpenConversation={(id) => {
-          setFavoriteListOpen(false);
-          openConversation(id);
-        }}
-        onManage={() => {
-          setFavoriteListOpen(false);
-          setFavoriteManagerOpen(true);
-        }}
-      />
-      <NewChatModal
-        open={newChatOpen}
-        onOpenChange={setNewChatOpen}
-        pending={isPending}
-        onSelect={(friendId) => {
-          startTransition(async () => {
-            const result = await openDirectConversationAction(friendId).catch(() => ({
-              ok: false,
-              message: "Could not open that chat.",
-              conversationId: undefined
-            }));
-            if (!result.ok || !result.conversationId) {
-              setFeedback(result.message);
-              return;
-            }
-            setNewChatOpen(false);
-            router.push(`/messages?conversation=${result.conversationId}` as Route);
-          });
-        }}
-        onGroups={() => {
-          setNewChatOpen(false);
-          setGroupsManagerOpen(true);
-        }}
-      />
-      <GroupsManagerModal open={groupsManagerOpen} onOpenChange={setGroupsManagerOpen} />
-    </div>
-  );
+      <div className="mt-2.5 flex items-end gap-2.5 overflow-x-auto pb-1 no-scrollbar" aria-label="Favorite chats">
+        <FavoriteShortcut label="Add" onClick={() => setFavoriteManagerOpen(true)} icon={<Plus className="h-5 w-5" aria-hidden="true" />} />
+        {favorites.slice(0, 5).map((conversation) => <FavoritePerson key={conversation.id} conversation={conversation} onClick={() => onOpenConversation(conversation.id)} />)}
+        <FavoriteShortcut label="More" onClick={() => setFavoriteListOpen(true)} icon={<MoreHorizontal className="h-5 w-5" aria-hidden="true" />} badge={favorites.length > 5 ? favorites.length : undefined} />
+      </div>
+    </section>
+    <ManageFavoritesModal open={favoriteManagerOpen} onOpenChange={setFavoriteManagerOpen} conversations={conversations} favoriteIds={favoriteIds} onToggle={onToggleFavorite} />
+    <FavoriteListModal open={favoriteListOpen} onOpenChange={setFavoriteListOpen} conversations={favorites} onOpenConversation={(id) => { setFavoriteListOpen(false); onOpenConversation(id); }} onManage={() => { setFavoriteListOpen(false); setFavoriteManagerOpen(true); }} />
+  </>;
 }
 
-function MessagesV5Styles() {
+export function MessagesStyles() {
   return (
     <style>{`
       @media (max-width: 1023px) {
-        /* V5 owns the mobile title. Keep V4's desktop title/compose row. */
-        .messages-experience-v5 [data-v4-host] aside > div:first-child > div:first-child {
+        /* The mobile title lives above the inbox; desktop keeps its inbox title. */
+        .messages-page [data-chat-inbox] aside > div:first-child > div:first-child {
           display: none;
         }
 
-        /* V4's search row is still the real search. Reserve exactly one 44px
-           action slot beside it for the V5 New Chat trigger. */
-        .messages-experience-v5 [data-v4-host] aside > div:first-child {
+        /* Keep New Chat beside the canonical search field. */
+        .messages-page [data-chat-inbox] aside > div:first-child {
           padding-top: .3rem;
         }
-        .messages-experience-v5 [data-v4-host] aside > div:first-child > div:nth-child(2) {
+        .messages-page [data-chat-inbox] aside > div:first-child > div:nth-child(2) {
           margin-right: 3.25rem;
         }
-        .messages-experience-v5 [data-v5-new-chat-trigger] {
+        .messages-page [data-new-chat-trigger] {
           right: .75rem;
           top: 1.05rem;
         }
       }
 
-      .messages-experience-v5 .composer-row {
+      .messages-page .composer-row {
         gap: .55rem;
         padding: .55rem .7rem .5rem;
       }
-      .messages-experience-v5 .composer-bubble {
+      .messages-page .composer-bubble {
         min-height: 48px;
         border: 1px solid hsl(var(--border) / .62);
         border-radius: 9999px;
         background: hsl(var(--secondary) / .58);
         box-shadow: 0 4px 18px hsl(var(--shadow) / .06);
       }
-      .messages-experience-v5 .composer-bubble:focus-within {
+      .messages-page .composer-bubble:focus-within {
         border-color: hsl(var(--primary) / .34);
         background: hsl(var(--background) / .96);
         box-shadow: 0 0 0 3px hsl(var(--primary) / .07), 0 6px 20px hsl(var(--shadow) / .08);
       }
-      .messages-experience-v5 .composer-action {
+      .messages-page .composer-action {
         width: 48px;
         height: 48px;
         border-radius: 9999px;
@@ -315,7 +101,7 @@ function MessagesV5Styles() {
         color: #FEFBF3;
         box-shadow: 0 8px 22px rgba(78, 4, 1, .14);
       }
-      .messages-experience-v5 .composer-action:hover {
+      .messages-page .composer-action:hover {
         background: #D97F20;
       }
 
@@ -408,14 +194,12 @@ function ManageFavoritesModal({
   onOpenChange,
   conversations,
   favoriteIds,
-  pendingIds,
   onToggle
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversations: ConversationView[];
   favoriteIds: ReadonlySet<string>;
-  pendingIds: ReadonlySet<string>;
   onToggle: (conversation: ConversationView) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -436,7 +220,6 @@ function ManageFavoritesModal({
               <li key={conversation.id}>
                 <button
                   type="button"
-                  disabled={pendingIds.has(conversation.id)}
                   onClick={() => onToggle(conversation)}
                   className="focus-ring flex min-h-14 w-full items-center gap-3 rounded-2xl px-2.5 py-2 text-left transition-colors hover:bg-secondary/65 disabled:opacity-60"
                 >
@@ -500,7 +283,7 @@ function FavoriteListModal({
   );
 }
 
-function NewChatModal({
+export function NewChatModal({
   open,
   onOpenChange,
   pending,
@@ -515,11 +298,12 @@ function NewChatModal({
 }) {
   const [friends, setFriends] = useState<MessageableFriend[] | null>(null);
   const [query, setQuery] = useState("");
+  const [friendsLoadError, setFriendsLoadError] = useState(false);
 
   useEffect(() => {
-    if (!open || friends !== null) return;
-    void getMessageableFriendsAction().then(setFriends);
-  }, [friends, open]);
+    if (!open || friends !== null || friendsLoadError) return;
+    void getMessageableFriendsAction().then(setFriends).catch(() => setFriendsLoadError(true));
+  }, [friends, friendsLoadError, open]);
 
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -555,7 +339,12 @@ function NewChatModal({
             <span className="text-xs text-muted-foreground">Create, manage or open a private Group</span>
           </span>
         </button>
-        {friends === null ? (
+        {friendsLoadError ? (
+          <div className="space-y-2 py-6 text-center text-sm" role="alert">
+            <p>Could not load Muddies.</p>
+            <Button variant="outline" onClick={() => setFriendsLoadError(false)}>Try again</Button>
+          </div>
+        ) : friends === null ? (
           <div className="grid place-items-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
         ) : visible.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">No Muddies match your search.</p>
@@ -571,7 +360,7 @@ function NewChatModal({
                 >
                   <UserAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" decorative />
                   <span className="min-w-0 flex-1">
-                    <strong className="block truncate text-sm">{friend.displayName}</strong>
+                    <span className="flex items-center gap-1.5"><strong className="truncate text-sm">{friend.displayName}</strong><VerifiedAccountMark isVerifiedAccount={friend.isVerifiedAccount} compact inControl /></span>
                     <span className="block truncate text-xs text-muted-foreground">@{friend.username}</span>
                   </span>
                 </button>
@@ -604,11 +393,4 @@ function SearchField({
       />
     </div>
   );
-}
-
-function toggleSetValue(current: ReadonlySet<string>, id: string, enabled: boolean) {
-  const copy = new Set(current);
-  if (enabled) copy.add(id);
-  else copy.delete(id);
-  return copy;
 }
