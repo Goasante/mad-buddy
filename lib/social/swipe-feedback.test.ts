@@ -188,7 +188,7 @@ describe("pending Muddy requests show on the Muddies tab", () => {
   it("clears the moment a request is accepted or declined", () => {
     // Every accept, decline, cancel and block funnels through runFriendAction.
     const runner = friendsPage.slice(friendsPage.indexOf("function runFriendAction"));
-    expect(runner.slice(0, 600)).toContain("announceMuddyRequestsUpdated()");
+    expect(runner.slice(0, runner.indexOf("function searchUsers"))).toContain("announceMuddyRequestsUpdated()");
   });
 
   it("polls as a safety net, not a 30s cadence copied from messages", () => {

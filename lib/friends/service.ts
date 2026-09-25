@@ -1,5 +1,6 @@
 import "server-only";
 
+import { after } from "next/server";
 import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -619,57 +620,58 @@ export async function acceptFriendRequest(
 
   const admin = createSupabaseAdminClient();
 
-  // Both sides now have a Muddy; the sender's request was also accepted.
-  {
-    const [{ recordMilestone }, { grantFriendshipAchievements }] = await Promise.all([
-      import("@/lib/onboarding/service"),
-      import("@/lib/engagement/achievements")
-    ]);
-    await Promise.all([
-      recordMilestone(admin, userId, "first_muddy_added"),
-      recordMilestone(admin, request.sender_id, "first_muddy_added"),
-      recordMilestone(admin, request.sender_id, "first_request_accepted"),
-      grantFriendshipAchievements(admin, userId),
-      grantFriendshipAchievements(admin, request.sender_id)
-    ]);
-  }
-
-  // Life events, COMPENSATING. Emitted after the RPC has already committed the
-  // friendship, so a failure here can never undo it.
-  //
-  // The RPC reports which of the two things it did, because only the database
-  // can tell them apart without racing: it holds the row lock that decides
-  // whether this acceptance found an ended relationship or none at all.
-  //
-  // Reactivation deliberately emits ONLY `relationship.reactivated`. Emitting
-  // `relationship.created` again would be harmless at the dedupe key (the pair
-  // is created once), but it would also be a lie about what happened — the
-  // relationship was not created, it resumed.
-  {
-    const { emitLifeEvent } = await import("@/lib/life/emit");
-    void emitLifeEvent(admin, {
-      eventType: request.reactivated ? "relationship.reactivated" : "relationship.created",
-      actorId: userId,
-      subjectId: request.sender_id,
-      // A pair is created once, but may reactivate many times, so the natural
-      // key for reactivation carries the request that caused it. Without that
-      // every reactivation after the first would dedupe into the first one.
-      naturalKey: request.reactivated ? `reactivated:${parsedRequest.data}` : "created"
-    });
-  }
-
-  const { data: receiverProfile } = await admin
-    .from("profiles")
-    .select("full_name")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  await deliverNotification(admin, {
-    userId: request.sender_id,
-    senderId: userId,
-    type: "friend_request_accepted",
-    title: `${receiverProfile?.full_name ?? "A Muddy"} is now your Muddy`,
-    message: "Your Muddy request was accepted."
+  // The RPC has committed the friendship. Milestones, the life event and the
+  // notification must not keep the Accept button waiting or turn a completed
+  // acceptance into a reported failure. Next retains after() work for the
+  // request lifetime, unlike an untracked, fire-and-forget Promise.
+  after(async () => {
+    try {
+      const [{ recordMilestone }, { grantFriendshipAchievements }, { emitLifeEvent }] = await Promise.all([
+        import("@/lib/onboarding/service"),
+        import("@/lib/engagement/achievements"),
+        import("@/lib/life/emit")
+      ]);
+      const followups = await Promise.allSettled([
+        recordMilestone(admin, userId, "first_muddy_added"),
+        recordMilestone(admin, request.sender_id, "first_muddy_added"),
+        recordMilestone(admin, request.sender_id, "first_request_accepted"),
+        grantFriendshipAchievements(admin, userId),
+        grantFriendshipAchievements(admin, request.sender_id),
+        // Reactivation must not create a second relationship-created event.
+        emitLifeEvent(admin, {
+          eventType: request.reactivated ? "relationship.reactivated" : "relationship.created",
+          actorId: userId,
+          subjectId: request.sender_id,
+          naturalKey: request.reactivated ? `reactivated:${parsedRequest.data}` : "created"
+        }),
+        (async () => {
+          const { data: receiverProfile } = await admin
+            .from("profiles")
+            .select("full_name")
+            .eq("user_id", userId)
+            .maybeSingle();
+          await deliverNotification(admin, {
+            userId: request.sender_id,
+            senderId: userId,
+            type: "friend_request_accepted",
+            title: `${receiverProfile?.full_name ?? "A Muddy"} is now your Muddy`,
+            message: "Your Muddy request was accepted."
+          });
+        })()
+      ]);
+      for (const result of followups) {
+        if (result.status === "rejected") throw result.reason;
+      }
+    } catch (error) {
+      logBackendEvent("warn", {
+        requestId: createRequestId(),
+        action: "friends.accept.followup",
+        statusCode: 500,
+        latencyMs: 0,
+        userId,
+        errorType: errorType(error)
+      });
+    }
   });
 
   return { ok: true, message: "Muddy request accepted." };

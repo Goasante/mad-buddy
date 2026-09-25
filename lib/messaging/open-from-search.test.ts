@@ -260,16 +260,10 @@ describe("all message entry points", () => {
 
   it("guards the double tap at every entry point", () => {
     expect(modal).toContain("if (!friendId || isMessagePending) return;");
-    /* The Muddies guard now reads `busy`, not `isPending`.
-     *
-     * Opening a conversation CREATES one when the pair has none, so it is a
-     * mutation and no longer runs inside a transition -- which means isPending
-     * stays false for its whole duration. Keeping the old name here would have
-     * asserted a guard that no longer guards anything: the double tap it was
-     * written to stop would sail straight through. `busy` combines the
-     * remaining read transition with the write flag. */
+    /* Opening a conversation CREATES one when the pair has none, so the
+     * double-tap guard follows the explicit write flag. */
     expect(friends).toContain("if (busy) return;");
-    expect(friends).toContain("const busy = isPending || writing;");
+    expect(friends).toContain("const busy = writing;");
     expect(profile).toContain("if (isActionPending) return;");
   });
 

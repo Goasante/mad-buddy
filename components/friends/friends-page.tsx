@@ -18,7 +18,7 @@ import {
   X
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useSwipeTabs } from "@/hooks/use-swipe-tabs";
@@ -257,23 +257,26 @@ export function FriendsPageContent({
   const [addOpen, setAddOpen] = useState(() => searchParams.get("tab") === "add");
   const [addQuery, setAddQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchPending, setSearchPending] = useState(false);
+  const searchRequestIdRef = useRef(0);
+  const searchPendingRef = useRef(false);
   const [reportUser, setReportUser] = useState<UserSummary | null>(null);
   const [reportDescription, setReportDescription] = useState("");
   const [profileUser, setProfileUser] = useState<UserSummary | null>(null);
   const [createCircleOpen, setCreateCircleOpen] = useState(false);
   const [newCircleName, setNewCircleName] = useState("");
   const [circleTargetUser, setCircleTargetUser] = useState<UserSummary | null>(null);
-  const [isPending, startTransition] = useTransition();
   /**
    * Relationship writes that must finish.
    *
    * Requests, accepts, blocks and Circle changes are mutations: an abandoned
    * one leaves the list showing a relationship the server does not have.
-   * Combined with `isPending` wherever the UI only needs "something is
-   * happening", so the remaining read transitions still show progress.
+   * Keep the intent visibly pending while the write completes.
    */
   const [writing, setWriting] = useState(false);
-  const busy = isPending || writing;
+  const pendingFriendIdsRef = useRef(new Set<string>());
+  const [pendingFriendActions, setPendingFriendActions] = useState<Record<string, string>>({});
+  const busy = writing;
 
   /**
    * The single place a tab changes, whether by tap, swipe or keyboard.
@@ -349,9 +352,7 @@ export function FriendsPageContent({
       /* Guard the double tap: the server de-duplicates on direct_key anyway,
        * but there is no reason to send a second request.
        *
-       * Checks `busy`, not `isPending`. This write no longer runs inside a
-       * transition, so isPending stays false throughout it -- the guard would
-       * have stopped guarding the very call it was written for. */
+       * Checks the actual write state so the guard covers the request. */
       if (busy) return;
               /* Opening a conversation CREATES one if the pair has none, so it is a
          * mutation -- and it navigates on success, which must not happen for a
@@ -535,19 +536,29 @@ export function FriendsPageContent({
     setFeedback(message);
   }
 
-  function runFriendAction(action: () => Promise<{ ok: boolean; message: string }>, onLocalSuccess: () => void) {
+  function runFriendAction(userId: string, pendingLabel: string, action: () => Promise<{ ok: boolean; message: string }>, onLocalSuccess: () => void) {
     /* THE SHARED FUNNEL for accept, decline, cancel, remove and block -- every
      * one a relationship mutation, and every one previously tied to
      * interruptible work. An abandoned transition here means the row
      * disappears locally while the server still holds the old relationship,
      * and the next refresh brings it back with no explanation. */
+    if (pendingFriendIdsRef.current.has(userId)) return;
+    pendingFriendIdsRef.current.add(userId);
+    setPendingFriendActions((current) => ({ ...current, [userId]: pendingLabel }));
+    setWriting(true);
+    setFeedback("");
     void (async () => {
-      setWriting(true);
-      const result = await action().catch(() => ({
+      const result = await Promise.resolve().then(action).catch(() => ({
         ok: false,
         message: "That didn't go through. Check your connection and try again."
       }));
-      setWriting(false);
+      pendingFriendIdsRef.current.delete(userId);
+      setPendingFriendActions((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      setWriting(pendingFriendIdsRef.current.size > 0);
       setFeedback(result.message);
       if (!result.ok) interactionFeedback.error();
 
@@ -567,17 +578,28 @@ export function FriendsPageContent({
   }
 
   function searchUsers() {
-    startTransition(async () => {
-      const result = await searchUsersAction(addQuery);
+    if (searchPendingRef.current || addQuery.trim().length < 2) return;
+    const requestId = ++searchRequestIdRef.current;
+    searchPendingRef.current = true;
+    setSearchPending(true);
+    setFeedback("");
+    void searchUsersAction(addQuery).then((result) => {
+      if (requestId !== searchRequestIdRef.current) return;
       setFeedback(result.message);
       setHasSearched(true);
-
-      if (result.ok) {
-        setUsers((currentUsers) => [
-          ...currentUsers.filter((user) => user.status !== "available"),
-          ...result.users
-        ]);
+      if (result.ok) setUsers((currentUsers) => [
+        ...currentUsers.filter((user) => user.status !== "available"),
+        ...result.users
+      ]);
+    }).catch(() => {
+      if (requestId === searchRequestIdRef.current) {
+        setFeedback("Search didn't finish. Check your connection and try again.");
+        setHasSearched(true);
       }
+    }).finally(() => {
+      if (requestId !== searchRequestIdRef.current) return;
+      searchPendingRef.current = false;
+      setSearchPending(false);
     });
   }
 
@@ -706,6 +728,7 @@ export function FriendsPageContent({
       separatorBefore: true,
       onSelect: () =>
         runFriendAction(
+          user.id, "Removing…",
           () => removeFriendAction(user.id),
           () => removeUser(user.id, `${user.displayName} was removed.`)
         )
@@ -717,6 +740,7 @@ export function FriendsPageContent({
       destructive: true,
       onSelect: () =>
         runFriendAction(
+          user.id, "Blocking…",
           () => blockUserAction(user.id),
           () => updateUserStatus(user.id, "blocked", `${user.displayName} is blocked.`)
         )
@@ -749,12 +773,14 @@ export function FriendsPageContent({
       onMessage={() => openConversationWith(user.id)}
       onRemove={() =>
         runFriendAction(
+          user.id, "Removing…",
           () => removeFriendAction(user.id),
           () => removeUser(user.id, `${user.displayName} was removed.`)
         )
       }
       onBlock={() =>
         runFriendAction(
+          user.id, "Blocking…",
           () => blockUserAction(user.id),
           () => updateUserStatus(user.id, "blocked", `${user.displayName} is blocked.`)
         )
@@ -888,7 +914,7 @@ export function FriendsPageContent({
       </div>
 
       {feedback ? (
-        <p className="text-sm text-muted-foreground" role="status">{feedback}</p>
+        <p className="pointer-events-none fixed inset-x-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5rem)] z-[70] mx-auto max-w-md rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground shadow-lg md:bottom-6" role="status">{feedback}</p>
       ) : null}
 
 
@@ -1043,6 +1069,7 @@ export function FriendsPageContent({
               </div>
 
               <MuddiesRequests
+                pendingActions={pendingFriendActions}
                 requests={incomingRequests.slice(0, 3).map((person) => ({
                   id: person.id,
                   requestId: person.requestId,
@@ -1054,6 +1081,7 @@ export function FriendsPageContent({
                 }))}
                 onAccept={(person) =>
                   runFriendAction(
+                    person.id, "Accepting…",
                     () => acceptFriendRequestAction(person.requestId ?? person.id),
                     () => {
                       interactionFeedback.success();
@@ -1063,6 +1091,7 @@ export function FriendsPageContent({
                 }
                 onIgnore={(person) =>
                   runFriendAction(
+                    person.id, "Ignoring…",
                     () => updateFriendRequestStatusAction(person.requestId ?? person.id, "declined"),
                     () => removeUser(person.id, `${person.displayName}'s request was ignored.`)
                   )
@@ -1178,8 +1207,10 @@ export function FriendsPageContent({
                   key={user.id}
                   user={user}
                   kind={requestSubTab}
+                  pendingAction={pendingFriendActions[user.id]}
                   onAccept={() =>
                     runFriendAction(
+                      user.id, "Accepting…",
                       () => acceptFriendRequestAction(user.requestId ?? user.id),
                       () => {
                         interactionFeedback.success();
@@ -1189,12 +1220,14 @@ export function FriendsPageContent({
                   }
                   onDecline={() =>
                     runFriendAction(
+                      user.id, "Declining…",
                       () => updateFriendRequestStatusAction(user.requestId ?? user.id, "declined"),
                       () => removeUser(user.id, `${user.displayName}'s request was declined.`)
                     )
                   }
                   onCancel={() =>
                     runFriendAction(
+                      user.id, "Cancelling…",
                       () => updateFriendRequestStatusAction(user.requestId ?? user.id, "cancelled"),
                       () => removeUser(user.id, `Request to ${user.displayName} was cancelled.`)
                     )
@@ -1230,13 +1263,15 @@ export function FriendsPageContent({
                   className="shrink-0"
                   onClick={() =>
                     runFriendAction(
+                      user.id, "Unblocking…",
                       () => unblockUserAction(user.id),
                       () => updateUserStatus(user.id, "available", `${user.displayName} is unblocked.`)
                     )
                   }
+                  disabled={Boolean(pendingFriendActions[user.id])}
                 >
-                  <Check className="h-4 w-4" aria-hidden="true" />
-                  Unblock
+                  {pendingFriendActions[user.id] ? null : <Check className="h-4 w-4" aria-hidden="true" />}
+                  {pendingFriendActions[user.id] ?? "Unblock"}
                 </Button>
               </li>
             ))}
@@ -1257,26 +1292,37 @@ export function FriendsPageContent({
         onOpenChange={(next) => {
           setAddOpen(next);
           if (!next) {
+            ++searchRequestIdRef.current;
+            searchPendingRef.current = false;
+            setSearchPending(false);
             // Closing (X, backdrop, Escape, or after a successful send) always
             // clears the search, so reopening later never shows a stale query
             // or result list from a previous visit.
             setAddQuery("");
             setHasSearched(false);
+            setUsers((current) => current.filter((user) => user.status !== "available"));
           }
         }}
         query={addQuery}
         onQueryChange={(value) => {
+          ++searchRequestIdRef.current;
+          searchPendingRef.current = false;
+          setSearchPending(false);
           setAddQuery(value);
           setFeedback("");
           setHasSearched(false);
+          setUsers((current) => current.filter((user) => user.status !== "available"));
         }}
         onSearch={searchUsers}
         results={users.filter((user) => user.status === "available")}
         hasSearched={hasSearched}
-        isPending={isPending}
+        isPending={searchPending}
+        searchPending={searchPending}
+        pendingActions={pendingFriendActions}
         feedback={feedback}
         onRequest={(user) =>
           runFriendAction(
+            user.id, "Sending…",
             () => sendFriendRequestAction(user.id),
             () => {
               interactionFeedback.success();
@@ -1302,6 +1348,7 @@ export function FriendsPageContent({
         onSubmit={() => {
           if (reportUser) {
             runFriendAction(
+              reportUser.id, "Reporting…",
               () =>
                 reportUserAction({
                   targetUserId: reportUser.id,
@@ -1788,12 +1835,14 @@ function ActiveNowAvatar({
 function RequestRow({
   user,
   kind,
+  pendingAction,
   onAccept,
   onDecline,
   onCancel
 }: {
   user: UserSummary;
   kind: "received" | "sent";
+  pendingAction?: string;
   onAccept: () => void;
   onDecline: () => void;
   onCancel: () => void;
@@ -1815,12 +1864,12 @@ function RequestRow({
       <div className="flex shrink-0 items-center gap-2">
         {kind === "received" ? (
           <>
-            <Button type="button" size="sm" onClick={onAccept}>
-              <Check className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden min-[380px]:inline">Accept</span>
+            <Button type="button" size="sm" disabled={Boolean(pendingAction)} onClick={onAccept} aria-label={pendingAction === "Accepting…" ? pendingAction : `Accept ${user.displayName}`}>
+              {pendingAction === "Accepting…" ? null : <Check className="h-4 w-4" aria-hidden="true" />}
+              <span>{pendingAction === "Accepting…" ? pendingAction : "Accept"}</span>
             </Button>
-            <Button type="button" variant="outline" size="icon" aria-label={`Decline ${user.displayName}`} title="Decline" onClick={onDecline}>
-              <X className="h-4 w-4" aria-hidden="true" />
+            <Button type="button" variant="outline" size={pendingAction === "Declining…" ? "sm" : "icon"} aria-label={pendingAction === "Declining…" ? pendingAction : `Decline ${user.displayName}`} title="Decline" disabled={Boolean(pendingAction)} onClick={onDecline}>
+              {pendingAction === "Declining…" ? pendingAction : <X className="h-4 w-4" aria-hidden="true" />}
             </Button>
           </>
         ) : (
@@ -1829,9 +1878,9 @@ function RequestRow({
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               Pending
             </span>
-            <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-              <X className="h-4 w-4" aria-hidden="true" />
-              Cancel
+            <Button type="button" variant="outline" size="sm" disabled={Boolean(pendingAction)} onClick={onCancel}>
+              {pendingAction ? null : <X className="h-4 w-4" aria-hidden="true" />}
+              {pendingAction ?? "Cancel"}
             </Button>
           </>
         )}
@@ -1849,6 +1898,8 @@ function AddMuddyModal({
   results,
   hasSearched,
   isPending,
+  searchPending,
+  pendingActions,
   feedback,
   onRequest
 }: {
@@ -1860,6 +1911,8 @@ function AddMuddyModal({
   results: UserSummary[];
   hasSearched: boolean;
   isPending: boolean;
+  searchPending: boolean;
+  pendingActions: Readonly<Record<string, string>>;
   feedback: string;
   onRequest: (user: UserSummary) => void;
 }) {
@@ -1887,14 +1940,15 @@ function AddMuddyModal({
             disabled={isPending}
           />
         </div>
-        <Button type="submit" disabled={isPending || query.trim().length < 2}>
-          Search
+        <Button type="submit" disabled={isPending || query.trim().length < 2} aria-busy={searchPending}>
+          {searchPending ? "Searching…" : "Search"}
         </Button>
       </form>
 
       {feedback ? <p className="mt-3 text-sm text-muted-foreground">{feedback}</p> : null}
 
-      <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto">
+      <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto" aria-busy={searchPending}>
+        {searchPending ? <p role="status" className="py-2 text-sm text-muted-foreground">Searching for Muddies…</p> : null}
         {results.length > 0
           ? results.map((user) => (
               <div key={user.id} className="flex items-center gap-3 rounded-lg border border-border/70 p-3">
@@ -1907,9 +1961,9 @@ function AddMuddyModal({
                   </p>
                   <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
                 </div>
-                <Button type="button" size="sm" onClick={() => onRequest(user)}>
+                <Button type="button" size="sm" disabled={Boolean(pendingActions[user.id])} onClick={() => onRequest(user)}>
                   <UserPlus className="h-4 w-4" aria-hidden="true" />
-                  Send request
+                  {pendingActions[user.id] ?? "Send request"}
                 </Button>
               </div>
             ))

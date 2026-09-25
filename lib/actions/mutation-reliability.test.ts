@@ -110,7 +110,8 @@ describe("every converted mutation owns an explicit pending flag", () => {
   it("Muddies writes report through their own flag", () => {
     const source = read("components/friends/friends-page.tsx");
     expect(source).toContain("const [writing, setWriting] = useState(false);");
-    expect(source).toContain("const busy = isPending || writing;");
+    expect(source).toContain("const busy = writing;");
+    expect(source).toContain("pendingFriendIdsRef.current.has(userId)");
   });
 });
 

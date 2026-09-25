@@ -25,20 +25,23 @@ export function MuddiesRequests({
   requests,
   onAccept,
   onIgnore,
-  pendingId
+  pendingId,
+  pendingActions
 }: {
   requests: readonly MuddyRequestPerson[];
   onAccept: (person: MuddyRequestPerson) => void;
   onIgnore: (person: MuddyRequestPerson) => void;
   /** The request mid-flight, if any. */
   pendingId?: string | null;
+  pendingActions?: Readonly<Record<string, string>>;
 }) {
   if (requests.length === 0) return null;
 
   return (
     <ul className="muddies-requests">
       {requests.map((person) => {
-        const busy = pendingId === person.id;
+        const pendingAction = pendingActions?.[person.id];
+        const busy = pendingId === person.id || Boolean(pendingAction);
 
         return (
           <li key={person.id} className="muddies-request">
@@ -74,17 +77,17 @@ export function MuddiesRequests({
                 type="button"
                 onClick={() => onIgnore(person)}
                 disabled={busy}
-                className="muddies-request-ignore focus-ring"
+                className="muddies-request-ignore focus-ring active:scale-[0.98] motion-reduce:active:scale-100"
               >
-                Ignore
+                {pendingAction === "Ignoring…" ? pendingAction : "Ignore"}
               </button>
               <button
                 type="button"
                 onClick={() => onAccept(person)}
                 disabled={busy}
-                className="muddies-request-accept focus-ring"
+                className="muddies-request-accept focus-ring active:scale-[0.98] motion-reduce:active:scale-100"
               >
-                Accept
+                {pendingAction === "Accepting…" ? pendingAction : "Accept"}
               </button>
             </div>
           </li>

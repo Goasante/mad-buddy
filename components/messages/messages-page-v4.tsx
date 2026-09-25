@@ -279,6 +279,8 @@ export function MessagesPageV4({
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
   const [newChatPending, setNewChatPending] = useState(false);
+  const [newChatPendingFriendId, setNewChatPendingFriendId] = useState<string | null>(null);
+  const newChatPendingRef = useRef(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupDetailsOpen, setGroupDetailsOpen] = useState(false);
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
@@ -1636,28 +1638,35 @@ export function MessagesPageV4({
         </main>
       </div>
 
-      <NewChatModal open={newMessageOpen} onOpenChange={setNewMessageOpen} pending={newChatPending} onSelect={(friendId) => {
-        if (newChatPending) return;
+      <NewChatModal open={newMessageOpen} onOpenChange={setNewMessageOpen} pending={newChatPending} pendingFriendId={newChatPendingFriendId} onSelect={(friendId) => {
+        if (newChatPendingRef.current) return;
+        newChatPendingRef.current = true;
         setNewChatPending(true);
+        setNewChatPendingFriendId(friendId);
         void (async () => {
-          const result = await openDirectConversationAction(friendId).catch(() => ({ ok: false, message: "Could not open chat.", conversationId: undefined }));
-          if (!result.ok || !result.conversationId) {
-            setNewChatPending(false);
-            setFeedback(result.message);
-            return;
-          }
-          if (!conversations.some((conversation) => conversation.id === result.conversationId)) {
-            const refreshed = await syncConversations();
-            if (!refreshed?.some((conversation) => conversation.id === result.conversationId)) {
-              setNewChatPending(false);
-              setNewMessageOpen(false);
-              router.push(`/messages?conversation=${result.conversationId}` as Route);
+          try {
+            const result = await openDirectConversationAction(friendId);
+            if (!result.ok || !result.conversationId) {
+              setFeedback(result.message);
               return;
             }
+            if (!conversations.some((conversation) => conversation.id === result.conversationId)) {
+              const refreshed = await syncConversations();
+              if (!refreshed?.some((conversation) => conversation.id === result.conversationId)) {
+                setNewMessageOpen(false);
+                router.push(`/messages?conversation=${result.conversationId}` as Route);
+                return;
+              }
+            }
+            setNewMessageOpen(false);
+            openConversation(result.conversationId);
+          } catch {
+            setFeedback("Could not open chat. Check your connection and try again.");
+          } finally {
+            newChatPendingRef.current = false;
+            setNewChatPending(false);
+            setNewChatPendingFriendId(null);
           }
-          setNewChatPending(false);
-          setNewMessageOpen(false);
-          openConversation(result.conversationId);
         })();
       }} onGroups={() => {
         setNewMessageOpen(false);

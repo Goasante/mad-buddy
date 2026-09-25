@@ -287,12 +287,14 @@ export function NewChatModal({
   open,
   onOpenChange,
   pending,
+  pendingFriendId,
   onSelect,
   onGroups
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pending: boolean;
+  pendingFriendId: string | null;
   onSelect: (friendId: string) => void;
   onGroups: () => void;
 }) {
@@ -357,13 +359,15 @@ export function NewChatModal({
                   type="button"
                   disabled={pending}
                   onClick={() => onSelect(friend.friendId)}
-                  className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition hover:bg-secondary/70 disabled:opacity-60"
+                  aria-busy={pendingFriendId === friend.friendId}
+                  className="focus-ring flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition hover:bg-secondary/70 active:bg-secondary disabled:opacity-60"
                 >
                   <UserAvatar name={friend.displayName} src={friend.avatarUrl} size="sm" decorative />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5"><strong className="truncate text-sm">{friend.displayName}</strong><VerifiedAccountMark isVerifiedAccount={friend.isVerifiedAccount} compact inControl /></span>
                     <span className="block truncate text-xs text-muted-foreground">@{friend.username}</span>
                   </span>
+                  {pendingFriendId === friend.friendId ? <span className="shrink-0 text-xs font-medium text-primary">Opening…</span> : null}
                 </button>
               </li>
             ))}
