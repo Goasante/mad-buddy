@@ -130,7 +130,7 @@ export function buildContentSecurityPolicy(options: {
     // which connect-src otherwise blocks even though the gtag.js script tag
     // itself is already trusted via the googletagmanager.com host source.
     `connect-src 'self' data:${supabase ? ` ${supabase} ${realtimeOrigin(supabase)}` : ""} ${gtm} ${ga} ${turnstile}`,
-    `font-src 'self'`,
+    `font-src 'self' https://fonts.gstatic.com`,
     `frame-src ${turnstile}`,
     `frame-ancestors 'none'`,
     `object-src 'none'`,
