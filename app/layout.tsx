@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { resolveBuildId } from "@/lib/pwa/update";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
+import "@/styles/typography.css";
 import "./icon-polish.css";
 import "./mobile-shell-stability.css";
 import "./mobile-nav-polish.css";
