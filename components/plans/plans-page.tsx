@@ -390,8 +390,10 @@ export function PlansPageContent({
               : plan
           )
         );
-        // A host's newly dated Plan belongs under Created by you. The canonical
-        // bucket logic will make the same decision again after refresh.
+        // A host's newly dated Plan belongs under Created by you. Close the
+        // editor so the move is visible immediately; the canonical bucket logic
+        // makes the same decision again after refresh.
+        setSelectedPlanId(null);
         setActiveBucket("hosting");
         router.refresh();
       } finally {
