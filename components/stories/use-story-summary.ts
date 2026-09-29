@@ -58,7 +58,12 @@ export function useStorySummary(
 
   useEffect(() => {
     if (!authorId) return;
-    void load(false);
+    // Defer the read-through one tick so the effect subscribes/schedules work
+    // rather than synchronously cascading local state during commit.
+    const timer = window.setTimeout(() => {
+      void load(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [authorId, load]);
 
   // No timer polling. When the person returns to the app, re-authorize and
