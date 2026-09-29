@@ -5365,6 +5365,14 @@ export type Database = {
         Args: { p_plan_id: string };
         Returns: string;
       };
+      delete_owned_plan: {
+        Args: { p_actor_id: string; p_plan_id: string };
+        Returns: boolean;
+      };
+      delete_owned_event: {
+        Args: { p_actor_id: string; p_event_id: string };
+        Returns: boolean;
+      };
       // Contextual Plan participant eligibility (20260907120000). One authority
       // for block-first, friendship-or-source-UpFor eligibility. The host is
       // NOT passed through it -- the reconciler admits the creator separately.
