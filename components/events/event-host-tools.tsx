@@ -90,6 +90,7 @@ export function EventHostTools({
   eventEnded,
   onOpen,
   onEndEvent,
+  onDeleteEvent,
   pending
 }: {
   eventId: string;
@@ -108,9 +109,11 @@ export function EventHostTools({
   eventEnded: boolean;
   onOpen: (row: HostToolsRow) => void;
   onEndEvent: () => void;
+  onDeleteEvent: () => void;
   pending: boolean;
 }) {
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -217,6 +220,48 @@ export function EventHostTools({
           This event has ended.
         </p>
       ) : null}
+
+      {/* Permanent deletion stays available after an Event has ended. Ending is
+          recoverable history; deleting is the separate owner choice to remove
+          the Event, its Rooms and their conversations for everyone. */}
+      <div className="border-t border-border/60 pt-4">
+        {confirmDelete ? (
+          <div className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+            <p className="text-sm font-semibold">Delete {eventName}?</p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              The Event, guest records, Rooms and their chats will be permanently removed for everyone.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDelete(false)}
+                disabled={pending}
+                className="flex-1 min-h-[2.75rem]"
+              >
+                Keep event
+              </Button>
+              <Button
+                variant="danger"
+                onClick={onDeleteEvent}
+                disabled={pending}
+                className="flex-1 min-h-[2.75rem]"
+              >
+                {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                {pending ? "Deleting…" : "Delete event"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            onClick={() => setConfirmDelete(true)}
+            disabled={pending}
+            className="min-h-[2.75rem] w-full text-destructive"
+          >
+            Delete Event
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
