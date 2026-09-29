@@ -142,13 +142,18 @@ export async function createStoryAction(formData: FormData): Promise<StoryAction
   if (!(file instanceof File)) return { ok: false, message: "Choose a photo first." };
 
   const headerBytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  const detectedKind = sniffImageKind(headerBytes);
   const validation = validateImageUpload({
     claimedMimeType: file.type,
     headerBytes,
     sizeBytes: file.size,
-    context: "moment"
+    context: detectedKind === "heic" ? "profile" : "moment"
   });
   if (!validation.valid) return { ok: false, message: uploadValidationMessage(validation.reason) };
+
+  const expectedStoredKind: ImageKind = validation.kind === "heic" ? "webp" : validation.kind;
+  const storedMimeType: MediaContentType =
+    validation.kind === "heic" ? "image/webp" : (validation.mimeType as MediaContentType);
 
   const uploadExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const { data: asset, error: assetError } = await admin
@@ -156,7 +161,7 @@ export async function createStoryAction(formData: FormData): Promise<StoryAction
     .insert({
       owner_id: userId,
       storage_key: `pending/${userId}/${Date.now()}`,
-      content_type: validation.mimeType as MediaContentType,
+      content_type: storedMimeType,
       size_bytes: file.size,
       context_type: "moment",
       processing_status: "pending",
@@ -172,7 +177,7 @@ export async function createStoryAction(formData: FormData): Promise<StoryAction
     ownerId: userId,
     context: "moment",
     mediaId: asset.id,
-    kind: validation.kind
+    kind: expectedStoredKind
   });
 
   let processed;
@@ -192,7 +197,7 @@ export async function createStoryAction(formData: FormData): Promise<StoryAction
   const { error: uploadError } = await admin.storage
     .from("media")
     .upload(key, toStorageArrayBuffer(storyImage.buffer), {
-      contentType: validation.mimeType,
+      contentType: storedMimeType,
       upsert: false
     });
 
@@ -215,7 +220,7 @@ export async function createStoryAction(formData: FormData): Promise<StoryAction
       const { error } = await admin.storage
         .from("media")
         .upload(variantKey, toStorageArrayBuffer(image.buffer), {
-          contentType: validation.mimeType,
+          contentType: storedMimeType,
           upsert: false
         });
       if (error) return;
@@ -234,10 +239,10 @@ export async function createStoryAction(formData: FormData): Promise<StoryAction
   // Verify the stored object before marking it ready. A transformed request
   // body must never become a Story merely because Storage acknowledged it.
   const { data: storedOriginal, error: verifyError } = await admin.storage.from("media").download(key);
-  const storedKind = storedOriginal
+  const actualStoredKind = storedOriginal
     ? sniffImageKind(new Uint8Array(await storedOriginal.slice(0, 12).arrayBuffer()))
     : null;
-  if (verifyError || storedKind !== validation.kind) {
+  if (verifyError || actualStoredKind !== expectedStoredKind) {
     await removeStoryUpload(admin, userId, asset.id, [key, ...uploadedVariantPaths]);
     return { ok: false, message: "That photo was not stored correctly. Please try again." };
   }

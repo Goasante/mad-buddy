@@ -91,12 +91,6 @@ export function StoryComposer({
       return;
     }
 
-    const sourceError = validateImageSource(source, "moment", MAX_SOURCE_IMAGE_BYTES);
-    if (sourceError) {
-      setError(sourceError);
-      return;
-    }
-
     const extension = source.name.split(".").pop()?.toLowerCase();
     const isHeic =
       source.type === "image/heic" ||
@@ -104,12 +98,22 @@ export function StoryComposer({
       extension === "heic" ||
       extension === "heif";
 
+    const sourceError = validateImageSource(
+      source,
+      isHeic ? "profile" : "moment",
+      MAX_SOURCE_IMAGE_BYTES
+    );
+    if (sourceError) {
+      setError(sourceError);
+      return;
+    }
+
     startPreparing(async () => {
       // Browsers are inconsistent at decoding HEIC into canvas. Keep a valid
       // HEIC file intact and let the trusted Sharp server path convert it.
       // The normal 5 MB Story cap still applies before upload.
       if (isHeic) {
-        const uploadError = validateImageSelection(source, "moment");
+        const uploadError = validateImageSelection(source, "profile");
         if (uploadError) {
           setError(uploadError);
           return;
