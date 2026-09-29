@@ -1463,6 +1463,48 @@ export async function endEventAction(eventId: string): Promise<EventActionState>
   return { ok: true, message: `${event.name} has ended.`, eventId };
 }
 
+// ---------------------------------------------------------------------------
+// HOST TOOLS -- Delete Event
+// ---------------------------------------------------------------------------
+
+/**
+ * Permanently removes an Event owned by the current user.
+ *
+ * Ending preserves Rooms and their history. Delete is intentionally different:
+ * the database transaction removes the Event and its linked Event/Room
+ * conversations together so no orphan chats remain.
+ */
+export async function deleteEventAction(eventId: string): Promise<EventActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: event } = await admin
+    .from("events")
+    .select("id, host_id, name")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (!event) return { ok: false, message: "Event not found." };
+  if (event.host_id !== userId) {
+    return { ok: false, message: "Only the host can delete this event." };
+  }
+
+  const { data: deleted, error } = await admin.rpc("delete_owned_event", {
+    p_actor_id: userId,
+    p_event_id: eventId
+  });
+  if (error || deleted !== true) {
+    return { ok: false, message: "Couldn't delete the event." };
+  }
+
+  return { ok: true, message: `"${event.name}" was deleted.`, eventId };
+}
+
 /**
  * The Groups the viewer may point a Group-gated Room at.
  *
