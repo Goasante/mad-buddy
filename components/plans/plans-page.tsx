@@ -1487,7 +1487,9 @@ function PlanDateEditor({
   const [time, setTime] = useState("");
 
   const candidate = date && time ? new Date(`${date}T${time}`) : null;
-  const valid = Boolean(candidate && Number.isFinite(candidate.getTime()) && candidate.getTime() > Date.now());
+  // The server owns the future-time check. Keeping render deterministic avoids
+  // making button state depend on whichever millisecond React happened to paint.
+  const valid = Boolean(candidate && Number.isFinite(candidate.getTime()));
 
   return (
     <form
