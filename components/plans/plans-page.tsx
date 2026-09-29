@@ -366,11 +366,10 @@ export function PlansPageContent({
     });
   }
 
-  function addPlanDate(planId: string, startAt: string) {
+  async function addPlanDate(planId: string, startAt: string) {
     if (isWriting) return;
-    void (async () => {
-      setIsWriting(true);
-      try {
+    setIsWriting(true);
+    try {
         const result = await setPlanDateAction({ planId, startAt });
         setFeedback(result.message);
         if (!result.ok) {
@@ -396,17 +395,15 @@ export function PlansPageContent({
         setSelectedPlanId(null);
         setActiveBucket("hosting");
         router.refresh();
-      } finally {
-        setIsWriting(false);
-      }
-    })();
+    } finally {
+      setIsWriting(false);
+    }
   }
 
-  function deletePlan(planId: string) {
+  async function deletePlan(planId: string) {
     if (isWriting) return;
-    void (async () => {
-      setIsWriting(true);
-      try {
+    setIsWriting(true);
+    try {
         const result = await deletePlanAction(planId);
         setFeedback(result.message);
         if (!result.ok) {
@@ -418,10 +415,9 @@ export function PlansPageContent({
         setPlans((current) => current.filter((plan) => plan.id !== planId));
         setSelectedPlanId(null);
         router.refresh();
-      } finally {
-        setIsWriting(false);
-      }
-    })();
+    } finally {
+      setIsWriting(false);
+    }
   }
 
   function createPlan(input: {
