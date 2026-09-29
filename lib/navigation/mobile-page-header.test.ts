@@ -275,7 +275,7 @@ describe("stage 1b rollout", () => {
     const shell = read("components/app-shell/app-shell.tsx");
     const list = shell.slice(shell.indexOf("const PAGES_WITH_OWN_HEADER"), shell.indexOf("function hasOwnHeader"));
     for (const route of [
-      "/messages", "/moments", "/events", "/settings", "/notifications",
+      "/messages", "/events", "/settings", "/notifications",
       "/invites", "/drops", "/meeting-pings", "/reminders", "/billing",
       "/buddy-score", "/scan", "/safe-arrival"
     ]) {

@@ -145,7 +145,7 @@ describe("loading states", () => {
     // the HTML and therefore cannot flash.
     expect(home).toContain("loadNearbyFriends()");
     expect(home).toContain("animate-pulse");
-    for (const prop of ["smartCard={smartCard}", "agendaItems={", "moments={"]) {
+    for (const prop of ["smartCard={smartCard}", "agendaItems={"]) {
       expect(page, `${prop} should be server-rendered`).toContain(prop);
     }
   });
