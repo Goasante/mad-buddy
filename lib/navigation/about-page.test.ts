@@ -123,7 +123,7 @@ describe("the page describes the product as it is now", () => {
       "Plans & Events",
       "UpFor",
       "Linkr",
-      "Messages & Moments",
+      "Messages & Stories",
       "Safe Arrival"
     ]) {
       expect(about, `About must mention ${feature}`).toContain(feature);

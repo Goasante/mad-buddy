@@ -286,7 +286,7 @@ describe("accessibility", () => {
 
 describe("performance", () => {
   it("caps what each rail renders", () => {
-    expect(page).toContain("HOME_MOMENTS_LIMIT");
+    expect(page).not.toContain("HOME_MOMENTS_LIMIT");
     expect(home).toContain("NEARBY_MAX_POSITIONS");
   });
 

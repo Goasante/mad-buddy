@@ -19,7 +19,8 @@ describe("Muddy profile modal design contract", () => {
   it("uses the custom identity-led sheet instead of the generic visible title bar", () => {
     expect(source).toContain("hideTitle");
     expect(source).toContain('owner="MuddyProfileModal"');
-    expect(source).toContain('size="hero"');
+    expect(source).toContain("<StoryRing");
+    expect(source).toContain('size="xl"');
   });
 
   it("keeps Wave as the primary action and Ping/Message as secondary actions", () => {

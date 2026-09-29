@@ -171,7 +171,7 @@ describe("batchEligibleMuddyIds", () => {
  */
 const GATED_SURFACES: { feature: string; file: string; via: "query" | "helper" }[] = [
   { feature: "Moments visibility", file: "lib/content/service.ts", via: "query" },
-  { feature: "Moments audience picker", file: "app/(app)/moments/page.tsx", via: "query" },
+  { feature: "Stories audience authorization", file: "lib/stories/service.ts", via: "query" },
   { feature: "messaging eligibility", file: "lib/messaging/service.ts", via: "helper" },
   { feature: "Socialize eligibility", file: "app/(app)/social-actions.ts", via: "query" },
   { feature: "friend lists", file: "app/(app)/friends/page.tsx", via: "query" },

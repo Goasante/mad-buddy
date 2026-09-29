@@ -238,10 +238,10 @@ describe("Moments waits for the relationship loop", () => {
     expect(composeHome(at({ activationState: null })).showMoments).toBe(true);
   });
 
-  it("stays behind its own feature flag as well", () => {
-    // Composition narrows; it must not force a disabled feature on.
+  it("does not resurrect the retired Moments rail on Home", () => {
     const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
-    expect(home).toContain("momentsEnabled && composition.showMoments");
+    expect(home).not.toContain("<MomentsPreview");
+    expect(home).not.toContain("momentsEnabled");
   });
 });
 

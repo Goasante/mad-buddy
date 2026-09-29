@@ -65,7 +65,9 @@ describe("Story creation stays lightweight", () => {
     expect(actions).toContain("sniffImageKind");
     expect(actions).toContain('context: "moment"');
     expect(actions).toContain('admin.rpc("create_story"');
-    expect(actions).not.toContain("expiresAt:");
+    expect(actions).not.toContain('formData.get("expiresAt")');
+    expect(actions).not.toContain("p_expires_at");
+    expect(migration).toContain("interval '12 hours'");
   });
 });
 

@@ -131,34 +131,24 @@ describe("camera implementation is preserved, not deleted", () => {
 // ---------------------------------------------------------------------------
 
 describe("Moments when paused", () => {
-  it("redirects a direct visit rather than showing a broken page", () => {
-    expect(momentsRoute).toContain("if (!(await isMomentsEnabled(admin))) redirect(\"/dashboard\")");
+  it("redirects every legacy direct visit to Profile", () => {
+    expect(momentsRoute).toContain('redirect("/profile")');
+    expect(momentsRoute).not.toContain("isMomentsEnabled");
   });
 
   it("removes Moments from navigation", () => {
     expect(layout).toContain('...(momentsEnabled ? [] : ["/moments"])');
   });
 
-  it("removes the Moments quick action", () => {
-    expect(homeLoader).toContain('...(momentsEnabled ? [] : ["/moments"])');
+  it("removes the Moments quick action permanently", () => {
+    expect(homeLoader).toContain('"/moments"');
+    expect(homeLoader).not.toContain('...(momentsEnabled ? [] : ["/moments"])');
   });
 
-  it("hides the Home section entirely, including its onboarding card", () => {
-    // MomentsPreview renders a "Share Moments" onboarding card when empty --
-    // a creation affordance for a paused feature. Passing empty arrays is not
-    // enough; the section must not render at all.
-    /* Anchored to the GUARD, not to its formatting.
-     *
-     * This pinned `{momentsEnabled ? <MomentsPreview`, which broke when an
-     * early-activation condition was added alongside it -- while the rule it
-     * protects (the section never renders for a paused feature) still held.
-     * What matters is that momentsEnabled gates the element, whatever else
-     * also gates it. */
-    const rendered = home.indexOf("<MomentsPreview");
-    expect(rendered).toBeGreaterThan(-1);
-    const guard = home.slice(home.lastIndexOf("{", rendered - 200), rendered);
-    expect(guard).toContain("momentsEnabled");
-    expect(home).toContain("momentsEnabled = false,");
+  it("removes the retired Home section entirely, including onboarding", () => {
+    expect(home).not.toContain("<MomentsPreview");
+    expect(home).not.toContain("momentsEnabled");
+    expect(home).not.toContain("Share Moments");
   });
 
   it("enforces the pause on every Moments mutation, not just in the UI", () => {
@@ -276,22 +266,12 @@ describe("no Moments residue in visible UI while paused", () => {
     expect(gated, `${path} links to /moments without consulting the flag`).toBe(true);
   });
 
-  it("keeps the exempt surfaces behind the route guard", () => {
-    // If either of these ever renders outside /moments, this pause leaks.
+  it("keeps legacy implementation files unreachable behind the compatibility redirect", () => {
     for (const path of BEHIND_THE_ROUTE) {
       expect(read(path).length, path).toBeGreaterThan(0);
     }
-    /* Anchored to the GUARD, not to its formatting.
-     *
-     * This pinned `{momentsEnabled ? <MomentsPreview`, which broke when an
-     * early-activation condition was added alongside it -- while the rule it
-     * protects (the section never renders for a paused feature) still held.
-     * What matters is that momentsEnabled gates the element, whatever else
-     * also gates it. */
-    const rendered = home.indexOf("<MomentsPreview");
-    expect(rendered).toBeGreaterThan(-1);
-    const guard = home.slice(home.lastIndexOf("{", rendered - 200), rendered);
-    expect(guard).toContain("momentsEnabled");
+    expect(momentsRoute).toContain('redirect("/profile")');
+    expect(home).not.toContain("<MomentsPreview");
   });
 
   it("leaves the shared MomentImage primitive alone", () => {

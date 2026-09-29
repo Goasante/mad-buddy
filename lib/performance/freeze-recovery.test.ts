@@ -70,7 +70,6 @@ describe("app freeze recovery safeguards", () => {
       "app/(app)/friends/page.tsx",
       "app/(app)/notifications/page.tsx",
       "app/(app)/hangout-mode/page.tsx",
-      "app/(app)/moments/page.tsx",
       "app/(app)/plans/page.tsx",
       "app/(app)/safe-arrival/page.tsx"
     ]) {
