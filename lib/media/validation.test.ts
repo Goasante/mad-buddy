@@ -92,6 +92,10 @@ describe("validateImageUpload", () => {
   });
 
   it("accepts HEIC for profile photos and temporary Stories", () => {
+    expect(kindForMimeType("image/heic-sequence")).toBe("heic");
+    expect(kindForMimeType("image/heif-sequence")).toBe("heic");
+    expect(kindForMimeType("image/x-heic")).toBe("heic");
+
     const profileResult = validateImageUpload(upload({
       claimedMimeType: "image/heic",
       headerBytes: HEIC_HEADER,

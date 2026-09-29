@@ -4,18 +4,17 @@ import {
   ArrowRight,
   CalendarCheck2,
   CalendarDays,
-  Check,
   Coffee,
   Eye,
   EyeOff,
   Ghost,
   Hand,
+  ImagePlus,
   MessagesSquare,
   Radio,
   RadioTower,
   ShieldCheck,
-  UsersRound,
-  X
+  UsersRound
 } from "lucide-react";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { PublicFooter } from "@/components/front-door/public-shell";
@@ -89,6 +88,11 @@ const momentumFlow = [
 ];
 
 const supportingFeatures = [
+  {
+    title: "Stories",
+    detail: "Share private photo updates with the Muddies you choose. They disappear after 12 hours.",
+    icon: ImagePlus
+  },
   {
     title: "Events",
     detail: "Shared experiences people can discover or attend together.",
@@ -177,7 +181,7 @@ function Hero() {
           <ul className="mt-7 grid gap-2.5 text-sm text-[#4E0401]/60 sm:grid-cols-3 sm:gap-3 dark:text-[#FFF8F1]/60">
             {trustPoints.map((point) => (
               <li key={point} className="flex items-start gap-2">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <LandingMark tone="positive" className="mt-0.5" />
                 <span>{point}</span>
               </li>
             ))}
@@ -297,7 +301,7 @@ function ConnectionSection() {
               <ul className="relative mt-5 grid gap-2.5">
                 {mode.points.map((point) => (
                   <li key={point} className="flex items-center gap-2.5 text-sm font-semibold text-[#4E0401]/75 dark:text-[#FFF8F1]/70">
-                    <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {point}
+                    <LandingMark tone="positive" /> {point}
                   </li>
                 ))}
               </ul>
@@ -369,7 +373,7 @@ function MomentumSection() {
           </article>
         </div>
 
-        <div className="mt-5 grid gap-px overflow-hidden rounded-[1.5rem] border border-[#4E0401]/10 bg-[#4E0401]/10 sm:grid-cols-2 lg:grid-cols-4 dark:border-white/[0.08] dark:bg-white/[0.08]">
+        <div className="mt-5 grid gap-px overflow-hidden rounded-[1.5rem] border border-[#4E0401]/10 bg-[#4E0401]/10 sm:grid-cols-2 lg:grid-cols-5 dark:border-white/[0.08] dark:bg-white/[0.08]">
           {supportingFeatures.map((feature) => (
             <div key={feature.title} className="bg-[#FEFBF3] p-4 dark:bg-[#140B09] sm:p-5">
               <feature.icon className="h-5 w-5 text-[#E88C2B]" aria-hidden="true" />
@@ -401,7 +405,7 @@ function PrivacySection() {
             </div>
             <ul className="mt-6 grid gap-3">
               {privacyCanKnow.map((item) => (
-                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/70 dark:text-[#FFF8F1]/60"><Check className="mt-1 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /><span>{item}</span></li>
+                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/70 dark:text-[#FFF8F1]/60"><LandingMark tone="positive" className="mt-0.5" /><span>{item}</span></li>
               ))}
             </ul>
           </article>
@@ -413,7 +417,7 @@ function PrivacySection() {
             </div>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2">
               {privacyNeverGet.map((item) => (
-                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/70 dark:text-[#FFF8F1]/60"><X className="mt-1 h-4 w-4 shrink-0 text-[#B24637] dark:text-[#F28B7C]" aria-hidden="true" /><span>{item}</span></li>
+                <li key={item} className="flex gap-3 text-sm leading-6 text-[#4E0401]/70 dark:text-[#FFF8F1]/60"><LandingMark tone="negative" className="mt-0.5" /><span>{item}</span></li>
               ))}
             </ul>
           </article>
@@ -458,6 +462,24 @@ function SectionHeading({ eyebrow, title, description, align = "left" }: { eyebr
       <h2 className="mt-3 text-3xl font-semibold leading-[1.08] tracking-[-0.03em] text-[#4E0401] sm:text-4xl lg:text-[2.8rem] dark:text-[#FFF8F1]">{title}</h2>
       <p className="mt-4 max-w-2xl text-base leading-7 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">{description}</p>
     </div>
+  );
+}
+
+function LandingMark({ tone, className = "" }: { tone: "positive" | "negative"; className?: string }) {
+  const positive = tone === "positive";
+  return (
+    <span
+      aria-hidden="true"
+      className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${positive ? "border-emerald-600/30 bg-emerald-600/[0.08] text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-400" : "border-[#B24637]/25 bg-[#B24637]/[0.06] text-[#A23A2D] dark:border-[#F28B7C]/30 dark:text-[#F28B7C]"} ${className}`}
+    >
+      <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        {positive ? (
+          <path d="m4 8.1 2.4 2.4L12 5.4" />
+        ) : (
+          <path d="M5.2 5.2l5.6 5.6m0-5.6-5.6 5.6" />
+        )}
+      </svg>
+    </span>
   );
 }
 

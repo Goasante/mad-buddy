@@ -95,39 +95,49 @@ export function StoryComposer({
     const isHeic =
       source.type === "image/heic" ||
       source.type === "image/heif" ||
+      source.type === "image/heic-sequence" ||
+      source.type === "image/heif-sequence" ||
+      source.type === "image/x-heic" ||
+      source.type === "image/x-heif" ||
       extension === "heic" ||
       extension === "heif";
+    const isAvif = source.type === "image/avif" || extension === "avif";
 
-    const sourceError = validateImageSource(
-      source,
-      isHeic ? "profile" : "moment",
-      MAX_SOURCE_IMAGE_BYTES
-    );
+    const sourceError = isAvif
+      ? source.size <= 0
+        ? "Choose an image first."
+        : source.size > MAX_SOURCE_IMAGE_BYTES
+          ? "That image is unusually large. Choose another one."
+          : null
+      : validateImageSource(
+          source,
+          isHeic ? "profile" : "moment",
+          MAX_SOURCE_IMAGE_BYTES
+        );
     if (sourceError) {
       setError(sourceError);
       return;
     }
 
     startPreparing(async () => {
-      // Browsers are inconsistent at decoding HEIC into canvas. Keep a valid
-      // HEIC file intact and let the trusted Sharp server path convert it.
-      // The normal 5 MB Story cap still applies before upload.
-      if (isHeic) {
-        const uploadError = validateImageSelection(source, "profile");
-        if (uploadError) {
-          setError(uploadError);
-          return;
-        }
-        if (preview) URL.revokeObjectURL(preview);
-        setFile(source);
-        setPreviewFailed(false);
-        setPreview(URL.createObjectURL(source));
-        setError("");
-        return;
-      }
-
-      const compressed = await compressImageForUpload(source);
+      // Modern phone formats are converted automatically in the browser when
+      // possible. HEIC/HEIF still has a server-side fallback for browsers that
+      // can select the file but cannot decode it locally.
+      const compressed = await compressImageForUpload(source, {
+        forceReencode: isHeic || isAvif
+      });
       if (!compressed.ok) {
+        if (isHeic) {
+          const uploadError = validateImageSelection(source, "profile");
+          if (!uploadError) {
+            if (preview) URL.revokeObjectURL(preview);
+            setFile(source);
+            setPreviewFailed(false);
+            setPreview(URL.createObjectURL(source));
+            setError("");
+            return;
+          }
+        }
         setError(compressed.reason);
         return;
       }
@@ -218,7 +228,7 @@ export function StoryComposer({
             <input
               ref={cameraRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+              accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,image/heic-sequence,image/heif-sequence,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif"
               capture="environment"
               className="hidden"
               onChange={(event) => {
@@ -230,7 +240,7 @@ export function StoryComposer({
             <input
               ref={libraryRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+              accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,image/heic-sequence,image/heif-sequence,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif"
               className="hidden"
               onChange={(event) => {
                 const picked = event.target.files?.[0];
@@ -267,7 +277,7 @@ export function StoryComposer({
                     <ImagePlus className="mx-auto h-8 w-8 text-white/70" aria-hidden="true" />
                     <p className="mt-3 text-sm font-semibold">Photo ready to share</p>
                     <p className="mt-1 text-xs text-white/65">
-                      This browser cannot preview the HEIC photo, but Mad Buddy will convert it securely when you share.
+                      This browser cannot preview the original phone format, but Mad Buddy can still prepare it when you share.
                     </p>
                   </div>
                 </div>

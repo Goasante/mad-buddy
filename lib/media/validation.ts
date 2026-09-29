@@ -25,10 +25,16 @@ export const MIME_BY_KIND: Record<ImageKind, string> = {
 
 const KIND_BY_MIME = new Map<string, ImageKind>([
   ["image/jpeg", "jpg"],
+  ["image/jpg", "jpg"],
+  ["image/pjpeg", "jpg"],
   ["image/png", "png"],
   ["image/webp", "webp"],
   ["image/heic", "heic"],
-  ["image/heif", "heic"]
+  ["image/heif", "heic"],
+  ["image/heic-sequence", "heic"],
+  ["image/heif-sequence", "heic"],
+  ["image/x-heic", "heic"],
+  ["image/x-heif", "heic"]
 ]);
 
 export const VIDEO_MIME_BY_KIND: Record<VideoKind, string> = {

@@ -2,6 +2,7 @@
 
 import { Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   deleteStoryAction,
   getStoriesForAuthorAction,
@@ -74,10 +75,16 @@ export function StoryViewer({
 
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    const previousBodyBackground = document.body.style.backgroundColor;
+    const previousHtmlBackground = document.documentElement.style.backgroundColor;
     document.body.style.overflow = "hidden";
+    document.body.style.backgroundColor = "#000";
+    document.documentElement.style.backgroundColor = "#000";
     return () => {
-      document.body.style.overflow = previous;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.backgroundColor = previousBodyBackground;
+      document.documentElement.style.backgroundColor = previousHtmlBackground;
     };
   }, [open]);
 
@@ -151,7 +158,7 @@ export function StoryViewer({
     [items, activeIndex, progress]
   );
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   function removeActive() {
     if (!active?.isAuthor || isDeleting) return;
@@ -172,12 +179,12 @@ export function StoryViewer({
     });
   }
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Story viewer"
-      className="fixed inset-0 z-[100] flex bg-black text-white"
+      className="fixed inset-0 z-[100] flex h-[100dvh] w-screen overscroll-none bg-black text-white"
       onPointerDown={(event) => {
         dragStartY.current = event.clientY;
       }}
@@ -298,6 +305,7 @@ export function StoryViewer({
           {error}
         </p>
       ) : null}
-    </div>
+    </div>,
+    document.body
   );
 }

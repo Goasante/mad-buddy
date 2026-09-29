@@ -47,14 +47,16 @@ describe("Stories product limits", () => {
 
 describe("Story creation stays lightweight", () => {
   it("is photo-only and only uploads during Share", () => {
-    expect(composer).toContain("image/jpeg,image/png,image/webp,image/heic,image/heif");
+    expect(composer).toContain("image/avif");
+    expect(composer).toContain("image/heic-sequence");
     expect(composer).toContain("function publish()");
     expect(composer).toContain("formData.set(\"media\", file)");
     expect(composer).toContain("createStoryAction(formData)");
     expect(composer).not.toContain("uploadMomentMediaAction");
   });
 
-  it("accepts iPhone HEIC/HEIF through server-side conversion", () => {
+  it("accepts iPhone HEIC/HEIF through automatic conversion with a server fallback", () => {
+    expect(composer).toContain("forceReencode: isHeic || isAvif");
     expect(composer).toContain('isHeic ? "profile" : "moment"');
     expect(actions).toContain('detectedKind === "heic" ? "profile" : "moment"');
     expect(actions).toContain('validation.kind === "heic" ? "webp"');

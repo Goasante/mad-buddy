@@ -37,11 +37,55 @@ export type CompressResult =
   | { ok: false; reason: string };
 
 function canCompress(): boolean {
-  return (
-    typeof document !== "undefined" &&
-    typeof createImageBitmap === "function" &&
-    typeof HTMLCanvasElement !== "undefined"
-  );
+  return typeof document !== "undefined" && typeof HTMLCanvasElement !== "undefined";
+}
+
+type DecodedImage = {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  close: () => void;
+};
+
+async function decodeImage(file: File): Promise<DecodedImage | null> {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return {
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        close: () => bitmap.close?.()
+      };
+    } catch {
+      // Safari can render some camera formats through <img> even when
+      // createImageBitmap cannot decode them. Fall through to that path.
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = document.createElement("img");
+    image.decoding = "async";
+    image.src = objectUrl;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("image decode failed"));
+    });
+    if (!image.naturalWidth || !image.naturalHeight) {
+      URL.revokeObjectURL(objectUrl);
+      return null;
+    }
+    return {
+      source: image,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      close: () => URL.revokeObjectURL(objectUrl)
+    };
+  } catch {
+    URL.revokeObjectURL(objectUrl);
+    return null;
+  }
 }
 
 function targetDimensions(width: number, height: number, limit: number): { width: number; height: number } {
@@ -69,17 +113,18 @@ function toBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promi
  */
 export async function compressImageForUpload(
   file: File,
-  options: { targetBytes?: number; maxDimension?: number } = {}
+  options: { targetBytes?: number; maxDimension?: number; forceReencode?: boolean } = {}
 ): Promise<CompressResult> {
   const targetBytes = options.targetBytes ?? CLIENT_TARGET_BYTES;
   const maxDimension = options.maxDimension ?? CLIENT_MAX_DIMENSION;
+  const forceReencode = options.forceReencode ?? false;
 
   if (file.size <= 0) return { ok: false, reason: "That image looks empty. Choose another one." };
   if (file.size > MAX_SOURCE_IMAGE_BYTES) {
     return { ok: false, reason: "That image is unusually large. Choose another one." };
   }
   // Already small enough: send it untouched rather than re-encoding for nothing.
-  if (file.size <= targetBytes) {
+  if (file.size <= targetBytes && !forceReencode) {
     return { ok: true, file, originalBytes: file.size, compressedBytes: file.size, skipped: true };
   }
   if (!canCompress()) {
@@ -88,21 +133,19 @@ export async function compressImageForUpload(
     return { ok: false, reason: "This browser can't resize images. Try a smaller photo." };
   }
 
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(file);
-  } catch {
-    return { ok: false, reason: "That image couldn't be read. Try another photo." };
+  const decoded = await decodeImage(file);
+  if (!decoded) {
+    return { ok: false, reason: "This photo couldn't be prepared automatically." };
   }
 
   try {
-    const { width, height } = targetDimensions(bitmap.width, bitmap.height, maxDimension);
+    const { width, height } = targetDimensions(decoded.width, decoded.height, maxDimension);
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) return { ok: false, reason: "Couldn't prepare that image. Try again." };
-    context.drawImage(bitmap, 0, 0, width, height);
+    context.drawImage(decoded.source, 0, 0, width, height);
 
     const keepPng = file.type === "image/png";
     const mimeType = keepPng ? "image/png" : "image/jpeg";
@@ -129,7 +172,6 @@ export async function compressImageForUpload(
       skipped: false
     };
   } finally {
-    // Free the decoded bitmap even if encoding threw.
-    bitmap.close?.();
+    decoded.close();
   }
 }
