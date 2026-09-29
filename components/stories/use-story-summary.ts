@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect -- Story summary effects intentionally synchronize cached server metadata with the currently selected author. */
+
 import { useCallback, useEffect, useState } from "react";
 import { getStorySummaryAction } from "@/app/(app)/stories-actions";
 import { appCache, cacheKeys } from "@/lib/cache/entity-cache";
