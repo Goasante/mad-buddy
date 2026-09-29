@@ -8,6 +8,7 @@ import {
   createEventCheckInQrAction,
   createEventCircleAction,
   createRoomJoinQrAction,
+  deleteEventAction,
   endEventAction,
   joinEventCircleAction,
   leaveEventCircleAction,
@@ -388,6 +389,50 @@ export function EventsPageContent({
       }
       setRooms(await listEventRoomsAction(selectedEvent.id, true));
     });
+  }
+
+  function deleteEvent() {
+    if (!selectedEvent || isWriting) return;
+    const eventId = selectedEvent.id;
+
+    // A permanent delete is not transition work. It must be allowed to finish
+    // once the host confirms, exactly like the multi-step publish path.
+    void (async () => {
+      setIsWriting(true);
+      setRoomError("");
+      try {
+        const result = await deleteEventAction(eventId);
+        setFeedback(result.message);
+        if (!result.ok) {
+          setRoomError(result.message);
+          return;
+        }
+
+        // Stop any deep-link response for the deleted Event from repopulating
+        // the sheet after the local removal.
+        inFlightLinkRef.current = null;
+        setEvents((current) => current.filter((event) => event.id !== eventId));
+        setSelectedId(null);
+        setHostToolsOpen(false);
+        setUpdatesOpen(false);
+        setAdminsOpen(false);
+        setMeetPeopleOpen(false);
+        setRoomsOpen(false);
+        setCreateRoomOpen(false);
+        setGuestsOpen(false);
+        setEventQrOpen(false);
+        setOpenRoomId(null);
+        setRoomSettingsId(null);
+        setRoomQrId(null);
+        setJoinedRoom(null);
+        setRooms([]);
+        setLinkedEventPending(false);
+        setLinkedEventMissing(false);
+        router.replace("/events");
+      } finally {
+        setIsWriting(false);
+      }
+    })();
   }
 
   function loadEventContext(eventId: string) {
@@ -1276,6 +1321,7 @@ export function EventsPageContent({
             eventEnded={selectedEvent.status === "ended"}
             pending={busy}
             onEndEvent={endEvent}
+            onDeleteEvent={deleteEvent}
             onOpen={(row: HostToolsRow) => {
               // Each row opens a REAL surface. Updates and Admins deliberately
               // reuse the existing Event architecture rather than duplicating
