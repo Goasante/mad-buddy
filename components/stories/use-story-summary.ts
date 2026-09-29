@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect -- Story summary effects intentionally synchronize cached server metadata with the currently selected author. */
-
 import { useCallback, useEffect, useState } from "react";
 import { getStorySummaryAction } from "@/app/(app)/stories-actions";
 import { appCache, cacheKeys } from "@/lib/cache/entity-cache";
@@ -19,14 +17,12 @@ export function useStorySummary(
   initialSummary: StorySummary | null | undefined = undefined
 ) {
   const [summary, setSummary] = useState<StorySummary | null>(initialSummary ?? null);
+  const [loadedAuthorId, setLoadedAuthorId] = useState<string | null>(authorId ?? null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(
     async (force = false) => {
-      if (!authorId) {
-        setSummary(null);
-        return null;
-      }
+      if (!authorId) return null;
       const key = cacheKeys.storySummary(authorId);
       if (force) appCache.invalidate(key);
       setLoading(true);
@@ -40,6 +36,7 @@ export function useStorySummary(
           }
         );
         setSummary(next);
+        setLoadedAuthorId(authorId);
         return next;
       } finally {
         setLoading(false);
@@ -60,10 +57,7 @@ export function useStorySummary(
   }, [authorId, initialSummary]);
 
   useEffect(() => {
-    if (!authorId) {
-      setSummary(null);
-      return;
-    }
+    if (!authorId) return;
     void load(false);
   }, [authorId, load]);
 
@@ -94,7 +88,7 @@ export function useStorySummary(
   }, [authorId, summary?.nextExpiryAt, load]);
 
   return {
-    summary,
+    summary: authorId && loadedAuthorId === authorId ? summary : initialSummary ?? null,
     loading,
     refresh: () => load(true)
   };

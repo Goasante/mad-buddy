@@ -89,7 +89,7 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
   const [glowColors, storySummary] = await Promise.all([
     user && entitlements && areFriends
       ? loadFriendGlowColors(admin, user.id, entitlements)
-      : Promise.resolve({}),
+      : Promise.resolve<Record<string, string>>({}),
     user ? loadStorySummary(admin, user.id, profile.user_id) : Promise.resolve(null)
   ]);
 

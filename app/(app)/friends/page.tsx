@@ -129,7 +129,7 @@ async function loadFriendNetwork(): Promise<{
     loadCircles(admin, user.id),
     loadCloseFriendIds(admin, user.id),
     loadFriendGlowColors(admin, user.id),
-    loadStorySummariesForAuthors(admin, user.id, activeFriendIds)
+    loadStorySummariesForAuthors(admin, user.id, [...activeFriendIds])
   ]);
 
   if (profileIds.size === 0) {

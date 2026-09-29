@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect -- Story viewer effects intentionally synchronize local playback state with server-backed Story lifecycle events. */
-
 import { Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
@@ -31,11 +29,12 @@ export function StoryViewer({
 }) {
   const [items, setItems] = useState<StoryItem[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
   const [isDeleting, startDelete] = useTransition();
   const dragStartY = useRef<number | null>(null);
+  const recordedViewIdsRef = useRef(new Set<string>());
   const active = items[activeIndex] ?? null;
 
   const close = useCallback(() => {
@@ -43,6 +42,7 @@ export function StoryViewer({
     setActiveIndex(0);
     setProgress(0);
     setError("");
+    setLoading(true);
     onClose();
   }, [onClose]);
 
@@ -51,16 +51,15 @@ export function StoryViewer({
   useEffect(() => {
     if (!open || !authorId) return;
     let cancelled = false;
-    setLoading(true);
-    setError("");
     void getStoriesForAuthorAction(authorId)
       .then((stories) => {
         if (cancelled) return;
         const live = stories.filter((story) => Date.parse(story.expiresAt) > Date.now());
         setItems(live);
+        setProgress(0);
+        setError(live.length === 0 ? "This Story is no longer available." : "");
         const firstUnseen = live.findIndex((story) => !story.isAuthor && !story.viewed);
         setActiveIndex(firstUnseen >= 0 ? firstUnseen : 0);
-        if (live.length === 0) setError("This Story is no longer available.");
       })
       .catch(() => {
         if (!cancelled) setError("Couldn't load this Story.");
@@ -101,30 +100,37 @@ export function StoryViewer({
   );
 
   useEffect(() => {
-    if (!open || !active) return;
-    if (active.isAuthor || active.viewed) return;
+    if (!open || !active || active.isAuthor || active.viewed) return;
+    if (recordedViewIdsRef.current.has(active.id)) return;
 
-    setItems((current) =>
-      current.map((story) => (story.id === active.id ? { ...story, viewed: true } : story))
-    );
+    recordedViewIdsRef.current.add(active.id);
     if (authorId) invalidateStorySummary(authorId);
     void recordStoryViewAction(active.id).then(() => onChanged?.());
-  }, [open, active?.id, active?.isAuthor, active?.viewed, authorId, onChanged]);
+  }, [open, active, authorId, onChanged]);
 
   useEffect(() => {
     if (!open || !active) return;
     const remaining = Math.max(0, Date.parse(active.expiresAt) - Date.now());
+
     if (remaining <= 0) {
-      setItems((current) => current.filter((story) => story.id !== active.id));
-      setActiveIndex(0);
-      if (authorId) invalidateStorySummary(authorId);
-      onChanged?.();
-      return;
+      const expiredTimer = window.setTimeout(() => {
+        if (items.length <= 1) {
+          if (authorId) invalidateStorySummary(authorId);
+          onChanged?.();
+          close();
+          return;
+        }
+        setItems((current) => current.filter((story) => story.id !== active.id));
+        setActiveIndex((current) => Math.min(current, items.length - 2));
+        setProgress(0);
+        if (authorId) invalidateStorySummary(authorId);
+        onChanged?.();
+      }, 0);
+      return () => window.clearTimeout(expiredTimer);
     }
 
     const duration = Math.min(STORY_DISPLAY_MS, remaining);
     const started = Date.now();
-    setProgress(0);
     const interval = window.setInterval(() => {
       setProgress(Math.min(1, (Date.now() - started) / duration));
     }, 100);
@@ -133,7 +139,7 @@ export function StoryViewer({
       window.clearInterval(interval);
       window.clearTimeout(timeout);
     };
-  }, [open, active?.id, active?.expiresAt, authorId, onChanged, step]);
+  }, [open, active, items.length, authorId, onChanged, step, close]);
 
   const progressValues = useMemo(
     () =>
