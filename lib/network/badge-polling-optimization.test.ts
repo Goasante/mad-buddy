@@ -81,7 +81,9 @@ describe("useUnreadMessageCount has no interval poll", () => {
   });
 
   it("keeps in-flight dedup, so a Realtime event and a focus resync cannot race", () => {
-    expect(messageCount).toContain("if (inFlight.current) return inFlight.current;");
+    const dedup = messageCount.slice(messageCount.indexOf("if (inFlight.current) {"));
+    expect(dedup.slice(0, 260)).toContain("queuedRefresh.current = true;");
+    expect(dedup.slice(0, 260)).toContain("return inFlight.current;");
   });
 
   it("creates exactly one Realtime channel for this purpose", () => {
