@@ -107,6 +107,24 @@ export function StoryViewer({
   );
 
   useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        step(-1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        step(1);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, step, close]);
+
+  useEffect(() => {
     if (!open || !active || active.isAuthor || active.viewed) return;
     if (recordedViewIdsRef.current.has(active.id)) return;
 
@@ -184,7 +202,7 @@ export function StoryViewer({
       role="dialog"
       aria-modal="true"
       aria-label="Story viewer"
-      className="fixed inset-0 z-[100] flex h-[100dvh] w-screen overscroll-none bg-black text-white"
+      className="pointer-events-auto fixed inset-0 z-[100] flex h-[100dvh] w-screen touch-manipulation overscroll-none bg-black text-white"
       onPointerDown={(event) => {
         dragStartY.current = event.clientY;
       }}
@@ -266,28 +284,26 @@ export function StoryViewer({
               });
             }}
           />
-          {items.length > 1 ? (
-            <>
-              <button
-                type="button"
-                aria-label="Previous Story"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  step(-1);
-                }}
-                className="absolute bottom-20 left-0 top-20 z-20 w-1/3 bg-transparent"
-              />
-              <button
-                type="button"
-                aria-label="Next Story"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  step(1);
-                }}
-                className="absolute bottom-20 right-0 top-20 z-20 w-1/3 bg-transparent"
-              />
-            </>
-          ) : null}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 top-20 z-20 grid grid-cols-2">
+            <button
+              type="button"
+              aria-label={activeIndex > 0 ? "Previous Story" : "Restart Story"}
+              onClick={(event) => {
+                event.stopPropagation();
+                step(-1);
+              }}
+              className="pointer-events-auto h-full w-full bg-transparent touch-manipulation"
+            />
+            <button
+              type="button"
+              aria-label={activeIndex < items.length - 1 ? "Next Story" : "Close Stories"}
+              onClick={(event) => {
+                event.stopPropagation();
+                step(1);
+              }}
+              className="pointer-events-auto h-full w-full bg-transparent touch-manipulation"
+            />
+          </div>
           {active.caption ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-20">
               <p className="mx-auto max-w-xl text-sm leading-6 text-white/95">{active.caption}</p>

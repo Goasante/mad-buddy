@@ -12,6 +12,7 @@ const migration = read("supabase/migrations/20260929123000_stories_replace_momen
 const actions = read("app/(app)/stories-actions.ts");
 const composer = read("components/stories/story-composer.tsx");
 const popup = read("components/glow/muddy-profile-modal.tsx");
+const viewer = read("components/stories/story-viewer.tsx");
 const friends = read("components/friends/friends-page.tsx");
 const appShell = read("components/app-shell/app-shell.tsx");
 const dashboard = read("components/dashboard/dashboard-page.tsx");
@@ -78,6 +79,18 @@ describe("Story and Glow signals do not compete", () => {
     expect(popup).toContain("<StoryRing");
     expect(popup).toContain("<StoryViewer");
     expect(popup).not.toContain("<ProximityGlowAvatar");
+  });
+
+  it("suspends the Home Muddy sheet while its Story viewer owns the screen", () => {
+    expect(popup).toContain("open={Boolean(muddy) && !storyOpen}");
+    expect(viewer).toContain("pointer-events-auto fixed inset-0");
+  });
+
+  it("keeps left and right tap zones available for Story navigation", () => {
+    expect(viewer).toContain('aria-label={activeIndex > 0 ? "Previous Story" : "Restart Story"}');
+    expect(viewer).toContain('aria-label={activeIndex < items.length - 1 ? "Next Story" : "Close Stories"}');
+    expect(viewer).toContain('event.key === "ArrowLeft"');
+    expect(viewer).toContain('event.key === "ArrowRight"');
   });
 
   it("lets the Muddies page show Story state directly while keeping proximity elsewhere", () => {

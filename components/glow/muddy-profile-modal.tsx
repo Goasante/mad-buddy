@@ -127,7 +127,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
   return (
     <>
     <Modal
-      open={Boolean(muddy)}
+      open={Boolean(muddy) && !storyOpen}
       onOpenChange={(open) => {
         onOpenChange(open);
         if (!open) {
