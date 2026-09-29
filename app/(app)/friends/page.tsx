@@ -19,6 +19,7 @@ import {
   shouldContactDiscoveryReminderShow,
   type ContactReminderKind
 } from "@/lib/contacts/reminder-eligibility";
+import { loadStorySummariesForAuthors } from "@/lib/stories/service";
 
 export const dynamic = "force-dynamic";
 
@@ -123,10 +124,12 @@ async function loadFriendNetwork(): Promise<{
   });
   blocked.forEach((entry) => profileIds.add(entry.blocked_id));
 
-  const [circles, closeFriendIds, glowColorByFriendId] = await Promise.all([
+  const activeFriendIds = friendIdsFrom(user.id, friendships);
+  const [circles, closeFriendIds, glowColorByFriendId, storySummaries] = await Promise.all([
     loadCircles(admin, user.id),
     loadCloseFriendIds(admin, user.id),
-    loadFriendGlowColors(admin, user.id)
+    loadFriendGlowColors(admin, user.id),
+    loadStorySummariesForAuthors(admin, user.id, activeFriendIds)
   ]);
 
   if (profileIds.size === 0) {
@@ -180,7 +183,7 @@ async function loadFriendNetwork(): Promise<{
    * deliberately: showing who you both know is social-graph information, and
    * blocking someone is a request to stop being shown their world.
    */
-  const viewerFriendIds = friendIdsFrom(user.id, friendships);
+  const viewerFriendIds = activeFriendIds;
   const mutualSubjectIds = [...profileIds].filter((id) => !blockedIds.has(id));
   let mutualsById = new Map<string, MutualSummary>();
 
@@ -268,7 +271,8 @@ async function loadFriendNetwork(): Promise<{
         note: "Approved Muddy",
         plan: plans.get(profileId) ?? "free",
         trustedSince: profile.trusted_member_since ?? null,
-        isVerifiedAccount: verifiedByUserId.get(profileId) ?? false
+        isVerifiedAccount: verifiedByUserId.get(profileId) ?? false,
+        storySummary: storySummaries[profileId] ?? null
       });
     }
   });

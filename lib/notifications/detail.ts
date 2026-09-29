@@ -105,7 +105,7 @@ const SOURCE_LABELS: Record<string, string> = {
   safe_arrival: "Safe Arrival",
   event: "Events",
   event_room: "Event Rooms",
-  moment: "Moments",
+  moment: "Stories",
   drop: "Drops",
   message: "Messages",
   group_message: "Groups",

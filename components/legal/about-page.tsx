@@ -24,8 +24,8 @@ const features = [
     icon: CalendarDays
   },
   {
-    title: "Messages & Moments",
-    description: "Keep conversations and private social sharing attached to the people and plans that matter.",
+    title: "Messages & Stories",
+    description: "Keep conversations and 12-hour private Stories attached to the Muddies who matter.",
     icon: MessageCircle
   },
   {

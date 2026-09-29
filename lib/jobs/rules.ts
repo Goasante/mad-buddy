@@ -190,8 +190,12 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
      machinery for a "someone is free" notification. Being a few minutes late
      is fine; being four hours EARLY was the defect. */
   { jobType: "upfor.announce_started", everyMinutes: 5, priority: 3 },
-  { jobType: "media.cleanup_orphan_chat", everyMinutes: 60, priority: 4 },
-  { jobType: "media.delete_queued", everyMinutes: 60, priority: 4 },
+  // Also reclaims unattached Story uploads; 30 minutes bounds wasted media
+  // without adding per-upload timers.
+  { jobType: "media.cleanup_orphan_chat", everyMinutes: 30, priority: 4 },
+  // Story files are short-lived, so drain queued media twice an hour rather
+  // than leaving expired photos resident for another full hour.
+  { jobType: "media.delete_queued", everyMinutes: 30, priority: 4 },
   { jobType: "billing.apply_scheduled_downgrade", everyMinutes: 60, priority: 3 },
   { jobType: "financial.capture_daily_snapshot", everyMinutes: 60 * 24, priority: 6 },
   { jobType: "financial.reconcile_paystack_fees", everyMinutes: 60 * 24, priority: 6 },
@@ -212,7 +216,9 @@ export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "expiry.statuses", everyMinutes: 15, priority: 5 },
   { jobType: "expiry.visibility_sessions", everyMinutes: 15, priority: 2 },
   { jobType: "expiry.pings", everyMinutes: 15, priority: 5 },
-  { jobType: "expiry.moments", everyMinutes: 30, priority: 5 },
+  // Stories disappear by read-time expires_at exactly at 12h; this faster
+  // sweep reclaims their underlying media/metadata soon afterwards.
+  { jobType: "expiry.moments", everyMinutes: 10, priority: 5 },
   { jobType: "expiry.drops", everyMinutes: 30, priority: 5 },
   { jobType: "expiry.invites", everyMinutes: 60, priority: 6 },
   { jobType: "expiry.friend_requests", everyMinutes: 60 * 12, priority: 6 },

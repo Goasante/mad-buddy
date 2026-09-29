@@ -15,7 +15,6 @@ import {
   Hand,
   HelpCircle,
   Home,
-  Images,
   LogOut,
   MessagesSquare,
   MoreHorizontal,
@@ -110,7 +109,6 @@ const navigationItems: Array<{
     | "/notifications"
     | "/messages"
     | "/plans"
-    | "/moments"
     | "/events"
     | "/discover"
     // Linkr 2.0. `/discover` stays in this union: the old route still exists
@@ -134,19 +132,6 @@ const navigationItems: Array<{
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/messages", label: "Messages", icon: MessagesSquare },
   { href: "/plans", label: "Plans", icon: CalendarCheck2, featureIcon: "plans" },
-  /* A Moment is a photo shared for a day. `Images` says that; Sparkles said
-     "something magical happens here", which is the AI-flavoured decoration
-     being removed product-wide.
-
-     THE ENTRY IS FEATURE-GATED, so replacing the glyph rather than deleting
-     the row is the right call here. app/(app)/layout.tsx computes
-     hiddenNavigationHrefs and drops "/moments" whenever the Moments flag is
-     off -- "a paused feature stops existing in navigation rather than
-     appearing as a dead or 'coming soon' entry" -- and enabledNavigationItems
-     filters on it before anything renders. So this row is only ever shown when
-     the destination genuinely works. That is different from the Quick Action,
-     which had no such gate and was therefore removed outright. */
-  { href: "/moments", label: "Moments", icon: Images, featureIcon: "moments" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
@@ -160,7 +145,7 @@ const navigationItems: Array<{
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
-const SECONDARY_HREFS = ["/plans", "/moments", "/events", "/linkr"] as const;
+const SECONDARY_HREFS = ["/plans", "/events", "/linkr"] as const;
 
 /**
  * Routes that render their own in-page title instead of the shared AppHeader
@@ -182,7 +167,6 @@ const PAGES_WITH_OWN_HEADER = [
   "/discover",
   "/linkr",
   "/meeting-pings",
-  "/moments",
   "/billing",
   "/buddy-score",
   "/reminders",

@@ -161,6 +161,7 @@ export async function buildMomentFeed(
     .select(
       "id, author_id, content_type, text_content, media_id, caption, audience_type, status, expires_at, created_at"
     )
+    .eq("surface", "moment")
     .in("author_id", authorIds)
     .neq("audience_type", "public")
     .eq("status", "active")
@@ -398,6 +399,7 @@ export async function hasActiveAirSession(
     admin
       .from("moments")
       .select("id, author_id")
+      .eq("surface", "moment")
       .eq("audience_type", "public")
       .eq("status", "active")
       .gt("expires_at", nowIso)
@@ -436,6 +438,7 @@ export async function buildSpotlightFeed(
         .select(
           "id, author_id, content_type, text_content, media_id, caption, audience_type, status, expires_at, created_at"
         )
+        .eq("surface", "moment")
         .eq("audience_type", "public")
         .eq("status", "active")
         .gt("expires_at", nowIso)
@@ -636,6 +639,7 @@ export async function loadMyTuneIns(
     admin
       .from("moments")
       .select("id, author_id")
+      .eq("surface", "moment")
       .in("author_id", creatorIds)
       .eq("audience_type", "public")
       .eq("status", "active")
@@ -784,6 +788,7 @@ export async function loadMomentsCreatorHub(
     admin
       .from("moments")
       .select("id", { count: "exact", head: true })
+      .eq("surface", "moment")
       .eq("author_id", creatorId)
       .eq("audience_type", "public")
       .eq("status", "active")

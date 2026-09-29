@@ -376,6 +376,8 @@ export const cacheKeys = {
   homeNearby: () => "home:nearby",
   moment: (momentId: string) => `moment:${momentId}`,
   momentsFeed: (userId: string) => `moments:feed:${userId}`,
+  /** Lightweight Story-ring metadata only. Never media bytes or signed URLs. */
+  storySummary: (authorId: string) => `stories:summary:${authorId}`,
   profile: (username: string) => `profile:${username}`,
   conversations: (userId: string) => `messages:list:${userId}`
 } as const;

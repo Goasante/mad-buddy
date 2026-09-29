@@ -31,7 +31,6 @@ type OpenToPlan = { id: string; ownerName: string; activityType: string; message
 const quickActions: { label: string; feature: FeatureIconKey; to: string }[] = [
   { label: "Hangout", feature: "hangout", to: "/socialize" },
   { label: "Safe Arrival", feature: "safeArrival", to: "/safety" },
-  { label: "Moments", feature: "moments", to: "/moments" },
   { label: "Events", feature: "events", to: "/events" },
   { label: "Socialize", feature: "socialize", to: "/socialize" },
   { label: "Invites", feature: "invites", to: "/muddies" },

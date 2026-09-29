@@ -12,6 +12,7 @@ import { loadVisibleProfilePhotosFor } from "@/lib/profile/photo-service";
 import { getTrustedMemberStandingAction } from "@/app/(app)/trusted-member-actions";
 import { isProfileSection, isSafeReturnPath } from "@/lib/navigation/handoff";
 import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
+import { loadStorySummary } from "@/lib/stories/service";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function ProfilePage({
     : { data: null };
 
   const admin = createSupabaseAdminClient();
-  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, photos, trustedStanding, interestRows, verificationRows] = user
+  const [effectivePlan, birthDetails, fieldPrivacy, identitySummary, photos, trustedStanding, interestRows, verificationRows, storySummary] = user
     ? await Promise.all([
         loadEffectivePlan(admin, user.id),
         loadDateOfBirthState(user.id),
@@ -69,9 +70,10 @@ export default async function ProfilePage({
         // The owner's own interests: no privacy narrowing, you always see
         // everything on your own profile.
         admin.from("user_interests").select("interest").eq("user_id", user.id),
-        admin.from("account_verifications").select("status").eq("user_id", user.id)
+        admin.from("account_verifications").select("status").eq("user_id", user.id),
+        loadStorySummary(admin, user.id, user.id)
       ])
-    : ["free" as const, null, null, null, [], null, null, null];
+    : ["free" as const, null, null, null, [], null, null, null, null];
 
   /* Completion comes from the shared authority in lib/profile/rules rather
    * than being counted in the component, so this page and onboarding can
@@ -103,6 +105,8 @@ export default async function ProfilePage({
 
   return (
     <ProfilePageContent
+      userId={user?.id ?? ""}
+      initialStorySummary={storySummary}
       section={section}
       returnTo={returnTo}
       handoffOrigin={handoffOrigin}

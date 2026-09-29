@@ -82,7 +82,6 @@ describe("destinations that map cleanly", () => {
     ["/messages", "/messages"],
     ["/plans", "/plans"],
     ["/events", "/events"],
-    ["/moments", "/moments"],
     ["/notifications", "/notifications"],
     ["/groups", "/groups"]
   ])("%s -> %s", (input, expected) => {
@@ -110,7 +109,8 @@ describe("against real resolver output", () => {
     [`message:${UUID}`, `/messages/${UUID}`],
     [`plan:${UUID}`, "/plans"],
     [`event:${UUID}`, "/events"],
-    ["subscription_update", "/subscription"]
+    ["subscription_update", "/subscription"],
+    [`moment:${UUID}`, "/profile"]
   ])("%s opens %s", (type, expected) => {
     expect(adapt(resolveNotificationDestination(type))).toEqual({ type: "internal", href: expected });
   });
@@ -143,7 +143,7 @@ describe("against real resolver output", () => {
       `meetup_request:${UUID}`, `event_room:${UUID}:${UUID}`
     ];
     const reachable = new Set([
-      "/home", "/muddies", "/messages", "/plans", "/events", "/moments",
+      "/home", "/muddies", "/messages", "/plans", "/events",
       "/notifications", "/groups", "/pings", "/safety", "/subscription",
       "/socialize", "/profile", "/settings", "/buddy-score", "/help", "/more"
     ]);

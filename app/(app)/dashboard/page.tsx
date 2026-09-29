@@ -9,7 +9,6 @@ import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isMomentsEnabled } from "@/lib/features/feature-flags";
 import { countIncomingRequests } from "@/lib/friends/service";
 import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
@@ -20,18 +19,8 @@ import { loadHomeSmartCardProjection } from "@/lib/smart-card/home-projection";
 import { loadAcknowledgedSmartCardIds, loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
 import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
-import { buildMomentFeed, buildSpotlightFeed } from "@/lib/content/service";
 import { getRankedUpcomingEvents } from "@/lib/events/ranked-events";
 import { HOME_RANKED_EVENTS_LIMIT } from "@/lib/events/ranking";
-
-/**
- * How many Moments the Home rail renders. Enough to fill the viewport with
- * one peeking; the full feed lives on /moments.
- *
- * Moments is paused as a Smart Card source. This legacy Home rail remains
- * governed by its feature flag until the separate Moments cleanup tranche.
- */
-const HOME_MOMENTS_LIMIT = 8;
 
 function isStatusActiveAtRequestTime(expiresAt: string) {
   return Date.parse(expiresAt) > Date.now();
@@ -40,11 +29,10 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 export default async function DashboardPage() {
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUserRecord()]);
   const admin = createSupabaseAdminClient();
-  const momentsEnabledPromise = user ? isMomentsEnabled(admin) : Promise.resolve(false);
   const acknowledgedIdsPromise = user
     ? loadAcknowledgedSmartCardIds(admin, user.id)
     : Promise.resolve(new Set<string>());
-  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, momentsEnabled, journey, incomingRequestCount, birthDetailsResult, buddyScore, moments, air, topEvents, activation, upForContext, linkrMutuals] = user
+  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, journey, incomingRequestCount, birthDetailsResult, buddyScore, topEvents, activation, upForContext, linkrMutuals] = user
     ? await Promise.all([
         ensureProfileForUser(user),
         supabase
@@ -60,19 +48,16 @@ export default async function DashboardPage() {
           .maybeSingle(),
         loadSafeArrivalJourneys(admin, user.id),
         loadFriendGlowColors(admin, user.id),
-        momentsEnabledPromise,
         loadJourney(admin, user.id),
         countIncomingRequests(user.id),
         admin.from("profile_birth_details").select("date_of_birth").eq("user_id", user.id).maybeSingle(),
         loadBuddyScore(admin, user.id),
-        momentsEnabledPromise.then((enabled) => enabled ? buildMomentFeed(admin, user.id) : []),
-        momentsEnabledPromise.then((enabled) => enabled ? buildSpotlightFeed(admin, user.id) : []),
         getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }),
         loadActivationProjection(user.id),
         loadHomeUpForContext(admin, user.id),
         loadClickedPeople(user.id)
       ])
-    : [null, null, { items: [], hasMore: false }, null, null, {}, false, null, 0, null, null, [], [], [], null, null, []];
+    : [null, null, { items: [], hasMore: false }, null, null, {}, null, 0, null, null, [], null, null, []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -260,12 +245,9 @@ export default async function DashboardPage() {
         "/groups",
         "/reminders",
         "/settings/engagement",
-        ...(momentsEnabled ? [] : ["/moments"])
+        "/moments"
       ]}
-      momentsEnabled={Boolean(momentsEnabled)}
       smartCard={smartCard}
-      moments={(moments ?? []).slice(0, HOME_MOMENTS_LIMIT)}
-      air={(air ?? []).slice(0, HOME_MOMENTS_LIMIT)}
       topEvents={topEvents ?? []}
       isFirstTimeUser={journey ? isFirstTimeJourneyState(journey) : false}
       incomingRequestCount={incomingRequestCount ?? 0}

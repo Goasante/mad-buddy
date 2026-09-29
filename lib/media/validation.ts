@@ -205,7 +205,7 @@ function imageFormatError(
           : extension
         : null;
   const kind = kindForMimeType(file.type) ?? extensionKind;
-  if (!kind || (kind === "heic" && context !== "profile")) {
+  if (!kind || (kind === "heic" && context !== "profile" && context !== "moment")) {
     return "Upload a JPG, JPEG, PNG, WebP, or HEIC image.";
   }
   return null;
@@ -224,7 +224,7 @@ export function validateImageSelection(
       ? extension === "heif" ? "heic" : extension
       : null;
   const kind = kindForMimeType(file.type) ?? extensionKind;
-  if (!kind || (kind === "heic" && context !== "profile")) return "Upload a JPG, JPEG, PNG, WebP, or HEIC image.";
+  if (!kind || (kind === "heic" && context !== "profile" && context !== "moment")) return "Upload a JPG, JPEG, PNG, WebP, or HEIC image.";
 
   const maximumBytes = maxUploadBytesFor(context);
   if (file.size > maximumBytes) {
@@ -283,7 +283,7 @@ export function validateImageUpload(input: UploadValidationInput): UploadValidat
   // that narrow case, the verified magic bytes remain authoritative.
   const hasGenericMime = input.claimedMimeType === "" || input.claimedMimeType === "application/octet-stream";
   const effectiveKind = claimedKind ?? (hasGenericMime ? actualKind : null);
-  if (!effectiveKind || (effectiveKind === "heic" && input.context !== "profile")) {
+  if (!effectiveKind || (effectiveKind === "heic" && input.context !== "profile" && input.context !== "moment")) {
     return { valid: false, reason: "unsupported_type" };
   }
 

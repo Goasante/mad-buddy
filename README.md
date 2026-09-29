@@ -34,7 +34,7 @@ Do not change these casually:
 - One-sided Linkr decisions remain private; only mutual connections become relationship context.
 - Existing relationships and commitments survive Mad Buddy Access expiry.
 - Mad Buddy Access unlocks social expansion through Linkr and the relevant expansion side of UpFor; it does not paywall the user's existing social world.
-- Moments is paused and must not silently return as a required loop.
+- Moments is retired as a product surface. Stories is the current private temporary-sharing system: photo-only, 12-hour expiry, maximum 5 active Stories, with Muddy-scoped audiences.
 
 See `docs/operations/PRODUCT-INVARIANTS.md` for the complete current rules.
 

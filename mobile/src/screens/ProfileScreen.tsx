@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Check, X, Award, CalendarCheck2, Images, ShieldCheck, Users, ArrowRight } from "lucide-react";
+import { Pencil, Check, X, Award, CalendarCheck2, ShieldCheck, Users, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -205,7 +205,6 @@ export function ProfileScreen() {
           <h3 className="text-base font-semibold">Activity</h3>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <ActivityStat icon={Users} label="Muddies" value={identity.activity.muddyCount} />
-            <ActivityStat icon={Images} label="Moments" value={identity.activity.momentCount} />
             <ActivityStat icon={CalendarCheck2} label="Plans completed" value={identity.activity.completedPlanCount} />
             <ActivityStat icon={ShieldCheck} label="Safe Arrivals" value={identity.activity.completedSafeArrivalCount} />
           </div>

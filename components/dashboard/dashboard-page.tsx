@@ -28,13 +28,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { createMeetupRequestAction } from "@/app/(app)/premium-actions";
 import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
-import { MomentsPreview } from "@/components/content/moments-preview";
 import { useRouter } from "next/navigation";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
 import { PlanStack } from "@/components/socialize/plan-stack";
 import { rsvpAction } from "@/app/(app)/plans-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
-import type { VisibleMoment } from "@/lib/content/service";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
 import { appCache, cacheKeys } from "@/lib/cache/entity-cache";
@@ -209,13 +207,6 @@ type DashboardPageContentProps = {
    */
   serverNearby?: NearbyFriendApiItem[];
   /**
-   * A capped slice of the canonical Moments feed, already authorised by
-   * buildMomentFeed. Home previews it; /moments owns the real experience.
-   */
-  moments?: VisibleMoment[];
-  /** Live Air sessions, mixed into the same rail as Moments. */
-  air?: VisibleMoment[];
-  /**
    * Canonical first-time signal, computed server-side from real Journey
    * progress (see app/(app)/dashboard/page.tsx) — never inferred client-side.
    * Swaps the Quick Actions set and the Nearby empty-state copy/CTA to the
@@ -229,8 +220,6 @@ type DashboardPageContentProps = {
    * and renders nothing rather than a placeholder.
    */
   topEvents?: RankedEvent[];
-  /** Moments (paused). Server-resolved; hides every Home Moments surface. */
-  momentsEnabled?: boolean;
   // currentUsername / currentAvatarUrl / buddyScoreLevelLabel used to be
   // passed here for Home's own copy of the menu sheet. That sheet now lives
   // in AppShell and gets its identity from the layout, so Home no longer
@@ -328,11 +317,8 @@ export function DashboardPageContent({
   planParticipationCount = 0,
   muddyCount = 0,
   serverNearby = [],
-  moments = [],
-  air = [],
   isFirstTimeUser = false,
   topEvents = [],
-  momentsEnabled = false,
   incomingRequestCount = 0
 }: DashboardPageContentProps) {
   const reducedMotion = useReducedMotion();
@@ -1258,17 +1244,6 @@ export function DashboardPageContent({
           />
         ) : composition.showSuggestions ? (
           <QuickActionsHome primary={primaryActions} />
-        ) : null}
-
-        {/* Moments preview. Renders the branded onboarding when the viewer has
-            none, and the rail once any exist — so the onboarding is never
-            shown again after a first Moment. */}
-        {/* Moments paused: the section disappears entirely rather than
-            leaving its onboarding card, which would be a creation affordance
-            for a feature that is switched off. Home's remaining sections
-            simply close up -- no filler was added in its place. */}
-        {momentsEnabled && composition.showMoments ? (
-          <MomentsPreview moments={moments} air={air} />
         ) : null}
 
         {/* Compact profile-completion banner (real state, dismissible).

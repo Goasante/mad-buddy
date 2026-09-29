@@ -12,7 +12,10 @@ import { Button } from "@/components/ui/button";
 import { TrustedMemberMark } from "@/components/trust/trusted-member-mark";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
-import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { StoryRing } from "@/components/stories/story-ring";
+import { StoryViewer } from "@/components/stories/story-viewer";
+import { useStorySummary } from "@/components/stories/use-story-summary";
 import { PROXIMITY_BAND_LABELS, type ProximityBand } from "@/lib/proximity/bands";
 import { Modal } from "@/components/ui/modal";
 import { CONNECTION_PROMPTS } from "@/lib/meetups/connection-prompts";
@@ -77,7 +80,9 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
   }, [waveFeedback]);
   const [isWavePending, startWaveTransition] = useTransition();
   const [isMessagePending, startMessageTransition] = useTransition();
+  const [storyOpen, setStoryOpen] = useState(false);
   const router = useRouter();
+  const { summary: storySummary, refresh: refreshStorySummary } = useStorySummary(muddy?.friendId ?? null);
 
   /**
    * Open (or create) the direct conversation and go straight to it.
@@ -120,6 +125,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
   const support = muddy ? supportingLine(muddy) : null;
 
   return (
+    <>
     <Modal
       open={Boolean(muddy)}
       onOpenChange={(open) => {
@@ -128,6 +134,7 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
           setPingOpen(false);
           setWaveSent(false);
           setWaveFeedback("");
+          setStoryOpen(false);
         }
       }}
       title={muddy?.displayName ?? "Muddy"}
@@ -147,14 +154,34 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
 
           <section className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 pb-4 pt-5 sm:gap-5 sm:pb-5 sm:pt-3">
             <div className="grid shrink-0 place-items-center px-1 sm:px-2">
-              <ProximityGlowAvatar
-                src={muddy.avatarUrl}
-                name={muddy.displayName}
-                band={muddy.proximityBand ?? null}
-                glowColorId={muddy.glowColorId}
-                size="hero"
-                decorative
-              />
+              {storySummary?.activeCount ? (
+                <button
+                  type="button"
+                  onClick={() => setStoryOpen(true)}
+                  className="focus-ring rounded-full"
+                  aria-label={`View ${muddy.displayName}'s ${storySummary.activeCount === 1 ? "Story" : "Stories"}`}
+                >
+                  <StoryRing
+                    count={storySummary.activeCount}
+                    hasUnseen={storySummary.hasUnseen}
+                    ariaLabel={storySummary.hasUnseen ? "New Story" : "Story viewed"}
+                  >
+                    <UserAvatar
+                      src={muddy.avatarUrl}
+                      name={muddy.displayName}
+                      size="xl"
+                      decorative
+                    />
+                  </StoryRing>
+                </button>
+              ) : (
+                <UserAvatar
+                  src={muddy.avatarUrl}
+                  name={muddy.displayName}
+                  size="xl"
+                  decorative
+                />
+              )}
             </div>
 
             <div className="min-w-0 pr-9 sm:pr-10">
@@ -262,5 +289,14 @@ export function MuddyProfileModal({ muddy, onOpenChange, onSendPing }: MuddyProf
         </div>
       ) : null}
     </Modal>
+    <StoryViewer
+      authorId={muddy?.friendId ?? null}
+      open={storyOpen && Boolean(muddy?.friendId)}
+      onClose={() => setStoryOpen(false)}
+      onChanged={() => {
+        void refreshStorySummary();
+      }}
+    />
+    </>
   );
 }

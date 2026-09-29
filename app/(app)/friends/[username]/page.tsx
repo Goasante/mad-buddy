@@ -10,6 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 import { hasVerifiedAccountStatus } from "@/lib/trust/verified-account";
+import { loadStorySummary } from "@/lib/stories/service";
 
 export default async function MuddyProfileRoute({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -85,10 +86,12 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
         isApprovedMuddy: areFriends
       })
     : [];
-  const glowColors =
+  const [glowColors, storySummary] = await Promise.all([
     user && entitlements && areFriends
-      ? await loadFriendGlowColors(admin, user.id, entitlements)
-      : {};
+      ? loadFriendGlowColors(admin, user.id, entitlements)
+      : Promise.resolve({}),
+    user ? loadStorySummary(admin, user.id, profile.user_id) : Promise.resolve(null)
+  ]);
 
   return (
     <MuddyProfilePage
@@ -111,6 +114,7 @@ export default async function MuddyProfileRoute({ params }: { params: Promise<{ 
       canCustomizeGlow={canCustomizeGlow}
       isMuddy={areFriends}
       initialGlowColorId={glowColors[profile.user_id] ?? null}
+      initialStorySummary={storySummary}
     />
   );
 }

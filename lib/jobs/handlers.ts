@@ -352,13 +352,24 @@ export const handleSafeArrivalLifecycleNotification: JobHandler = async (admin, 
 /** Drains the media deletion queue: removes objects, then marks the row done. */
 export const handleCleanupOrphanChatMedia: JobHandler = async (admin) => {
   const now = Date.now();
-  const { data, error } = await admin.rpc("queue_stale_unattached_chat_media", {
-    p_ready_before: new Date(now - READY_CHAT_ORPHAN_AGE_MS).toISOString(),
-    p_incomplete_before: new Date(now - INCOMPLETE_CHAT_ORPHAN_AGE_MS).toISOString(),
-    p_limit: 100
-  });
-  if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
-  return data ?? 0;
+  // The scheduler key keeps its historical name, but the sweep now covers the
+  // two upload-intent families that can become orphaned: chat attachments and
+  // Story photos. Story uploads carry their own upload_expires_at deadline, so
+  // they can be collected quickly without touching attached media.
+  const [chat, stories] = await Promise.all([
+    admin.rpc("queue_stale_unattached_chat_media", {
+      p_ready_before: new Date(now - READY_CHAT_ORPHAN_AGE_MS).toISOString(),
+      p_incomplete_before: new Date(now - INCOMPLETE_CHAT_ORPHAN_AGE_MS).toISOString(),
+      p_limit: 100
+    }),
+    admin.rpc("queue_stale_unattached_story_media", {
+      p_before: new Date(now).toISOString(),
+      p_limit: 100
+    })
+  ]);
+  if (chat.error) throw new JobError("DATABASE_TIMEOUT", chat.error.message);
+  if (stories.error) throw new JobError("DATABASE_TIMEOUT", stories.error.message);
+  return Number(chat.data ?? 0) + Number(stories.data ?? 0);
 };
 
 export const handleMediaDeleteQueued: JobHandler = async (admin) => {
@@ -372,15 +383,23 @@ export const handleMediaDeleteQueued: JobHandler = async (admin) => {
   let deleted = 0;
   for (const row of queued ?? []) {
     if (row.reason === "orphaned_upload") {
-      const { data: attached } = await admin
-        .from("messages")
-        .select("id")
-        .eq("media_id", row.media_asset_id)
-        .limit(1)
-        .maybeSingle();
-      if (attached) {
-        // Defensive second check. The database trigger already makes a queued
-        // asset unattachable, but this protects data during rolling deploys.
+      const [{ data: attachedMessage }, { data: attachedStory }] = await Promise.all([
+        admin
+          .from("messages")
+          .select("id")
+          .eq("media_id", row.media_asset_id)
+          .limit(1)
+          .maybeSingle(),
+        admin
+          .from("moments")
+          .select("id")
+          .eq("media_id", row.media_asset_id)
+          .limit(1)
+          .maybeSingle()
+      ]);
+      if (attachedMessage || attachedStory) {
+        // Defensive second check. A queued upload must never be removed after
+        // another request successfully attached it to a message or Story.
         await admin.from("media_deletion_queue").delete().eq("id", row.id);
         continue;
       }
@@ -586,10 +605,11 @@ export const handleExpireMoments: JobHandler = async (admin) => {
     .update({ status: "expired", updated_at: nowIso })
     .lt("expires_at", nowIso)
     .eq("status", "active")
-    .select("id, media_id");
+    .select("id, media_id, surface");
   if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
 
-  // An expired Moment's media follows it (batch 6 §8, §45).
+  // Expired temporary media follows its parent. New Stories use the same
+  // proven deletion queue as legacy Moments.
   const withMedia = (data ?? []).filter((moment) => moment.media_id);
   if (withMedia.length > 0) {
     await admin.from("media_deletion_queue").upsert(
@@ -597,6 +617,26 @@ export const handleExpireMoments: JobHandler = async (admin) => {
       { onConflict: "media_asset_id", ignoreDuplicates: true }
     );
   }
+
+  // Stories are intentionally ephemeral. Once one expires, keep only the
+  // parent audit row and discard viewer/audience/reaction state that no longer
+  // serves the product. Legacy Moment history is left untouched.
+  const expiredStoryIds = (data ?? [])
+    .filter((moment) => moment.surface === "story")
+    .map((moment) => moment.id);
+  if (expiredStoryIds.length > 0) {
+    await Promise.all([
+      admin.from("moment_views").delete().in("moment_id", expiredStoryIds),
+      admin.from("moment_audience_targets").delete().in("moment_id", expiredStoryIds),
+      admin.from("moment_reactions").delete().in("moment_id", expiredStoryIds),
+      admin
+        .from("hidden_content")
+        .delete()
+        .eq("content_type", "moment")
+        .in("content_id", expiredStoryIds)
+    ]);
+  }
+
   return data?.length ?? 0;
 };
 

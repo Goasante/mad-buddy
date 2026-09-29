@@ -15,7 +15,6 @@ import { MoreScreen } from "./screens/MoreScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { MessagesScreen } from "./screens/MessagesScreen";
 import { ChatScreen } from "./screens/ChatScreen";
-import { MomentsScreen } from "./screens/MomentsScreen";
 import { SocializeScreen } from "./screens/SocializeScreen";
 import { MeetingPingsScreen } from "./screens/MeetingPingsScreen";
 import { HelpScreen } from "./screens/HelpScreen";
@@ -101,7 +100,7 @@ export default function App() {
         <Route path="/more" element={<MoreScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/messages" element={<MessagesScreen />} />
-        <Route path="/moments" element={<MomentsScreen />} />
+        <Route path="/moments" element={<Navigate to="/profile" replace />} />
         <Route path="/socialize" element={<SocializeScreen />} />
         <Route path="/pings" element={<MeetingPingsScreen />} />
         <Route path="/events" element={<EventsScreen />} />

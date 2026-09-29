@@ -77,15 +77,22 @@ Do not collapse these into one giant generic card system or duplicate the same i
 
 Only one adaptive card should be visually loud at a time. Safety can retain full visual authority even when Activation is present.
 
-## Moments
+## Stories / retired Moments
 
-Moments is paused/discontinued for the current phase.
+**Stories** is the current temporary-sharing product. **Moments is retired as a product surface.**
 
-- Do not restore Moments as a Smart Card source.
-- Do not restore Moments as a Journey requirement.
-- Do not add Moments progression dependency or Home creation prompts without an explicit product decision.
+- Stories are photo-only in the initial release.
+- Every Story expires exactly 12 hours after creation.
+- A creator may have at most 5 active Stories. A slot reopens when a Story expires or is deleted.
+- Initial audiences are: All Muddies, Close Friends, and Selected Muddies.
+- No public/Spotlight, nearby-only, Event, Plan, video, archive/highlight, or reshare Story modes in this phase.
+- Story audience authorization is server-side. A ring must never reveal a Story to someone who cannot view it.
+- Home's nearby avatar keeps the canonical proximity Glow and does not add a Story ring. After opening the Muddy popup, repeated Glow is removed and the avatar may show the Story ring instead.
+- Stories do not become a Smart Card source, Journey requirement, Home feed, or dedicated navigation tab.
+- The legacy `moments` storage tables may remain underneath the Story service while the domain is stabilised. New Story rows must be explicitly tagged as Story rows; legacy Moment rows are historical only.
+- The old `/moments` route is compatibility-only and must not restore the retired feed/composer.
 
-Historical Moments tables/code may still exist; historical presence is not current product authority.
+Historical Moments code may remain temporarily when deleting it would risk shared media/privacy infrastructure, but it is not current product authority.
 
 ## Server/client security boundary
 

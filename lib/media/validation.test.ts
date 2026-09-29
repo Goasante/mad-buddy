@@ -91,18 +91,20 @@ describe("validateImageUpload", () => {
     }
   });
 
-  it("accepts HEIC for profile photos only", () => {
+  it("accepts HEIC for profile photos and temporary Stories", () => {
     const profileResult = validateImageUpload(upload({
       claimedMimeType: "image/heic",
       headerBytes: HEIC_HEADER,
       context: "profile"
     }));
     expect(profileResult).toEqual({ valid: true, kind: "heic", mimeType: "image/heic" });
-    expect(validateImageUpload(upload({
+
+    const storyResult = validateImageUpload(upload({
       claimedMimeType: "image/heic",
       headerBytes: HEIC_HEADER,
       context: "moment"
-    })).valid).toBe(false);
+    }));
+    expect(storyResult).toEqual({ valid: true, kind: "heic", mimeType: "image/heic" });
   });
 
   it("uses verified magic bytes when a browser omits the MIME type", () => {

@@ -2408,6 +2408,7 @@ export type Database = {
           caption: string | null;
           audience_type: MomentAudienceType;
           status: MomentStatus;
+          surface: MomentSurface;
           starts_at: string;
           expires_at: string;
           created_at: string;
@@ -2423,6 +2424,7 @@ export type Database = {
           caption?: string | null;
           audience_type: MomentAudienceType;
           status?: MomentStatus;
+          surface?: MomentSurface;
           starts_at?: string;
           expires_at: string;
           created_at?: string;
@@ -5369,6 +5371,24 @@ export type Database = {
         Args: { p_actor_id: string; p_plan_id: string };
         Returns: boolean;
       };
+      create_story: {
+        Args: {
+          p_actor_id: string;
+          p_media_id: string;
+          p_caption: string;
+          p_audience_type: string;
+          p_target_ids?: string[];
+        };
+        Returns: Array<{
+          story_id: string;
+          story_expires_at: string;
+          active_count: number;
+        }>;
+      };
+      queue_stale_unattached_story_media: {
+        Args: { p_before: string; p_limit?: number };
+        Returns: number;
+      };
       delete_owned_event: {
         Args: { p_actor_id: string; p_event_id: string };
         Returns: boolean;
@@ -5915,6 +5935,7 @@ export type ModerationStatus =
   | "deleted_by_user";
 
 export type MomentContentType = "text" | "photo" | "video";
+export type MomentSurface = "moment" | "story";
 export type DropContentType = "text" | "photo";
 export type MomentAudienceType =
   | "all_muddies"

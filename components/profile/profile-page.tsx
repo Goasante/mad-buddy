@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { BookOpen, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Edit3, Film, Gamepad2, MessageSquareText, MoonStar, Mountain, Music2, Plane, ShieldCheck, Smile, TrendingUp, UtensilsCrossed, UsersRound } from "lucide-react";
+import { BookOpen, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Edit3, Film, Gamepad2, MessageSquareText, MoonStar, Mountain, Music2, Plane, Plus, ShieldCheck, Smile, TrendingUp, UtensilsCrossed, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProfileAction, uploadAvatarAction } from "@/app/(app)/actions";
 import { FormField } from "@/components/auth/form-field";
@@ -35,6 +35,11 @@ import { profileCompletion, type ProfileIdentitySummary } from "@/lib/profile/id
 import type { CompletionTask } from "@/lib/profile/rules";
 import { ProfileInterestsCard } from "@/components/profile/profile-interests-card";
 import { ProfileCompletionCard } from "@/components/profile/profile-completion-card";
+import { StoryComposer } from "@/components/stories/story-composer";
+import { StoryRing } from "@/components/stories/story-ring";
+import { StoryViewer } from "@/components/stories/story-viewer";
+import { useStorySummary } from "@/components/stories/use-story-summary";
+import type { StorySummary } from "@/lib/stories/types";
 
 type BirthVisibility = "only_me" | "approved_muddies";
 
@@ -44,6 +49,8 @@ const BIRTH_VISIBILITY_OPTIONS: AppSelectOption<BirthVisibility>[] = [
 ];
 
 type ProfilePageContentProps = {
+  userId?: string;
+  initialStorySummary?: StorySummary | null;
   initialDisplayName: string;
   initialUsername: string;
   initialBio: string;
@@ -110,6 +117,8 @@ type SavedProfile = {
 };
 
 export function ProfilePageContent({
+  userId = "",
+  initialStorySummary = null,
   initialDisplayName,
   initialUsername,
   initialBio,
@@ -173,6 +182,13 @@ export function ProfilePageContent({
    * never ambiguously both.
    */
   const [avatarFullScreen, setAvatarFullScreen] = useState(false);
+  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const { summary: storySummary, refresh: refreshStorySummary } = useStorySummary(
+    userId || null,
+    initialStorySummary
+  );
+  const storyCount = storySummary?.activeCount ?? 0;
   const [feedback, setFeedback] = useState("");
   /**
    * Saving runs as plain async work, so there is no transition left to report.
@@ -664,13 +680,44 @@ export function ProfilePageContent({
                   full screen would show the preview, not the saved photo. */}
               <button
                 type="button"
-                onClick={() => setAvatarFullScreen(true)}
-                disabled={!avatarUrl || Boolean(selectedAvatarFile)}
-                aria-label="View profile photo"
+                onClick={() => {
+                  if (storyCount > 0 && !selectedAvatarFile) {
+                    setStoryViewerOpen(true);
+                    return;
+                  }
+                  setAvatarFullScreen(true);
+                }}
+                disabled={(storyCount === 0 && !avatarUrl) || Boolean(selectedAvatarFile)}
+                aria-label={storyCount > 0 ? `View your ${storyCount === 1 ? "Story" : "Stories"}` : "View profile photo"}
                 className="profile-avatar-open focus-ring"
               >
               <BirthdayAccent active={birthdayToday}>
-                <span className="block rounded-full bg-gradient-to-br from-primary via-amber-400 to-fuchsia-500 p-[3px] shadow-[0_0_28px_hsl(var(--primary)/0.18)]">
+                {storyCount > 0 ? (
+                  <StoryRing
+                    count={storyCount}
+                    hasUnseen
+                    ariaLabel={`${storyCount} active ${storyCount === 1 ? "Story" : "Stories"}`}
+                  >
+                    <UserAvatar
+                      src={avatarSrc}
+                      name={savedProfile.displayName}
+                      size="profile"
+                      className="h-[7.25rem] w-[7.25rem] border-[3px] border-background shadow-[0_12px_30px_hsl(var(--shadow)/0.24)] [&>span>span]:h-[7.25rem] [&>span>span]:w-[7.25rem] sm:h-32 sm:w-32 sm:[&>span>span]:h-32 sm:[&>span>span]:w-32"
+                      onImageError={() => {
+                        if (selectedAvatarFile) {
+                          setFeedback(
+                            selectedAvatarFile.type === "image/heic" || selectedAvatarFile.type === "image/heif"
+                              ? "This browser cannot preview the HEIC photo, but Mad Buddy can try to convert it when you save."
+                              : "This photo could not be previewed. Choose another image."
+                          );
+                          return;
+                        }
+                        setAvatarLoadFailed(true);
+                        setFeedback("Your profile photo could not be displayed. Choose another photo or try again.");
+                      }}
+                    />
+                  </StoryRing>
+                ) : (
                   <UserAvatar
                     src={avatarSrc}
                     name={savedProfile.displayName}
@@ -689,10 +736,21 @@ export function ProfilePageContent({
                       setFeedback("Your profile photo could not be displayed. Choose another photo or try again.");
                     }}
                   />
-                </span>
+                )}
               </BirthdayAccent>
               </button>
               {!selectedAvatarFile ? (
+                <>
+                <button
+                  type="button"
+                  onClick={() => setStoryComposerOpen(true)}
+                  disabled={!userId || avatarUploading || returningToLinkr}
+                  aria-label="Add Story"
+                  title="Add Story"
+                  className="focus-ring safe-motion absolute -bottom-1 -left-1 z-[3] grid h-11 w-11 place-items-center rounded-full border-[3px] border-background bg-primary text-primary-foreground shadow-md hover:brightness-105 disabled:opacity-50"
+                >
+                  <Plus className="h-5 w-5" aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
@@ -719,6 +777,7 @@ export function ProfilePageContent({
                 >
                   <Camera className="h-4 w-4" aria-hidden="true" />
                 </button>
+                </>
               ) : null}
             </div>
             {avatarField}
@@ -967,6 +1026,23 @@ export function ProfilePageContent({
         isOwner
         open={avatarFullScreen}
         onClose={() => setAvatarFullScreen(false)}
+      />
+      <StoryViewer
+        authorId={userId || null}
+        open={storyViewerOpen && Boolean(userId)}
+        onClose={() => setStoryViewerOpen(false)}
+        onChanged={() => {
+          void refreshStorySummary();
+        }}
+      />
+      <StoryComposer
+        open={storyComposerOpen}
+        activeCount={storyCount}
+        onOpenChange={setStoryComposerOpen}
+        onPublished={(message) => {
+          setFeedback(message);
+          void refreshStorySummary();
+        }}
       />
     </div>
   );

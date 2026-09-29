@@ -71,6 +71,10 @@ import { type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
 import type { ProximityBand } from "@/lib/proximity/bands";
 import { proximityBandLabel } from "@/lib/proximity/bands";
 import { ProximityGlowAvatar } from "@/components/glow/proximity-glow-avatar";
+import { StoryRing } from "@/components/stories/story-ring";
+import { StoryViewer } from "@/components/stories/story-viewer";
+import { getStorySummariesAction, getStorySummaryAction } from "@/app/(app)/stories-actions";
+import type { StorySummary } from "@/lib/stories/types";
 import { MuddiesClosestRail } from "@/components/friends/muddies-closest-rail";
 import { MuddiesRequests } from "@/components/friends/muddies-requests";
 import {
@@ -103,6 +107,8 @@ export type UserSummary = {
   trustedSince?: string | null;
   /** Server-authoritative identity verification. Never inferred from plan or tenure. */
   isVerifiedAccount?: boolean;
+  /** Server-authorised active Story metadata. Never contains media bytes/URLs. */
+  storySummary?: StorySummary | null;
 };
 
 type ProximityInfo = {
@@ -271,6 +277,47 @@ export function FriendsPageContent({
   const [reportUser, setReportUser] = useState<UserSummary | null>(null);
   const [reportDescription, setReportDescription] = useState("");
   const [profileUser, setProfileUser] = useState<UserSummary | null>(null);
+  const [storyUser, setStoryUser] = useState<UserSummary | null>(null);
+
+  // The list receives one batched Story snapshot from the server. Refresh that
+  // snapshot exactly when the earliest active Story expires so a ring never
+  // lingers beyond the 12-hour privacy/storage boundary. One request refreshes
+  // every friend, avoiding a per-row polling loop.
+  useEffect(() => {
+    const friendsWithStories = users.filter(
+      (entry) => entry.status === "friend" && entry.storySummary?.nextExpiryAt
+    );
+    if (friendsWithStories.length === 0) return;
+
+    const earliest = Math.min(
+      ...friendsWithStories.map((entry) => Date.parse(entry.storySummary!.nextExpiryAt!))
+    );
+    const delay = Math.max(0, earliest - Date.now()) + 50;
+
+    const timer = window.setTimeout(() => {
+      const friendIds = users
+        .filter((entry) => entry.status === "friend")
+        .map((entry) => entry.id);
+      void getStorySummariesAction(friendIds).then((next) => {
+        setUsers((current) =>
+          current.map((entry) =>
+            entry.status === "friend"
+              ? { ...entry, storySummary: next[entry.id] ?? null }
+              : entry
+          )
+        );
+        setProfileUser((current) =>
+          current ? { ...current, storySummary: next[current.id] ?? null } : current
+        );
+        setStoryUser((current) =>
+          current ? { ...current, storySummary: next[current.id] ?? null } : current
+        );
+      });
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [users]);
+
   const [createCircleOpen, setCreateCircleOpen] = useState(false);
   const [newCircleName, setNewCircleName] = useState("");
   const [circleTargetUser, setCircleTargetUser] = useState<UserSummary | null>(null);
@@ -756,6 +803,19 @@ export function FriendsPageContent({
     { id: "report", label: "Report", icon: <Flag className="h-4 w-4" />, onSelect: () => setReportUser(user) }
   ];
 
+  const refreshStorySummary = useCallback(async (userId: string) => {
+    const next = await getStorySummaryAction(userId);
+    setUsers((current) =>
+      current.map((entry) => (entry.id === userId ? { ...entry, storySummary: next } : entry))
+    );
+    setProfileUser((current) =>
+      current?.id === userId ? { ...current, storySummary: next } : current
+    );
+    setStoryUser((current) =>
+      current?.id === userId ? { ...current, storySummary: next } : current
+    );
+  }, []);
+
   const renderUserRow = (user: UserSummary) => (
     <MuddyRow
       key={user.id}
@@ -764,6 +824,7 @@ export function FriendsPageContent({
       isCloseFriend={closeFriendIds.includes(user.id)}
       circles={circles}
       onViewProfile={() => setProfileUser(user)}
+      onViewStory={() => setStoryUser(user)}
       onWave={() => {
                   /* A Wave is sent to another person; losing it silently is worse than
            * failing loudly, because nothing on screen would differ. */
@@ -1411,6 +1472,15 @@ export function FriendsPageContent({
         />
       ) : null}
 
+      <StoryViewer
+        authorId={storyUser?.id ?? null}
+        open={Boolean(storyUser)}
+        onClose={() => setStoryUser(null)}
+        onChanged={() => {
+          if (storyUser) void refreshStorySummary(storyUser.id);
+        }}
+      />
+
       <MuddyProfileModal
         muddy={
           profileUser
@@ -1505,6 +1575,7 @@ type UserRowProps = {
   isCloseFriend: boolean;
   circles: Circle[];
   onViewProfile: () => void;
+  onViewStory: () => void;
   onWave: () => void;
   onMessage: () => void;
   onRemove: () => void;
@@ -1581,6 +1652,7 @@ function MuddyRow({
   isCloseFriend,
   circles,
   onViewProfile,
+  onViewStory,
   onWave,
   onMessage,
   onRemove,
@@ -1597,23 +1669,40 @@ function MuddyRow({
   const otherCircles = circles.filter((circle) => circle.id !== "close-friends");
   const band = bandFor(proximity);
   const proximityText = proximityTextFor(proximity);
+  const storyCount = user.storySummary?.activeCount ?? 0;
+  const hasStory = storyCount > 0;
 
   return (
     <li className="flex items-center gap-3 py-2.5">
       <button
         type="button"
         data-tour-id={TOUR_TARGET_IDS.MUDDIES_PROFILE}
-        onClick={onViewProfile}
+        onClick={hasStory ? onViewStory : onViewProfile}
         className="focus-ring safe-motion relative shrink-0 rounded-full"
-        aria-label={[user.displayName, proximityText].filter(Boolean).join(", ")}
+        aria-label={[
+          user.displayName,
+          proximityText,
+          hasStory ? (user.storySummary?.hasUnseen ? "new Story" : "Story") : null
+        ].filter(Boolean).join(", ")}
       >
-        <ProximityGlowAvatar
-          name={user.displayName}
-          src={user.avatarUrl}
-          band={band}
-          decorative
-          size="sm"
-        />
+        {hasStory ? (
+          <StoryRing
+            count={storyCount}
+            hasUnseen={Boolean(user.storySummary?.hasUnseen)}
+          >
+            <UserAvatar name={user.displayName} src={user.avatarUrl} size="sm" decorative />
+          </StoryRing>
+        ) : band ? (
+          <ProximityGlowAvatar
+            name={user.displayName}
+            src={user.avatarUrl}
+            band={band}
+            decorative
+            size="sm"
+          />
+        ) : (
+          <UserAvatar name={user.displayName} src={user.avatarUrl} size="sm" decorative />
+        )}
         <HiddenMarker level={level} />
       </button>
 

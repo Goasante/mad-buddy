@@ -12,6 +12,10 @@ import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { blockUserAction, reportUserAction, sendFriendRequestAction } from "@/app/(app)/actions";
 import { clearFriendGlowColorAction, setFriendGlowColorAction } from "@/app/(app)/glow-color-actions";
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { StoryRing } from "@/components/stories/story-ring";
+import { StoryViewer } from "@/components/stories/story-viewer";
+import { useStorySummary } from "@/components/stories/use-story-summary";
 import { HeroCard, HeroIdentity } from "@/components/hero/hero-card";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
@@ -35,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { feedback as interactionFeedback } from "@/lib/feedback/feedback";
 import { BirthdayAccent } from "@/components/profile/birthday-accent";
 import type { ProfileIdentitySummary } from "@/lib/profile/identity";
+import type { StorySummary } from "@/lib/stories/types";
 
 export type MuddyProfileData = {
   friendId: string;
@@ -64,6 +69,7 @@ export function MuddyProfilePage({
   canCustomizeGlow = false,
   isMuddy = false,
   initialGlowColorId = null,
+  initialStorySummary = null,
   photos = []
 }: {
   muddy: MuddyProfileData;
@@ -75,12 +81,19 @@ export function MuddyProfilePage({
   /** Viewer is an approved Muddy (drives the free-tier upsell visibility). */
   isMuddy?: boolean;
   initialGlowColorId?: string | null;
+  initialStorySummary?: StorySummary | null;
   /** Already filtered by the server for this viewer. */
   photos?: ProfilePhoto[];
 }) {
   const router = useRouter();
   /** Full screen for the hero photograph and the showcases as one sequence. */
   const [heroFullScreen, setHeroFullScreen] = useState(false);
+  const [storyOpen, setStoryOpen] = useState(false);
+  const { summary: storySummary, refresh: refreshStorySummary } = useStorySummary(
+    muddy.friendId,
+    initialStorySummary
+  );
+  const storyCount = storySummary?.activeCount ?? 0;
   const [waveSent, setWaveSent] = useState(false);
   const [waveFeedback, setWaveFeedback] = useState("");
   useEffect(() => {
@@ -210,6 +223,29 @@ export function MuddyProfilePage({
       <HeroCard
         aspect="portrait"
         className="mx-auto w-full max-w-[560px] shadow-[0_18px_48px_-24px_hsl(var(--shadow)/0.55)]"
+        overlay={
+          storyCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setStoryOpen(true)}
+              className="focus-ring inline-flex rounded-full bg-black/25 p-1 backdrop-blur-sm"
+              aria-label={`View ${muddy.displayName}'s ${storyCount === 1 ? "Story" : "Stories"}`}
+            >
+              <StoryRing
+                count={storyCount}
+                hasUnseen={Boolean(storySummary?.hasUnseen)}
+                ariaLabel={storySummary?.hasUnseen ? "New Story" : "Story viewed"}
+              >
+                <UserAvatar
+                  src={muddy.avatarUrl}
+                  name={muddy.displayName}
+                  size="sm"
+                  decorative
+                />
+              </StoryRing>
+            </button>
+          ) : null
+        }
         media={
           muddy.avatarUrl ? (
             /* The hero photograph opens full screen, in the same sequence the
@@ -559,6 +595,14 @@ export function MuddyProfilePage({
         isOwner={false}
         open={heroFullScreen}
         onClose={() => setHeroFullScreen(false)}
+      />
+      <StoryViewer
+        authorId={muddy.friendId}
+        open={storyOpen}
+        onClose={() => setStoryOpen(false)}
+        onChanged={() => {
+          void refreshStorySummary();
+        }}
       />
     </div>
   );

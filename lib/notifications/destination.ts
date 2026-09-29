@@ -39,7 +39,9 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   // An Event Room notification lands on its Event, and with both ids on the
   // Room itself. Never on generic Events Home.
   event_room: "/events" as Route,
-  moment: "/moments" as Route,
+  // Historical Moment notifications now land on Profile. Moments is retired;
+  // Stories are profile-based and do not have a standalone feed route.
+  moment: "/profile" as Route,
   drop: "/drops" as Route,
   message: "/messages" as Route,
   group_message: "/messages?filter=groups" as Route,
