@@ -7,6 +7,7 @@ import { deliverNotification } from "@/lib/notifications/server";
 import {
   canTransitionPlan,
   isPlanChatCloseDays,
+  isTerminalPlanStatus,
   maxVotesPerUser,
   planChatClosesAtMs,
   planTierLimitsFor,
@@ -221,6 +222,122 @@ export async function cancelPlanAction(planId: string): Promise<PlanActionState>
   );
 
   return { ok: true, message: "This plan has been cancelled." };
+}
+
+// ---------------------------------------------------------------------------
+// Set a date on an undated Plan
+// ---------------------------------------------------------------------------
+
+const setPlanDateSchema = z.object({
+  planId: uuidSchema,
+  startAt: z.string().datetime()
+});
+
+/**
+ * Gives an undated Plan a real start time.
+ *
+ * HOST ONLY. The write is additionally scoped to creator_id and a NULL
+ * start_at, so a stale tab cannot overwrite a date that was added elsewhere.
+ * A future instant is required because the product promise here is to bring a
+ * Plan out of "No date yet" and back into the dated lifecycle.
+ */
+export async function setPlanDateAction(input: unknown): Promise<PlanActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+
+  const parsed = setPlanDateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Choose a valid date and time." };
+
+  const startMs = Date.parse(parsed.data.startAt);
+  if (!Number.isFinite(startMs) || startMs <= Date.now()) {
+    return { ok: false, message: "Choose a date and time in the future." };
+  }
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: plan } = await admin
+    .from("plans")
+    .select("id, creator_id, status, plan_type, start_at")
+    .eq("id", parsed.data.planId)
+    .maybeSingle();
+
+  if (!plan) return { ok: false, message: "Plan not found." };
+  if (plan.creator_id !== userId) {
+    return { ok: false, message: "Only the host can change this plan." };
+  }
+  if (isTerminalPlanStatus(plan.status)) {
+    return { ok: false, message: "A finished plan can't be rescheduled." };
+  }
+  if (plan.start_at) {
+    return { ok: false, message: "This plan already has a date." };
+  }
+
+  const update: Database["public"]["Tables"]["plans"]["Update"] = {
+    start_at: parsed.data.startAt,
+    updated_at: new Date().toISOString()
+  };
+  // "quick" means an undated lightweight Plan. Once it receives a date it has
+  // the same scheduling semantics as a scheduled Plan. Poll Plans stay polls.
+  if (plan.plan_type === "quick") update.plan_type = "scheduled";
+
+  const { data: updated, error } = await admin
+    .from("plans")
+    .update(update)
+    .eq("id", parsed.data.planId)
+    .eq("creator_id", userId)
+    .is("start_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !updated) {
+    return { ok: false, message: "Couldn't add the date. Refresh and try again." };
+  }
+
+  return { ok: true, message: "Date added. This plan is back in your schedule.", planId: updated.id };
+}
+
+// ---------------------------------------------------------------------------
+// Permanently delete a Plan
+// ---------------------------------------------------------------------------
+
+/**
+ * Permanently removes a Plan owned by the current user.
+ *
+ * This is intentionally separate from cancelPlanAction. Cancellation preserves
+ * the Plan Chat and history; deletion is an explicit destructive choice and
+ * the database RPC removes the Plan plus its linked conversation atomically.
+ */
+export async function deletePlanAction(planId: string): Promise<PlanActionState> {
+  const missing = missingEnvState();
+  if (missing) return missing;
+  if (!uuidSchema.safeParse(planId).success) return { ok: false, message: "Plan not found." };
+
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+
+  const admin = createSupabaseAdminClient();
+  const { data: plan } = await admin
+    .from("plans")
+    .select("id, creator_id, title")
+    .eq("id", planId)
+    .maybeSingle();
+
+  if (!plan) return { ok: false, message: "Plan not found." };
+  if (plan.creator_id !== userId) {
+    return { ok: false, message: "Only the host can delete this plan." };
+  }
+
+  const { data: deleted, error } = await admin.rpc("delete_owned_plan", {
+    p_actor_id: userId,
+    p_plan_id: planId
+  });
+  if (error || deleted !== true) {
+    return { ok: false, message: "Couldn't delete the plan." };
+  }
+
+  return { ok: true, message: `"${plan.title}" was deleted.` };
 }
 
 // ---------------------------------------------------------------------------

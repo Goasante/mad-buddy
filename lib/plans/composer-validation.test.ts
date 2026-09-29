@@ -16,11 +16,13 @@ const source = stripComments(readFileSync("components/plans/plans-page.tsx", "ut
 const flat = stripFormatting(readFileSync("components/plans/plans-page.tsx", "utf8"));
 
 /** The create handler, bounded to itself rather than a character window. */
+const createStart = source.indexOf("function createPlan(input");
 const createHandler = source.slice(
-  // From the function itself, not from the action call: setIsCreating(true)
-  // runs BEFORE the await, and a slice starting at the call cannot see it.
-  source.indexOf("void (async () => {"),
-  source.indexOf("const inviteCount")
+  // Anchor on the named create handler. Other non-interruptible mutations may
+  // also use async IIFEs now, so "first async IIFE in the file" is not a
+  // stable way to identify Plan creation.
+  createStart,
+  source.indexOf("const inviteCount", createStart)
 );
 
 describe("a refused Plan stays in the composer and says why", () => {

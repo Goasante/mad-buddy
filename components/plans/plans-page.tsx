@@ -16,9 +16,11 @@ import { useId, useMemo, useRef, useState, useTransition } from "react";
 import {
   cancelPlanAction,
   createPlanAction,
+  deletePlanAction,
   createPollAction,
   rsvpAction,
   setPlanChatCloseWindowAction,
+  setPlanDateAction,
   votePollAction
 } from "@/app/(app)/plans-actions";
 import { Badge } from "@/components/ui/badge";
@@ -238,6 +240,9 @@ export function PlansPageContent({
    * mid-flight and leaves the person unable to tell whether the Plan was made.
    */
   const [isCreating, setIsCreating] = useState(false);
+  /** Permanent/date mutations must finish even if React interrupts a render. */
+  const [isWriting, setIsWriting] = useState(false);
+  const detailPending = isPending || isWriting;
 
   const visiblePlans = useMemo(
     () => plans.filter((plan) => bucketFor(plan) === activeBucket),
@@ -359,6 +364,60 @@ export function PlansPageContent({
         router.refresh();
       }
     });
+  }
+
+  async function addPlanDate(planId: string, startAt: string) {
+    if (isWriting) return;
+    setIsWriting(true);
+    try {
+        const result = await setPlanDateAction({ planId, startAt });
+        setFeedback(result.message);
+        if (!result.ok) {
+          interactionFeedback.error();
+          return;
+        }
+
+        interactionFeedback.success();
+        setPlans((current) =>
+          current.map((plan) =>
+            plan.id === planId
+              ? {
+                  ...plan,
+                  startAt,
+                  planType: plan.planType === "quick" ? "scheduled" : plan.planType
+                }
+              : plan
+          )
+        );
+        // A host's newly dated Plan belongs under Created by you. Close the
+        // editor so the move is visible immediately; the canonical bucket logic
+        // makes the same decision again after refresh.
+        setSelectedPlanId(null);
+        setActiveBucket("hosting");
+        router.refresh();
+    } finally {
+      setIsWriting(false);
+    }
+  }
+
+  async function deletePlan(planId: string) {
+    if (isWriting) return;
+    setIsWriting(true);
+    try {
+        const result = await deletePlanAction(planId);
+        setFeedback(result.message);
+        if (!result.ok) {
+          interactionFeedback.error();
+          return;
+        }
+
+        interactionFeedback.warning();
+        setPlans((current) => current.filter((plan) => plan.id !== planId));
+        setSelectedPlanId(null);
+        router.refresh();
+    } finally {
+      setIsWriting(false);
+    }
   }
 
   function createPlan(input: {
@@ -550,13 +609,15 @@ export function PlansPageContent({
       />
       <PlanDetailsModal
         plan={selectedPlan}
-        pending={isPending}
+        pending={detailPending}
         onOpenChange={(open) => {
           if (!open) setSelectedPlanId(null);
         }}
         onRsvpChange={(rsvp) => selectedPlan && changeRsvp(selectedPlan.id, rsvp)}
         onVote={(pollId, optionId) => vote(pollId, optionId)}
         onCancel={() => selectedPlan && cancelPlan(selectedPlan.id)}
+        onSetDate={(startAt) => selectedPlan && addPlanDate(selectedPlan.id, startAt)}
+        onDelete={() => selectedPlan && deletePlan(selectedPlan.id)}
         onAddPoll={(question, pollType, options) => selectedPlan && addPoll(selectedPlan.id, question, pollType, options)}
         onSetChatWindow={(days) => selectedPlan && setChatWindow(selectedPlan.id, days)}
         // The canonical Plan conversation on the Messages surface -- the same
@@ -1198,6 +1259,8 @@ function PlanDetailsModal({
   onRsvpChange,
   onVote,
   onCancel,
+  onSetDate,
+  onDelete,
   onAddPoll,
   onSetChatWindow,
   onOpenChat
@@ -1208,14 +1271,24 @@ function PlanDetailsModal({
   onRsvpChange: (rsvp: "going" | "maybe" | "not_going") => void;
   onVote: (pollId: string, optionId: string) => void;
   onCancel: () => void;
+  onSetDate: (startAt: string) => void;
+  onDelete: () => void;
   onAddPoll: (question: string, pollType: string, options: string[]) => void;
   onSetChatWindow: (days: number) => void;
   onOpenChat: (conversationId: string) => void;
 }) {
+  // Key confirmation to the Plan id so opening another Plan can never inherit
+  // a destructive confirmation from the previous sheet.
+  const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
+  const confirmingDelete = Boolean(plan && deletePlanId === plan.id);
+
   return (
     <Modal
       open={Boolean(plan)}
-      onOpenChange={onOpenChange}
+      onOpenChange={(open) => {
+        if (!open) setDeletePlanId(null);
+        onOpenChange(open);
+      }}
       title={plan?.title ?? "Plan"}
       description={plan ? dateLabel(plan) : undefined}
       variant="sheet"
@@ -1350,6 +1423,10 @@ function PlanDetailsModal({
             </div>
           ))}
 
+          {plan.isHost && !plan.startAt && !TERMINAL.has(plan.status) ? (
+            <PlanDateEditor pending={pending} onSave={onSetDate} />
+          ) : null}
+
           {plan.isHost && !TERMINAL.has(plan.status) ? (
             <div className="space-y-4 border-t border-border/70 pt-4">
               <AddPollForm pending={pending} onSubmit={onAddPoll} />
@@ -1363,9 +1440,96 @@ function PlanDetailsModal({
               </Button>
             </div>
           ) : null}
+
+          {/* Deletion is separate from cancellation and remains available after
+              a Plan is completed/cancelled, which is how old Plans can actually
+              be cleared rather than becoming permanent history. */}
+          {plan.isHost ? (
+            <div className="border-t border-border/70 pt-4">
+              {confirmingDelete ? (
+                <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+                  <p className="text-sm font-medium">Delete {plan.title}?</p>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    The Plan, its guest and poll records, and its Plan Chat will be permanently removed for everyone.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setDeletePlanId(null)} disabled={pending}>
+                      Keep plan
+                    </Button>
+                    <Button type="button" variant="danger" size="sm" className="flex-1" onClick={onDelete} disabled={pending}>
+                      {pending ? "Deleting…" : "Delete plan"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button type="button" variant="ghost" size="sm" className="w-full text-destructive" onClick={() => setDeletePlanId(plan.id)} disabled={pending}>
+                  Delete plan
+                </Button>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Modal>
+  );
+}
+
+function PlanDateEditor({
+  pending,
+  onSave
+}: {
+  pending: boolean;
+  onSave: (startAt: string) => void;
+}) {
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+
+  const candidate = date && time ? new Date(`${date}T${time}`) : null;
+  // The server owns the future-time check. Keeping render deterministic avoids
+  // making button state depend on whichever millisecond React happened to paint.
+  const valid = Boolean(candidate && Number.isFinite(candidate.getTime()));
+
+  return (
+    <form
+      method="post"
+      className="space-y-3 rounded-xl border border-border/70 bg-secondary/20 p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!candidate || !valid) return;
+        onSave(candidate.toISOString());
+      }}
+    >
+      <div>
+        <p className="text-sm font-semibold">Add a date</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          Once saved, this Plan leaves No date yet and returns to your dated Plans.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="space-y-1 text-xs font-medium">
+          <span>Date</span>
+          <Input
+            type="date"
+            min={localDateValue(0)}
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            disabled={pending}
+          />
+        </label>
+        <label className="space-y-1 text-xs font-medium">
+          <span>Time</span>
+          <Input
+            type="time"
+            value={time}
+            onChange={(event) => setTime(event.target.value)}
+            disabled={pending}
+          />
+        </label>
+      </div>
+      <Button type="submit" size="sm" disabled={!valid || pending}>
+        {pending ? "Saving…" : "Save date"}
+      </Button>
+    </form>
   );
 }
 

@@ -41,7 +41,7 @@ export function useUnreadMessageCount(userId: string | null) {
       // A read can complete while the previous count request is still running.
       // Fetch again afterward so its older response cannot leave a stale badge.
       queuedRefresh.current = true;
-      return inFlight.current;
+      if (inFlight.current) return inFlight.current;
     }
 
     const request = (async () => {
