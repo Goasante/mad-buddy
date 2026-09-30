@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
  *   Updates      -> the EXISTING Event Updates architecture, not a second one
  *   Guest list   -> built from RSVP + live check-in truth
  *   Admins       -> the EXISTING EventAdminManager
- *   Settings     -> the EXISTING Event draft/edit authority
+ *   Settings     -> host-only Event audience/privacy settings
  *   End Event    -> a real, confirmed, authorized lifecycle transition
  *
  * Updates and Admins deliberately delegate. Event Updates are Event-wide and

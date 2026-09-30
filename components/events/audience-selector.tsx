@@ -83,10 +83,12 @@ export type AudienceOptionsLoader = () => Promise<{
 export function AudienceSelector({
   value,
   onChange,
-  loadOptions
+  loadOptions,
+  hint = "You can change this anytime before publishing."
 }: {
   value: AudienceValue;
   onChange: (next: AudienceValue) => void;
+  hint?: string;
   /**
    * How to fetch the picker's options. REQUIRED -- there is deliberately no
    * default.
@@ -183,7 +185,7 @@ export function AudienceSelector({
     <fieldset className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <div className="space-y-1">
         <legend className="text-lg font-semibold leading-snug">Who should know about this event?</legend>
-        <p className="text-sm text-muted-foreground">You can change this anytime before publishing.</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       </div>
 
       <div role="radiogroup" aria-label="Event audience" className="min-w-0 max-w-full space-y-2">

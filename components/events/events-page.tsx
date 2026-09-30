@@ -54,6 +54,7 @@ import { EventRoomsSection, CreateRoomForm } from "@/components/events/event-roo
 import { EventRoomDetail } from "@/components/events/event-room-detail";
 import { EventRoomSettings } from "@/components/events/event-room-settings";
 import { EventHostTools, EventGuestList, type HostToolsRow } from "@/components/events/event-host-tools";
+import { EventSettingsModal } from "@/components/events/event-settings-modal";
 import { QrPanel, JoinedRoomSuccess } from "@/components/events/event-qr";
 import type { RoomView } from "@/lib/events/rooms";
 import { EventShare } from "@/components/events/event-share";
@@ -247,6 +248,7 @@ export function EventsPageContent({
    * Event's rooms. */
   const [rooms, setRooms] = useState<RoomView[]>([]);
   const [hostToolsOpen, setHostToolsOpen] = useState(false);
+  const [eventSettingsOpen, setEventSettingsOpen] = useState(false);
   const [roomsOpen, setRoomsOpen] = useState(false);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [guestsOpen, setGuestsOpen] = useState(false);
@@ -628,6 +630,7 @@ export function EventsPageContent({
     setRoomQrId(null);
     setJoinedRoom(null);
     setHostToolsOpen(false);
+    setEventSettingsOpen(false);
     setRoomsOpen(false);
     setCreateRoomOpen(false);
     setGuestsOpen(false);
@@ -1334,12 +1337,34 @@ export function EventsPageContent({
               else if (row === "updates") setUpdatesOpen(true);
               else if (row === "guests") setGuestsOpen(true);
               else if (row === "admins") setAdminsOpen(true);
-              // Reuses the EXISTING Event draft/edit authority. No shadow settings store.
-              else if (row === "settings") continueDraft(selectedEvent.id);
+              else if (row === "settings") {
+                // Published Event settings are their own host-only surface.
+                // The draft editor intentionally refuses live Events, which is
+                // why routing Settings through continueDraft made this row dead.
+                setHostToolsOpen(false);
+                setEventSettingsOpen(true);
+              }
             }}
           />
         ) : null}
       </Modal>
+
+      <EventSettingsModal
+        open={eventSettingsOpen && Boolean(selectedEvent?.isHost)}
+        onOpenChange={setEventSettingsOpen}
+        eventId={selectedEvent?.id ?? null}
+        eventName={selectedEvent?.name ?? null}
+        onSaved={(visibility, message) => {
+          if (selectedEvent) {
+            setEvents((current) =>
+              current.map((event) =>
+                event.id === selectedEvent.id ? { ...event, visibility } : event
+              )
+            );
+          }
+          setFeedback(message);
+        }}
+      />
 
       {/* EVENT CHECK-IN QR. A real server-minted, signed, expiring token. */}
       <Modal

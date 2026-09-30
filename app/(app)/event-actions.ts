@@ -37,7 +37,9 @@ import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   createEvent,
+  getEventAudienceSettingsForHost,
   getEventDraftForHost,
+  updateEventAudienceSettings,
   updateEventDraft,
   getEventViewForViewer,
   listEvents,
@@ -785,6 +787,26 @@ export async function updateEventDraftAction(eventId: string, input: unknown): P
   if (!userId) return { ok: false, message: "Log in first." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
   return updateEventDraft(userId, eventId, input);
+}
+
+/**
+ * Host-only settings for an existing Event. Unlike getEventDraftAction this is
+ * valid after publishing because it exposes only the audience decision.
+ */
+export async function getEventAudienceSettingsAction(eventId: string) {
+  const userId = await getAuthedUserId();
+  if (!userId || !uuidSchema.safeParse(eventId).success) return null;
+  return getEventAudienceSettingsForHost(userId, eventId);
+}
+
+export async function updateEventAudienceSettingsAction(
+  eventId: string,
+  input: unknown
+): Promise<EventActionState> {
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
+  return updateEventAudienceSettings(userId, eventId, input);
 }
 
 /**

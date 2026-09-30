@@ -1006,3 +1006,195 @@ export async function updateEventDraft(
 
   return { ok: true, message: "Draft saved.", eventId };
 }
+
+const eventAudienceSettingsSchema = z.object({
+  visibility: z.enum(["invite", "link", "community", "nearby", "public"]),
+  targetIds: z.array(z.string().uuid()).max(200).default([]),
+  location: z
+    .object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      locality: z.string().max(120).optional(),
+      region: z.string().max(120).optional()
+    })
+    .nullable()
+    .optional()
+});
+
+export type EventAudienceSettings = {
+  eventId: string;
+  status: string;
+  visibility: "invite" | "link" | "community" | "nearby" | "public";
+  targetIds: string[];
+  location: {
+    latitude: number;
+    longitude: number;
+    locality?: string;
+    region?: string;
+  } | null;
+};
+
+/**
+ * Host-only settings projection for an existing Event.
+ *
+ * Published Events deliberately do not reuse the draft editor: changing who
+ * may find an Event is a smaller operation than rewriting a live Event's name,
+ * schedule and other attendee-facing facts.
+ */
+export async function getEventAudienceSettingsForHost(
+  userId: string,
+  eventId: string
+): Promise<EventAudienceSettings | null> {
+  if (!hasServiceRoleEnv() || !uuidSchema.safeParse(eventId).success) return null;
+
+  const admin = createSupabaseAdminClient();
+  const { data: event } = await admin
+    .from("events")
+    .select("id, host_id, status, visibility")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event || event.host_id !== userId) return null;
+
+  const visibility = eventAudienceSettingsSchema.shape.visibility.safeParse(event.visibility);
+  if (!visibility.success) return null;
+
+  const [{ data: targets }, { data: location }] = await Promise.all([
+    admin
+      .from("event_audience_targets")
+      .select("target_type, target_id")
+      .eq("event_id", eventId),
+    admin
+      .from("event_locations")
+      .select("latitude, longitude, locality, region")
+      .eq("event_id", eventId)
+      .maybeSingle()
+  ]);
+
+  const targetType = visibility.data === "invite" ? "user" : visibility.data === "community" ? "community" : null;
+  const targetIds = targetType
+    ? (targets ?? []).filter((row) => row.target_type === targetType).map((row) => row.target_id)
+    : [];
+
+  return {
+    eventId,
+    status: event.status,
+    visibility: visibility.data,
+    targetIds,
+    location: location
+      ? {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          locality: location.locality ?? undefined,
+          region: location.region ?? undefined
+        }
+      : null
+  };
+}
+
+/**
+ * Changes only the audience of an existing Event.
+ *
+ * The server re-authorizes every selected Muddy/community and validates Nearby
+ * geography. Draft, scheduled and active Events can change audience; ended or
+ * cancelled Events keep their historical distribution state.
+ */
+export async function updateEventAudienceSettings(
+  userId: string,
+  eventId: string,
+  input: unknown
+): Promise<EventResult> {
+  if (!hasServiceRoleEnv()) {
+    return { ok: false, message: "This action needs the server database configuration." };
+  }
+  if (!uuidSchema.safeParse(eventId).success) {
+    return { ok: false, message: "Event not found." };
+  }
+
+  const parsed = eventAudienceSettingsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the Event audience and try again." };
+
+  const rateLimit = await consumeRateLimit({ action: "events.update", userId });
+  if (!rateLimit.allowed) return { ok: false, message: rateLimitMessage(rateLimit.resetAt) };
+
+  const admin = createSupabaseAdminClient();
+  const { data: event } = await admin
+    .from("events")
+    .select("id, host_id, status")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return { ok: false, message: "Event not found." };
+  if (event.host_id !== userId) return { ok: false, message: "Only the host can change Event settings." };
+  if (event.status === "ended" || event.status === "cancelled") {
+    return { ok: false, message: "Audience settings can't be changed after an Event has ended." };
+  }
+
+  const chosenVisibility = parsed.data.visibility;
+  const requestedTargetIds = [...new Set(parsed.data.targetIds)];
+  const [{ data: storedLocation }, allowedTargetIds] = await Promise.all([
+    admin
+      .from("event_locations")
+      .select("event_id")
+      .eq("event_id", eventId)
+      .maybeSingle(),
+    chosenVisibility === "invite"
+      ? batchEligibleMuddyIds(admin, userId, requestedTargetIds).then((ids) => [...ids])
+      : chosenVisibility === "community"
+        ? eligibleCommunityTargetIds(admin, userId, requestedTargetIds)
+        : Promise.resolve([])
+  ]);
+
+  const audienceCheck = validateAudienceRequirements({
+    visibility: chosenVisibility,
+    targetCount: allowedTargetIds.length,
+    hasLocation: Boolean(parsed.data.location) || Boolean(storedLocation)
+  });
+  if (!audienceCheck.ok) return { ok: false, message: audienceCheck.message };
+
+  /* Replace target rows first. The Event's visibility is flipped only after
+     its required target set exists, so an invited/community Event is never
+     intentionally published with an empty audience. */
+  const { error: clearError } = await admin
+    .from("event_audience_targets")
+    .delete()
+    .eq("event_id", eventId);
+  if (clearError) return { ok: false, message: "Couldn't update the Event audience. Try again." };
+
+  if (allowedTargetIds.length > 0 && (chosenVisibility === "invite" || chosenVisibility === "community")) {
+    const targetType = chosenVisibility === "invite" ? "user" : "community";
+    const { error: targetError } = await admin.from("event_audience_targets").insert(
+      allowedTargetIds.map((targetId) => ({
+        event_id: eventId,
+        target_type: targetType,
+        target_id: targetId
+      }))
+    );
+    if (targetError) return { ok: false, message: "Couldn't update the Event audience. Try again." };
+  }
+
+  if (parsed.data.location) {
+    const { error: locationError } = await admin.from("event_locations").upsert(
+      {
+        event_id: eventId,
+        latitude: parsed.data.location.latitude,
+        longitude: parsed.data.location.longitude,
+        locality: parsed.data.location.locality ?? null,
+        region: parsed.data.location.region ?? null,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "event_id" }
+    );
+    if (locationError) return { ok: false, message: "Couldn't save the Event area. Try again." };
+  }
+
+  const { error: eventError } = await admin
+    .from("events")
+    .update({
+      visibility: chosenVisibility,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", eventId)
+    .eq("host_id", userId);
+  if (eventError) return { ok: false, message: "Couldn't save Event settings. Try again." };
+
+  return { ok: true, message: "Event audience updated.", eventId };
+}
