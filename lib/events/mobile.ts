@@ -810,6 +810,7 @@ export type EventDraft = {
   /** Local-date and time parts, because that is what the form fields hold. */
   date: string;
   startTime: string;
+  endDate: string;
   endTime: string;
   venueLabel: string;
   visibility: string;
@@ -876,6 +877,7 @@ export async function getEventDraftForHost(userId: string, eventId: string): Pro
     description: event.description ?? "",
     date: Number.isFinite(starts.getTime()) ? dateOf(starts) : "",
     startTime: Number.isFinite(starts.getTime()) ? timeOf(starts) : "",
+    endDate: Number.isFinite(ends.getTime()) ? dateOf(ends) : "",
     endTime: Number.isFinite(ends.getTime()) ? timeOf(ends) : "",
     venueLabel: event.venue_label ?? "",
     visibility: event.visibility,

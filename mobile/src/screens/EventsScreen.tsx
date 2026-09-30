@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { formatClockValue } from "@/lib/datetime/clock";
 import { Screen } from "../components/AppShell";
 import { Spinner } from "../components/Spinner";
 import { api } from "../lib/api";
@@ -304,12 +305,14 @@ function CreateEvent({ onCreated }: { onCreated: () => void }) {
       <Textarea placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
       <Input placeholder="Venue (optional)" value={venue} onChange={(e) => setVenue(e.target.value)} />
       <div className="space-y-1.5">
-        <label htmlFor="starts" className="text-xs font-medium text-muted-foreground">Starts</label>
+        <label htmlFor="starts" className="text-xs font-medium text-muted-foreground">Starts (AM/PM)</label>
         <Input id="starts" type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} />
+        {starts.includes("T") ? <p className="text-xs font-semibold text-primary">{formatClockValue(starts.slice(11, 16))}</p> : null}
       </div>
       <div className="space-y-1.5">
-        <label htmlFor="ends" className="text-xs font-medium text-muted-foreground">Ends</label>
+        <label htmlFor="ends" className="text-xs font-medium text-muted-foreground">Ends (AM/PM)</label>
         <Input id="ends" type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} />
+        {ends.includes("T") ? <p className="text-xs font-semibold text-primary">{formatClockValue(ends.slice(11, 16))}</p> : null}
       </div>
       <AudienceSelector value={audience} onChange={setAudience} loadOptions={loadAudienceOptions} />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

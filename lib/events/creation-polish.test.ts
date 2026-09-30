@@ -72,7 +72,7 @@ describe("creation is staged", () => {
     // audience into an Event that requires one.
     expect(page).toContain("const audienceReady =");
     expect(page).toContain("const basicsReady = name.trim().length >= 2;");
-    expect(page).toContain("const whenReady = Boolean(date && startTime && endTime && !scheduleInvalid);");
+    expect(page).toContain("const whenReady = Boolean(date && startTime && endDate && endTime && !scheduleInvalid);");
   });
 
   it("offers Publish only at Review", () => {
@@ -117,17 +117,17 @@ describe("form fields read as fields", () => {
      * from captions -- people could not tell what was editable. A filled
      * surface with an inset ring says "type here" without the heavy outlined
      * box the rest of the sheet avoids. */
-    for (const id of ["event-name", "event-date", "event-start", "event-end", "event-venue"]) {
+    for (const id of ["event-name", "event-date", "event-start", "event-end-date", "event-end", "event-venue"]) {
       const field = page.slice(page.indexOf(`id="${id}"`) - 700, page.indexOf(`id="${id}"`) + 700);
       expect(field, id).toContain("bg-secondary/50");
     }
   });
 
-  it("labels both ends of the time range", () => {
-    // "Ends" used to be sr-only, so the second control was an unlabelled box
-    // beside an arrow.
+  it("labels both ends of the schedule and exposes the end date", () => {
     const when = page.slice(page.indexOf('id="event-date"'), page.indexOf('id="event-venue"'));
+    expect(flat(when)).toContain("> Start date <");
     expect(flat(when)).toContain("> Starts <");
+    expect(flat(when)).toContain("> End date <");
     expect(flat(when)).toContain("> Ends <");
   });
 

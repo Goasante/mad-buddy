@@ -32,6 +32,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
+import { formatClockValue } from "@/lib/datetime/clock";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import {
   isArchivedUnscheduledPlan,
@@ -150,7 +151,8 @@ function dateLabel(plan: PlanSummary): string {
     month: "short",
     day: "numeric",
     hour: "numeric",
-    minute: "2-digit"
+    minute: "2-digit",
+    hour12: true
   });
 }
 
@@ -718,7 +720,7 @@ function PlanCard({ plan, onView }: { plan: PlanSummary; onView: () => void }) {
   // while the row above already said it had been set aside. One rule, asked
   // once.
   const timeLabel = plan.startAt
-    ? new Date(plan.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    ? new Date(plan.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })
     : isArchivedUnscheduledPlan(plan)
       ? "Set aside"
       : plan.planType === "poll"
@@ -1109,7 +1111,7 @@ function CreatePlanModal({
                 className={fieldClassName}
               />
             </FormField>
-            <FormField htmlFor={`${formId}-time`} label="Time">
+            <FormField htmlFor={`${formId}-time`} label="Time (AM/PM)">
               <Input
                 id={`${formId}-time`}
                 type="time"
@@ -1117,6 +1119,7 @@ function CreatePlanModal({
                 onChange={(event) => setTime(event.target.value)}
                 className={fieldClassName}
               />
+              {time ? <p className="mt-1 text-xs font-semibold text-primary">{formatClockValue(time)}</p> : null}
             </FormField>
           </div>
         </div>
@@ -1517,13 +1520,14 @@ function PlanDateEditor({
           />
         </label>
         <label className="space-y-1 text-xs font-medium">
-          <span>Time</span>
+          <span>Time (AM/PM)</span>
           <Input
             type="time"
             value={time}
             onChange={(event) => setTime(event.target.value)}
             disabled={pending}
           />
+          {time ? <span className="block text-[11px] font-semibold text-primary">{formatClockValue(time)}</span> : null}
         </label>
       </div>
       <Button type="submit" size="sm" disabled={!valid || pending}>

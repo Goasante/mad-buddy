@@ -64,6 +64,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import type { EventGlowMuddyList } from "@/lib/events/types";
 import { cn } from "@/lib/utils";
+import { formatClockValue } from "@/lib/datetime/clock";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 import { PageHeader } from "@/components/app-shell/page-header";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
@@ -789,6 +790,7 @@ export function EventsPageContent({
     name: string;
     date: string;
     startTime: string;
+    endDate: string;
     endTime: string;
     venueLabel: string;
     description: string;
@@ -804,7 +806,7 @@ export function EventsPageContent({
     onSettled?: () => void;
   }) {
     const startsAt = new Date(`${input.date}T${input.startTime}`);
-    const endsAt = new Date(`${input.date}T${input.endTime}`);
+    const endsAt = new Date(`${input.endDate}T${input.endTime}`);
     /* NOT a transition: publishing is three dependent server steps (create the
      * draft, upload the cover against its new id, then publish). Abandoning it
      * halfway leaves an Event with no artwork and the person with no share
@@ -1306,7 +1308,8 @@ export function EventsPageContent({
               day: "numeric",
               month: "short",
               hour: "numeric",
-              minute: "2-digit"
+              minute: "2-digit",
+              hour12: true
             })}
             eventCoverUrl={selectedEvent.coverUrl}
             eventHasCover={selectedEvent.hasCover}
@@ -1642,6 +1645,7 @@ function CreateEventModal({
     name: string;
     date: string;
     startTime: string;
+    endDate: string;
     endTime: string;
     venueLabel: string;
     description: string;
@@ -1676,6 +1680,7 @@ function CreateEventModal({
   });
   const [date, setDate] = useState(draft?.date ?? "");
   const [startTime, setStartTime] = useState(draft?.startTime ?? "");
+  const [endDate, setEndDate] = useState(draft?.endDate ?? draft?.date ?? "");
   const [endTime, setEndTime] = useState(draft?.endTime ?? "");
   const [venueLabel, setVenueLabel] = useState(draft?.venueLabel ?? "");
   const [description, setDescription] = useState(draft?.description ?? "");
@@ -1700,11 +1705,17 @@ function CreateEventModal({
    * than after a round trip. createEvent enforces the same rule server-side
    * and remains authoritative.
    */
+  const startCandidate = date && startTime ? new Date(`${date}T${startTime}`) : null;
+  const endCandidate = endDate && endTime ? new Date(`${endDate}T${endTime}`) : null;
   const scheduleInvalid = Boolean(
-    date && startTime && endTime && endTime <= startTime
+    startCandidate &&
+      endCandidate &&
+      Number.isFinite(startCandidate.getTime()) &&
+      Number.isFinite(endCandidate.getTime()) &&
+      endCandidate.getTime() <= startCandidate.getTime()
   );
   const complete =
-    name.trim().length >= 2 && date && startTime && endTime && !scheduleInvalid;
+    name.trim().length >= 2 && date && startTime && endDate && endTime && !scheduleInvalid;
 
   /* A GUIDED FLOW, NOT ONE LONG FORM (4J §21-24).
    *
@@ -1737,7 +1748,7 @@ function CreateEventModal({
     if (!audienceDone) return "audience";
     // A cover is required to publish, so a draft without one is incomplete.
     if (draft.name.trim().length < 2 || !draft.coverUrl) return "basics";
-    if (!draft.date || !draft.startTime || !draft.endTime) return "when";
+    if (!draft.date || !draft.startTime || !draft.endDate || !draft.endTime) return "when";
     return "review";
   });
   const stageIndex = STAGES.indexOf(stage);
@@ -1747,7 +1758,7 @@ function CreateEventModal({
     (audience.visibility !== "invite" && audience.visibility !== "community") ||
     audience.targetIds.length > 0;
   const basicsReady = name.trim().length >= 2;
-  const whenReady = Boolean(date && startTime && endTime && !scheduleInvalid);
+  const whenReady = Boolean(date && startTime && endDate && endTime && !scheduleInvalid);
 
   const canAdvance =
     stage === "audience"
@@ -1821,6 +1832,7 @@ function CreateEventModal({
       name: name.trim(),
       date,
       startTime,
+      endDate,
       endTime,
       venueLabel: venueLabel.trim(),
       description: description.trim(),
@@ -1841,6 +1853,7 @@ function CreateEventModal({
     setName("");
     setDate("");
     setStartTime("");
+    setEndDate("");
     setEndTime("");
     setVenueLabel("");
     setDescription("");
@@ -2001,65 +2014,86 @@ function CreateEventModal({
               value now sits in its own labelled row on a soft surface; the
               native picker still opens on tap, so timezone handling and
               validation are untouched. */}
-            <div className="mt-2 space-y-1.5">
-              <label
-                className="flex min-h-12 items-center justify-between gap-3 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
-                htmlFor="event-date"
-              >
-                <span className="text-sm text-muted-foreground">Date</span>
-                <input
-                  id="event-date"
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="min-w-0 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
-                />
-              </label>
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1.5">
+            <div className="mt-2 space-y-3">
+              <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2">
+                <label
+                  className="flex min-h-12 items-center justify-between gap-3 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
+                  htmlFor="event-date"
+                >
+                  <span className="text-sm text-muted-foreground">Start date</span>
+                  <input
+                    id="event-date"
+                    type="date"
+                    value={date}
+                    onChange={(event) => {
+                      const nextDate = event.target.value;
+                      setDate(nextDate);
+                      setEndDate((current) => !current || current === date ? nextDate : current);
+                    }}
+                    className="min-w-0 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
+                  />
+                </label>
                 <label
                   className="flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
                   htmlFor="event-start"
                 >
-                  <span className="shrink-0 text-sm text-muted-foreground">
-                    Starts
+                  <span className="shrink-0 text-sm text-muted-foreground">Starts</span>
+                  <span className="min-w-0 text-right">
+                    <input
+                      id="event-start"
+                      type="time"
+                      value={startTime}
+                      onChange={(event) => setStartTime(event.target.value)}
+                      className="min-w-0 max-w-[8.75rem] bg-transparent text-right text-[0.9375rem] font-medium outline-none"
+                    />
+                    {startTime ? <span className="mt-0.5 block text-[11px] font-semibold text-primary">{formatClockValue(startTime)}</span> : null}
                   </span>
+                </label>
+              </div>
+
+              <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2">
+                <label
+                  className="flex min-h-12 items-center justify-between gap-3 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
+                  htmlFor="event-end-date"
+                >
+                  <span className="text-sm text-muted-foreground">End date</span>
                   <input
-                    id="event-start"
-                    type="time"
-                    value={startTime}
-                    onChange={(event) => setStartTime(event.target.value)}
-                    className="min-w-0 flex-1 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
+                    id="event-end-date"
+                    type="date"
+                    min={date || undefined}
+                    value={endDate}
+                    onChange={(event) => setEndDate(event.target.value)}
+                    className="min-w-0 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
                   />
                 </label>
                 <label
                   className="flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-xl bg-secondary/50 px-3.5 ring-1 ring-inset ring-border/40 focus-within:ring-2 focus-within:ring-primary"
                   htmlFor="event-end"
                 >
-                  <span className="shrink-0 text-sm text-muted-foreground">
-                    Ends
+                  <span className="shrink-0 text-sm text-muted-foreground">Ends</span>
+                  <span className="min-w-0 text-right">
+                    <input
+                      id="event-end"
+                      type="time"
+                      value={endTime}
+                      onChange={(event) => setEndTime(event.target.value)}
+                      className="min-w-0 max-w-[8.75rem] bg-transparent text-right text-[0.9375rem] font-medium outline-none"
+                    />
+                    {endTime ? <span className="mt-0.5 block text-[11px] font-semibold text-primary">{formatClockValue(endTime)}</span> : null}
                   </span>
-                  <input
-                    id="event-end"
-                    type="time"
-                    value={endTime}
-                    onChange={(event) => setEndTime(event.target.value)}
-                    className="min-w-0 flex-1 bg-transparent text-right text-[0.9375rem] font-medium outline-none"
-                  />
                 </label>
               </div>
-              {/* End-after-start, stated before the server has to refuse it.
-                The server rule remains authoritative. */}
+
+              {date && endDate && endDate > date ? (
+                <p className="text-xs font-medium text-primary">This Event ends on a later day.</p>
+              ) : null}
+
               {scheduleInvalid ? (
-                <p
-                  role="alert"
-                  className="text-xs font-medium text-destructive"
-                >
+                <p role="alert" className="text-xs font-medium text-destructive">
                   The Event must end after it starts.
                 </p>
               ) : null}
             </div>
-          </div>
-
           {/* WHERE: one row. Long venue names wrap rather than overflow. */}
           <div className="border-t border-border/60 pt-4">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -2117,18 +2151,29 @@ function CreateEventModal({
                 <p className="text-base font-semibold leading-snug">
                   {name.trim() || "Untitled Event"}
                 </p>
-                {date && startTime ? (
+                {date && startTime && endDate && endTime ? (
                   <p className="text-sm text-muted-foreground">
-                    {new Date(`${date}T${startTime}`).toLocaleDateString([], {
+                    {new Date(`${date}T12:00`).toLocaleDateString([], {
                       weekday: "short",
                       day: "numeric",
                       month: "short",
                     })}
                     {" · "}
-                    {new Date(`${date}T${startTime}`).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
+                    {formatClockValue(startTime)}
+                    {endDate === date ? (
+                      <>{" – "}{formatClockValue(endTime)}</>
+                    ) : (
+                      <>
+                        {" → "}
+                        {new Date(`${endDate}T12:00`).toLocaleDateString([], {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                        })}
+                        {" · "}
+                        {formatClockValue(endTime)}
+                      </>
+                    )}
                   </p>
                 ) : null}
                 {venueLabel.trim() ? (
@@ -2303,7 +2348,7 @@ function CreateEventModal({
           <button
             type="button"
             onClick={() => submit(true)}
-            disabled={name.trim().length < 2 || !date || !startTime || !endTime || pending}
+            disabled={name.trim().length < 2 || !date || !startTime || !endDate || !endTime || pending}
             className="focus-ring rounded px-2 py-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             Save draft

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { PremiumPlanBadge } from "@/components/premium/premium-plan-badge";
 import type { SubscriptionPlan } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
+import { formatClockValue } from "@/lib/datetime/clock";
 import { Spinner } from "../components/Spinner";
 import { Modal } from "../components/Modal";
 import { useOverlayDismiss } from "../lib/overlay";
@@ -301,8 +302,9 @@ function CreatePlanModal({
           <Field label="Date (optional)">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
-          <Field label="Time (optional)">
+          <Field label="Time (AM/PM, optional)">
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            {time ? <p className="text-xs font-semibold text-primary">{formatClockValue(time)}</p> : null}
           </Field>
         </div>
 

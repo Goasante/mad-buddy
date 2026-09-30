@@ -32,7 +32,7 @@ function startOfDay(ms: number): number {
   return date.getTime();
 }
 
-const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", hour12: true };
 
 /**
  * A human time label.

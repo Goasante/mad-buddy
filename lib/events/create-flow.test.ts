@@ -341,7 +341,7 @@ describe("Create Event reads as a sheet, not a form", () => {
      *
      * What must stay true either way: every control has an accessible name,
      * whether from a <label htmlFor> or an aria-label. */
-    for (const id of ["event-name", "event-description", "event-date", "event-start", "event-end"]) {
+    for (const id of ["event-name", "event-description", "event-date", "event-start", "event-end-date", "event-end"]) {
       expect(createModal, id).toContain(`htmlFor="${id}"`);
     }
     // The venue field keeps an aria-label: its section heading is "Where",
@@ -362,15 +362,20 @@ describe("When is one section", () => {
 
   it("still drives the canonical schedule values", () => {
     // The native pickers remain: no new date engine.
-    expect(createModal).toContain('type="date"');
+    expect((createModal.match(/type="date"/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect((createModal.match(/type="time"/g) ?? []).length).toBe(2);
-    expect(createModal).toContain("setDate(event.target.value)");
+    expect(createModal).toContain("setDate(nextDate)");
+    expect(createModal).toContain("setEndDate");
     expect(createModal).toContain("setStartTime(event.target.value)");
     expect(createModal).toContain("setEndTime(event.target.value)");
+    expect(createModal).toContain("formatClockValue(startTime)");
+    expect(createModal).toContain("formatClockValue(endTime)");
   });
 
-  it("shows an arrow between start and end rather than two labelled boxes", () => {
-    expect(createModal).toContain("→");
+  it("lets an Event finish on another day", () => {
+    expect(createModal).toContain('htmlFor="event-end-date"');
+    expect(createModal).toContain("This Event ends on a later day.");
+    expect(eventsPage).toContain("input.endDate");
   });
 });
 
@@ -437,7 +442,7 @@ describe("one primary action", () => {
 
   it("blocks publishing when the schedule is impossible", () => {
     expect(createModal).toContain("scheduleInvalid");
-    expect(eventsPage).toContain("endTime <= startTime");
+    expect(eventsPage).toContain("endCandidate.getTime() <= startCandidate.getTime()");
   });
 });
 
