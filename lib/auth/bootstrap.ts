@@ -8,7 +8,7 @@ import {
 } from "@/lib/security/rate-limit";
 import { createRequestId, logBackendEvent } from "@/lib/observability/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
+import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 import { recordSignupConsent } from "@/lib/legal/consent-logger";
 import { normalizeUsername, validateUsername } from "@/lib/profile/rules";
@@ -139,8 +139,9 @@ export async function createConfirmedAccount(
   // used as-is so the mobile path keeps claiming the name the user chose.
   const fixedUsername = typeof username === "string" ? username : null;
 
+  const normalizedEmail = email.trim().toLowerCase();
   const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
+    email: normalizedEmail,
     password,
     // The whole point. No email is sent, and the address is confirmed by this
     // call rather than by a link the product never uses.
@@ -150,13 +151,13 @@ export async function createConfirmedAccount(
 
   if (createError || !created?.user) {
     const duplicate =
-      (createError && "code" in createError && (createError as { code?: string }).code === "email_exists") ||
+      (createError && "code" in createError && ["email_exists", "user_already_exists"].includes((createError as { code?: string }).code ?? "")) ||
       /already|registered|exists/i.test(createError?.message ?? "");
 
     logBackendEvent(duplicate ? "info" : "warn", {
       requestId,
       action: "auth.signup",
-      statusCode: duplicate ? 200 : 400,
+      statusCode: duplicate ? 409 : 400,
       latencyMs: Date.now() - startedAt,
       errorType: duplicate ? "duplicate_email" : (createError?.name ?? "create_user_failed")
     });
@@ -201,7 +202,7 @@ export async function createConfirmedAccount(
     };
   }
 
-  return { ok: true, account: { userId: created.user.id, email } };
+  return { ok: true, account: { userId: created.user.id, email: normalizedEmail } };
 }
 
 const mobileSignupSchema = z
@@ -212,7 +213,7 @@ const mobileSignupSchema = z
       .min(3)
       .max(24)
       .regex(/^[a-z0-9_]+$/),
-    email: z.string().email(),
+    email: z.string().trim().toLowerCase().email(),
     password: z.string().min(8),
     acceptedPolicy: z.literal(true),
     policyVersion: z.literal(PRIVACY_POLICY_VERSION),
@@ -273,8 +274,7 @@ export type MobileSignUpResult = {
  * Mad Buddy does not verify email at sign-up: the account is created confirmed
  * and the client signs in straight away.
  *
- * Any creation error stays generic so this endpoint cannot be used to discover
- * which email addresses are registered.
+ * Duplicate email directs returning users to login without bootstrapping rows.
  */
 export async function registerUserWithEmailVerification(input: unknown): Promise<MobileSignUpResult> {
   const requestId = createRequestId();
@@ -321,6 +321,9 @@ export async function registerUserWithEmailVerification(input: unknown): Promise
   });
 
   if (!creation.ok) {
+    if (creation.failure.reason === "duplicate") {
+      return { ok: false, message: "An account with this email already exists. Log in instead." };
+    }
     if (creation.failure.reason === "bootstrap") {
       const code = creation.failure.code;
       return {
@@ -332,8 +335,7 @@ export async function registerUserWithEmailVerification(input: unknown): Promise
       };
     }
 
-    // One generic message for both duplicate and provider failures, so the
-    // endpoint never reveals whether an address is already registered.
+    // Provider failures stay generic; raw constraint details are never exposed.
     return { ok: false, message: "Your account could not be created. Check the form and try again." };
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useCallback, useState, useTransition } from "react";
@@ -15,7 +16,7 @@ import { isRequestTimeoutError, withTimeout } from "@/lib/network/resilience";
 import { TurnstileWidget } from "@/components/security/turnstile-widget";
 
 const signupSchema = z.object({
-  email: z.string().email("Enter a valid email address."),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
   password: z.string().min(8, "Use at least 8 characters."),
   acceptedPolicy: z.boolean().refine(Boolean, "Agree to the Terms and Privacy Policy to continue."),
   policyVersion: z.literal(PRIVACY_POLICY_VERSION)
@@ -176,7 +177,12 @@ export function SignupForm({ initialError = null, nextDestination = "/dashboard"
           ) : (
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           )}
-          {actionState.message}
+          <span>
+            {actionState.message}
+            {!actionState.ok && actionState.redirectTo ? (
+              <Link href={actionState.redirectTo as Route} className="focus-ring ml-2 inline-flex min-h-11 items-center font-semibold underline">Log in</Link>
+            ) : null}
+          </span>
         </div>
       ) : null}
 

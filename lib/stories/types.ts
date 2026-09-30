@@ -26,6 +26,7 @@ export type StoryItem = {
   createdAt: string;
   expiresAt: string;
   viewed: boolean;
+  liked: boolean;
   isAuthor: boolean;
 };
 
@@ -43,3 +44,19 @@ export type StoryCreationContext = {
 export function storySlotsRemaining(activeCount: number): number {
   return Math.max(0, STORY_ACTIVE_LIMIT - Math.max(0, activeCount));
 }
+
+export type StoryViewerRecord = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  viewedAt: string;
+  liked: boolean;
+};
+
+/** Only returned to the creator of the active Story. */
+export type StoryEngagement = {
+  viewCount: number;
+  likeCount: number;
+  viewers: StoryViewerRecord[];
+  nextOffset: number | null;
+};

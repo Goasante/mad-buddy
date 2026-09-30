@@ -23,6 +23,8 @@ import {
   loadStoryCreationContext,
   loadStorySummariesForAuthors,
   loadStorySummary,
+  loadStoryEngagement,
+  setStoryLike,
   recordStoryView,
   validateStoryAudienceTargets
 } from "@/lib/stories/service";
@@ -32,6 +34,7 @@ import {
   type StoryAudienceType,
   type StoryCreationContext,
   type StoryItem,
+  type StoryEngagement,
   type StorySummary
 } from "@/lib/stories/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -374,4 +377,24 @@ export async function getStoryCreationContextAction(): Promise<StoryCreationCont
   const userId = await getAuthedUserId();
   if (!userId) return { muddies: [], closeFriendsAvailable: false };
   return loadStoryCreationContext(createSupabaseAdminClient(), userId);
+}
+
+export async function getStoryEngagementAction(storyId: string, offset = 0): Promise<StoryEngagement | null> {
+  if (!uuidSchema.safeParse(storyId).success || !Number.isSafeInteger(offset) || offset < 0 || offset > 100_000) return null;
+  const userId = await getAuthedUserId();
+  if (!userId) return null;
+  return loadStoryEngagement(createSupabaseAdminClient(), userId, storyId, offset);
+}
+
+export async function setStoryLikeAction(storyId: string, liked: boolean): Promise<StoryActionState> {
+  if (!uuidSchema.safeParse(storyId).success || typeof liked !== "boolean") return { ok: false, message: "That Story isn't available." };
+  const userId = await getAuthedUserId();
+  if (!userId) return { ok: false, message: "Log in first." };
+  const admin = createSupabaseAdminClient();
+  const guard = await guardAction(admin, { userId, surface: "moments" });
+  if (!guard.allowed) return { ok: false, message: guard.message };
+  const limit = await consumeRateLimit({ action: "moments.react", userId });
+  if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
+  const ok = await setStoryLike(admin, userId, storyId, liked);
+  return { ok, message: ok ? (liked ? "Story liked." : "Like removed.") : "Couldn't update your like. Try again." };
 }

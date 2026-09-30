@@ -278,6 +278,7 @@ export function MessagesPageV4({
   const [feedback, setFeedback] = useTransientFeedback();
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
+  const [groupsCreateOnOpen, setGroupsCreateOnOpen] = useState(false);
   const [newChatPending, setNewChatPending] = useState(false);
   const [newChatPendingFriendId, setNewChatPendingFriendId] = useState<string | null>(null);
   const newChatPendingRef = useRef(false);
@@ -1422,6 +1423,12 @@ export function MessagesPageV4({
             </nav>
           </div>
 
+          {activeFilter === "groups" ? (
+            <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-3 md:px-5">
+              <Button onClick={() => { setGroupsCreateOnOpen(true); setGroupsManagerOpen(true); }}><Plus className="h-4 w-4" aria-hidden="true" />Create Group</Button>
+              <Button variant="outline" onClick={() => { setGroupsCreateOnOpen(false); setGroupsManagerOpen(true); }}>Groups and invitations</Button>
+            </div>
+          ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 md:px-3">
             {filteredConversations.length === 0 ? <EmptyState icon={MessageCircle} title={activeFilter === "archived" ? "No archived chats" : "No chats here"} description={activeFilter === "archived" ? "Chats you archive will wait here quietly." : "Try another filter or start a new chat."} action={activeFilter === "archived" ? undefined : <Button onClick={() => setNewMessageOpen(true)}>New chat</Button>} /> : (
               <ul className="space-y-1">
@@ -1670,9 +1677,10 @@ export function MessagesPageV4({
         })();
       }} onGroups={() => {
         setNewMessageOpen(false);
+        setGroupsCreateOnOpen(false);
         setGroupsManagerOpen(true);
       }} />
-      <GroupsManagerModal open={groupsManagerOpen} onOpenChange={setGroupsManagerOpen} />
+      <GroupsManagerModal open={groupsManagerOpen} createOnOpen={groupsCreateOnOpen} onOpenChange={setGroupsManagerOpen} />
 
       {selected ? <ChatSettingsV4 open={settingsOpen} onOpenChange={setSettingsOpen} conversation={selected} controls={controlState} pinsCount={ultimate?.pins.length ?? null} viewerRole={viewerRole} onFavorite={() => toggleFavorite(selected)} onMute={(hours) => setMuteHours(selected, hours)} onControlPatch={(patch) => patchControlState(selected.id, patch)} onSearch={() => { setSettingsOpen(false); setThreadSearchOpen(true); }} onGroupDetails={() => { setSettingsOpen(false); setGroupDetailsOpen(true); }} onViewProfile={() => { if (selected.otherUsername) router.push(`/friends/${selected.otherUsername}` as Route); }} onFeedback={setFeedback} /> : null}
 

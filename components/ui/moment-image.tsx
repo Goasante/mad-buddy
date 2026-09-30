@@ -22,6 +22,7 @@ export function MomentImage({
   src,
   alt,
   onRetry,
+  onLoad,
   unavailableLabel = "Image unavailable",
   className,
   fallbackClassName,
@@ -31,6 +32,7 @@ export function MomentImage({
   alt: string;
   /** Called once on first error to regenerate the signed URL (optional). */
   onRetry?: () => void;
+  onLoad?: () => void;
   unavailableLabel?: string;
   className?: string;
   fallbackClassName?: string;
@@ -84,6 +86,7 @@ export function MomentImage({
       loading={priority ? "eager" : "lazy"}
       fetchPriority={priority ? "high" : "auto"}
       decoding="async"
+      onLoad={onLoad}
       onError={() => {
         // The signed URL may simply have expired — retry once before giving up.
         if (!retried && onRetry) {

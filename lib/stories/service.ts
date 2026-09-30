@@ -7,6 +7,7 @@ import type {
   StoryAudienceType,
   StoryCreationContext,
   StoryItem,
+  StoryEngagement,
   StorySummary
 } from "@/lib/stories/types";
 
@@ -247,6 +248,12 @@ export async function loadStoriesForAuthor(
     .eq("user_id", authorId)
     .maybeSingle();
 
+  const { data: reactions, error: reactionsError } = await admin.from("moment_reactions")
+    .select("moment_id").eq("user_id", viewerId).eq("reaction_type", "heart")
+    .in("moment_id", rows.map((row) => row.id));
+  if (reactionsError) return [];
+  const likedIds = new Set((reactions ?? []).map((row) => row.moment_id));
+
   const authorName = profile?.full_name?.trim() || (authorId === viewerId ? "You" : "A Muddy");
   const signed = await Promise.all(
     rows.map(async (row) => {
@@ -265,6 +272,7 @@ export async function loadStoriesForAuthor(
         createdAt: row.created_at,
         expiresAt: row.expires_at,
         viewed: row.author_id === viewerId || viewedIds.has(row.id),
+        liked: likedIds.has(row.id),
         isAuthor: row.author_id === viewerId
       } satisfies StoryItem;
     })
@@ -419,4 +427,69 @@ export async function validateStoryAudienceTargets(
   const eligible = await loadEligibleStoryMuddyIds(admin, ownerId, uniqueTargets);
   if (eligible === null) return false;
   return uniqueTargets.every((targetId) => eligible.has(targetId));
+}
+
+/** Creator-only reach and viewer list; never reuse public Moment aggregates. */
+export async function loadStoryEngagement(
+  admin: Admin,
+  ownerId: string,
+  storyId: string,
+  offset = 0
+): Promise<StoryEngagement | null> {
+  const { data: story, error: storyError } = await admin.from("moments")
+    .select("id").eq("id", storyId).eq("author_id", ownerId)
+    .eq("surface", "story").eq("status", "active")
+    .gt("expires_at", new Date().toISOString()).maybeSingle();
+  if (storyError || !story) return null;
+
+  const pageSize = 50;
+  const [{ data: views, count: viewCount, error: viewsError }, { count: likeCount, error: likesError }] = await Promise.all([
+    admin.from("moment_views").select("viewer_id, viewed_at", { count: "exact" })
+      .eq("moment_id", storyId).neq("viewer_id", ownerId)
+      .order("viewed_at", { ascending: false }).order("viewer_id", { ascending: true })
+      .range(offset, offset + pageSize - 1),
+    admin.from("moment_reactions").select("id", { count: "exact", head: true })
+      .eq("moment_id", storyId).eq("reaction_type", "heart").neq("user_id", ownerId)
+  ]);
+  if (viewsError || likesError) return null;
+
+  const viewerIds = (views ?? []).map((view) => view.viewer_id);
+  if (viewerIds.length === 0) return { viewCount: viewCount ?? 0, likeCount: likeCount ?? 0, viewers: [], nextOffset: null };
+  const [{ data: profiles, error: profilesError }, { data: likes, error: reactionsError }] = await Promise.all([
+    admin.from("profiles").select("user_id, full_name, avatar_url").in("user_id", viewerIds),
+    admin.from("moment_reactions").select("user_id").eq("moment_id", storyId)
+      .eq("reaction_type", "heart").in("user_id", viewerIds)
+  ]);
+  if (profilesError || reactionsError) return null;
+  const byId = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
+  const likedIds = new Set((likes ?? []).map((like) => like.user_id));
+  return {
+    viewCount: viewCount ?? 0,
+    likeCount: likeCount ?? 0,
+    viewers: (views ?? []).map((view) => ({
+      id: view.viewer_id,
+      name: byId.get(view.viewer_id)?.full_name?.trim() || "A Muddy",
+      avatarUrl: byId.get(view.viewer_id)?.avatar_url ?? null,
+      viewedAt: view.viewed_at,
+      liked: likedIds.has(view.viewer_id)
+    })),
+    nextOffset: offset + viewerIds.length < (viewCount ?? 0) ? offset + viewerIds.length : null
+  };
+}
+
+/** Desired-state write makes retries safe: one heart per viewer, no toggling RPC. */
+export async function setStoryLike(admin: Admin, viewerId: string, storyId: string, liked: boolean): Promise<boolean> {
+  const { data: story, error } = await admin.from("moments").select("author_id")
+    .eq("id", storyId).eq("surface", "story").eq("status", "active")
+    .gt("expires_at", new Date().toISOString()).maybeSingle();
+  if (error || !story || story.author_id === viewerId) return false;
+  const { rows } = await visibleStoryRowsForAuthors(admin, viewerId, [story.author_id]);
+  if (!rows.some((row) => row.id === storyId)) return false;
+  const result = liked
+    ? await admin.from("moment_reactions").upsert(
+      { moment_id: storyId, user_id: viewerId, reaction_type: "heart" },
+      { onConflict: "moment_id,user_id" })
+    : await admin.from("moment_reactions").delete().eq("moment_id", storyId)
+      .eq("user_id", viewerId).eq("reaction_type", "heart");
+  return !result.error;
 }

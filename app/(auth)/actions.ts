@@ -38,7 +38,7 @@ async function waitForAuthTransportRetry(): Promise<void> {
 }
 
 const signupSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
   acceptedPolicy: z.literal(true),
   policyVersion: z.literal(PRIVACY_POLICY_VERSION),
@@ -61,9 +61,7 @@ const signupSchema = z.object({
  * recognise falls through to the generic sentence, which is the only case the
  * fallback is meant for.
  *
- * Note: "email already registered" deliberately does NOT reach here — the
- * caller treats it as a success so the form cannot be used to discover which
- * addresses have accounts.
+ * Duplicate email has a separate response directing the person to login.
  */
 function signupProviderMessage(error: { code?: string; message?: string } | null): string {
   const code = error?.code ?? "";
@@ -117,13 +115,13 @@ function signupValidationMessage(error: z.ZodError): string {
 }
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
   next: z.string().max(2048).optional()
 });
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   turnstileToken: z.string().max(2048).optional()
 });
 
@@ -257,9 +255,7 @@ export async function signUpAction(input: unknown): Promise<AuthActionState> {
 
   if (!creation.ok) {
     if (creation.failure.reason === "duplicate") {
-      // Indistinguishable from a fresh sign-up, so the form cannot be used to
-      // discover which addresses are registered. Returning users land on login.
-      return { ok: true, message: "Check your details and log in to continue.", redirectTo: loginDestination };
+      return { ok: false, message: "An account with this email already exists. Log in instead.", redirectTo: loginDestination };
     }
 
     if (creation.failure.reason === "bootstrap") {

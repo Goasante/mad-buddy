@@ -30,16 +30,18 @@ const groupTabs: Array<{ id: GroupTab; label: string }> = [
 export function GroupsPageContent({
   initialData,
   embedded = false,
+  initialCreateOpen = false,
   onNavigate
 }: {
   initialData: GroupsPageData;
   embedded?: boolean;
+  initialCreateOpen?: boolean;
   onNavigate?: () => void;
 }) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [activeTab, setActiveTab] = useState<GroupTab>("mine");
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(initialCreateOpen);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [imageMediaId, setImageMediaId] = useState<string | null>(null);
