@@ -13,7 +13,7 @@ import type {
   GroupsPageData,
   GroupSummary
 } from "@/lib/groups/types";
-import { loadCommunicationPreferences } from "@/lib/messaging/service";
+import { loadCommunicationPreferences, normalizeCommunicationPreferences } from "@/lib/messaging/service";
 import { messagePreviewText } from "@/lib/messaging/message-preview";
 import { resolveRoleChange, type GroupRoleChange } from "@/lib/messaging/rules";
 import { errorType, logBackendEvent } from "@/lib/observability/logger";
@@ -54,13 +54,14 @@ const createGroupSchema = z.object({
    * Groups are private messaging conversations. Discovery/public visibility
    * belonged to the retired Linkr model and is no longer an input.
    */
-  imageMediaId: z.string().uuid().optional()
+  imageMediaId: z.string().uuid().optional(),
+  memberIds: z.array(z.string().uuid()).max(100).optional()
 });
 const invitationSchema = z.object({ groupId: uuidSchema, userId: uuidSchema });
 const invitationResponseSchema = z.object({ groupId: uuidSchema, accept: z.boolean() });
 
 function emptyGroupsData(): GroupsPageData {
-  return { groups: [], discoverableGroups: [], invitations: [] };
+  return { groups: [], discoverableGroups: [], invitations: [], createCandidates: [] };
 }
 
 async function getAuthedUserId() {
@@ -89,6 +90,76 @@ async function groupCapacityAvailable(
     .eq("conversation_id", groupId)
     .in("status", ["joined", "invited"]);
   return assertWithinLimit(admin, ownerId, "max_group_members", count ?? 0, requestedMembers);
+}
+
+async function loadEligibleGroupInviteCandidates(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  excludedIds: Iterable<string> = []
+): Promise<GroupInviteCandidate[]> {
+  const [{ data: friendships }, { data: blocks }] = await Promise.all([
+    admin
+      .from("friendships")
+      .select("user_one_id, user_two_id")
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+      .is("ended_at", null),
+    admin
+      .from("blocked_users")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
+  ]);
+
+  const excluded = new Set(excludedIds);
+  excluded.add(userId);
+  const blocked = new Set(
+    (blocks ?? []).map((row) => row.blocker_id === userId ? row.blocked_id : row.blocker_id)
+  );
+  const candidateIds = [...new Set(
+    (friendships ?? [])
+      .map((row) => row.user_one_id === userId ? row.user_two_id : row.user_one_id)
+      .filter((id) => !excluded.has(id) && !blocked.has(id))
+  )];
+  if (candidateIds.length === 0) return [];
+
+  const [{ data: profiles }, { data: preferenceRows }, { data: closeRows }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("user_id, full_name, username, avatar_url")
+      .in("user_id", candidateIds),
+    admin
+      .from("user_preferences")
+      .select("user_id, communication_preferences")
+      .in("user_id", candidateIds),
+    admin
+      .from("close_friend_relationships")
+      .select("owner_id")
+      .in("owner_id", candidateIds)
+      .eq("friend_id", userId)
+  ]);
+
+  const prefsByUserId = new Map(
+    (preferenceRows ?? []).map((row) => [
+      row.user_id,
+      normalizeCommunicationPreferences(row.communication_preferences)
+    ])
+  );
+  const closeFriendOwners = new Set((closeRows ?? []).map((row) => row.owner_id));
+
+  return (profiles ?? [])
+    .filter((profile) => {
+      const prefs = prefsByUserId.get(profile.user_id);
+      const permission = prefs?.groupAddPermission ?? "ask_me";
+      if (permission === "nobody") return false;
+      if (permission === "close_friends" && !closeFriendOwners.has(profile.user_id)) return false;
+      return true;
+    })
+    .map((profile) => ({
+      userId: profile.user_id,
+      displayName: profile.full_name?.trim() || MEMBER_NAME_PLACEHOLDER,
+      username: profile.username,
+      avatarUrl: profile.avatar_url
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
 async function ownedGroupCount(admin: ReturnType<typeof createSupabaseAdminClient>, userId: string) {
@@ -195,9 +266,10 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
   const joinedIds = (memberships ?? []).filter((row) => row.status === "joined").map((row) => row.conversation_id);
   const invitedIds = (memberships ?? []).filter((row) => row.status === "invited").map((row) => row.conversation_id);
 
-  const [groups, invitationSummaries] = await Promise.all([
+  const [groups, invitationSummaries, createCandidates] = await Promise.all([
     summariesFor(admin, joinedIds, roleById),
-    summariesFor(admin, invitedIds, roleById)
+    summariesFor(admin, invitedIds, roleById),
+    loadEligibleGroupInviteCandidates(admin, userId)
   ]);
 
   const invitations: GroupInvitation[] = [];
@@ -221,7 +293,7 @@ export async function loadGroupsPageDataAction(): Promise<GroupsPageData> {
     }
   }
 
-  return { groups, discoverableGroups: [], invitations };
+  return { groups, discoverableGroups: [], invitations, createCandidates };
 }
 
 export async function createGroupAction(input: unknown): Promise<GroupActionState> {
@@ -240,6 +312,21 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
   const limit = await assertWithinLimit(admin, userId, "max_private_groups", count, 1);
   if (!limit.allowed) return { ok: false, message: `You can create up to ${limit.limit} groups on your current plan.` };
 
+  const requestedMemberIds = [...new Set(parsed.data.memberIds ?? [])].filter((id) => id !== userId);
+  let invitedCandidates: GroupInviteCandidate[] = [];
+  if (requestedMemberIds.length > 0) {
+    const eligible = await loadEligibleGroupInviteCandidates(admin, userId);
+    const eligibleById = new Map(eligible.map((candidate) => [candidate.userId, candidate]));
+    if (requestedMemberIds.some((id) => !eligibleById.has(id))) {
+      return { ok: false, message: "One or more selected Muddies can't be invited right now." };
+    }
+    invitedCandidates = requestedMemberIds.map((id) => eligibleById.get(id)!);
+    const memberLimit = await assertWithinLimit(admin, userId, "max_group_members", 1, invitedCandidates.length);
+    if (!memberLimit.allowed) {
+      return { ok: false, message: `This Group can have up to ${memberLimit.limit} members on your current plan.` };
+    }
+  }
+
   const { data: conversation, error: conversationError } = await admin
     .from("conversations")
     .insert({ conversation_type: "group", created_by: userId, status: "active" })
@@ -248,7 +335,21 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
   if (conversationError || !conversation) return { ok: false, message: "Couldn't create that Group." };
 
   const now = new Date().toISOString();
-  const [settingsResult, memberResult] = await Promise.all([
+  const invitationWrite = invitedCandidates.length > 0
+    ? admin.from("conversation_members").insert(
+        invitedCandidates.map((candidate) => ({
+          conversation_id: conversation.id,
+          user_id: candidate.userId,
+          role: "member" as const,
+          status: "invited" as const,
+          joined_at: now,
+          left_at: null,
+          history_visible_from: now
+        }))
+      )
+    : Promise.resolve({ error: null });
+
+  const [settingsResult, memberResult, invitationsResult] = await Promise.all([
     admin.from("group_settings").insert({
       conversation_id: conversation.id,
       name: parsed.data.name,
@@ -267,11 +368,29 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
       status: "joined",
       joined_at: now,
       history_visible_from: now
-    })
+    }),
+    invitationWrite
   ]);
-  if (settingsResult.error || memberResult.error) {
+  if (settingsResult.error || memberResult.error || invitationsResult.error) {
     await admin.from("conversations").delete().eq("id", conversation.id);
     return { ok: false, message: "Couldn't finish creating that Group." };
+  }
+
+  if (invitedCandidates.length > 0) {
+    const { data: inviter } = await admin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle();
+    const inviterName = inviter?.full_name?.trim() || MEMBER_NAME_PLACEHOLDER;
+    await Promise.allSettled(
+      invitedCandidates.map((candidate) =>
+        deliverNotification(admin, {
+          userId: candidate.userId,
+          senderId: userId,
+          priority: "high",
+          type: `group:${conversation.id}`,
+          title: "Group invitation",
+          message: `${inviterName} invited you to ${parsed.data.name}.`
+        })
+      )
+    );
   }
 
   {
@@ -279,7 +398,13 @@ export async function createGroupAction(input: unknown): Promise<GroupActionStat
     await grantAchievement(admin, userId, "group_founder");
   }
   revalidatePath("/messages");
-  return { ok: true, message: "Group created.", groupId: conversation.id };
+  return {
+    ok: true,
+    message: invitedCandidates.length > 0
+      ? `Group created. ${invitedCandidates.length} invitation${invitedCandidates.length === 1 ? "" : "s"} sent.`
+      : "Group created.",
+    groupId: conversation.id
+  };
 }
 
 export async function respondToGroupInvitationAction(input: unknown): Promise<GroupActionState> {

@@ -9,6 +9,8 @@ const read = (path: string) => stripComments(readFileSync(join(process.cwd(), pa
 const groups = read("components/groups/groups-page.tsx");
 const manager = read("components/groups/groups-manager-modal.tsx");
 const details = read("components/groups/group-details-modal.tsx");
+const detailPage = read("components/groups/group-detail-page-v2.tsx");
+const actions = read("app/(app)/group-actions.ts");
 const messages = read("components/messages/messages-page-v4.tsx");
 const shell = read("components/messages/messages-shortcuts.tsx");
 const settings = read("components/messaging/chat-settings-v4.tsx");
@@ -27,6 +29,21 @@ describe("Messages owns the complete Group experience", () => {
     expect(settings).toContain('title="Group details"');
     expect(messages).toContain("<GroupDetailsModal");
     expect(details).toContain("<GroupDetailPageV2");
+  });
+
+  it("lets owners choose Muddies during Group creation and add more later", () => {
+    expect(groups).toContain("Add people (optional)");
+    expect(groups).toContain("memberIds: selectedMemberIds");
+    expect(actions).toContain("memberIds: z.array(z.string().uuid())");
+    expect(actions).toContain("loadEligibleGroupInviteCandidates");
+    expect(detailPage).toContain(">Add people</Button>");
+  });
+
+  it("opens Group details without waiting for the message/media history", () => {
+    const initialLoad = details.slice(details.indexOf("useEffect(() =>"));
+    expect(initialLoad).toContain("loadGroupDetailAction(conversationId)");
+    expect(initialLoad).not.toContain("Promise.all([");
+    expect(detailPage).toContain('item === "media" && !messagesLoaded && !messagesLoading');
   });
 
   it("does not reintroduce public or Linkr Group discovery", () => {

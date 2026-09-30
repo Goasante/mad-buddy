@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ImagePlus, Inbox, Loader2, Plus, Search, Shield, Users2 } from "lucide-react";
+import { Check, ImagePlus, Inbox, Loader2, Plus, Search, Shield, UserPlus, Users2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
 import {
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Textarea } from "@/components/ui/textarea";
 import type { GroupInvitation, GroupSummary, GroupsPageData } from "@/lib/groups/types";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
@@ -48,6 +49,8 @@ export function GroupsPageContent({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [query, setQuery] = useState("");
+  const [memberQuery, setMemberQuery] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -58,6 +61,20 @@ export function GroupsPageContent({
       `${group.name} ${group.description ?? ""}`.toLowerCase().includes(normalized)
     );
   }, [data.groups, query]);
+
+  const visibleCreateCandidates = useMemo(() => {
+    const normalized = memberQuery.trim().toLowerCase();
+    if (!normalized) return data.createCandidates;
+    return data.createCandidates.filter((candidate) =>
+      `${candidate.displayName} ${candidate.username}`.toLowerCase().includes(normalized)
+    );
+  }, [data.createCandidates, memberQuery]);
+
+  function toggleSelectedMember(userId: string) {
+    setSelectedMemberIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
+    );
+  }
 
   function openGroup(groupId: string) {
     onNavigate?.();
@@ -96,7 +113,8 @@ export function GroupsPageContent({
       const result = await createGroupAction({
         name,
         description,
-        imageMediaId: imageMediaId ?? undefined
+        imageMediaId: imageMediaId ?? undefined,
+        memberIds: selectedMemberIds
       });
       setFeedback(result.message);
       if (!result.ok) return;
@@ -105,6 +123,8 @@ export function GroupsPageContent({
       setDescription("");
       setImageMediaId(null);
       setImagePreview(null);
+      setMemberQuery("");
+      setSelectedMemberIds([]);
       setCreateOpen(false);
 
       if (result.groupId) {
@@ -278,6 +298,68 @@ export function GroupsPageContent({
                 }}
               />
             </label>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <span className="block text-sm font-medium">Add people (optional)</span>
+                <span className="text-xs text-muted-foreground">Choose Muddies now, or add them later from Group details.</span>
+              </div>
+              {selectedMemberIds.length > 0 ? (
+                <span className="shrink-0 text-xs font-semibold text-primary">{selectedMemberIds.length} selected</span>
+              ) : null}
+            </div>
+
+            {data.createCandidates.length > 0 ? (
+              <>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    value={memberQuery}
+                    onChange={(event) => setMemberQuery(event.target.value)}
+                    placeholder="Search Muddies"
+                    className="pl-9"
+                  />
+                </div>
+                <ul className="max-h-52 space-y-1 overflow-y-auto rounded-2xl border border-border/60 p-1">
+                  {visibleCreateCandidates.length > 0 ? visibleCreateCandidates.map((candidate) => {
+                    const selected = selectedMemberIds.includes(candidate.userId);
+                    return (
+                      <li key={candidate.userId}>
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectedMember(candidate.userId)}
+                          className={cn(
+                            "focus-ring flex w-full items-center gap-3 rounded-xl p-2.5 text-left",
+                            selected ? "bg-primary/10" : "hover:bg-secondary/60"
+                          )}
+                          aria-pressed={selected}
+                        >
+                          <UserAvatar src={candidate.avatarUrl} name={candidate.displayName} size="sm" decorative />
+                          <span className="min-w-0 flex-1">
+                            <strong className="block truncate text-sm">{candidate.displayName}</strong>
+                            <span className="block truncate text-xs text-muted-foreground">@{candidate.username}</span>
+                          </span>
+                          <span className={cn(
+                            "grid h-7 w-7 shrink-0 place-items-center rounded-full border",
+                            selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                          )}>
+                            {selected ? <Check className="h-4 w-4" aria-hidden="true" /> : <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  }) : (
+                    <li className="px-3 py-6 text-center text-sm text-muted-foreground">No matching Muddies.</li>
+                  )}
+                </ul>
+              </>
+            ) : (
+              <p className="rounded-xl bg-secondary/45 px-3 py-3 text-xs text-muted-foreground">
+                Add approved Muddies first, or create the Group now and invite people later.
+              </p>
+            )}
           </div>
         </div>
       </Modal>

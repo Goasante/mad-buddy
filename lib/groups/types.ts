@@ -34,6 +34,8 @@ export type GroupsPageData = {
   /** Compatibility for older mobile builds. Public discovery is retired, so this is always empty. */
   discoverableGroups: GroupSummary[];
   invitations: GroupInvitation[];
+  /** Approved Muddies the signed-in user may invite while creating a Group. */
+  createCandidates: GroupInviteCandidate[];
 };
 
 /**

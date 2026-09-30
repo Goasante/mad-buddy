@@ -28,32 +28,50 @@ export function GroupDetailsModal({
 }) {
   const [loaded, setLoaded] = useState<LoadedGroup | null>(null);
   const [failed, setFailed] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    const [group, messages] = await Promise.all([
-      loadGroupDetailAction(conversationId),
-      getMessagesAction(conversationId)
-    ]);
+    const group = await loadGroupDetailAction(conversationId);
     if (!group) throw new Error("group_not_available");
-    setLoaded({ group, messages });
+    setLoaded((current) => ({
+      group,
+      messages: current?.group.id === conversationId ? current.messages : []
+    }));
     setFailed(false);
   }, [conversationId]);
+
+  const loadMessages = useCallback(async () => {
+    if (messagesLoading || messagesLoaded) return;
+    setMessagesLoading(true);
+    try {
+      const messages = await getMessagesAction(conversationId);
+      setLoaded((current) =>
+        current?.group.id === conversationId ? { ...current, messages } : current
+      );
+      setMessagesLoaded(true);
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [conversationId, messagesLoaded, messagesLoading]);
 
   useEffect(() => {
     if (!open) return;
     let active = true;
 
-    void Promise.all([
-      loadGroupDetailAction(conversationId),
-      getMessagesAction(conversationId)
-    ])
-      .then(([group, messages]) => {
+    setLoaded(null);
+    setFailed(false);
+    setMessagesLoaded(false);
+    setMessagesLoading(false);
+
+    void loadGroupDetailAction(conversationId)
+      .then((group) => {
         if (!active) return;
         if (!group) {
           setFailed(true);
           return;
         }
-        setLoaded({ group, messages });
+        setLoaded({ group, messages: [] });
         setFailed(false);
       })
       .catch(() => {
@@ -71,6 +89,9 @@ export function GroupDetailsModal({
         <GroupDetailPageV2
           group={loaded.group}
           initialMessages={loaded.messages}
+          messagesLoading={messagesLoading}
+          messagesLoaded={messagesLoaded}
+          onLoadMessages={() => void loadMessages()}
           embedded
           onRefresh={() => void load().catch(() => setFailed(true))}
           onExit={() => {

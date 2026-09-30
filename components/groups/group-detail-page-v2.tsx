@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera, ChevronRight, LogOut, MessageCircle, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
+import { ArrowLeft, Camera, ChevronRight, Loader2, LogOut, MessageCircle, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
 import {
@@ -42,12 +42,18 @@ type ConfirmAction = {
 export function GroupDetailPageV2({
   group,
   initialMessages,
+  messagesLoading = false,
+  messagesLoaded = true,
+  onLoadMessages,
   embedded = false,
   onRefresh,
   onExit
 }: {
   group: GroupDetailView;
   initialMessages: ChatMessageView[];
+  messagesLoading?: boolean;
+  messagesLoaded?: boolean;
+  onLoadMessages?: () => void;
   embedded?: boolean;
   onRefresh?: () => void;
   onExit?: () => void;
@@ -175,13 +181,13 @@ export function GroupDetailPageV2({
         </div>
 
         <div className="grid grid-cols-3 border-t border-border/50">
-          {(["members", "media", "about"] as const).map((item) => <button key={item} type="button" onClick={() => setTab(item)} className={cn("relative min-h-12 text-xs font-bold capitalize transition", tab === item ? "text-[#E88C2B]" : "text-muted-foreground")}><span>{item}</span>{tab === item ? <span className="absolute inset-x-6 bottom-0 h-0.5 rounded-full bg-[#E88C2B] animate-in zoom-in-x" /> : null}</button>)}
+          {(["members", "media", "about"] as const).map((item) => <button key={item} type="button" onClick={() => { setTab(item); if (item === "media" && !messagesLoaded && !messagesLoading) onLoadMessages?.(); }} className={cn("relative min-h-12 text-xs font-bold capitalize transition", tab === item ? "text-[#E88C2B]" : "text-muted-foreground")}><span>{item}</span>{tab === item ? <span className="absolute inset-x-6 bottom-0 h-0.5 rounded-full bg-[#E88C2B] animate-in zoom-in-x" /> : null}</button>)}
         </div>
       </section>
 
       {tab === "members" ? (
         <section className="mt-4 overflow-hidden rounded-[24px] border border-border/60 bg-card/60">
-          <div className="flex items-center justify-between border-b border-border/50 px-4 py-3"><div><strong className="block text-sm">Members</strong><span className="text-[11px] text-muted-foreground">Owner → admins → members</span></div>{group.canManageMembers ? <button type="button" onClick={() => setInviteOpen(true)} className="focus-ring grid h-10 w-10 place-items-center rounded-full bg-[#E88C2B]/10 text-[#E88C2B]" aria-label="Add members"><UserPlus className="h-4 w-4" /></button> : null}</div>
+          <div className="flex items-center justify-between border-b border-border/50 px-4 py-3"><div><strong className="block text-sm">Members</strong><span className="text-[11px] text-muted-foreground">Owner → admins → members</span></div>{group.canManageMembers ? <Button type="button" size="sm" variant="ghost" onClick={() => setInviteOpen(true)} className="rounded-full text-[#E88C2B]"><UserPlus className="h-4 w-4" />Add people</Button> : null}</div>
           <ul className="divide-y divide-border/45">
             {members.map((member) => {
               const actions = memberActions({ viewerRole: group.role, viewerId: group.viewerId, member, hasProfileRoute: Boolean(member.username) });
@@ -198,7 +204,7 @@ export function GroupDetailPageV2({
       {tab === "media" ? (
         <section className="mt-4 rounded-[24px] border border-border/60 bg-card/60 p-3">
           <div className="mb-3 flex items-center gap-2"><Camera className="h-4 w-4 text-[#E88C2B]" /><strong className="text-sm">Shared photos</strong><span className="ml-auto text-xs text-muted-foreground">{media.length}</span></div>
-          {media.length === 0 ? <div className="grid min-h-44 place-items-center rounded-2xl bg-secondary/35 text-center"><div><Camera className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-sm font-medium">No shared photos yet</p><button type="button" onClick={() => router.push(`/messages?conversation=${group.id}`)} className="mt-2 text-xs font-bold text-[#E88C2B]">Open chat to share one</button></div></div> : <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">{media.map((message) => <button key={message.id} type="button" onClick={() => setViewerMessageId(message.id)} className="focus-ring aspect-square overflow-hidden rounded-xl bg-secondary transition-transform active:scale-95" aria-label={`Open photo from ${message.senderName}`}>{message.attachment?.thumbUrl || message.attachment?.fullUrl ? <img src={message.attachment.thumbUrl ?? message.attachment.fullUrl ?? ""} alt="" className="h-full w-full object-cover" /> : null}</button>)}</div>}
+          {messagesLoading ? <div className="grid min-h-44 place-items-center rounded-2xl bg-secondary/35 text-center"><div><Loader2 className="mx-auto h-5 w-5 animate-spin text-[#E88C2B] motion-reduce:animate-none" aria-hidden="true" /><p className="mt-2 text-sm font-medium">Loading shared photos…</p></div></div> : media.length === 0 ? <div className="grid min-h-44 place-items-center rounded-2xl bg-secondary/35 text-center"><div><Camera className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-sm font-medium">No shared photos yet</p><button type="button" onClick={() => router.push(`/messages?conversation=${group.id}`)} className="mt-2 text-xs font-bold text-[#E88C2B]">Open chat to share one</button></div></div> : <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">{media.map((message) => <button key={message.id} type="button" onClick={() => setViewerMessageId(message.id)} className="focus-ring aspect-square overflow-hidden rounded-xl bg-secondary transition-transform active:scale-95" aria-label={`Open photo from ${message.senderName}`}>{message.attachment?.thumbUrl || message.attachment?.fullUrl ? <img src={message.attachment.thumbUrl ?? message.attachment.fullUrl ?? ""} alt="" className="h-full w-full object-cover" /> : null}</button>)}</div>}
         </section>
       ) : null}
 
