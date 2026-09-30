@@ -36,7 +36,10 @@ describe("Messages owns the complete Group experience", () => {
     expect(groups).toContain("memberIds: selectedMemberIds");
     expect(actions).toContain("memberIds: z.array(z.string().uuid())");
     expect(actions).toContain("loadEligibleGroupInviteCandidates");
-    expect(detailPage).toContain(">Add people</Button>");
+    expect(detailPage).toContain("Add people to this Group");
+    expect(detailPage).toContain("Choose an approved Muddy to send a Group invitation.");
+    expect(detailPage).not.toContain('title="Add people" variant="sheet"');
+    expect(settings).toContain("Members, roles, add people and shared media");
   });
 
   it("opens Group details without waiting for the message/media history", () => {

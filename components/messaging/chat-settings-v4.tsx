@@ -216,7 +216,7 @@ export function ChatSettingsV4({
               </div>
             ) : null}
 
-            {isGroup ? <SettingRow icon={UsersRound} title="Group details" subtitle="Members, roles and shared media" onClick={onGroupDetails} /> : null}
+            {isGroup ? <SettingRow icon={UsersRound} title="Group details" subtitle="Members, roles, add people and shared media" onClick={onGroupDetails} /> : null}
           </section>
 
           {isGroup && canManageGroup && settings ? (
