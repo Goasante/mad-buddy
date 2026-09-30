@@ -40,7 +40,7 @@ function serverReady(): boolean {
 }
 
 function emptyGroupsData(): GroupsPageData {
-  return { groups: [], discoverableGroups: [], invitations: [] };
+  return { groups: [], discoverableGroups: [], invitations: [], createCandidates: [] };
 }
 
 async function groupCapacityAvailable(admin: Admin, groupId: string, ownerId: string, requestedMembers = 1) {
@@ -201,7 +201,7 @@ export async function listGroupsPageData(userId: string): Promise<GroupsPageData
     }
   }
 
-  return { groups, discoverableGroups: [], invitations };
+  return { groups, discoverableGroups: [], invitations, createCandidates: [] };
 }
 
 export async function createGroup(userId: string, input: unknown): Promise<GroupResult> {
