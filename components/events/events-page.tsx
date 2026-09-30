@@ -2114,6 +2114,7 @@ function CreateEventModal({
               A venue name, not a street address.
             </p>
           </div>
+          </div>
         </div>
 
         {/* STAGE 4 -- REVIEW.
