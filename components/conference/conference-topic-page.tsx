@@ -101,7 +101,7 @@ function ReactionPair({
   const [vote, setVote] = useState(initialVote);
   const [hypeCount, setHypeCount] = useState(initialHypeCount);
   const [passCount, setPassCount] = useState(initialPassCount);
-  const [, startMutation] = useTransition();
+  const [pending, startMutation] = useTransition();
 
   function react(selected: ConferenceVote) {
     const previous = { vote, hypeCount, passCount };
@@ -125,6 +125,7 @@ function ReactionPair({
     <>
       <button
         type="button"
+        disabled={pending}
         aria-pressed={vote === "hype"}
         onClick={() => react("hype")}
         className={cn(
@@ -137,6 +138,7 @@ function ReactionPair({
       </button>
       <button
         type="button"
+        disabled={pending}
         aria-pressed={vote === "pass"}
         onClick={() => react("pass")}
         className={cn(
