@@ -101,6 +101,21 @@ describe("Conference V1 product boundaries", () => {
     expect(deletion).toContain('"conference_replies"');
   });
 
+  it("lets members delete their own Topics and Voices without needing current location", () => {
+    const server = stripComments(read("lib/conference/server.ts"));
+    const actions = stripComments(read("app/(app)/conference-actions.ts"));
+    const feed = stripComments(read("components/conference/conference-page.tsx"));
+    const detail = stripComments(read("components/conference/conference-topic-page.tsx"));
+    expect(server).toContain("deleteConferenceContent");
+    expect(server).toContain('status: "removed"');
+    expect(server).toContain("origin_latitude: null");
+    expect(server).toContain("origin_longitude: null");
+    expect(actions).toContain("deleteConferenceContentAction");
+    expect(feed).toContain("Delete");
+    expect(detail).toContain("Delete Topic");
+    expect(detail).toContain("Delete Voice");
+  });
+
   it("ships Hype and Pass instead of the old Lift/Lower wording", () => {
     const feed = read("components/conference/conference-page.tsx");
     const detail = read("components/conference/conference-topic-page.tsx");
