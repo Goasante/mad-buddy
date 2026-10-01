@@ -17,7 +17,7 @@ import {
 import { createConferenceTopicAction, reportConferenceAction, voteConferenceAction } from "@/app/(app)/conference-actions";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
-import { detectLocationRisk, LOCATION_WARNING_MESSAGE } from "@/lib/content/safety";
+import { detectLocationRisk } from "@/lib/content/safety";
 import type { ConferenceFeedResult, ConferenceSort, ConferenceTopic, ConferenceVote } from "@/lib/conference/types";
 import { cn } from "@/lib/utils";
 
@@ -229,7 +229,7 @@ export function ConferencePage({ feed, sort }: { feed: ConferenceFeedResult; sor
           />
           {locationRisk.warn ? (
             <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
-              {LOCATION_WARNING_MESSAGE}
+              {"This may reveal an exact location. Conference is visible to nearby members."}
             </p>
           ) : null}
           <div className="mt-2 flex items-center justify-between gap-3">
