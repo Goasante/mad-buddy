@@ -26,6 +26,7 @@ export type GuardedSurface =
   | "linkr"
   | "moments"
   | "drops"
+  | "conference"
   | "communities"
   | "event_glow"
   | "invite_links"
@@ -44,6 +45,7 @@ export const GUARDED_SURFACES: readonly GuardedSurface[] = [
   "linkr",
   "moments",
   "drops",
+  "conference",
   "communities",
   "event_glow",
   "invite_links",
@@ -59,6 +61,7 @@ const SURFACE_RESTRICTIONS: Record<GuardedSurface, RestrictionType[]> = {
   linkr: [],
   moments: ["media_disabled"],
   drops: ["media_disabled"],
+  conference: [],
   communities: ["community_creation_disabled"],
   event_glow: [],
   invite_links: ["invites_disabled"],
