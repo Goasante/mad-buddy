@@ -27,9 +27,13 @@ export function GroupDetailsModal({
   onExited?: () => void;
 }) {
   const [loaded, setLoaded] = useState<LoadedGroup | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const [failedFor, setFailedFor] = useState<string | null>(null);
+  const [messagesLoadingFor, setMessagesLoadingFor] = useState<string | null>(null);
+  const [messagesLoadedFor, setMessagesLoadedFor] = useState<string | null>(null);
+
+  const failed = failedFor === conversationId;
+  const messagesLoading = messagesLoadingFor === conversationId;
+  const messagesLoaded = messagesLoadedFor === conversationId;
 
   const load = useCallback(async () => {
     const group = await loadGroupDetailAction(conversationId);
@@ -38,20 +42,20 @@ export function GroupDetailsModal({
       group,
       messages: current?.group.id === conversationId ? current.messages : []
     }));
-    setFailed(false);
+    setFailedFor(null);
   }, [conversationId]);
 
   const loadMessages = useCallback(async () => {
     if (messagesLoading || messagesLoaded) return;
-    setMessagesLoading(true);
+    setMessagesLoadingFor(conversationId);
     try {
       const messages = await getMessagesAction(conversationId);
       setLoaded((current) =>
         current?.group.id === conversationId ? { ...current, messages } : current
       );
-      setMessagesLoaded(true);
+      setMessagesLoadedFor(conversationId);
     } finally {
-      setMessagesLoading(false);
+      setMessagesLoadingFor((current) => current === conversationId ? null : current);
     }
   }, [conversationId, messagesLoaded, messagesLoading]);
 
@@ -59,23 +63,18 @@ export function GroupDetailsModal({
     if (!open) return;
     let active = true;
 
-    setLoaded(null);
-    setFailed(false);
-    setMessagesLoaded(false);
-    setMessagesLoading(false);
-
     void loadGroupDetailAction(conversationId)
       .then((group) => {
         if (!active) return;
         if (!group) {
-          setFailed(true);
+          setFailedFor(conversationId);
           return;
         }
         setLoaded({ group, messages: [] });
-        setFailed(false);
+        setFailedFor(null);
       })
       .catch(() => {
-        if (active) setFailed(true);
+        if (active) setFailedFor(conversationId);
       });
 
     return () => {
@@ -93,7 +92,7 @@ export function GroupDetailsModal({
           messagesLoaded={messagesLoaded}
           onLoadMessages={() => void loadMessages()}
           embedded
-          onRefresh={() => void load().catch(() => setFailed(true))}
+          onRefresh={() => void load().catch(() => setFailedFor(conversationId))}
           onExit={() => {
             onOpenChange(false);
             onExited?.();
