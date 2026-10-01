@@ -610,7 +610,7 @@ export async function createConferenceReply(userId: string, topicId: string, bod
   if (!rate.allowed) return { ok: false, message: rateLimitMessage(rate.resetAt) };
 
   const topic = await loadAccessibleTopicRow(admin, userId, topicId);
-  if (!topic) return { ok: false, message: "That Topic isn't available Around You." };
+  if (!topic) return { ok: false, stale: true, message: "That Topic is no longer available." };
 
   const conference = conferenceDb(admin);
   try {
@@ -688,7 +688,7 @@ export async function voteConference(
   if (!rate.allowed) return { ok: false, message: rateLimitMessage(rate.resetAt) };
 
   const target = await resolveTarget(admin, userId, targetType, targetId);
-  if (!target) return { ok: false, message: "That conversation isn't available Around You." };
+  if (!target) return { ok: false, stale: true, message: "That conversation is no longer available." };
   if (target.authorUserId === userId) {
     return { ok: false, message: "You can't Hype or Pass your own Voice." };
   }
@@ -748,7 +748,7 @@ export async function reportConference(
     return { ok: false, message: "Conference is unavailable." };
   }
   const target = await resolveTarget(admin, userId, targetType, targetId);
-  if (!target) return { ok: false, message: "That conversation isn't available Around You." };
+  if (!target) return { ok: false, stale: true, message: "That conversation is no longer available." };
   if (target.authorUserId === userId) {
     return { ok: false, message: "You can't flag your own Voice." };
   }
@@ -821,7 +821,7 @@ export async function hideConferenceVoice(
   if (!rate.allowed) return { ok: false, message: rateLimitMessage(rate.resetAt) };
 
   const target = await resolveTarget(admin, userId, targetType, targetId);
-  if (!target) return { ok: false, message: "That Voice isn't available Around You." };
+  if (!target) return { ok: false, stale: true, message: "That Voice is no longer available." };
   if (target.authorUserId === userId) {
     return { ok: false, message: "You can't hide your own Voice." };
   }
