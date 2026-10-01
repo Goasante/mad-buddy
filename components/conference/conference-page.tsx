@@ -104,7 +104,7 @@ function TopicCard({
   const [vote, setVote] = useState(topic.yourVote);
   const [hypeCount, setHypeCount] = useState(topic.hypeCount);
   const [passCount, setPassCount] = useState(topic.passCount);
-  const [, startMutation] = useTransition();
+  const [pending, startMutation] = useTransition();
   const optimistic = topic.id.startsWith("optimistic-");
 
   function react(selected: ConferenceVote) {
@@ -207,7 +207,7 @@ function TopicCard({
           <>
             <button
               type="button"
-              disabled={optimistic}
+              disabled={optimistic || pending}
               aria-pressed={vote === "hype"}
               onClick={() => react("hype")}
               className={cn(
@@ -220,7 +220,7 @@ function TopicCard({
             </button>
             <button
               type="button"
-              disabled={optimistic}
+              disabled={optimistic || pending}
               aria-pressed={vote === "pass"}
               onClick={() => react("pass")}
               className={cn(
