@@ -141,6 +141,29 @@ describe("Conference V1 product boundaries", () => {
     expect(server).toContain('.in("user_id", authorIds)');
   });
 
+  it("never resurrects stale Conference content or sends it to the generic 404 page", () => {
+    const server = stripComments(read("lib/conference/server.ts"));
+    const feed = stripComments(read("components/conference/conference-page.tsx"));
+    const detailRoute = stripComments(read("app/(app)/conference/[topicId]/page.tsx"));
+    expect(server).toContain("stale: true");
+    expect(server).toContain("is no longer available");
+    expect(feed).toContain("!result.ok && !result.stale");
+    expect(detailRoute).toContain('redirect("/conference?notice=unavailable")');
+    expect(detailRoute).not.toContain("notFound()");
+  });
+
+  it("dismisses Conference action menus on outside tap or Escape and avoids blocking browser confirms", () => {
+    const menu = stripComments(read("components/conference/conference-action-menu.tsx"));
+    const feed = stripComments(read("components/conference/conference-page.tsx"));
+    const detail = stripComments(read("components/conference/conference-topic-page.tsx"));
+    expect(menu).toContain('document.addEventListener("pointerdown"');
+    expect(menu).toContain('event.key === "Escape"');
+    expect(feed).not.toContain("<details");
+    expect(detail).not.toContain("<details");
+    expect(feed).not.toContain("window.confirm");
+    expect(detail).not.toContain("window.confirm");
+  });
+
   it("ships Hype and Pass instead of the old Lift/Lower wording", () => {
     const feed = read("components/conference/conference-page.tsx");
     const detail = read("components/conference/conference-topic-page.tsx");
