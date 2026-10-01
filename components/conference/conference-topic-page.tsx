@@ -106,6 +106,10 @@ function Actions({
               startTransition(async () => {
                 const result = await reportConferenceAction(targetType, targetId, reason, topicId);
                 onFeedback(result.message);
+                if (result.ok) {
+                  if (targetType === "topic") router.push("/conference");
+                  else router.refresh();
+                }
               })
             }
             className="focus-ring block min-h-10 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
@@ -120,7 +124,10 @@ function Actions({
             startTransition(async () => {
               const result = await hideConferenceVoiceAction(targetType, targetId, topicId);
               onFeedback(result.message);
-              if (result.ok) router.push("/conference");
+              if (result.ok) {
+                if (targetType === "topic") router.push("/conference");
+                else router.refresh();
+              }
             })
           }
           className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-secondary"
