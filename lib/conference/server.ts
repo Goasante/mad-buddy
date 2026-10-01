@@ -837,17 +837,30 @@ export async function deleteConferenceContent(
   // depend on current location and is not blocked by participation rate limits
   // or account restrictions.
   const conference = conferenceDb(admin);
-  const table = targetType === "topic" ? "conference_topics" : "conference_replies";
-  const { data: row, error: readError } = await conference
-    .from(table)
-    .select(targetType === "topic" ? "id, author_user_id, status" : "id, author_user_id, topic_id, status")
-    .eq("id", targetId)
-    .maybeSingle();
+  let row: { id: string; author_user_id: string; status: string; topic_id?: string } | null = null;
 
-  if (readError || !row) {
+  if (targetType === "topic") {
+    const { data, error } = await conference
+      .from("conference_topics")
+      .select("id, author_user_id, status")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (error) return { ok: false, message: "Topic not found." };
+    row = data as { id: string; author_user_id: string; status: string } | null;
+  } else {
+    const { data, error } = await conference
+      .from("conference_replies")
+      .select("id, author_user_id, topic_id, status")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (error) return { ok: false, message: "Voice not found." };
+    row = data as { id: string; author_user_id: string; topic_id: string; status: string } | null;
+  }
+
+  if (!row) {
     return { ok: false, message: targetType === "topic" ? "Topic not found." : "Voice not found." };
   }
-  if (String(row.author_user_id) !== userId) {
+  if (row.author_user_id !== userId) {
     return { ok: false, message: "You can only delete your own Conference content." };
   }
   if (row.status !== "active" && row.status !== "hidden") {
