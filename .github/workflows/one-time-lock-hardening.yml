@@ -35,3 +35,5 @@ jobs:
           git add package-lock.json
           git commit -m "Refresh vulnerable runtime dependencies"
           git push origin HEAD:hardening/conference-final-app
+
+# Triggered only for this hardening branch; delete after lock refresh.
