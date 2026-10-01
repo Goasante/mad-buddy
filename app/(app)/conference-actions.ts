@@ -6,6 +6,7 @@ import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import {
   createConferenceReply,
   createConferenceTopic,
+  deleteConferenceContent,
   hideConferenceVoice,
   reportConference,
   voteConference
@@ -111,6 +112,23 @@ export async function hideConferenceVoiceAction(
   if (!type.success || !id.success) return { ok: false, message: "Invalid Voice." };
 
   const result = await hideConferenceVoice(user, type.data, id.data);
+  if (result.ok) refresh(topicId ?? (type.data === "topic" ? id.data : undefined));
+  return result;
+}
+
+
+export async function deleteConferenceContentAction(
+  targetType: string,
+  targetId: string,
+  topicId?: string
+): Promise<ConferenceActionResult> {
+  const user = await userId();
+  if (!user) return { ok: false, message: "Log in to delete Conference content." };
+  const type = targetTypeSchema.safeParse(targetType);
+  const id = uuid.safeParse(targetId);
+  if (!type.success || !id.success) return { ok: false, message: "Invalid Conference content." };
+
+  const result = await deleteConferenceContent(user, type.data, id.data);
   if (result.ok) refresh(topicId ?? (type.data === "topic" ? id.data : undefined));
   return result;
 }
