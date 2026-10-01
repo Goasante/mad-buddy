@@ -54,6 +54,51 @@ describe("Conference V1 product boundaries", () => {
     expect(read("app/(app)/settings/engagement/page.tsx")).toBeTruthy();
   });
 
+  it("keeps Conference location separate from Glow and respects Ghost Mode", () => {
+    const feed = stripComments(read("components/conference/conference-page.tsx"));
+    const sync = stripComments(read("components/conference/conference-location-sync.tsx"));
+    const server = stripComments(read("lib/conference/server.ts"));
+    expect(feed).toContain("/api/conference/location");
+    expect(feed).not.toContain("/api/location/update");
+    expect(sync).toContain("/api/conference/location");
+    expect(server).toContain('profile?.visibility_status !== "ghost"');
+  });
+
+  it("reuses Mad Buddy safety, moderation and retention systems", () => {
+    const migration = stripComments(read("supabase/migrations/20261001170000_conference_v1.sql"));
+    const server = stripComments(read("lib/conference/server.ts"));
+    const moderation = stripComments(read("app/(admin)/admin/reports/actions.ts"));
+    expect(migration).toContain("conference_report_once_per_user");
+    expect(migration).toContain("cleanup_conference");
+    expect(migration).toContain("conference_topic");
+    expect(migration).toContain("conference_reply");
+    expect(server).toContain('from("hidden_content")');
+    expect(server).toContain('from("content_reports")');
+    expect(moderation).toContain("conference_topics");
+    expect(moderation).toContain("conference_replies");
+  });
+
+  it("fails closed behind an off-by-default feature flag", () => {
+    const migration = stripComments(read("supabase/migrations/20261001170000_conference_v1.sql"));
+    const layout = stripComments(read("app/(app)/layout.tsx"));
+    const launcher = stripComments(read("components/app-shell/quick-actions-launcher.tsx"));
+    expect(migration).toContain("'conference'");
+    expect(migration).toContain("'off'");
+    expect(layout).toContain("CONFERENCE_FLAG");
+    expect(launcher).toContain('action.id !== "conference"');
+  });
+
+  it("includes Conference in account export and deletion", () => {
+    const exportRoute = stripComments(read("app/api/account/export/route.ts"));
+    const deletion = stripComments(read("lib/account/deletion.ts"));
+    expect(exportRoute).toContain("conferenceTopics");
+    expect(exportRoute).toContain("conferenceReplies");
+    expect(exportRoute).not.toContain('select("latitude, longitude").eq("user_id", userId)');
+    expect(deletion).toContain('"conference_locations"');
+    expect(deletion).toContain('"conference_topics"');
+    expect(deletion).toContain('"conference_replies"');
+  });
+
   it("ships Hype and Pass instead of the old Lift/Lower wording", () => {
     const feed = read("components/conference/conference-page.tsx");
     const detail = read("components/conference/conference-topic-page.tsx");
