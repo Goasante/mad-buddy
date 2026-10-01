@@ -203,7 +203,7 @@ returns integer
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $
+as $$
 declare
   changed integer := 0;
   affected integer := 0;
@@ -246,7 +246,7 @@ begin
 
   return changed;
 end;
-$;
+$$;
 
 -- Reuse Mad Buddy's canonical report-and-hide system.
 alter table public.content_reports
