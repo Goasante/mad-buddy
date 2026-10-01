@@ -32,26 +32,25 @@ export function EventSettingsModal({
 }) {
   const [projection, setProjection] = useState<SettingsProjection>(null);
   const [audience, setAudience] = useState<AudienceValue | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open || !eventId) return;
     let active = true;
-    setLoading(true);
-    setError("");
-    setProjection(null);
-    setAudience(null);
 
     void getEventAudienceSettingsAction(eventId)
       .then((next) => {
         if (!active) return;
+        setLoadedFor(eventId);
         setProjection(next);
         if (!next) {
+          setAudience(null);
           setError("Event settings aren't available.");
           return;
         }
+        setError("");
         setAudience({
           visibility: next.visibility,
           targetIds: next.targetIds,
@@ -59,10 +58,11 @@ export function EventSettingsModal({
         });
       })
       .catch(() => {
-        if (active) setError("Event settings couldn't be loaded. Try again.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        if (!active) return;
+        setLoadedFor(eventId);
+        setProjection(null);
+        setAudience(null);
+        setError("Event settings couldn't be loaded. Try again.");
       });
 
     return () => {
@@ -70,29 +70,34 @@ export function EventSettingsModal({
     };
   }, [eventId, open]);
 
-  const ended = projection?.status === "ended" || projection?.status === "cancelled";
+  const current = loadedFor === eventId;
+  const currentProjection = current ? projection : null;
+  const currentAudience = current ? audience : null;
+  const currentError = current ? error : "";
+  const loading = Boolean(open && eventId && !current);
+  const ended = currentProjection?.status === "ended" || currentProjection?.status === "cancelled";
   const targetMissing =
-    audience?.visibility === "invite" || audience?.visibility === "community"
-      ? audience.targetIds.length === 0
+    currentAudience?.visibility === "invite" || currentAudience?.visibility === "community"
+      ? currentAudience.targetIds.length === 0
       : false;
-  const nearbyMissing = audience?.visibility === "nearby" && !audience.location;
-  const canSave = Boolean(audience && !ended && !targetMissing && !nearbyMissing && !loading && !saving);
+  const nearbyMissing = currentAudience?.visibility === "nearby" && !currentAudience.location;
+  const canSave = Boolean(currentAudience && !ended && !targetMissing && !nearbyMissing && !loading && !saving);
 
   async function save() {
-    if (!eventId || !audience || !canSave) return;
+    if (!eventId || !currentAudience || !canSave) return;
     setSaving(true);
     setError("");
     try {
       const result = await updateEventAudienceSettingsAction(eventId, {
-        visibility: audience.visibility,
-        targetIds: audience.targetIds,
-        location: audience.location
+        visibility: currentAudience.visibility,
+        targetIds: currentAudience.targetIds,
+        location: currentAudience.location
       });
       if (!result.ok) {
         setError(result.message);
         return;
       }
-      onSaved(audience.visibility, result.message);
+      onSaved(currentAudience.visibility, result.message);
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -114,14 +119,14 @@ export function EventSettingsModal({
           <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           Loading Event settings…
         </div>
-      ) : error && !audience ? (
+      ) : currentError && !currentAudience ? (
         <div className="space-y-3 rounded-xl bg-secondary/45 p-4">
-          <p role="alert" className="text-sm">{error}</p>
+          <p role="alert" className="text-sm">{currentError}</p>
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             Close
           </Button>
         </div>
-      ) : audience ? (
+      ) : currentAudience ? (
         <div className="space-y-5">
           <div className="flex items-start gap-3 rounded-xl bg-secondary/35 p-3.5">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
@@ -139,14 +144,14 @@ export function EventSettingsModal({
             </p>
           ) : (
             <AudienceSelector
-              value={audience}
+              value={currentAudience}
               onChange={setAudience}
               loadOptions={getAudienceOptionsAction}
               hint="You can change this after publishing too. Changes apply as soon as you save."
             />
           )}
 
-          {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+          {currentError ? <p role="alert" className="text-sm text-destructive">{currentError}</p> : null}
 
           {!ended ? (
             <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border/60 bg-card px-4 pt-3 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
