@@ -14,8 +14,26 @@ const requestSchema = z.object({
   accuracy: z.number().min(0).max(10000)
 });
 
+const AREA_REFRESH_METERS = 2_000;
+const EARTH_RADIUS_M = 6_371_000;
+
 function coarseCoordinate(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function toRad(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
+  const dLat = toRad(bLat - aLat);
+  const dLon = toRad(bLon - aLon);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 export function OPTIONS(request: Request) {
@@ -56,11 +74,31 @@ export async function POST(request: Request) {
   // The curated database types intentionally lag unapplied migrations. Cast
   // only this new-table boundary; existing Mad Buddy tables remain typed.
   const conference = admin as unknown as SupabaseClient;
+  const { data: previous } = await conference
+    .from("conference_locations")
+    .select("latitude, longitude")
+    .eq("user_id", auth.user.id)
+    .maybeSingle();
+
+  const nextLatitude = coarseCoordinate(parsed.data.latitude);
+  const nextLongitude = coarseCoordinate(parsed.data.longitude);
+  const areaChanged =
+    !previous ||
+    distanceMeters(
+      Number(previous.latitude),
+      Number(previous.longitude),
+      nextLatitude,
+      nextLongitude
+    ) >= AREA_REFRESH_METERS;
+
+  // Small GPS drift refreshes the timestamp without moving the feed anchor.
+  // Once movement reaches 2km, advance the anchor and let the client reload
+  // the Around You feed once.
   const { error } = await conference.from("conference_locations").upsert(
     {
       user_id: auth.user.id,
-      latitude: coarseCoordinate(parsed.data.latitude),
-      longitude: coarseCoordinate(parsed.data.longitude),
+      latitude: areaChanged ? nextLatitude : Number(previous.latitude),
+      longitude: areaChanged ? nextLongitude : Number(previous.longitude),
       accuracy: parsed.data.accuracy,
       last_updated: new Date().toISOString()
     },
@@ -72,7 +110,7 @@ export async function POST(request: Request) {
   }
 
   return withCors(
-    NextResponse.json({ received: true, expiresInSeconds: 15 * 60 }),
+    NextResponse.json({ received: true, areaChanged, expiresInSeconds: 15 * 60 }),
     request
   );
 }
