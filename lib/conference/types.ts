@@ -54,4 +54,5 @@ export type ConferenceActionResult = {
   topicId?: string;
   replyId?: string;
   createdAt?: string;
+  stale?: boolean;
 };
