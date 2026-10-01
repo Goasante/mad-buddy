@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { ConferenceTopicPage } from "@/components/conference/conference-topic-page";
 import { loadConferenceTopic } from "@/lib/conference/server";
 import { getCurrentIdentity } from "@/lib/supabase/auth";
@@ -20,6 +20,6 @@ export default async function ConferenceTopicRoute({
   if (!identity) redirect(`/login?next=/conference/${encodeURIComponent(route.topicId)}`);
 
   const topic = await loadConferenceTopic(identity.id, route.topicId);
-  if (!topic) notFound();
+  if (!topic) redirect("/conference?notice=unavailable");
   return <ConferenceTopicPage topic={topic} />;
 }

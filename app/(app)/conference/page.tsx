@@ -9,12 +9,18 @@ export const dynamic = "force-dynamic";
 export default async function ConferenceRoute({
   searchParams
 }: {
-  searchParams: Promise<{ sort?: string }>;
+  searchParams: Promise<{ sort?: string; notice?: string }>;
 }) {
   const [identity, params] = await Promise.all([getCurrentIdentity(), searchParams]);
   if (!identity) redirect("/login?next=/conference");
 
   const sort: ConferenceSort = params.sort === "hot" ? "hot" : "fresh";
+  const initialFeedback =
+    params.notice === "unavailable"
+      ? "That Topic is no longer available."
+      : params.notice === "action-failed"
+        ? "That action did not complete. Please try again."
+        : "";
   const feed = await loadConferenceFeed(identity.id);
-  return <ConferencePage feed={feed} initialSort={sort} />;
+  return <ConferencePage feed={feed} initialSort={sort} initialFeedback={initialFeedback} />;
 }

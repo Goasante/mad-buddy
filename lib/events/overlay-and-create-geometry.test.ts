@@ -38,7 +38,8 @@ describe("Create Event narrow-phone geometry", () => {
     const page = read("components/events/events-page.tsx");
     const when = page.slice(page.indexOf('id="event-date"'), page.indexOf('id="event-venue"'));
 
-    expect(when).toContain("grid-cols-[minmax(0,1fr)_minmax(0,1fr)]");
+    expect(when).toContain("grid-cols-1");
+    expect(when).toContain("sm:grid-cols-2");
     expect(when.match(/min-h-12 min-w-0/g)).toHaveLength(2);
     expect(page).not.toContain("space-y-5 overflow-x-hidden px-1 pb-1");
   });

@@ -10,9 +10,7 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
-  MoreHorizontal,
-  PenLine,
-  Trash2
+  PenLine
 } from "lucide-react";
 import {
   createConferenceTopicAction,
@@ -22,8 +20,13 @@ import {
 } from "@/app/(app)/conference-actions";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
+import {
+  ConferenceActionMenu,
+  ConferenceDeleteMenuItem
+} from "@/components/conference/conference-action-menu";
 import { detectLocationRisk } from "@/lib/content/safety";
 import type {
+  ConferenceActionResult,
   ConferenceFeedResult,
   ConferenceReportReason,
   ConferenceSort,
@@ -118,6 +121,11 @@ function TopicCard({
     startMutation(async () => {
       const result = await voteConferenceAction("topic", topic.id, selected, topic.id);
       if (!result.ok) {
+        if (result.stale) {
+          onRemove(topic.id);
+          onError(result.message);
+          return;
+        }
         setVote(previous.vote);
         setHypeCount(previous.hypeCount);
         setPassCount(previous.passCount);
@@ -126,14 +134,16 @@ function TopicCard({
     });
   }
 
-  function removeThen(task: () => Promise<{ ok: boolean; message: string }>) {
+  function removeThen(task: () => Promise<ConferenceActionResult>) {
     onRemove(topic.id);
     startMutation(async () => {
       const result = await task();
-      if (!result.ok) {
+      if (!result.ok && !result.stale) {
         onRestore(topic);
         onError(result.message);
+        return;
       }
+      if (result.stale) onError(result.message);
     });
   }
 
@@ -158,27 +168,14 @@ function TopicCard({
         </div>
 
         {!optimistic ? (
-          <details className="relative shrink-0">
-            <summary
-              aria-label="Topic actions"
-              className="focus-ring grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full text-muted-foreground hover:bg-secondary"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </summary>
-            <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-xl">
-              {topic.isYours ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.currentTarget.closest("details")?.removeAttribute("open");
-                    if (!window.confirm("Delete this Topic?")) return;
-                    removeThen(() => deleteConferenceContentAction("topic", topic.id, topic.id));
-                  }}
-                  className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Topic
-                </button>
+          <ConferenceActionMenu label="Topic actions">
+            {(close) =>
+              topic.isYours ? (
+                <ConferenceDeleteMenuItem
+                  label="Delete Topic"
+                  close={close}
+                  onDelete={() => removeThen(() => deleteConferenceContentAction("topic", topic.id, topic.id))}
+                />
               ) : (
                 <>
                   <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flag Topic</div>
@@ -186,8 +183,9 @@ function TopicCard({
                     <button
                       key={reason}
                       type="button"
-                      onClick={(event) => {
-                        event.currentTarget.closest("details")?.removeAttribute("open");
+                      role="menuitem"
+                      onClick={() => {
+                        close();
                         removeThen(() => reportConferenceAction("topic", topic.id, reason, topic.id));
                       }}
                       className="focus-ring block min-h-9 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
@@ -196,9 +194,9 @@ function TopicCard({
                     </button>
                   ))}
                 </>
-              )}
-            </div>
-          </details>
+              )
+            }
+          </ConferenceActionMenu>
         ) : null}
       </div>
 
@@ -257,16 +255,18 @@ function TopicCard({
 
 export function ConferencePage({
   feed,
-  initialSort
+  initialSort,
+  initialFeedback = ""
 }: {
   feed: ConferenceFeedResult;
   initialSort: ConferenceSort;
+  initialFeedback?: string;
 }) {
   const [sort, setSort] = useState<ConferenceSort>(initialSort);
   const [topics, setTopics] = useState(feed.topics);
   const [composerOpen, setComposerOpen] = useState(false);
   const [body, setBody] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState(initialFeedback);
   const [posting, startPosting] = useTransition();
   const [locating, setLocating] = useState(false);
   const locationRisk = detectLocationRisk(body);

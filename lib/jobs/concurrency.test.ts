@@ -119,8 +119,11 @@ describe("periodic enqueue idempotency", () => {
     expect(claimSql).toContain("on public.jobs(idempotency_key)");
   });
 
-  it("treats a unique violation as success rather than an error", () => {
-    expect(worker).toContain("// A unique violation means this period is already enqueued, expected.");
+  it("uses a conflict-aware upsert so overlapping ticks do not generate expected 23505 errors", () => {
+    expect(worker).toContain('.upsert(');
+    expect(worker).toContain('onConflict: "idempotency_key"');
+    expect(worker).toContain("ignoreDuplicates: true");
+    expect(worker).toContain("overlapping tick returns no row");
   });
 
   it("gives two schedulers firing together the same key", () => {
@@ -149,10 +152,12 @@ describe("idle ticks no longer attempt every schedule", () => {
     const enqueue = worker.slice(worker.indexOf("export async function enqueueDueSchedules"));
     const body = enqueue.slice(0, enqueue.indexOf("\n}"));
     expect(body).toContain("SCHEDULE.filter((spec) => isScheduleDue(spec, nowMs))");
-    // The insert itself, and the comment explaining the index is still the
-    // real guarantee, must both survive this change untouched.
-    expect(body).toContain("admin.from(\"jobs\").insert(");
-    expect(body).toContain("// A unique violation means this period is already enqueued, expected.");
+    // The unique index stays the concurrency guarantee, while the upsert makes
+    // an overlapping tick a quiet no-op instead of an expected database error.
+    expect(body).toContain('.from("jobs")');
+    expect(body).toContain(".upsert(");
+    expect(body).toContain('onConflict: "idempotency_key"');
+    expect(body).toContain("ignoreDuplicates: true");
   });
 
   it("imports the due check from the one place it is defined", () => {

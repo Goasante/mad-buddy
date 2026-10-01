@@ -51,16 +51,24 @@ export async function enqueueDueSchedules(admin: Admin, nowMs = Date.now()): Pro
   // or an overlapping scheduler safe.
   for (const spec of SCHEDULE.filter((spec) => isScheduleDue(spec, nowMs))) {
     const key = periodicIdempotencyKey(spec.jobType, spec.everyMinutes, nowMs);
-    const { error } = await admin.from("jobs").insert({
-      job_type: spec.jobType,
-      payload: {},
-      priority: spec.priority,
-      status: "queued",
-      idempotency_key: key,
-      run_at: new Date(nowMs).toISOString()
-    });
-    // A unique violation means this period is already enqueued, expected.
-    if (!error) enqueued += 1;
+    const { data, error } = await admin
+      .from("jobs")
+      .upsert(
+        {
+          job_type: spec.jobType,
+          payload: {},
+          priority: spec.priority,
+          status: "queued",
+          idempotency_key: key,
+          run_at: new Date(nowMs).toISOString()
+        },
+        { onConflict: "idempotency_key", ignoreDuplicates: true }
+      )
+      .select("id")
+      .maybeSingle();
+
+    // An overlapping tick returns no row instead of generating a 23505.
+    if (!error && data?.id) enqueued += 1;
   }
   return enqueued;
 }

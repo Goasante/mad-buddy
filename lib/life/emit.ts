@@ -59,20 +59,27 @@ export async function emitLifeEvent(admin: Admin, input: LifeEventInput): Promis
     return { status: "failed", reason: "invalid_event" };
   }
 
-  const { error } = await admin.from("domain_events").insert({
-    event_type: record.eventType,
-    resource_type: record.resourceType,
-    resource_id: null,
-    resource_key: record.resourceKey,
-    actor_id: record.actorId,
-    dedupe_key: record.dedupeKey,
-    // The payload is built from primitives only (buildLifeEvent rejects
-    // anything else), so this is a Json value by construction.
-    payload: record.payload as never,
-    occurred_at: record.occurredAt
-  });
+  const { data, error } = await admin
+    .from("domain_events")
+    .upsert(
+      {
+        event_type: record.eventType,
+        resource_type: record.resourceType,
+        resource_id: null,
+        resource_key: record.resourceKey,
+        actor_id: record.actorId,
+        dedupe_key: record.dedupeKey,
+        // The payload is built from primitives only (buildLifeEvent rejects
+        // anything else), so this is a Json value by construction.
+        payload: record.payload as never,
+        occurred_at: record.occurredAt
+      },
+      { onConflict: "dedupe_key", ignoreDuplicates: true }
+    )
+    .select("id")
+    .maybeSingle();
 
-  if (!error) {
+  if (!error && data?.id) {
     logBackendEvent("info", {
       route: "life/emit",
       statusCode: 200,
@@ -81,9 +88,7 @@ export async function emitLifeEvent(admin: Admin, input: LifeEventInput): Promis
     return { status: "recorded" };
   }
 
-  // A unique violation on dedupe_key means this fact is already recorded.
-  // Expected whenever an action is retried, so it is a success, not a fault.
-  if (isDuplicate(error)) {
+  if (!error) {
     return { status: "duplicate" };
   }
 
@@ -97,11 +102,6 @@ export async function emitLifeEvent(admin: Admin, input: LifeEventInput): Promis
   return { status: "failed", reason: "insert_failed" };
 }
 
-/** Postgres unique-violation, however the client surfaces it. */
-function isDuplicate(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-  return error.code === "23505" || Boolean(error.message?.includes("duplicate key"));
-}
 
 /**
  * Emit several events without letting one failure stop the rest.
