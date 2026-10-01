@@ -255,16 +255,18 @@ function TopicCard({
 
 export function ConferencePage({
   feed,
-  initialSort
+  initialSort,
+  initialFeedback = ""
 }: {
   feed: ConferenceFeedResult;
   initialSort: ConferenceSort;
+  initialFeedback?: string;
 }) {
   const [sort, setSort] = useState<ConferenceSort>(initialSort);
   const [topics, setTopics] = useState(feed.topics);
   const [composerOpen, setComposerOpen] = useState(false);
   const [body, setBody] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState(initialFeedback);
   const [posting, startPosting] = useTransition();
   const [locating, setLocating] = useState(false);
   const locationRisk = detectLocationRisk(body);
