@@ -61,7 +61,7 @@ export async function voteConferenceAction(
   targetType: string,
   targetId: string,
   vote: string,
-  topicId?: string
+  _topicId?: string
 ): Promise<ConferenceActionResult> {
   const user = await userId();
   if (!user) return { ok: false, message: "Log in to vote." };
@@ -78,7 +78,7 @@ export async function reportConferenceAction(
   targetType: string,
   targetId: string,
   reason: string,
-  topicId?: string
+  _topicId?: string
 ): Promise<ConferenceActionResult> {
   const user = await userId();
   if (!user) return { ok: false, message: "Log in to flag content." };
@@ -94,7 +94,7 @@ export async function reportConferenceAction(
 export async function hideConferenceVoiceAction(
   targetType: string,
   targetId: string,
-  topicId?: string
+  _topicId?: string
 ): Promise<ConferenceActionResult> {
   const user = await userId();
   if (!user) return { ok: false, message: "Log in to hide a Voice." };
@@ -110,7 +110,7 @@ export async function hideConferenceVoiceAction(
 export async function deleteConferenceContentAction(
   targetType: string,
   targetId: string,
-  topicId?: string
+  _topicId?: string
 ): Promise<ConferenceActionResult> {
   const user = await userId();
   if (!user) return { ok: false, message: "Log in to delete Conference content." };
