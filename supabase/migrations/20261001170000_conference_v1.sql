@@ -198,6 +198,56 @@ create trigger conference_reply_counts
   after insert or update or delete on public.conference_replies
   for each row execute function public.conference_adjust_reply_count();
 
+create or replace function public.cleanup_conference()
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  changed integer := 0;
+  affected integer := 0;
+begin
+  -- Once a Topic expires, its coarse creation anchor is no longer needed.
+  update public.conference_topics
+  set
+    status = case when status = 'active' then 'expired' else status end,
+    origin_latitude = null,
+    origin_longitude = null,
+    updated_at = now()
+  where expires_at <= now()
+    and (origin_latitude is not null or origin_longitude is not null);
+  get diagnostics affected = row_count;
+  changed := changed + affected;
+
+  -- Conference current-location rows are unusable after 15 minutes; one hour
+  -- is only cleanup headroom, not an additional product retention window.
+  delete from public.conference_locations
+  where last_updated < now() - interval '1 hour';
+  get diagnostics affected = row_count;
+  changed := changed + affected;
+
+  -- Retain expired text briefly for appeals/moderation, but not indefinitely.
+  delete from public.conference_topics
+  where expires_at < now() - interval '30 days';
+  get diagnostics affected = row_count;
+  changed := changed + affected;
+
+  delete from public.hidden_content h
+  where h.content_type = 'conference_topic'
+    and not exists (
+      select 1 from public.conference_topics t where t.id = h.content_id
+    );
+  delete from public.hidden_content h
+  where h.content_type = 'conference_reply'
+    and not exists (
+      select 1 from public.conference_replies r where r.id = h.content_id
+    );
+
+  return changed;
+end;
+$;
+
 -- Reuse Mad Buddy's canonical report-and-hide system.
 alter table public.content_reports
   drop constraint if exists content_reports_content_type_check;
@@ -273,6 +323,8 @@ revoke execute on function public.conference_adjust_vote_counts() from public, a
 revoke execute on function public.conference_adjust_reply_count() from public, anon, authenticated;
 grant execute on function public.conference_adjust_vote_counts() to service_role;
 grant execute on function public.conference_adjust_reply_count() to service_role;
+revoke execute on function public.cleanup_conference() from public, anon, authenticated;
+grant execute on function public.cleanup_conference() to service_role;
 
 comment on table public.conference_topics is
   'Conference Topics. Coarse origin anchor is server-only, used only for 15 km discovery, and cleared at expiry.';
