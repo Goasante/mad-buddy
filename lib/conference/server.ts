@@ -875,13 +875,13 @@ export async function deleteConferenceContent(
   }
 
   if (!row) {
-    return { ok: false, message: targetType === "topic" ? "Topic not found." : "Voice not found." };
+    return { ok: true, stale: true, message: targetType === "topic" ? "Topic already gone." : "Voice already gone." };
   }
   if (row.author_user_id !== userId) {
     return { ok: false, message: "You can only delete your own Conference content." };
   }
   if (row.status !== "active" && row.status !== "hidden") {
-    return { ok: true, message: targetType === "topic" ? "Topic already deleted." : "Voice already deleted." };
+    return { ok: true, stale: true, message: targetType === "topic" ? "Topic already deleted." : "Voice already deleted." };
   }
 
   const now = new Date().toISOString();
