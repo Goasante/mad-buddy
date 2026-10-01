@@ -821,3 +821,64 @@ export async function hideConferenceVoice(
     ? { ok: false, message: "Couldn't hide that Voice." }
     : { ok: true, message: "That Voice is hidden from your Conference." };
 }
+
+
+export async function deleteConferenceContent(
+  userId: string,
+  targetType: ConferenceTargetType,
+  targetId: string
+) {
+  const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return { ok: false, message: "Conference is unavailable." };
+  }
+
+  // Deleting your own content is a privacy/user-control action, so it does not
+  // depend on current location and is not blocked by participation rate limits
+  // or account restrictions.
+  const conference = conferenceDb(admin);
+  const table = targetType === "topic" ? "conference_topics" : "conference_replies";
+  const { data: row, error: readError } = await conference
+    .from(table)
+    .select(targetType === "topic" ? "id, author_user_id, status" : "id, author_user_id, topic_id, status")
+    .eq("id", targetId)
+    .maybeSingle();
+
+  if (readError || !row) {
+    return { ok: false, message: targetType === "topic" ? "Topic not found." : "Voice not found." };
+  }
+  if (String(row.author_user_id) !== userId) {
+    return { ok: false, message: "You can only delete your own Conference content." };
+  }
+  if (row.status !== "active" && row.status !== "hidden") {
+    return { ok: true, message: targetType === "topic" ? "Topic already deleted." : "Voice already deleted." };
+  }
+
+  const now = new Date().toISOString();
+  if (targetType === "topic") {
+    const { error } = await conference
+      .from("conference_topics")
+      .update({
+        status: "removed",
+        origin_latitude: null,
+        origin_longitude: null,
+        updated_at: now
+      })
+      .eq("id", targetId)
+      .eq("author_user_id", userId);
+
+    return error
+      ? { ok: false, message: "Couldn't delete that Topic." }
+      : { ok: true, message: "Topic deleted." };
+  }
+
+  const { error } = await conference
+    .from("conference_replies")
+    .update({ status: "removed", updated_at: now })
+    .eq("id", targetId)
+    .eq("author_user_id", userId);
+
+  return error
+    ? { ok: false, message: "Couldn't delete that Voice." }
+    : { ok: true, message: "Voice deleted." };
+}
