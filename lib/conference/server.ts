@@ -400,8 +400,10 @@ export async function loadConferenceFeed(userId: string): Promise<ConferenceFeed
 async function loadAccessibleTopicRow(
   admin: Admin,
   userId: string,
-  topicId: string
+  topicId: string,
+  options: { respectPersonalHides?: boolean } = {}
 ): Promise<TopicRow | null> {
+  const respectPersonalHides = options.respectPersonalHides !== false;
   const conference = conferenceDb(admin);
   const [restrictions, viewer, topicResult] = await Promise.all([
     getRestrictionState(admin, userId),
@@ -422,18 +424,22 @@ async function loadAccessibleTopicRow(
   const row = topicResult.data as TopicRow | null;
   if (!row) return null;
 
-  const [{ data: hiddenTopic }, hidden, blocked] = await Promise.all([
-    admin
-      .from("hidden_content")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("content_type", "conference_topic")
-      .eq("content_id", row.id)
-      .maybeSingle(),
-    isConferenceUserHidden(conference, userId, row.author_user_id),
+  const [hiddenTopicResult, hidden, blocked] = await Promise.all([
+    respectPersonalHides
+      ? admin
+          .from("hidden_content")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("content_type", "conference_topic")
+          .eq("content_id", row.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    respectPersonalHides
+      ? isConferenceUserHidden(conference, userId, row.author_user_id)
+      : Promise.resolve(false),
     isBlockedEitherDirection(admin, userId, row.author_user_id)
   ]);
-  if (hiddenTopic || hidden || blocked) return null;
+  if (hiddenTopicResult.data || hidden || blocked) return null;
 
   if (
     distanceMeters(
@@ -639,10 +645,12 @@ async function resolveTarget(
   admin: Admin,
   userId: string,
   targetType: ConferenceTargetType,
-  targetId: string
+  targetId: string,
+  mode: "visible" | "safety" = "visible"
 ): Promise<{ topicId: string; authorUserId: string } | null> {
+  const respectPersonalHides = mode === "visible";
   if (targetType === "topic") {
-    const topic = await loadAccessibleTopicRow(admin, userId, targetId);
+    const topic = await loadAccessibleTopicRow(admin, userId, targetId, { respectPersonalHides });
     return topic ? { topicId: topic.id, authorUserId: topic.author_user_id } : null;
   }
 
@@ -656,12 +664,14 @@ async function resolveTarget(
   if (error) throw error;
   if (!data) return null;
 
-  const topic = await loadAccessibleTopicRow(admin, userId, String(data.topic_id));
+  const topic = await loadAccessibleTopicRow(admin, userId, String(data.topic_id), { respectPersonalHides });
   if (!topic) return null;
 
   const authorUserId = String(data.author_user_id);
   const [hidden, blocked] = await Promise.all([
-    isConferenceUserHidden(conference, userId, authorUserId),
+    respectPersonalHides
+      ? isConferenceUserHidden(conference, userId, authorUserId)
+      : Promise.resolve(false),
     isBlockedEitherDirection(admin, userId, authorUserId)
   ]);
   if (hidden || blocked) return null;
@@ -747,7 +757,7 @@ export async function reportConference(
   if (!(await conferenceIsEnabled(admin))) {
     return { ok: false, message: "Conference is unavailable." };
   }
-  const target = await resolveTarget(admin, userId, targetType, targetId);
+  const target = await resolveTarget(admin, userId, targetType, targetId, "safety");
   if (!target) return { ok: false, stale: true, message: "That conversation is no longer available." };
   if (target.authorUserId === userId) {
     return { ok: false, message: "You can't flag your own Voice." };
@@ -820,7 +830,7 @@ export async function hideConferenceVoice(
   const rate = await consumeRateLimit({ action: "conference.hide", userId });
   if (!rate.allowed) return { ok: false, message: rateLimitMessage(rate.resetAt) };
 
-  const target = await resolveTarget(admin, userId, targetType, targetId);
+  const target = await resolveTarget(admin, userId, targetType, targetId, "safety");
   if (!target) return { ok: false, stale: true, message: "That Voice is no longer available." };
   if (target.authorUserId === userId) {
     return { ok: false, message: "You can't hide your own Voice." };
