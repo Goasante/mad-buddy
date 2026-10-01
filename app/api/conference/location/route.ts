@@ -87,14 +87,16 @@ export async function POST(request: Request) {
   // a reload here can race with an optimistic report/hide/vote and resurrect
   // stale UI. The caller's refreshOnFirst path already handles a truly missing
   // initial Conference location.
-  const areaChanged =
-    Boolean(previous) &&
-    distanceMeters(
-      Number(previous.latitude),
-      Number(previous.longitude),
-      nextLatitude,
-      nextLongitude
-    ) >= AREA_REFRESH_METERS;
+  const areaChanged = previous
+    ? distanceMeters(
+        Number(previous.latitude),
+        Number(previous.longitude),
+        nextLatitude,
+        nextLongitude
+      ) >= AREA_REFRESH_METERS
+    : false;
+  const anchorLatitude = previous && !areaChanged ? Number(previous.latitude) : nextLatitude;
+  const anchorLongitude = previous && !areaChanged ? Number(previous.longitude) : nextLongitude;
 
   // Small GPS drift refreshes the timestamp without moving the feed anchor.
   // Once movement reaches 2km, advance the anchor and let the client reload
@@ -102,8 +104,8 @@ export async function POST(request: Request) {
   const { error } = await conference.from("conference_locations").upsert(
     {
       user_id: auth.user.id,
-      latitude: areaChanged ? nextLatitude : Number(previous.latitude),
-      longitude: areaChanged ? nextLongitude : Number(previous.longitude),
+      latitude: anchorLatitude,
+      longitude: anchorLongitude,
       accuracy: parsed.data.accuracy,
       last_updated: new Date().toISOString()
     },
