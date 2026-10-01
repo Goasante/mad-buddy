@@ -96,6 +96,8 @@ describe("moderation action ladder", () => {
     expect(user).not.toContain("remove_content");
     expect(user).not.toContain("hide_content");
     expect(user).toContain("temporary_suspension");
+    expect(availableModerationActions("content", "conference_topic")).not.toContain("suspend_feature");
+    expect(availableModerationActions("content", "conference_reply")).not.toContain("suspend_feature");
   });
 
   it("requires a reason for everything except no_action", () => {
