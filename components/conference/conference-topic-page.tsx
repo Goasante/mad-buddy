@@ -9,9 +9,7 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
-  MoreHorizontal,
-  Send,
-  Trash2
+  Send
 } from "lucide-react";
 import {
   createConferenceReplyAction,
@@ -21,9 +19,14 @@ import {
   voteConferenceAction
 } from "@/app/(app)/conference-actions";
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
+import {
+  ConferenceActionMenu,
+  ConferenceDeleteMenuItem
+} from "@/components/conference/conference-action-menu";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { detectLocationRisk } from "@/lib/content/safety";
 import type {
+  ConferenceActionResult,
   ConferenceReply,
   ConferenceReportReason,
   ConferenceTopicDetail,
@@ -89,7 +92,8 @@ function ReactionPair({
   initialVote,
   initialHypeCount,
   initialPassCount,
-  onError
+  onError,
+  onStale
 }: {
   targetType: "topic" | "reply";
   targetId: string;
@@ -97,6 +101,7 @@ function ReactionPair({
   initialHypeCount: number;
   initialPassCount: number;
   onError: (value: string) => void;
+  onStale: () => void;
 }) {
   const [vote, setVote] = useState(initialVote);
   const [hypeCount, setHypeCount] = useState(initialHypeCount);
@@ -113,6 +118,10 @@ function ReactionPair({
     startMutation(async () => {
       const result = await voteConferenceAction(targetType, targetId, selected);
       if (!result.ok) {
+        if (result.stale) {
+          onStale();
+          return;
+        }
         setVote(previous.vote);
         setHypeCount(previous.hypeCount);
         setPassCount(previous.passCount);
@@ -169,11 +178,11 @@ function ReplyCard({
   const [, startMutation] = useTransition();
   const optimistic = reply.id.startsWith("optimistic-");
 
-  function removeThen(task: () => Promise<{ ok: boolean; message: string }>) {
+  function removeThen(task: () => Promise<ConferenceActionResult>) {
     onRemove(reply.id);
     startMutation(async () => {
       const result = await task();
-      if (!result.ok) {
+      if (!result.ok && !result.stale) {
         onRestore(reply);
         onError(result.message);
       }
@@ -195,33 +204,21 @@ function ReplyCard({
         </div>
 
         {!optimistic ? (
-          <details className="relative shrink-0">
-            <summary
-              aria-label="Voice actions"
-              className="focus-ring grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full text-muted-foreground hover:bg-secondary"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </summary>
-            <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-xl">
-              {reply.isYours ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.currentTarget.closest("details")?.removeAttribute("open");
-                    if (!window.confirm("Delete this Voice?")) return;
-                    removeThen(() => deleteConferenceContentAction("reply", reply.id, topicId));
-                  }}
-                  className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Voice
-                </button>
+          <ConferenceActionMenu label="Voice actions">
+            {(close) =>
+              reply.isYours ? (
+                <ConferenceDeleteMenuItem
+                  label="Delete Voice"
+                  close={close}
+                  onDelete={() => removeThen(() => deleteConferenceContentAction("reply", reply.id, topicId))}
+                />
               ) : (
                 <>
                   <button
                     type="button"
-                    onClick={(event) => {
-                      event.currentTarget.closest("details")?.removeAttribute("open");
+                    role="menuitem"
+                    onClick={() => {
+                      close();
                       removeThen(() => hideConferenceVoiceAction("reply", reply.id, topicId));
                     }}
                     className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-secondary"
@@ -234,8 +231,9 @@ function ReplyCard({
                     <button
                       key={reason}
                       type="button"
-                      onClick={(event) => {
-                        event.currentTarget.closest("details")?.removeAttribute("open");
+                      role="menuitem"
+                      onClick={() => {
+                        close();
                         removeThen(() => reportConferenceAction("reply", reply.id, reason, topicId));
                       }}
                       className="focus-ring block min-h-9 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
@@ -244,9 +242,9 @@ function ReplyCard({
                     </button>
                   ))}
                 </>
-              )}
-            </div>
-          </details>
+              )
+            }
+          </ConferenceActionMenu>
         ) : null}
       </div>
 
@@ -259,6 +257,7 @@ function ReplyCard({
             initialHypeCount={reply.hypeCount}
             initialPassCount={reply.passCount}
             onError={onError}
+            onStale={() => window.location.assign("/conference?notice=unavailable")}
           />
         </div>
       ) : reply.isYours ? (
@@ -324,6 +323,10 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
       const result = await createConferenceReplyAction(topic.id, text);
       if (!result.ok || !result.replyId) {
         removeReply(tempId);
+        if (result.stale) {
+          router.replace("/conference?notice=unavailable");
+          return;
+        }
         setFeedback(result.message);
         return;
       }
@@ -338,11 +341,13 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
     });
   }
 
-  function leaveTopicThen(task: () => Promise<{ ok: boolean; message: string }>) {
+  function leaveTopicThen(task: () => Promise<ConferenceActionResult>) {
     router.push("/conference");
     startTopicMutation(async () => {
       const result = await task();
-      if (!result.ok) window.alert(result.message);
+      if (!result.ok && !result.stale) {
+        router.replace("/conference?notice=action-failed");
+      }
     });
   }
 
@@ -374,33 +379,21 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
             <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.5] text-foreground">{topic.body}</p>
           </div>
 
-          <details className="relative shrink-0">
-            <summary
-              aria-label="Topic actions"
-              className="focus-ring grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full text-muted-foreground hover:bg-secondary"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </summary>
-            <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-xl">
-              {topic.isYours ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.currentTarget.closest("details")?.removeAttribute("open");
-                    if (!window.confirm("Delete this Topic?")) return;
-                    leaveTopicThen(() => deleteConferenceContentAction("topic", topic.id, topic.id));
-                  }}
-                  className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Topic
-                </button>
+          <ConferenceActionMenu label="Topic actions">
+            {(close) =>
+              topic.isYours ? (
+                <ConferenceDeleteMenuItem
+                  label="Delete Topic"
+                  close={close}
+                  onDelete={() => leaveTopicThen(() => deleteConferenceContentAction("topic", topic.id, topic.id))}
+                />
               ) : (
                 <>
                   <button
                     type="button"
-                    onClick={(event) => {
-                      event.currentTarget.closest("details")?.removeAttribute("open");
+                    role="menuitem"
+                    onClick={() => {
+                      close();
                       leaveTopicThen(() => hideConferenceVoiceAction("topic", topic.id, topic.id));
                     }}
                     className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-secondary"
@@ -413,8 +406,9 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
                     <button
                       key={reason}
                       type="button"
-                      onClick={(event) => {
-                        event.currentTarget.closest("details")?.removeAttribute("open");
+                      role="menuitem"
+                      onClick={() => {
+                        close();
                         leaveTopicThen(() => reportConferenceAction("topic", topic.id, reason, topic.id));
                       }}
                       className="focus-ring block min-h-9 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
@@ -423,9 +417,9 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
                     </button>
                   ))}
                 </>
-              )}
-            </div>
-          </details>
+              )
+            }
+          </ConferenceActionMenu>
         </div>
 
         <div className="mt-3 flex items-center gap-1.5">
@@ -438,6 +432,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
                 initialHypeCount={topic.hypeCount}
                 initialPassCount={topic.passCount}
                 onError={setFeedback}
+                onStale={() => router.replace("/conference?notice=unavailable")}
               />
             </>
           ) : (
