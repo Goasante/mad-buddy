@@ -342,9 +342,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
     router.push("/conference");
     startTopicMutation(async () => {
       const result = await task();
-      if (!result.ok) {
-        window.sessionStorage.setItem("conference-feedback", result.message);
-      }
+      if (!result.ok) window.alert(result.message);
     });
   }
 
