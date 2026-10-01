@@ -90,7 +90,7 @@ function resolveLeft(edge: QuickActionsEdge) {
  * it opens the same four destinations as before, now in a bottom sheet
  * instead of a stack of pills growing out of the trigger.
  */
-export function QuickActionsLauncher() {
+export function QuickActionsLauncher({ conferenceEnabled = false }: { conferenceEnabled?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -169,6 +169,10 @@ export function QuickActionsLauncher() {
   }, []);
 
   if (!showsQuickActions(pathname)) return null;
+
+  const visibleActions = conferenceEnabled
+    ? QUICK_ACTIONS
+    : QUICK_ACTIONS.filter((action) => action.id !== "conference");
 
   function onPointerDown(event: React.PointerEvent<HTMLButtonElement>) {
     if (event.button !== undefined && event.button !== 0) return;
@@ -306,7 +310,7 @@ export function QuickActionsLauncher() {
         owner="quick-actions-launcher"
       >
         <ul id={panelId} className="quick-actions-sheet-list" role="menu" aria-label="Quick actions">
-          {QUICK_ACTIONS.map((action) => (
+          {visibleActions.map((action) => (
             <li key={action.id} className={cn("quick-actions-sheet-item", action.toneClass)}>
               <Link
                 href={action.href}
