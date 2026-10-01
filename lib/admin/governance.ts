@@ -490,6 +490,7 @@ export const SUSPENSION_BLOCKS = [
   "linkr",
   "moments",
   "drops",
+  "conference",
   "communities",
   "event_glow",
   "invite_links",

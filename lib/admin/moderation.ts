@@ -119,7 +119,9 @@ export const CONTENT_TYPE_LABELS: Record<string, string> = {
   message: "Message",
   profile: "Profile",
   announcement: "Announcement",
-  plan: "Plan"
+  plan: "Plan",
+  conference_topic: "Conference Topic",
+  conference_reply: "Conference Voice"
 };
 export function contentTypeLabel(type: string): string {
   return CONTENT_TYPE_LABELS[type] ?? type;
@@ -207,10 +209,21 @@ export function moderationActionToRestriction(action: ModerationActionType): Res
 const CONTENT_ONLY_ACTIONS: readonly ModerationActionType[] = ["restore_content", "hide_content", "remove_content"];
 
 /** The actions offered for a given report kind. */
-export function availableModerationActions(kind: ReportKind): readonly ModerationActionType[] {
-  return kind === "content"
-    ? MODERATION_ACTION_LADDER
-    : MODERATION_ACTION_LADDER.filter((action) => !CONTENT_ONLY_ACTIONS.includes(action));
+export function availableModerationActions(
+  kind: ReportKind,
+  contentType?: string | null
+): readonly ModerationActionType[] {
+  const actions =
+    kind === "content"
+      ? MODERATION_ACTION_LADDER
+      : MODERATION_ACTION_LADDER.filter((action) => !CONTENT_ONLY_ACTIONS.includes(action));
+
+  // Conference does not have a feature-specific restriction type in the
+  // canonical ladder. Never mislabel a messaging suspension as Conference.
+  if (contentType === "conference_topic" || contentType === "conference_reply") {
+    return actions.filter((action) => action !== "suspend_feature");
+  }
+  return actions;
 }
 
 /** Every action except a pure "no action" must carry a written reason. */

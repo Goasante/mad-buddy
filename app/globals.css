@@ -6505,6 +6505,11 @@ select {
   --qa-tone: #d96655;
 }
 
+.qa-tone-conference {
+  /* Conference belongs to Mad Buddy, not a separate visual brand. */
+  --qa-tone: hsl(var(--primary));
+}
+
 /* ---------------------------------------------------------------------------
  * The Linkr swipe hint.
  *

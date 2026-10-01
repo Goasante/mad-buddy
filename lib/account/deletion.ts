@@ -58,6 +58,12 @@ export const DELETION_TABLES = [
   "privacy_zones",
   "user_preferences",
   "user_locations",
+  "conference_locations",
+  "conference_votes",
+  "conference_voice_ids",
+  "conference_hidden_users",
+  "conference_replies",
+  "conference_topics",
   "user_phone_identities",
   "blocked_users",
   "friend_requests",
@@ -123,6 +129,13 @@ export async function purgeUserData(
   admin: SupabaseClient,
   userId: string
 ): Promise<{ ok: boolean; failedTable?: string }> {
+  const { data: conferenceFlag } = await admin
+    .from("feature_flags")
+    .select("key")
+    .eq("key", "conference")
+    .maybeSingle();
+  const conferenceReady = Boolean(conferenceFlag);
+
   const scoped: Array<[string, PromiseLike<{ error: unknown }>]> = [
     ["proximity_events", admin.from("proximity_events").delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`)],
     ["notifications", admin.from("notifications").delete().eq("user_id", userId)],
@@ -149,6 +162,20 @@ export async function purgeUserData(
     ["subscriptions", admin.from("subscriptions").delete().eq("user_id", userId)],
     ["consent_logs", admin.from("consent_logs").delete().eq("user_id", userId)]
   ];
+
+  if (conferenceReady) {
+    scoped.push(
+      ["conference_locations", admin.from("conference_locations").delete().eq("user_id", userId)],
+      ["conference_votes", admin.from("conference_votes").delete().eq("user_id", userId)],
+      ["conference_voice_ids", admin.from("conference_voice_ids").delete().eq("user_id", userId)],
+      [
+        "conference_hidden_users",
+        admin.from("conference_hidden_users").delete().or(`viewer_user_id.eq.${userId},hidden_user_id.eq.${userId}`)
+      ],
+      ["conference_replies", admin.from("conference_replies").delete().eq("author_user_id", userId)],
+      ["conference_topics", admin.from("conference_topics").delete().eq("author_user_id", userId)]
+    );
+  }
 
   const results = await Promise.all(scoped.map(async ([table, query]) => ({ table, error: (await query).error })));
   const failed = results.find((result) => result.error);

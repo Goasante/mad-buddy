@@ -50,6 +50,8 @@ describe("the launcher appears throughout the app", () => {
     expect(showsQuickActions("/scan")).toBe(false);
     expect(showsQuickActions("/safe-arrival")).toBe(false);
     expect(showsQuickActions("/linkr")).toBe(false);
+    expect(showsQuickActions("/conference")).toBe(false);
+    expect(showsQuickActions("/conference/123")).toBe(false);
   });
 
   it("stays off focused configuration surfaces", () => {
@@ -104,8 +106,13 @@ describe("every action opens its canonical route", () => {
       "plans",
       "events",
       "safe_arrival",
-      "focus"
+      "conference"
     ]);
+  });
+
+  it("keeps Conference dark until its server-resolved flag is enabled", () => {
+    expect(component).toContain('action.id !== "conference"');
+    expect(shell).toContain('conferenceEnabled={conferenceEnabled}');
   });
 
   it("offers no route that only redirects away", () => {
@@ -119,7 +126,8 @@ describe("every action opens its canonical route", () => {
     expect(routes.plans).toBe("/plans");
     expect(routes.events).toBe("/events");
     expect(routes.safe_arrival).toBe("/safe-arrival");
-    expect(routes.focus).toBe("/settings/engagement");
+    expect(routes.conference).toBe("/conference");
+    expect(routes.focus).toBeUndefined();
   });
 
   it("never includes the camera", () => {
@@ -224,11 +232,11 @@ describe("open and close behaviour", () => {
 
 describe("exactly one launcher exists", () => {
   it("is mounted once, in the shell", () => {
-    expect(shell.match(/<QuickActionsLauncher \/>/g) ?? []).toHaveLength(1);
+    expect(shell.match(/<QuickActionsLauncher conferenceEnabled=\{conferenceEnabled\} \/>/g) ?? []).toHaveLength(1);
   });
 
   it("is hidden while a conversation is immersive", () => {
-    expect(shell).toContain("{immersive ? null : <QuickActionsLauncher />}");
+    expect(shell).toContain("{immersive ? null : <QuickActionsLauncher conferenceEnabled={conferenceEnabled} />}");
   });
 
   it("is not mounted by any individual page", () => {

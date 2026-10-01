@@ -7,6 +7,7 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 export const OPEN_MOMENTS_FLAG = "open_moments" as const;
 export const SOCIALIZE_FLAG = "socialize" as const;
+export const CONFERENCE_FLAG = "conference" as const;
 
 /** Advertising controls. All four fail closed: no row or an OFF row means no ad request. */
 export const ADS_ENABLED_FLAG = "ads_enabled" as const;
@@ -118,6 +119,14 @@ export const MANAGED_FEATURES = [
     description: "Authenticated members can view public Moments and Buddy Pro members can publish them.",
     enabledImpact: "The Open feed becomes visible to signed-in members. Only eligible Buddy Pro members can publish.",
     disabledImpact: "The Open feed is hidden and new public posts are blocked. Stored posts keep their normal expiry."
+  },
+  {
+    key: CONFERENCE_FLAG,
+    title: "Conference",
+    category: "Local conversation",
+    description: "Anonymous-to-peers text conversations from members within a 15 km Around You radius.",
+    enabledImpact: "Conference appears in Quick Actions and authenticated members can read and join local Topics.",
+    disabledImpact: "Conference is hidden from Quick Actions and direct Conference routes fail closed."
   },
   {
     key: SOCIALIZE_FLAG,

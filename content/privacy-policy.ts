@@ -1,6 +1,6 @@
 export { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 export const PRIVACY_POLICY_EFFECTIVE_DATE = "23 July 2026";
-export const PRIVACY_POLICY_LAST_UPDATED = "23 September 2026";
+export const PRIVACY_POLICY_LAST_UPDATED = "1 October 2026";
 
 export const legalContact = {
   companyName: "Godfred Ofosu Asante",
@@ -23,14 +23,14 @@ export const privacyPolicyMarkdown = `
 
 ## Introduction
 
-Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContact.companyName}, ${legalContact.businessAddress}. It helps mutually approved friends ("Muddies") notice roughly when they are nearby and also lets you deliberately enable Linkr when you want to discover someone new. In both cases, the ordinary proximity experience is designed not to reveal your exact location to another user. This policy explains what we collect, why, what other people can and cannot see, and what control you have.
+Mad Buddy ("we", "us") is a private social proximity app operated by ${legalContact.companyName}, ${legalContact.businessAddress}. It helps mutually approved friends ("Muddies") notice roughly when they are nearby, lets you deliberately enable Linkr when you want to discover someone new, and offers Conference for anonymous-to-other-members local conversations. In both cases, the ordinary proximity experience is designed not to reveal your exact location to another user. This policy explains what we collect, why, what other people can and cannot see, and what control you have.
 
 ## What we collect
 
 * **Account information:** your email address, display name, username, and password (stored as a hash by our authentication provider; we never see your plain-text password).
 * **Profile information you choose to add:** a bio, a mood status, and a profile photo.
 * **A single location signal:** when your glow is on, your device sends your current coordinates over an encrypted connection. We store only your most recent signal: each update overwrites the previous one. We do not keep a location history.
-* **Derived proximity signals:** short-lived records of broad proximity used by Mad Buddy's proximity features, designed to expire after 15 minutes. A feature may display a named proximity band, its broad category range, or a coarsely rounded estimate, but not the underlying precise measurement.
+* **Derived proximity signals:** short-lived records of broad proximity used by Mad Buddy's proximity features, designed to expire after 15 minutes. A feature may display a named proximity band, its broad category range, or a coarsely rounded estimate, but not the underlying precise measurement.\n* **Conference activity:** Topics, Voices, Hype/Pass votes, reports and anonymous per-Topic Voice identifiers. Conference also keeps one coarse current location signal while you use it so the server can decide which Topics are within 15 km.
 * **Notifications and social activity:** friend requests, waves, meet-up pings, and in-app notifications you send or receive.
 * **Billing information:** if you subscribe, our payment provider (Paystack) processes your payment. We store a reference to your subscription status and plan, never your card number.
 
@@ -40,7 +40,7 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 * Your raw coordinates are processed on our servers only. They are converted into broad proximity information before anything is shared with another user.
 * A label may be explained with a broad category range, such as **Just Around · 0–100 m**. This range describes the category that the signal falls within. It is not your precise measured distance or position.
 * **Other users do not receive your coordinates, a live map position, your precise measured distance, your direction of travel, your street address, or your location history through Mad Buddy's ordinary proximity experience.**
-* Turning on Ghost Mode removes you from nearby visibility immediately. This is enforced on the server, not just hidden in the interface.
+* Turning on Ghost Mode removes you from nearby visibility immediately. This is enforced on the server, not just hidden in the interface.\n* **Conference is separate from Glow.** Opening Conference does not turn Glow on or refresh your Glow location. Conference uses its own overwrite-only coarse current signal when needed, including while Ghost Mode is on.
 
 ## Muddy proximity
 
@@ -57,7 +57,8 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 * A Linkr discovery does not make someone a Muddy automatically. A continuing connection still requires mutual choice.
 * When you stop your Linkr session, Linkr discovery stops.
 
-## What other users can never see through proximity
+## Conference\n\n* Conference shows local Topics from members whose Topic anchor falls within roughly 15 km of your current Conference area.\n* Other members see a temporary per-Topic label such as **Voice 12**, not your Mad Buddy profile identity. Mad Buddy keeps the account mapping privately for safety, blocking and moderation.\n* Conference never shows another member your coordinates, map position, exact distance, direction of travel or street-level location.\n* A Topic stores a coarse server-only creation anchor while it is active. That anchor is cleared when the Topic expires.\n* Blocking someone removes their Conference content in both directions. Reporting a Topic or Voice hides that item from the reporter immediately and sends it to the existing safety review system.
+* You can delete your own Conference Topics and Voices. A deleted Topic disappears immediately and its coarse location anchor is cleared immediately; limited server-side content retention may continue briefly for safety, moderation and abuse review.\n\n## What other users can never see through proximity
 
 * Exact GPS coordinates.
 * A live map position or map pin showing where you are.
@@ -81,7 +82,7 @@ Mad Buddy ("we", "us") is a private social proximity app operated by ${legalCont
 
 ## Account deletion
 
-When you delete your account from Settings, we delete your profile, your stored location signal, your proximity records, your friendships and requests, your notifications, your circles, your preferences, your uploaded photos, and your authentication record. We retain a minimal audit entry (a "Deleted User" label and a billing reference, where a paid subscription existed) for fraud prevention and financial record-keeping, and reports you filed or that were filed about you are anonymized rather than deleted so that our safety team's decisions remain accountable.
+When you delete your account from Settings, we delete your profile, your stored location signals, your proximity records, your Conference Topics, Voices, votes and hidden-Voice state, your friendships and requests, your notifications, your circles, your preferences, your uploaded photos, and your authentication record. We retain a minimal audit entry (a "Deleted User" label and a billing reference, where a paid subscription existed) for fraud prevention and financial record-keeping, and reports you filed or that were filed about you are anonymized rather than deleted so that our safety team's decisions remain accountable.
 
 ## Payments
 

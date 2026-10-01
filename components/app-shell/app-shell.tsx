@@ -181,7 +181,8 @@ const PAGES_WITH_OWN_HEADER = [
   "/help",
   "/invite",
   "/safety-center",
-  "/hangout-mode"
+  "/hangout-mode",
+  "/conference"
 ] as const;
 
 /**
@@ -228,6 +229,7 @@ function hasOwnHeader(pathname: string): boolean {
      back link/title stacked on top of each other. */
   if (PAGES_WITH_OWN_HEADER.some((href) => pathname === href)) return true;
   if (pathname.startsWith("/settings/")) return true;
+  if (pathname.startsWith("/conference/")) return true;
   /* Profile VNext draws its own inline header on EVERY /profile-lab screen,
      including the nested ones, so the whole subtree stands the global header
      down. Without this each lab screen carried two bars stacked on top of each
@@ -292,6 +294,7 @@ export type AppShellProps = {
    * itself is untouched and returns as soon as the flag is on.
    */
   madCamEnabled?: boolean;
+  conferenceEnabled?: boolean;
   /**
    * Identity for the app-wide menu sheet, resolved once by the layout.
    *
@@ -336,6 +339,7 @@ function AppShellInner({
   currentUserId = null,
   hiddenNavigationHrefs = [],
   madCamEnabled = false,
+  conferenceEnabled = false,
   currentDisplayName = "",
   wallpaperPromise = resolvedDefaultWallpaper
 }: AppShellProps) {
@@ -599,7 +603,7 @@ function AppShellInner({
           in lib/navigation/quick-actions, so no page mounts its own copy and
           there can never be two launchers on screen. Hidden while immersive
           (a conversation is open), where the composer owns the lower right. */}
-      {immersive ? null : <QuickActionsLauncher />}
+      {immersive ? null : <QuickActionsLauncher conferenceEnabled={conferenceEnabled} />}
 
       {/* The app-wide menu sheet. Mounted once here — every screen's header
           Menu opens this same instance through AppMenuProvider. */}

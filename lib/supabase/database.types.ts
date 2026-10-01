@@ -5961,7 +5961,15 @@ export type DropContextType = "circle" | "plan" | "event" | "event_circle";
 export type DropActionType = "open_chat" | "join_plan" | "wave" | "rsvp" | "view_announcement";
 export type DropStatus = "draft" | "scheduled" | "active" | "expired" | "cancelled" | "removed";
 
-export type ReportableContentType = "moment" | "drop" | "message" | "profile" | "announcement" | "plan";
+export type ReportableContentType =
+  | "moment"
+  | "drop"
+  | "message"
+  | "profile"
+  | "announcement"
+  | "plan"
+  | "conference_topic"
+  | "conference_reply";
 export type ReportCategory =
   | "harassment"
   | "threat_or_violence"

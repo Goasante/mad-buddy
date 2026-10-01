@@ -16,7 +16,7 @@ import type { FeatureIconKey } from "@/lib/icons/feature-icons";
  * page by page, and the first version should not ask that.
  */
 
-export type QuickActionId = "moments" | "plans" | "events" | "safe_arrival" | "focus";
+export type QuickActionId = "moments" | "plans" | "events" | "safe_arrival" | "conference";
 
 export type QuickAction = {
   id: QuickActionId;
@@ -39,9 +39,9 @@ export type QuickAction = {
  * The launcher's contents, in display order.
  *
  * Ordered top-to-bottom as they appear when expanded. Groups deliberately
- * does not live here: group conversations are owned by Messages. Focus takes
- * the fourth slot because it is an app-wide control without permanent bottom
- * navigation.
+ * does not live here: group conversations are owned by Messages. Conference
+ * takes the fourth slot because it is useful but does not belong in permanent
+ * navigation. Focus remains available from Settings > Engagement.
  *
  * Camera is deliberately ABSENT. Mad Cam is reached by the Home tab (tap to go
  * Home, tap again or double-tap to open the camera), and duplicating it here
@@ -67,7 +67,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
     featureIcon: "safeArrival",
     toneClass: "qa-tone-safe-arrival"
   },
-  { id: "focus", label: "Focus", href: "/settings/engagement" as Route, featureIcon: "focus", toneClass: "qa-tone-focus" }
+  { id: "conference", label: "Conference", href: "/conference" as Route, featureIcon: "conference", toneClass: "qa-tone-conference" }
 ];
 
 /**
@@ -116,7 +116,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  * shell already knows it is immersive -- the message composer owns the
  * lower-right corner there.
  */
-const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/linkr", "/settings"];
+const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/linkr", "/settings", "/conference"];
 
 /**
  * Detail routes that keep their own corner.
@@ -132,6 +132,7 @@ const EXCLUDED_PREFIXES: readonly string[] = [
   "/events/",
   "/scan/",
   "/safe-arrival/",
+  "/conference/",
   // Every settings sub-page is the same focused configuration surface as its
   // parent -- /settings/glow-visibility is exactly where this matters most.
   "/settings/"

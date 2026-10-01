@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminPermission } from "@/lib/admin/access";
 import { activeRestrictions, applyUserRestriction, recordAdminAuditEvent } from "@/lib/admin/service";
 import { restrictionNotice } from "@/lib/admin/governance";
@@ -43,7 +44,13 @@ async function loadReport(admin: Admin, kind: ReportKind, reportId: string) {
       .eq("id", reportId)
       .maybeSingle();
     return data
-      ? { id: data.id, reportedUserId: data.reported_user_id, status: data.status, contentType: data.content_type }
+      ? {
+          id: data.id,
+          reportedUserId: data.reported_user_id,
+          status: data.status,
+          contentType: data.content_type,
+          contentId: data.content_id
+        }
       : null;
   }
 
@@ -53,7 +60,14 @@ async function loadReport(admin: Admin, kind: ReportKind, reportId: string) {
     .eq("id", reportId)
     .maybeSingle();
   return data
-    ? { id: data.id, reportedUserId: data.reported_user_id, reporterId: data.reporter_id, status: data.status, contentType: null }
+    ? {
+        id: data.id,
+        reportedUserId: data.reported_user_id,
+        reporterId: data.reporter_id,
+        status: data.status,
+        contentType: null,
+        contentId: null
+      }
     : null;
 }
 
@@ -73,6 +87,47 @@ async function setStatus(admin: Admin, kind: ReportKind, reportId: string, statu
 function revalidateReports(kind: ReportKind, reportId: string) {
   revalidatePath("/admin/reports");
   revalidatePath(`/admin/reports/${kind}/${reportId}`);
+}
+
+async function applyConferenceContentState(
+  admin: Admin,
+  report: { contentType: string | null; contentId: string | null },
+  actionType: string
+) {
+  if (!report.contentId) return { ok: true as const };
+  if (report.contentType !== "conference_topic" && report.contentType !== "conference_reply") {
+    return { ok: true as const };
+  }
+
+  if (actionType === "suspend_feature") {
+    return { ok: false as const, message: "Conference does not use the messaging feature suspension." };
+  }
+
+  const nextStatus =
+    actionType === "restore_content"
+      ? "active"
+      : actionType === "hide_content"
+        ? "hidden"
+        : actionType === "remove_content"
+          ? "removed"
+          : null;
+  if (!nextStatus) return { ok: true as const };
+
+  const conference = admin as unknown as SupabaseClient;
+  const table = report.contentType === "conference_topic" ? "conference_topics" : "conference_replies";
+  let query = conference.from(table).update({
+    status: nextStatus,
+    updated_at: new Date().toISOString()
+  }).eq("id", report.contentId);
+
+  if (report.contentType === "conference_topic" && nextStatus === "active") {
+    query = query.gt("expires_at", new Date().toISOString());
+  }
+
+  const { error } = await query;
+  return error
+    ? { ok: false as const, message: "The Conference content state could not be updated." }
+    : { ok: true as const };
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +231,13 @@ export async function applyModerationActionAction(input: unknown): Promise<Moder
   const report = await loadReport(admin, kind, reportId);
   if (!report) return { ok: false, message: "That report is unavailable." };
 
+  if (
+    actionType === "suspend_feature" &&
+    (report.contentType === "conference_topic" || report.contentType === "conference_reply")
+  ) {
+    return { ok: false, message: "Use a Conference content action or an account restriction instead." };
+  }
+
   const restriction = moderationActionToRestriction(actionType);
 
   // Audit-first: record the moderation decision before doing anything.
@@ -188,6 +250,9 @@ export async function applyModerationActionAction(input: unknown): Promise<Moder
     reason: reason || "Trust and safety action"
   });
   if (!logged) return { ok: false, message: "The audit entry could not be recorded, so no action was taken." };
+
+  const contentState = await applyConferenceContentState(admin, report, actionType);
+  if (!contentState.ok) return contentState;
 
   // Enforcement actions apply a restriction through the existing permission-
   // checked, audited service — never an inline update.
@@ -283,5 +348,11 @@ export async function applyModerationActionAction(input: unknown): Promise<Moder
   }
 
   revalidateReports(kind, reportId);
+  if (report.contentType === "conference_topic" && report.contentId) {
+    revalidatePath("/conference");
+    revalidatePath(`/conference/${report.contentId}`);
+  } else if (report.contentType === "conference_reply") {
+    revalidatePath("/conference");
+  }
   return { ok: true, message: restriction ? "Action applied and enforcement recorded." : "Action recorded." };
 }

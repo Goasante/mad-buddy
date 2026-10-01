@@ -48,8 +48,9 @@ describe("Groups belong to Messages", () => {
   it("does not advertise a second Groups destination in shell or quick actions", () => {
     expect(appShell).not.toContain('{ href: "/groups", label: "Groups"');
     expect(quickActions).not.toContain('id: "groups"');
-    expect(quickActions).toContain('id: "focus"');
-    expect(quickActions).toContain('href: "/settings/engagement"');
+    expect(quickActions).toContain('id: "conference"');
+    expect(quickActions).toContain('href: "/conference"');
+    expect(quickActions).not.toContain('id: "focus"');
   });
 
   it("does not escape New Chat or Group Settings back to the retired page", () => {

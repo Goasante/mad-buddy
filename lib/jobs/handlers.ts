@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { deliverNotification } from "@/lib/notifications/server";
 import { batchBlockedIds } from "@/lib/social/permissions";
 import { DEFAULT_RECIPIENT_TIMEZONE } from "@/lib/notifications/preferences";
@@ -667,6 +669,20 @@ export const handleExpireFriendRequests: JobHandler = async (admin) => {
 };
 
 /** Expired admin access must actually stop granting (batch 13 §6). */
+export const handleConferenceCleanup: JobHandler = async (admin) => {
+  const { data: flag } = await admin
+    .from("feature_flags")
+    .select("key")
+    .eq("key", "conference")
+    .maybeSingle();
+  if (!flag) return 0;
+
+  const conference = admin as unknown as SupabaseClient;
+  const { data, error } = await conference.rpc("cleanup_conference");
+  if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
+  return typeof data === "number" ? data : Number(data ?? 0);
+};
+
 export const handleExpireAdminAssignments: JobHandler = async (admin) => {
   const nowIso = new Date().toISOString();
   const { data, error } = await admin
@@ -1287,6 +1303,7 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "expiry.friend_requests": handleExpireFriendRequests,
   "expiry.event_circles": handleExpireEventCircles,
   "expiry.admin_assignments": handleExpireAdminAssignments,
+  "conference.cleanup": handleConferenceCleanup,
   "verification.cleanup_evidence": handleVerificationEvidenceCleanup,
   "reminders.scan": async (admin) => {
     const { scanAndEnqueueReminders } = await import("@/lib/reminders/service");

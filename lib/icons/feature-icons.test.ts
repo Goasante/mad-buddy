@@ -16,6 +16,7 @@ const REQUIRED_KEYS: FeatureIconKey[] = [
   "invites",
   "reminders",
   "focus",
+  "conference",
   "plans",
   "ping",
   "wave"
