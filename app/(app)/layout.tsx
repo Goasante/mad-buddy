@@ -23,6 +23,7 @@ import {
   ADS_INTERSTITIAL_FLAG,
   MAD_CAM_FLAG,
   MOMENTS_FLAG,
+  CONFERENCE_FLAG,
   resolveGlobalFeatureFlag,
   SOCIALIZE_FLAG
 } from "@/lib/features/feature-flags";
@@ -106,6 +107,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
             SOCIALIZE_FLAG,
             MOMENTS_FLAG,
             MAD_CAM_FLAG,
+            CONFERENCE_FLAG,
             ADS_ENABLED_FLAG,
             ADS_INLINE_FLAG,
             ADS_ANCHOR_FLAG,
@@ -200,6 +202,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   const socializeEnabled = flagEnabled(SOCIALIZE_FLAG);
   const momentsEnabled = flagEnabled(MOMENTS_FLAG);
   const madCamEnabled = flagEnabled(MAD_CAM_FLAG);
+  const conferenceEnabled = flagEnabled(CONFERENCE_FLAG);
   const adsEnabled = flagEnabled(ADS_ENABLED_FLAG);
   const inlineAdsEnabled = flagEnabled(ADS_INLINE_FLAG);
   const anchorAdsEnabled = flagEnabled(ADS_ANCHOR_FLAG);
@@ -247,6 +250,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
         // Mad Cam is paused: without this the shell never mounts the camera
         // launcher or its lazy chunk. The camera code itself is untouched.
         madCamEnabled={madCamEnabled}
+        conferenceEnabled={conferenceEnabled}
         wallpaperPromise={wallpaperPromise}
       >
         {children}
