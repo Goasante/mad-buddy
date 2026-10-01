@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { createConferenceTopicAction, reportConferenceAction, voteConferenceAction } from "@/app/(app)/conference-actions";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
+import { detectLocationRisk, LOCATION_WARNING_MESSAGE } from "@/lib/content/safety";
 import type { ConferenceFeedResult, ConferenceSort, ConferenceTopic, ConferenceVote } from "@/lib/conference/types";
 import { cn } from "@/lib/utils";
 
@@ -86,8 +88,16 @@ function TopicCard({ topic, onFeedback }: { topic: ConferenceTopic; onFeedback: 
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <VoteButton topic={topic} vote="hype" icon={ArrowUp} label="Hype" count={topic.hypeCount} onDone={(m) => { onFeedback(m); router.refresh(); }} />
-        <VoteButton topic={topic} vote="pass" icon={ArrowDown} label="Pass" count={topic.passCount} onDone={(m) => { onFeedback(m); router.refresh(); }} />
+        {topic.isYours ? (
+          <span className="inline-flex min-h-9 items-center rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
+            Your Topic
+          </span>
+        ) : (
+          <>
+            <VoteButton topic={topic} vote="hype" icon={ArrowUp} label="Hype" count={topic.hypeCount} onDone={(m) => { onFeedback(m); router.refresh(); }} />
+            <VoteButton topic={topic} vote="pass" icon={ArrowDown} label="Pass" count={topic.passCount} onDone={(m) => { onFeedback(m); router.refresh(); }} />
+          </>
+        )}
         <Link
           href={`/conference/${topic.id}`}
           className="focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
@@ -96,17 +106,21 @@ function TopicCard({ topic, onFeedback }: { topic: ConferenceTopic; onFeedback: 
           {topic.replyCount} Voices
         </Link>
 
-        <details className="relative ml-auto">
+        {!topic.isYours ? <details className="relative ml-auto">
           <summary className="focus-ring flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
             <Flag className="h-3.5 w-3.5" />
             Flag
           </summary>
           <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-border bg-card p-1.5 shadow-lg">
             {[
-              ["spam", "Spam"],
               ["harassment", "Harassment"],
-              ["hate", "Hate"],
-              ["false_info", "False info"],
+              ["threat_or_violence", "Threat or violence"],
+              ["sexual_content", "Sexual content"],
+              ["hate_or_discrimination", "Hate or discrimination"],
+              ["spam", "Spam"],
+              ["scam", "Scam"],
+              ["private_information", "Private information"],
+              ["dangerous_location_sharing", "Dangerous location sharing"],
               ["other", "Other"]
             ].map(([reason, label]) => (
               <button
@@ -125,7 +139,7 @@ function TopicCard({ topic, onFeedback }: { topic: ConferenceTopic; onFeedback: 
               </button>
             ))}
           </div>
-        </details>
+        </details> : null}
       </div>
     </article>
   );
@@ -138,6 +152,7 @@ export function ConferencePage({ feed, sort }: { feed: ConferenceFeedResult; sor
   const [feedback, setFeedback] = useState("");
   const [posting, startPosting] = useTransition();
   const [locating, setLocating] = useState(false);
+  const locationRisk = detectLocationRisk(body);
 
   function updateLocation() {
     if (!navigator.geolocation) {
@@ -148,7 +163,7 @@ export function ConferencePage({ feed, sort }: { feed: ConferenceFeedResult; sor
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const response = await fetch("/api/location/update", {
+          const response = await fetch("/api/conference/location", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -176,6 +191,7 @@ export function ConferencePage({ feed, sort }: { feed: ConferenceFeedResult; sor
 
   return (
     <div className="mx-auto w-full max-w-[760px] space-y-5 pb-10 md:pt-6">
+      <ConferenceLocationSync refreshOnFirst={!feed.locationAvailable} />
       <PageHeader title="Conference" />
 
       <div className="flex items-center justify-between gap-3 pt-1">
@@ -211,6 +227,11 @@ export function ConferencePage({ feed, sort }: { feed: ConferenceFeedResult; sor
             placeholder="Share a thought, ask a question, or start a local conversation..."
             className="focus-ring mt-4 min-h-32 w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm"
           />
+          {locationRisk.warn ? (
+            <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
+              {LOCATION_WARNING_MESSAGE}
+            </p>
+          ) : null}
           <div className="mt-2 flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">{body.length}/300</span>
             <button
@@ -253,7 +274,12 @@ export function ConferencePage({ feed, sort }: { feed: ConferenceFeedResult; sor
         </Link>
       </div>
 
-      {!feed.locationAvailable ? (
+      {feed.accessRestricted ? (
+        <section className="rounded-2xl border border-border bg-card/80 p-6 text-center">
+          <h2 className="text-lg font-semibold">Conference unavailable</h2>
+          <p className="mt-2 text-sm text-muted-foreground">This account currently has a restriction that prevents Conference access.</p>
+        </section>
+      ) : !feed.locationAvailable ? (
         <section className="rounded-2xl border border-border bg-card/80 p-6 text-center">
           <MapPin className="mx-auto h-8 w-8 text-primary" />
           <h2 className="mt-3 text-lg font-semibold">{feed.locationStale ? "Refresh Around You" : "See Conference Around You"}</h2>
