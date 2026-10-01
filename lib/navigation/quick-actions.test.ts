@@ -51,6 +51,7 @@ describe("the launcher appears throughout the app", () => {
     expect(showsQuickActions("/safe-arrival")).toBe(false);
     expect(showsQuickActions("/linkr")).toBe(false);
     expect(showsQuickActions("/conference")).toBe(false);
+    expect(showsQuickActions("/conference/123")).toBe(false);
   });
 
   it("stays off focused configuration surfaces", () => {
