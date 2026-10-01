@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   ArrowDown,
@@ -263,7 +262,6 @@ export function ConferencePage({
   feed: ConferenceFeedResult;
   initialSort: ConferenceSort;
 }) {
-  const router = useRouter();
   const [sort, setSort] = useState<ConferenceSort>(initialSort);
   const [topics, setTopics] = useState(feed.topics);
   const [composerOpen, setComposerOpen] = useState(false);
