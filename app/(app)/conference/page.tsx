@@ -13,8 +13,13 @@ export default async function ConferenceRoute({
 }: {
   searchParams: Promise<{ sort?: string }>;
 }) {
-  const [identity, params, enabled] = await Promise.all([\n    getCurrentIdentity(),\n    searchParams,\n    isFeatureEnabled(createSupabaseAdminClient(), CONFERENCE_FLAG)\n  ]);
-  if (!identity) redirect("/login?next=/conference");\n  if (!enabled) redirect("/dashboard");
+  const [identity, params, enabled] = await Promise.all([
+    getCurrentIdentity(),
+    searchParams,
+    isFeatureEnabled(createSupabaseAdminClient(), CONFERENCE_FLAG)
+  ]);
+  if (!identity) redirect("/login?next=/conference");
+  if (!enabled) redirect("/dashboard");
 
   const sort: ConferenceSort = params.sort === "hot" ? "hot" : "fresh";
   const feed = await loadConferenceFeed(identity.id, sort);
