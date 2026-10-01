@@ -132,6 +132,7 @@ const EXCLUDED_PREFIXES: readonly string[] = [
   "/events/",
   "/scan/",
   "/safe-arrival/",
+  "/conference/",
   // Every settings sub-page is the same focused configuration surface as its
   // parent -- /settings/glow-visibility is exactly where this matters most.
   "/settings/"
