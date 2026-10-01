@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import {
@@ -36,10 +35,6 @@ async function userId() {
   return user?.id ?? null;
 }
 
-function refresh(topicId?: string) {
-  revalidatePath("/conference");
-  if (topicId) revalidatePath(`/conference/${topicId}`);
-}
 
 export async function createConferenceTopicAction(body: string): Promise<ConferenceActionResult> {
   const user = await userId();
@@ -48,7 +43,6 @@ export async function createConferenceTopicAction(body: string): Promise<Confere
   if (!parsed.success) return { ok: false, message: "Keep your Topic between 1 and 300 characters." };
 
   const result = await createConferenceTopic(user, parsed.data);
-  if (result.ok) refresh(result.topicId);
   return result;
 }
 
@@ -60,7 +54,6 @@ export async function createConferenceReplyAction(topicId: string, body: string)
   if (!parsed.success) return { ok: false, message: "Keep your Voice between 1 and 300 characters." };
 
   const result = await createConferenceReply(user, topicId, parsed.data);
-  if (result.ok) refresh(topicId);
   return result;
 }
 
@@ -78,7 +71,6 @@ export async function voteConferenceAction(
   if (!type.success || !id.success || !parsedVote.success) return { ok: false, message: "Invalid vote." };
 
   const result = await voteConference(user, type.data, id.data, parsedVote.data);
-  if (result.ok) refresh(topicId ?? (type.data === "topic" ? id.data : undefined));
   return result;
 }
 
@@ -96,7 +88,6 @@ export async function reportConferenceAction(
   if (!type.success || !id.success || !parsedReason.success) return { ok: false, message: "Invalid report." };
 
   const result = await reportConference(user, type.data, id.data, parsedReason.data);
-  if (result.ok) refresh(topicId ?? (type.data === "topic" ? id.data : undefined));
   return result;
 }
 
@@ -112,7 +103,6 @@ export async function hideConferenceVoiceAction(
   if (!type.success || !id.success) return { ok: false, message: "Invalid Voice." };
 
   const result = await hideConferenceVoice(user, type.data, id.data);
-  if (result.ok) refresh(topicId ?? (type.data === "topic" ? id.data : undefined));
   return result;
 }
 
@@ -129,6 +119,5 @@ export async function deleteConferenceContentAction(
   if (!type.success || !id.success) return { ok: false, message: "Invalid Conference content." };
 
   const result = await deleteConferenceContent(user, type.data, id.data);
-  if (result.ok) refresh(topicId ?? (type.data === "topic" ? id.data : undefined));
   return result;
 }
