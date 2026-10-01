@@ -4,6 +4,7 @@ import {
   Hand,
   Images,
   Moon,
+  MessagesSquare,
   Send,
   ShieldCheck,
   UserPlus,
@@ -40,6 +41,7 @@ export type FeatureIconKey =
   | "invites"
   | "reminders"
   | "focus"
+  | "conference"
   | "plans"
   | "ping"
   | "wave";
@@ -59,6 +61,7 @@ export type FeatureIconSource = { icon: LucideIcon | typeof LinkrIcon; label: st
  *  - invites      UserPlus      — bringing someone in
  *  - reminders    Bell          — a nudge
  *  - focus        Moon          — quiet hours / do not disturb
+ *  - conference   MessagesSquare — local public conversation
  *  - plans        CalendarCheck2 — a committed plan
  *  - ping         Send          — reaching out to one person
  *  - wave         Hand          — the literal gesture
@@ -73,6 +76,7 @@ export const FEATURE_ICON_SOURCES: Record<FeatureIconKey, FeatureIconSource> = {
   invites: { icon: UserPlus, label: "Invites" },
   reminders: { icon: Bell, label: "Reminders" },
   focus: { icon: Moon, label: "Focus" },
+  conference: { icon: MessagesSquare, label: "Conference" },
   plans: { icon: CalendarCheck2, label: "Plans" },
   ping: { icon: Send, label: "Ping" },
   wave: { icon: Hand, label: "Wave" }
