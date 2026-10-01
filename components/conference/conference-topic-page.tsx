@@ -83,13 +83,12 @@ function nextVoteState(
   };
 }
 
-function ReactionButton({
+function ReactionPair({
   targetType,
   targetId,
   initialVote,
   initialHypeCount,
   initialPassCount,
-  selectedVote,
   onError
 }: {
   targetType: "topic" | "reply";
@@ -97,25 +96,22 @@ function ReactionButton({
   initialVote: ConferenceVote | null;
   initialHypeCount: number;
   initialPassCount: number;
-  selectedVote: ConferenceVote;
   onError: (value: string) => void;
 }) {
   const [vote, setVote] = useState(initialVote);
   const [hypeCount, setHypeCount] = useState(initialHypeCount);
   const [passCount, setPassCount] = useState(initialPassCount);
   const [, startMutation] = useTransition();
-  const count = selectedVote === "hype" ? hypeCount : passCount;
-  const Icon = selectedVote === "hype" ? ArrowUp : ArrowDown;
 
-  function react() {
+  function react(selected: ConferenceVote) {
     const previous = { vote, hypeCount, passCount };
-    const next = nextVoteState(vote, selectedVote, hypeCount, passCount);
+    const next = nextVoteState(vote, selected, hypeCount, passCount);
     setVote(next.vote);
     setHypeCount(next.hypeCount);
     setPassCount(next.passCount);
 
     startMutation(async () => {
-      const result = await voteConferenceAction(targetType, targetId, selectedVote);
+      const result = await voteConferenceAction(targetType, targetId, selected);
       if (!result.ok) {
         setVote(previous.vote);
         setHypeCount(previous.hypeCount);
@@ -126,18 +122,32 @@ function ReactionButton({
   }
 
   return (
-    <button
-      type="button"
-      aria-pressed={vote === selectedVote}
-      onClick={react}
-      className={cn(
-        "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
-        vote === selectedVote ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {selectedVote === "hype" ? "Hype" : "Pass"} {count}
-    </button>
+    <>
+      <button
+        type="button"
+        aria-pressed={vote === "hype"}
+        onClick={() => react("hype")}
+        className={cn(
+          "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
+          vote === "hype" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
+        )}
+      >
+        <ArrowUp className="h-3.5 w-3.5" />
+        Hype {hypeCount}
+      </button>
+      <button
+        type="button"
+        aria-pressed={vote === "pass"}
+        onClick={() => react("pass")}
+        className={cn(
+          "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
+          vote === "pass" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
+        )}
+      >
+        <ArrowDown className="h-3.5 w-3.5" />
+        Pass {passCount}
+      </button>
+    </>
   );
 }
 
@@ -240,22 +250,12 @@ function ReplyCard({
 
       {!reply.isYours && !optimistic ? (
         <div className="mt-2.5 flex items-center gap-1.5">
-          <ReactionButton
+          <ReactionPair
             targetType="reply"
             targetId={reply.id}
             initialVote={reply.yourVote}
             initialHypeCount={reply.hypeCount}
             initialPassCount={reply.passCount}
-            selectedVote="hype"
-            onError={onError}
-          />
-          <ReactionButton
-            targetType="reply"
-            targetId={reply.id}
-            initialVote={reply.yourVote}
-            initialHypeCount={reply.hypeCount}
-            initialPassCount={reply.passCount}
-            selectedVote="pass"
             onError={onError}
           />
         </div>
@@ -431,22 +431,12 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
         <div className="mt-3 flex items-center gap-1.5">
           {!topic.isYours ? (
             <>
-              <ReactionButton
+              <ReactionPair
                 targetType="topic"
                 targetId={topic.id}
                 initialVote={topic.yourVote}
                 initialHypeCount={topic.hypeCount}
                 initialPassCount={topic.passCount}
-                selectedVote="hype"
-                onError={setFeedback}
-              />
-              <ReactionButton
-                targetType="topic"
-                targetId={topic.id}
-                initialVote={topic.yourVote}
-                initialHypeCount={topic.hypeCount}
-                initialPassCount={topic.passCount}
-                selectedVote="pass"
                 onError={setFeedback}
               />
             </>
