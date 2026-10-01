@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 const POLL_MS = 2 * 60 * 1000;
 const HEARTBEAT_MS = 8 * 60 * 1000;
 const SEND_MOVE_METERS = 1_000;
-const REFRESH_MOVE_METERS = 2_000;
 const EARTH_RADIUS_M = 6_371_000;
 
 function toRad(value: number) {
@@ -71,6 +70,7 @@ export function ConferenceLocationSync({
               })
             });
             if (!response.ok || cancelled) return;
+            const payload = (await response.json().catch(() => null)) as { areaChanged?: boolean } | null;
 
             lastSent.current = {
               lat: position.coords.latitude,
@@ -80,7 +80,7 @@ export function ConferenceLocationSync({
 
             const shouldRefresh =
               (!firstSuccess.current && refreshOnFirst) ||
-              (firstSuccess.current && moved >= REFRESH_MOVE_METERS);
+              payload?.areaChanged === true;
             firstSuccess.current = true;
             if (shouldRefresh) {
               if (hardRefresh) window.location.reload();
