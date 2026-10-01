@@ -109,6 +109,11 @@ describe("every action opens its canonical route", () => {
     ]);
   });
 
+  it("keeps Conference dark until its server-resolved flag is enabled", () => {
+    expect(component).toContain('action.id !== "conference"');
+    expect(shell).toContain('conferenceEnabled={conferenceEnabled}');
+  });
+
   it("offers no route that only redirects away", () => {
     const ids = QUICK_ACTIONS.map((action) => action.id);
     expect(ids, "a paused feature is back in Quick Actions").not.toContain("moments");
@@ -226,11 +231,11 @@ describe("open and close behaviour", () => {
 
 describe("exactly one launcher exists", () => {
   it("is mounted once, in the shell", () => {
-    expect(shell.match(/<QuickActionsLauncher \/>/g) ?? []).toHaveLength(1);
+    expect(shell.match(/<QuickActionsLauncher conferenceEnabled=\{conferenceEnabled\} \/>/g) ?? []).toHaveLength(1);
   });
 
   it("is hidden while a conversation is immersive", () => {
-    expect(shell).toContain("{immersive ? null : <QuickActionsLauncher />}");
+    expect(shell).toContain("{immersive ? null : <QuickActionsLauncher conferenceEnabled={conferenceEnabled} />}");
   });
 
   it("is not mounted by any individual page", () => {
