@@ -10,7 +10,6 @@ import type {
   ConferenceFeedResult,
   ConferenceReply,
   ConferenceReportReason,
-  ConferenceSort,
   ConferenceTargetType,
   ConferenceTopic,
   ConferenceTopicDetail,
@@ -162,36 +161,44 @@ async function getViewerLocation(admin: Admin, userId: string): Promise<{
   stale: boolean;
 }> {
   const conference = conferenceDb(admin);
-  const [{ data: conferenceLocation }, { data: existingLocation }, { data: profile }] = await Promise.all([
-    conference
-      .from("conference_locations")
-      .select("latitude, longitude, last_updated")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    admin
-      .from("user_locations")
-      .select("latitude, longitude, last_updated")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    admin
-      .from("profiles")
-      .select("visibility_status")
-      .eq("user_id", userId)
-      .maybeSingle()
-  ]);
+  const { data: conferenceLocation } = await conference
+    .from("conference_locations")
+    .select("latitude, longitude, last_updated")
+    .eq("user_id", userId)
+    .maybeSingle();
 
   const conferenceCandidate = conferenceLocation as ViewerLocation | null;
+  if (isFreshLocation(conferenceCandidate)) {
+    return { location: conferenceCandidate, stale: false };
+  }
+
+  // Ghost Mode never blocks Conference. It only prevents Conference from
+  // borrowing the Glow signal; the browser can still refresh the dedicated
+  // Conference signal immediately.
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("visibility_status")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (profile?.visibility_status === "ghost") {
+    return { location: null, stale: Boolean(conferenceCandidate) };
+  }
+
+  const { data: existingLocation } = await admin
+    .from("user_locations")
+    .select("latitude, longitude, last_updated")
+    .eq("user_id", userId)
+    .maybeSingle();
+
   const existingCandidate = existingLocation as ViewerLocation | null;
-  const mayReuseGlowSignal = profile?.visibility_status !== "ghost";
+  if (isFreshLocation(existingCandidate)) {
+    return { location: existingCandidate, stale: false };
+  }
 
-  const fresh = [conferenceCandidate, ...(mayReuseGlowSignal ? [existingCandidate] : [])]
-    .filter(isFreshLocation)
-    .sort((a, b) => Date.parse(b.last_updated) - Date.parse(a.last_updated));
-
-  if (fresh[0]) return { location: fresh[0], stale: false };
   return {
     location: null,
-    stale: Boolean(conferenceCandidate || (mayReuseGlowSignal && existingCandidate))
+    stale: Boolean(conferenceCandidate || existingCandidate)
   };
 }
 
@@ -284,22 +291,16 @@ function buildTopicProjection(
   };
 }
 
-function hotScore(topic: ConferenceTopic): number {
-  const ageHours = Math.max(0, (Date.now() - Date.parse(topic.createdAt)) / 3_600_000);
-  return topic.hypeCount - topic.passCount * 0.75 + Math.min(topic.replyCount, 20) * 1.5 - ageHours * 0.25;
-}
-
-export async function loadConferenceFeed(userId: string, sort: ConferenceSort): Promise<ConferenceFeedResult> {
+export async function loadConferenceFeed(userId: string): Promise<ConferenceFeedResult> {
   const admin = createSupabaseAdminClient();
-  if (!(await conferenceIsEnabled(admin))) {
+  const [enabled, restrictions, viewer] = await Promise.all([
+    conferenceIsEnabled(admin),
+    getRestrictionState(admin, userId),
+    getViewerLocation(admin, userId)
+  ]);
+  if (!enabled || restrictions.suspended) {
     return { locationAvailable: false, locationStale: false, accessRestricted: true, topics: [] };
   }
-  const restrictions = await getRestrictionState(admin, userId);
-  if (restrictions.suspended) {
-    return { locationAvailable: false, locationStale: false, accessRestricted: true, topics: [] };
-  }
-
-  const viewer = await getViewerLocation(admin, userId);
   if (!viewer.location) {
     return {
       locationAvailable: false,
@@ -327,34 +328,37 @@ export async function loadConferenceFeed(userId: string, sort: ConferenceSort): 
     .gte("origin_longitude", box.minLon)
     .lte("origin_longitude", box.maxLon)
     .order("created_at", { ascending: false })
-    .limit(160);
+    .limit(100);
 
   if (error) throw error;
 
   const candidates = (data ?? []) as TopicRow[];
+  const nearbyCandidates = candidates.filter(
+    (row) =>
+      distanceMeters(
+        viewer.location!.latitude,
+        viewer.location!.longitude,
+        row.origin_latitude,
+        row.origin_longitude
+      ) <= CONFERENCE_RADIUS_METERS
+  );
+  const candidateAuthorIds = [...new Set(nearbyCandidates.map((row) => row.author_user_id))];
   const [hidden, blocked, hiddenTopics] = await Promise.all([
     loadHiddenUserIds(conference, userId),
-    batchBlockedIds(admin, userId, candidates.map((row) => row.author_user_id)),
+    batchBlockedIds(admin, userId, candidateAuthorIds),
     loadHiddenContentIds(admin, userId, "conference_topic")
   ]);
 
-  const rows = candidates
-    .filter((row) => !hidden.has(row.author_user_id) && !blocked.has(row.author_user_id) && !hiddenTopics.has(row.id))
-    .filter(
-      (row) =>
-        distanceMeters(
-          viewer.location!.latitude,
-          viewer.location!.longitude,
-          row.origin_latitude,
-          row.origin_longitude
-        ) <= CONFERENCE_RADIUS_METERS
-    );
+  const rows = nearbyCandidates.filter(
+    (row) => !hidden.has(row.author_user_id) && !blocked.has(row.author_user_id) && !hiddenTopics.has(row.id)
+  );
 
   if (rows.length === 0) {
     return { locationAvailable: true, locationStale: false, accessRestricted: false, topics: [] };
   }
 
   const topicIds = rows.map((row) => row.id);
+  const authorIds = [...new Set(rows.map((row) => row.author_user_id))];
   const [{ data: voteRows }, { data: voiceRows }] = await Promise.all([
     conference
       .from("conference_votes")
@@ -365,6 +369,7 @@ export async function loadConferenceFeed(userId: string, sort: ConferenceSort): 
       .from("conference_voice_ids")
       .select("topic_id, user_id, voice_number")
       .in("topic_id", topicIds)
+      .in("user_id", authorIds)
   ]);
 
   const votes = (voteRows ?? []) as VoteRow[];
@@ -382,14 +387,13 @@ export async function loadConferenceFeed(userId: string, sort: ConferenceSort): 
     buildTopicProjection(row, voiceNumbers, yourVotes.get(row.id) ?? null, userId)
   );
 
-  if (sort === "hot") topics.sort((a, b) => hotScore(b) - hotScore(a));
-  else topics.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  topics.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
   return {
     locationAvailable: true,
     locationStale: false,
     accessRestricted: false,
-    topics: topics.slice(0, 40)
+    topics
   };
 }
 
@@ -398,25 +402,24 @@ async function loadAccessibleTopicRow(
   userId: string,
   topicId: string
 ): Promise<TopicRow | null> {
-  const restrictions = await getRestrictionState(admin, userId);
-  if (restrictions.suspended) return null;
-
-  const viewer = await getViewerLocation(admin, userId);
-  if (!viewer.location) return null;
-
   const conference = conferenceDb(admin);
-  const { data, error } = await conference
-    .from("conference_topics")
-    .select(
-      "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, created_at"
-    )
-    .eq("id", topicId)
-    .eq("status", "active")
-    .gt("expires_at", new Date().toISOString())
-    .maybeSingle();
+  const [restrictions, viewer, topicResult] = await Promise.all([
+    getRestrictionState(admin, userId),
+    getViewerLocation(admin, userId),
+    conference
+      .from("conference_topics")
+      .select(
+        "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, created_at"
+      )
+      .eq("id", topicId)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle()
+  ]);
+  if (restrictions.suspended || !viewer.location) return null;
 
-  if (error) throw error;
-  const row = data as TopicRow | null;
+  if (topicResult.error) throw topicResult.error;
+  const row = topicResult.data as TopicRow | null;
   if (!row) return null;
 
   const [{ data: hiddenTopic }, hidden, blocked] = await Promise.all([
@@ -481,6 +484,7 @@ export async function loadConferenceTopic(
       !hiddenReplies.has(reply.id)
   );
   const replyIds = replies.map((reply) => reply.id);
+  const voiceUserIds = [...new Set([topic.author_user_id, ...replies.map((reply) => reply.author_user_id)])];
 
   const [{ data: topicVoteRows }, { data: replyVoteRows }, { data: voiceRows }] = await Promise.all([
     conference
@@ -499,6 +503,7 @@ export async function loadConferenceTopic(
       .from("conference_voice_ids")
       .select("topic_id, user_id, voice_number")
       .eq("topic_id", topicId)
+      .in("user_id", voiceUserIds)
   ]);
 
   const votes = [
@@ -568,7 +573,7 @@ export async function createConferenceTopic(userId: string, body: string) {
       origin_longitude: coarseCoordinate(viewer.location.longitude),
       body
     })
-    .select("id")
+    .select("id, created_at")
     .single();
 
   if (error || !data?.id) {
@@ -584,7 +589,12 @@ export async function createConferenceTopic(userId: string, body: string) {
     return { ok: false, message: "Couldn't assign your anonymous Voice. Try again." };
   }
 
-  return { ok: true, message: "Topic posted Around You.", topicId };
+  return {
+    ok: true,
+    message: "Topic posted Around You.",
+    topicId,
+    createdAt: typeof data.created_at === "string" ? data.created_at : new Date().toISOString()
+  };
 }
 
 export async function createConferenceReply(userId: string, topicId: string, body: string) {
@@ -609,13 +619,20 @@ export async function createConferenceReply(userId: string, topicId: string, bod
     return { ok: false, message: "Couldn't assign your anonymous Voice. Try again." };
   }
 
-  const { error } = await conference
+  const { data, error } = await conference
     .from("conference_replies")
-    .insert({ topic_id: topicId, author_user_id: userId, body });
+    .insert({ topic_id: topicId, author_user_id: userId, body })
+    .select("id, created_at")
+    .single();
 
-  return error
+  return error || !data?.id
     ? { ok: false, message: "Couldn't add your Voice. Try again." }
-    : { ok: true, message: "Your Voice was added." };
+    : {
+        ok: true,
+        message: "Your Voice was added.",
+        replyId: String(data.id),
+        createdAt: typeof data.created_at === "string" ? data.created_at : new Date().toISOString()
+      };
 }
 
 async function resolveTarget(

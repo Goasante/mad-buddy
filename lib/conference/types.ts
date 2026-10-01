@@ -52,4 +52,6 @@ export type ConferenceActionResult = {
   ok: boolean;
   message: string;
   topicId?: string;
+  replyId?: string;
+  createdAt?: string;
 };

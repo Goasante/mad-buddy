@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 const POLL_MS = 2 * 60 * 1000;
 const HEARTBEAT_MS = 8 * 60 * 1000;
 const SEND_MOVE_METERS = 1_000;
-const REFRESH_MOVE_METERS = 2_000;
 const EARTH_RADIUS_M = 6_371_000;
 
 function toRad(value: number) {
@@ -28,7 +27,13 @@ function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number) 
  * Keeps Conference's own coarse, overwrite-only location fresh while this
  * surface is open. It never calls the Glow location endpoint.
  */
-export function ConferenceLocationSync({ refreshOnFirst = false }: { refreshOnFirst?: boolean }) {
+export function ConferenceLocationSync({
+  refreshOnFirst = false,
+  hardRefresh = false
+}: {
+  refreshOnFirst?: boolean;
+  hardRefresh?: boolean;
+}) {
   const router = useRouter();
   const lastSent = useRef<{ lat: number; lon: number; at: number } | null>(null);
   const firstSuccess = useRef(false);
@@ -65,6 +70,7 @@ export function ConferenceLocationSync({ refreshOnFirst = false }: { refreshOnFi
               })
             });
             if (!response.ok || cancelled) return;
+            const payload = (await response.json().catch(() => null)) as { areaChanged?: boolean } | null;
 
             lastSent.current = {
               lat: position.coords.latitude,
@@ -74,9 +80,12 @@ export function ConferenceLocationSync({ refreshOnFirst = false }: { refreshOnFi
 
             const shouldRefresh =
               (!firstSuccess.current && refreshOnFirst) ||
-              (firstSuccess.current && moved >= REFRESH_MOVE_METERS);
+              payload?.areaChanged === true;
             firstSuccess.current = true;
-            if (shouldRefresh) router.refresh();
+            if (shouldRefresh) {
+              if (hardRefresh) window.location.reload();
+              else router.refresh();
+            }
           } finally {
             inFlight.current = false;
           }
@@ -101,7 +110,7 @@ export function ConferenceLocationSync({ refreshOnFirst = false }: { refreshOnFi
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refreshOnFirst, router]);
+  }, [hardRefresh, refreshOnFirst, router]);
 
   return null;
 }
