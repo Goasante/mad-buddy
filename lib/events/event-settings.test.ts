@@ -43,6 +43,6 @@ describe("Event settings", () => {
 
   it("keeps ended and cancelled Event audience history immutable", () => {
     expect(service).toContain('event.status === "ended" || event.status === "cancelled"');
-    expect(modal).toContain('projection?.status === "ended"');
+    expect(modal).toContain('currentProjection?.status === "ended"');
   });
 });
