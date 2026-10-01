@@ -1,17 +1,28 @@
--- Conference V1: lightweight hyperlocal anonymous conversations.
+-- Conference V1: lightweight, hyperlocal, anonymous-to-peers conversation.
 --
--- Privacy boundary:
---   * Conference does NOT write public.user_locations and therefore cannot
---     refresh or change Glow presence as a side effect.
---   * conference_locations is one overwrite-only, current coarse signal per
---     user. It is not a history table and is never exposed to browser roles.
---   * Topic anchors are snapped before storage and never projected to clients.
+-- Privacy:
+-- * Around You is a server-side 15 km radius. No exact location or distance is
+--   returned to another member.
+-- * Conference has its own overwrite-only coarse location row. Opening it does
+--   not refresh Glow or change nearby visibility.
+-- * A Topic keeps a coarse anchor only while it is active. The cleanup job
+--   clears that anchor at expiry, then removes old expired content later.
 --
--- Authority boundary:
---   * all Conference product reads/writes go through trusted server code;
---   * anon/authenticated get no direct table privileges;
---   * service_role grants are explicit so this remains compatible with
---     Supabase's 2026 Data API default-grant changes.
+-- Authority:
+-- * Browser roles have no direct Conference table access.
+-- * All reads/writes go through authenticated server code.
+-- * Existing Mad Buddy reports, restrictions, blocking, jobs and feature flags
+--   remain the canonical safety/operations systems.
+
+insert into public.feature_flags (key, description, status, default_value)
+values (
+  'conference',
+  'Controls the lightweight 15 km Around You Conference surface.',
+  'off',
+  false
+)
+on conflict (key) do update
+set description = excluded.description;
 
 create table if not exists public.conference_locations (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -22,27 +33,32 @@ create table if not exists public.conference_locations (
 );
 
 comment on table public.conference_locations is
-  'Current coarse Conference location only. One row per user, overwritten on refresh; separate from Glow/user_locations.';
+  'Current coarse Conference signal only. One row per user; overwritten on refresh and separate from Glow.';
 
 create table if not exists public.conference_topics (
   id uuid primary key default gen_random_uuid(),
   author_user_id uuid not null references auth.users(id) on delete cascade,
-  -- Privacy-preserving coarse anchor used only for the server-side 15 km check.
-  origin_latitude double precision not null check (origin_latitude between -90 and 90),
-  origin_longitude double precision not null check (origin_longitude between -180 and 180),
+  origin_latitude double precision check (origin_latitude between -90 and 90),
+  origin_longitude double precision check (origin_longitude between -180 and 180),
   body text not null check (char_length(btrim(body)) between 1 and 300),
-  status text not null default 'active' check (status in ('active','hidden','removed')),
+  status text not null default 'active'
+    check (status in ('active', 'hidden', 'removed', 'expired')),
   hype_count integer not null default 0 check (hype_count >= 0),
   pass_count integer not null default 0 check (pass_count >= 0),
   reply_count integer not null default 0 check (reply_count >= 0),
   expires_at timestamptz not null default (now() + interval '7 days'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (expires_at > created_at)
+  check (expires_at > created_at),
+  check (
+    (status = 'active' and origin_latitude is not null and origin_longitude is not null)
+    or status <> 'active'
+  )
 );
 
 create index if not exists conference_topics_geo_created_idx
-  on public.conference_topics (origin_latitude, origin_longitude, created_at desc);
+  on public.conference_topics (origin_latitude, origin_longitude, created_at desc)
+  where status = 'active';
 create index if not exists conference_topics_active_feed_idx
   on public.conference_topics (status, expires_at, created_at desc);
 create index if not exists conference_topics_author_created_idx
@@ -53,7 +69,8 @@ create table if not exists public.conference_replies (
   topic_id uuid not null references public.conference_topics(id) on delete cascade,
   author_user_id uuid not null references auth.users(id) on delete cascade,
   body text not null check (char_length(btrim(body)) between 1 and 300),
-  status text not null default 'active' check (status in ('active','hidden','removed')),
+  status text not null default 'active'
+    check (status in ('active', 'hidden', 'removed')),
   hype_count integer not null default 0 check (hype_count >= 0),
   pass_count integer not null default 0 check (pass_count >= 0),
   created_at timestamptz not null default now(),
@@ -61,7 +78,7 @@ create table if not exists public.conference_replies (
 );
 
 create index if not exists conference_replies_topic_created_idx
-  on public.conference_replies (topic_id, created_at asc);
+  on public.conference_replies (topic_id, created_at desc);
 create index if not exists conference_replies_author_created_idx
   on public.conference_replies (author_user_id, created_at desc);
 
@@ -106,10 +123,11 @@ create table if not exists public.conference_hidden_users (
 create index if not exists conference_hidden_users_hidden_idx
   on public.conference_hidden_users (hidden_user_id);
 
--- Keep Hype/Pass and visible Voice counts cheap and exact under concurrency.
+-- Hype/Pass counters remain exact under concurrent inserts, changes and deletes.
 create or replace function public.conference_adjust_vote_counts()
 returns trigger
 language plpgsql
+set search_path = public, pg_temp
 as $$
 begin
   if tg_op in ('DELETE', 'UPDATE') then
@@ -156,6 +174,7 @@ create trigger conference_vote_counts
 create or replace function public.conference_adjust_reply_count()
 returns trigger
 language plpgsql
+set search_path = public, pg_temp
 as $$
 begin
   if tg_op in ('DELETE', 'UPDATE') and old.status = 'active' then
@@ -176,10 +195,10 @@ $$;
 
 drop trigger if exists conference_reply_counts on public.conference_replies;
 create trigger conference_reply_counts
-  after insert or update of status, topic_id or delete on public.conference_replies
+  after insert or update or delete on public.conference_replies
   for each row execute function public.conference_adjust_reply_count();
 
--- Conference reports belong to Mad Buddy's existing Trust & Safety queue.
+-- Reuse Mad Buddy's canonical report-and-hide system.
 alter table public.content_reports
   drop constraint if exists content_reports_content_type_check;
 alter table public.content_reports
@@ -198,6 +217,29 @@ alter table public.content_reports
       ]
     )
   );
+
+alter table public.hidden_content
+  drop constraint if exists hidden_content_content_type_check;
+alter table public.hidden_content
+  add constraint hidden_content_content_type_check
+  check (
+    content_type = any (
+      array[
+        'moment'::text,
+        'drop'::text,
+        'message'::text,
+        'profile'::text,
+        'announcement'::text,
+        'plan'::text,
+        'conference_topic'::text,
+        'conference_reply'::text
+      ]
+    )
+  );
+
+create unique index if not exists conference_report_once_per_user
+  on public.content_reports (reporter_id, content_type, content_id)
+  where content_type in ('conference_topic', 'conference_reply');
 
 create index if not exists content_reports_target_idx
   on public.content_reports (content_type, content_id, created_at desc);
@@ -233,6 +275,6 @@ grant execute on function public.conference_adjust_vote_counts() to service_role
 grant execute on function public.conference_adjust_reply_count() to service_role;
 
 comment on table public.conference_topics is
-  'Conference Topics. Coarse origin anchor is server-only and used only for 15 km Around You discovery.';
+  'Conference Topics. Coarse origin anchor is server-only, used only for 15 km discovery, and cleared at expiry.';
 comment on table public.conference_voice_ids is
   'Per-topic anonymous identity mapping. Never expose user_id to Conference clients.';
