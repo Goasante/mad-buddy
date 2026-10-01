@@ -10,6 +10,8 @@ import {
   reportConferenceAction,
   voteConferenceAction
 } from "@/app/(app)/conference-actions";
+import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
+import { detectLocationRisk, LOCATION_WARNING_MESSAGE } from "@/lib/content/safety";
 import type { ConferenceReply, ConferenceTopicDetail, ConferenceVote } from "@/lib/conference/types";
 import { cn } from "@/lib/utils";
 
@@ -86,10 +88,14 @@ function Actions({
       </summary>
       <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-border bg-card p-1.5 shadow-lg">
         {[
-          ["spam", "Flag spam"],
           ["harassment", "Flag harassment"],
-          ["hate", "Flag hate"],
-          ["false_info", "Flag false info"],
+          ["threat_or_violence", "Flag threat or violence"],
+          ["sexual_content", "Flag sexual content"],
+          ["hate_or_discrimination", "Flag hate or discrimination"],
+          ["spam", "Flag spam"],
+          ["scam", "Flag scam"],
+          ["private_information", "Flag private information"],
+          ["dangerous_location_sharing", "Flag dangerous location sharing"],
           ["other", "Flag other"]
         ].map(([reason, label]) => (
           <button
@@ -135,9 +141,17 @@ function ReplyCard({ reply, topicId, onFeedback }: { reply: ConferenceReply; top
       </div>
       <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{reply.body}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <ReactionButton targetType="reply" targetId={reply.id} topicId={topicId} selected={reply.yourVote === "hype"} vote="hype" count={reply.hypeCount} onFeedback={onFeedback} />
-        <ReactionButton targetType="reply" targetId={reply.id} topicId={topicId} selected={reply.yourVote === "pass"} vote="pass" count={reply.passCount} onFeedback={onFeedback} />
-        <div className="ml-auto"><Actions targetType="reply" targetId={reply.id} topicId={topicId} onFeedback={onFeedback} /></div>
+        {reply.isYours ? (
+          <span className="inline-flex min-h-9 items-center rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
+            Your Voice
+          </span>
+        ) : (
+          <>
+            <ReactionButton targetType="reply" targetId={reply.id} topicId={topicId} selected={reply.yourVote === "hype"} vote="hype" count={reply.hypeCount} onFeedback={onFeedback} />
+            <ReactionButton targetType="reply" targetId={reply.id} topicId={topicId} selected={reply.yourVote === "pass"} vote="pass" count={reply.passCount} onFeedback={onFeedback} />
+            <div className="ml-auto"><Actions targetType="reply" targetId={reply.id} topicId={topicId} onFeedback={onFeedback} /></div>
+          </>
+        )}
       </div>
     </article>
   );
@@ -148,9 +162,11 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
   const [body, setBody] = useState("");
   const [feedback, setFeedback] = useState("");
   const [sending, startSending] = useTransition();
+  const locationRisk = detectLocationRisk(body);
 
   return (
     <div className="mx-auto w-full max-w-[760px] space-y-5 pb-10 md:pt-6">
+      <ConferenceLocationSync />
       <div className="flex min-h-12 items-center gap-3">
         <Link href="/conference" aria-label="Back to Conference" className="focus-ring grid h-11 w-11 place-items-center rounded-full hover:bg-secondary">
           <ArrowLeft className="h-5 w-5" />
@@ -170,10 +186,18 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
         </div>
         <p className="mt-4 whitespace-pre-wrap text-base leading-7">{topic.body}</p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <ReactionButton targetType="topic" targetId={topic.id} topicId={topic.id} selected={topic.yourVote === "hype"} vote="hype" count={topic.hypeCount} onFeedback={setFeedback} />
-          <ReactionButton targetType="topic" targetId={topic.id} topicId={topic.id} selected={topic.yourVote === "pass"} vote="pass" count={topic.passCount} onFeedback={setFeedback} />
+          {topic.isYours ? (
+            <span className="inline-flex min-h-9 items-center rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
+              Your Topic
+            </span>
+          ) : (
+            <>
+              <ReactionButton targetType="topic" targetId={topic.id} topicId={topic.id} selected={topic.yourVote === "hype"} vote="hype" count={topic.hypeCount} onFeedback={setFeedback} />
+              <ReactionButton targetType="topic" targetId={topic.id} topicId={topic.id} selected={topic.yourVote === "pass"} vote="pass" count={topic.passCount} onFeedback={setFeedback} />
+            </>
+          )}
           <span className="text-xs text-muted-foreground">{topic.replyCount} Voices</span>
-          <div className="ml-auto"><Actions targetType="topic" targetId={topic.id} topicId={topic.id} onFeedback={setFeedback} /></div>
+          {!topic.isYours ? <div className="ml-auto"><Actions targetType="topic" targetId={topic.id} topicId={topic.id} onFeedback={setFeedback} /></div> : null}
         </div>
       </article>
 
@@ -194,6 +218,11 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
           placeholder="Add your voice..."
           className="focus-ring min-h-20 w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
         />
+        {locationRisk.warn ? (
+          <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
+            {LOCATION_WARNING_MESSAGE}
+          </p>
+        ) : null}
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">{body.length}/300</span>
           <button
