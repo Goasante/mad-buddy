@@ -22,36 +22,6 @@ on:
 # Overall CI is still red if either fails, which is correct. The point is not
 # to hide a failure but to stop one failure from erasing the other's result.
 jobs:
-  lock_hardening:
-    name: One-time runtime lock hardening
-    if: github.event_name == 'pull_request' && github.head_ref == 'hardening/conference-final-app' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: hardening/conference-final-app
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Refresh vulnerable runtime packages within existing semver ranges
-        run: npm audit fix --package-lock-only --omit=dev
-      - name: Verify runtime audit
-        run: npm audit --omit=dev --audit-level=high
-      - name: Commit reviewed lockfile update
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "No lockfile changes required."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "Refresh vulnerable runtime dependencies"
-          git push origin HEAD:hardening/conference-final-app
-
   quality:
     name: Quality (lint, types, tests)
     runs-on: ubuntu-latest
