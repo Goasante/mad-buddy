@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ReportReviewPanel, type ReportReviewData } from "@/components/admin/moderation/report-review-panel";
@@ -32,6 +33,7 @@ export default async function ReportDetailPage({ params }: DetailProps) {
     detail: string | null;
     category: string | null;
     contentType: string | null;
+    contentId: string | null;
     createdAt: string;
   } | null = null;
 
@@ -51,6 +53,7 @@ export default async function ReportDetailPage({ params }: DetailProps) {
         detail: data.details,
         category: data.category,
         contentType: data.content_type,
+        contentId: data.content_id,
         createdAt: data.created_at
       };
     }
@@ -70,12 +73,29 @@ export default async function ReportDetailPage({ params }: DetailProps) {
         detail: data.description,
         category: null,
         contentType: null,
+        contentId: null,
         createdAt: data.created_at
       };
     }
   }
 
   if (!base) notFound();
+
+  let reportedContent: string | null = null;
+  if (
+    kind === "content" &&
+    base.contentId &&
+    (base.contentType === "conference_topic" || base.contentType === "conference_reply")
+  ) {
+    const conference = admin as unknown as SupabaseClient;
+    const table = base.contentType === "conference_topic" ? "conference_topics" : "conference_replies";
+    const { data: evidence } = await conference
+      .from(table)
+      .select("body")
+      .eq("id", base.contentId)
+      .maybeSingle();
+    reportedContent = typeof evidence?.body === "string" ? evidence.body : null;
+  }
 
   // Related context (all safe): reported/reporter names, reported user's active
   // restrictions, how many reports exist against them, moderation history, audit.
@@ -129,6 +149,8 @@ export default async function ReportDetailPage({ params }: DetailProps) {
     detail: base.detail,
     category: base.category,
     contentTypeLabel: base.contentType ? contentTypeLabel(base.contentType) : null,
+    contentType: base.contentType,
+    reportedContent,
     createdAt: base.createdAt,
     reported: base.reportedUserId
       ? {
