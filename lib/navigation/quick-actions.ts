@@ -39,10 +39,9 @@ export type QuickAction = {
  * The launcher's contents, in display order.
  *
  * Ordered top-to-bottom as they appear when expanded. Groups deliberately
- * does not live here: group conversations are owned by Messages. Focus takes
- * the fourth slot because it is an app-wide control without permanent bottom
- * navigation. Conference takes the former Focus slot; Focus remains available
- * from Settings > Engagement and is not duplicated here.
+ * does not live here: group conversations are owned by Messages. Conference
+ * takes the fourth slot because it is useful but does not belong in permanent
+ * navigation. Focus remains available from Settings > Engagement.
  *
  * Camera is deliberately ABSENT. Mad Cam is reached by the Home tab (tap to go
  * Home, tap again or double-tap to open the camera), and duplicating it here
