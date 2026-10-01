@@ -52,6 +52,11 @@ export type RateLimitAction =
   | "messages.send"
   | "conversations.create"
   | "groups.create"
+  | "conference.location"
+  | "conference.topic.create"
+  | "conference.reply.create"
+  | "conference.vote"
+  | "conference.hide"
   | "invites.create"
   | "invites.resolve"
   | "contacts.match"
@@ -138,6 +143,13 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "messages.send": { limit: 30, windowSeconds: 60 },
   "conversations.create": { limit: 30, windowSeconds: 60 * 60 },
   "groups.create": { limit: 10, windowSeconds: 24 * 60 * 60 },
+  // Conference is intentionally lightweight: starting conversations is scarce,
+  // joining them is more generous, and fast repetitive actions remain bounded.
+  "conference.location": { limit: 60, windowSeconds: 60 },
+  "conference.topic.create": { limit: 5, windowSeconds: 60 * 60 },
+  "conference.reply.create": { limit: 30, windowSeconds: 60 * 60 },
+  "conference.vote": { limit: 120, windowSeconds: 60 * 60 },
+  "conference.hide": { limit: 60, windowSeconds: 60 * 60 },
   // Discovery / invites (feature spec §23, §37, §56). Tight on resolve to make
   // token guessing and QR scraping impractical.
   "invites.create": { limit: 20, windowSeconds: 60 * 60 },
