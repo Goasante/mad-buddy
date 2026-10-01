@@ -292,6 +292,7 @@ export type AppShellProps = {
    * itself is untouched and returns as soon as the flag is on.
    */
   madCamEnabled?: boolean;
+  conferenceEnabled?: boolean;
   /**
    * Identity for the app-wide menu sheet, resolved once by the layout.
    *
@@ -336,6 +337,7 @@ function AppShellInner({
   currentUserId = null,
   hiddenNavigationHrefs = [],
   madCamEnabled = false,
+  conferenceEnabled = false,
   currentDisplayName = "",
   wallpaperPromise = resolvedDefaultWallpaper
 }: AppShellProps) {
@@ -599,7 +601,7 @@ function AppShellInner({
           in lib/navigation/quick-actions, so no page mounts its own copy and
           there can never be two launchers on screen. Hidden while immersive
           (a conversation is open), where the composer owns the lower right. */}
-      {immersive ? null : <QuickActionsLauncher />}
+      {immersive ? null : <QuickActionsLauncher conferenceEnabled={conferenceEnabled} />}
 
       {/* The app-wide menu sheet. Mounted once here — every screen's header
           Menu opens this same instance through AppMenuProvider. */}
