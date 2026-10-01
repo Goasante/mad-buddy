@@ -75,7 +75,6 @@ type VoiceRow = {
 type RestrictionState = {
   suspended: boolean;
   writeRestricted: boolean;
-  communityRestricted: boolean;
 };
 
 async function conferenceIsEnabled(admin: Admin) {
@@ -149,8 +148,7 @@ async function getRestrictionState(admin: Admin, userId: string): Promise<Restri
 
   return {
     suspended: types.has("suspended_temporary") || types.has("suspended_permanent"),
-    writeRestricted: types.has("rate_limited"),
-    communityRestricted: types.has("community_creation_disabled")
+    writeRestricted: types.has("rate_limited")
   };
 }
 
@@ -540,7 +538,6 @@ export async function loadConferenceTopic(
 
 function writeRestrictionMessage(state: RestrictionState) {
   if (state.suspended) return "Conference is unavailable while this account restriction is active.";
-  if (state.communityRestricted) return "Conference participation is temporarily unavailable for this account.";
   if (state.writeRestricted) return "Conference posting is temporarily limited for this account.";
   return null;
 }
