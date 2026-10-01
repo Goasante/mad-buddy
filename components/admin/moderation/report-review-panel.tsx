@@ -31,6 +31,8 @@ export type ReportReviewData = {
   detail: string | null;
   category: string | null;
   contentTypeLabel: string | null;
+  contentType: string | null;
+  reportedContent: string | null;
   createdAt: string;
   reported: {
     id: string;
@@ -82,7 +84,7 @@ export function ReportReviewPanel({ data }: { data: ReportReviewData }) {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
         <div className="order-2 space-y-5 lg:order-1">
-          <AdminSection title="Report" description="What the reporter told us. Reported content itself is never shown here.">
+          <AdminSection title="Report" description="What the reporter told us.">
             <Card className="p-3.5">
               {data.detail ? (
                 <p className="whitespace-pre-wrap text-sm leading-6">{data.detail}</p>
@@ -92,7 +94,24 @@ export function ReportReviewPanel({ data }: { data: ReportReviewData }) {
             </Card>
           </AdminSection>
 
-          <ActionControl kind={data.kind} reportId={data.id} hasReportedUser={Boolean(data.reported)} onFeedback={setFeedback} />
+          {data.reportedContent ? (
+            <AdminSection
+              title="Reported Conference content"
+              description="Shown to authorised safety staff for this report only. Conference location data is never included."
+            >
+              <Card className="p-3.5">
+                <p className="whitespace-pre-wrap text-sm leading-6">{data.reportedContent}</p>
+              </Card>
+            </AdminSection>
+          ) : null}
+
+          <ActionControl
+            kind={data.kind}
+            reportId={data.id}
+            contentType={data.contentType}
+            hasReportedUser={Boolean(data.reported)}
+            onFeedback={setFeedback}
+          />
 
           <Timeline history={data.history} />
         </div>
@@ -189,11 +208,13 @@ function StatusControl({
 function ActionControl({
   kind,
   reportId,
+  contentType,
   hasReportedUser,
   onFeedback
 }: {
   kind: ReportKind;
   reportId: string;
+  contentType: string | null;
   hasReportedUser: boolean;
   onFeedback: (feedback: Feedback) => void;
 }) {
@@ -202,7 +223,7 @@ function ActionControl({
   const [durationHours, setDurationHours] = useState("168");
   const [pending, start] = useTransition();
 
-  const actionOptions: AppSelectOption<ModerationActionType>[] = availableModerationActions(kind).map((value) => ({
+  const actionOptions: AppSelectOption<ModerationActionType>[] = availableModerationActions(kind, contentType).map((value) => ({
     value,
     label: MODERATION_ACTION_LABELS[value]
   }));
