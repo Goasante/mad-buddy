@@ -41,7 +41,7 @@ describe("Conference V1 product boundaries", () => {
     const migration = read("supabase/migrations/20261001170000_conference_v1.sql");
     expect(migration).toContain("conference_voice_ids");
     expect(migration).toContain("unique (topic_id, voice_number)");
-    expect(stripComments(read("components/conference/conference-page.tsx"))).toContain("You’ll appear as a Voice");
+    expect(stripComments(read("components/conference/conference-page.tsx"))).toContain("anonymous to others");
   });
 
   it("lives in Quick Actions, not permanent navigation, and Focus remains a Settings feature", () => {
@@ -63,7 +63,8 @@ describe("Conference V1 product boundaries", () => {
     expect(feed).toContain("/api/conference/location");
     expect(feed).not.toContain("/api/location/update");
     expect(sync).toContain("/api/conference/location");
-    expect(server).toContain('profile?.visibility_status !== "ghost"');
+    expect(server).toContain('profile?.visibility_status === "ghost"');
+    expect(server).toContain("conferenceCandidate");
   });
 
   it("reuses Mad Buddy safety, moderation and retention systems", () => {
@@ -143,10 +144,10 @@ describe("Conference V1 product boundaries", () => {
   it("ships Hype and Pass instead of the old Lift/Lower wording", () => {
     const feed = read("components/conference/conference-page.tsx");
     const detail = read("components/conference/conference-topic-page.tsx");
-    expect(feed).toContain('"Hype"');
-    expect(feed).toContain('"Pass"');
-    expect(detail).toContain('"Hype"');
-    expect(detail).toContain('"Pass"');
+    expect(feed).toContain("Hype {");
+    expect(feed).toContain("Pass {");
+    expect(detail).toContain("Hype {");
+    expect(detail).toContain("Pass {");
     expect(feed).not.toContain("Lift");
     expect(feed).not.toContain("Lower");
   });
