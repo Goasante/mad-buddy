@@ -181,7 +181,8 @@ const PAGES_WITH_OWN_HEADER = [
   "/help",
   "/invite",
   "/safety-center",
-  "/hangout-mode"
+  "/hangout-mode",
+  "/conference"
 ] as const;
 
 /**
@@ -228,6 +229,7 @@ function hasOwnHeader(pathname: string): boolean {
      back link/title stacked on top of each other. */
   if (PAGES_WITH_OWN_HEADER.some((href) => pathname === href)) return true;
   if (pathname.startsWith("/settings/")) return true;
+  if (pathname.startsWith("/conference/")) return true;
   /* Profile VNext draws its own inline header on EVERY /profile-lab screen,
      including the nested ones, so the whole subtree stands the global header
      down. Without this each lab screen carried two bars stacked on top of each
