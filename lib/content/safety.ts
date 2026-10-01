@@ -67,6 +67,7 @@ export const BLOCK_REVOKES = [
   "messaging",
   "moments",
   "drops",
+  "conference",
   "event_glow",
   "future_invitations"
 ] as const;
