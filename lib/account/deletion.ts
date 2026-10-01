@@ -58,6 +58,12 @@ export const DELETION_TABLES = [
   "privacy_zones",
   "user_preferences",
   "user_locations",
+  "conference_locations",
+  "conference_votes",
+  "conference_voice_ids",
+  "conference_hidden_users",
+  "conference_replies",
+  "conference_topics",
   "user_phone_identities",
   "blocked_users",
   "friend_requests",
@@ -134,6 +140,15 @@ export async function purgeUserData(
     ["privacy_zones", admin.from("privacy_zones").delete().eq("user_id", userId)],
     ["user_preferences", admin.from("user_preferences").delete().eq("user_id", userId)],
     ["user_locations", admin.from("user_locations").delete().eq("user_id", userId)],
+    ["conference_locations", admin.from("conference_locations").delete().eq("user_id", userId)],
+    ["conference_votes", admin.from("conference_votes").delete().eq("user_id", userId)],
+    ["conference_voice_ids", admin.from("conference_voice_ids").delete().eq("user_id", userId)],
+    [
+      "conference_hidden_users",
+      admin.from("conference_hidden_users").delete().or(`viewer_user_id.eq.${userId},hidden_user_id.eq.${userId}`)
+    ],
+    ["conference_replies", admin.from("conference_replies").delete().eq("author_user_id", userId)],
+    ["conference_topics", admin.from("conference_topics").delete().eq("author_user_id", userId)],
     // Contact discovery must not outlive the account. While this row exists
     // the number keeps producing matches, so a deleted person would still be
     // findable by anyone who has them saved.
