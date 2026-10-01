@@ -28,7 +28,13 @@ function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number) 
  * Keeps Conference's own coarse, overwrite-only location fresh while this
  * surface is open. It never calls the Glow location endpoint.
  */
-export function ConferenceLocationSync({ refreshOnFirst = false }: { refreshOnFirst?: boolean }) {
+export function ConferenceLocationSync({
+  refreshOnFirst = false,
+  hardRefresh = false
+}: {
+  refreshOnFirst?: boolean;
+  hardRefresh?: boolean;
+}) {
   const router = useRouter();
   const lastSent = useRef<{ lat: number; lon: number; at: number } | null>(null);
   const firstSuccess = useRef(false);
@@ -76,7 +82,10 @@ export function ConferenceLocationSync({ refreshOnFirst = false }: { refreshOnFi
               (!firstSuccess.current && refreshOnFirst) ||
               (firstSuccess.current && moved >= REFRESH_MOVE_METERS);
             firstSuccess.current = true;
-            if (shouldRefresh) router.refresh();
+            if (shouldRefresh) {
+              if (hardRefresh) window.location.reload();
+              else router.refresh();
+            }
           } finally {
             inFlight.current = false;
           }
@@ -101,7 +110,7 @@ export function ConferenceLocationSync({ refreshOnFirst = false }: { refreshOnFi
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refreshOnFirst, router]);
+  }, [hardRefresh, refreshOnFirst, router]);
 
   return null;
 }
