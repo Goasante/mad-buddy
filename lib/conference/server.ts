@@ -752,7 +752,13 @@ export async function reportConference(
     .limit(1)
     .maybeSingle();
 
-  if (existing) return { ok: true, message: "You've already flagged this." };
+  if (existing) {
+    await admin.from("hidden_content").upsert(
+      { user_id: userId, content_type: contentType, content_id: targetId },
+      { onConflict: "user_id,content_type,content_id" }
+    );
+    return { ok: true, message: "You've already flagged this. It remains hidden from you." };
+  }
 
   const { requiresHumanReview } = await import("@/lib/content/safety");
   const { error } = await admin.from("content_reports").insert({
