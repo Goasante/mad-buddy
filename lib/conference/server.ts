@@ -161,36 +161,44 @@ async function getViewerLocation(admin: Admin, userId: string): Promise<{
   stale: boolean;
 }> {
   const conference = conferenceDb(admin);
-  const [{ data: conferenceLocation }, { data: existingLocation }, { data: profile }] = await Promise.all([
-    conference
-      .from("conference_locations")
-      .select("latitude, longitude, last_updated")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    admin
-      .from("user_locations")
-      .select("latitude, longitude, last_updated")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    admin
-      .from("profiles")
-      .select("visibility_status")
-      .eq("user_id", userId)
-      .maybeSingle()
-  ]);
+  const { data: conferenceLocation } = await conference
+    .from("conference_locations")
+    .select("latitude, longitude, last_updated")
+    .eq("user_id", userId)
+    .maybeSingle();
 
   const conferenceCandidate = conferenceLocation as ViewerLocation | null;
+  if (isFreshLocation(conferenceCandidate)) {
+    return { location: conferenceCandidate, stale: false };
+  }
+
+  // Ghost Mode never blocks Conference. It only prevents Conference from
+  // borrowing the Glow signal; the browser can still refresh the dedicated
+  // Conference signal immediately.
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("visibility_status")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (profile?.visibility_status === "ghost") {
+    return { location: null, stale: Boolean(conferenceCandidate) };
+  }
+
+  const { data: existingLocation } = await admin
+    .from("user_locations")
+    .select("latitude, longitude, last_updated")
+    .eq("user_id", userId)
+    .maybeSingle();
+
   const existingCandidate = existingLocation as ViewerLocation | null;
-  const mayReuseGlowSignal = profile?.visibility_status !== "ghost";
+  if (isFreshLocation(existingCandidate)) {
+    return { location: existingCandidate, stale: false };
+  }
 
-  const fresh = [conferenceCandidate, ...(mayReuseGlowSignal ? [existingCandidate] : [])]
-    .filter(isFreshLocation)
-    .sort((a, b) => Date.parse(b.last_updated) - Date.parse(a.last_updated));
-
-  if (fresh[0]) return { location: fresh[0], stale: false };
   return {
     location: null,
-    stale: Boolean(conferenceCandidate || (mayReuseGlowSignal && existingCandidate))
+    stale: Boolean(conferenceCandidate || existingCandidate)
   };
 }
 
@@ -325,9 +333,10 @@ export async function loadConferenceFeed(userId: string): Promise<ConferenceFeed
   if (error) throw error;
 
   const candidates = (data ?? []) as TopicRow[];
+  const candidateAuthorIds = [...new Set(candidates.map((row) => row.author_user_id))];
   const [hidden, blocked, hiddenTopics] = await Promise.all([
     loadHiddenUserIds(conference, userId),
-    batchBlockedIds(admin, userId, candidates.map((row) => row.author_user_id)),
+    batchBlockedIds(admin, userId, candidateAuthorIds),
     loadHiddenContentIds(admin, userId, "conference_topic")
   ]);
 
