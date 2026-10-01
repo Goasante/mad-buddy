@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
@@ -28,6 +30,7 @@ export async function GET() {
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
   }
+  const conference = createSupabaseAdminClient() as unknown as SupabaseClient;
   const [
     profile,
     subscription,
@@ -51,7 +54,11 @@ export async function GET() {
     eventModes,
     appFeedback,
     supportRequests,
-    mediaAssets
+    mediaAssets,
+    conferenceTopics,
+    conferenceReplies,
+    conferenceVotes,
+    conferenceLocation
   ] = await Promise.all([
     supabase.from("profiles").select("user_id, full_name, username, avatar_url, bio, mood_status, visibility_status, is_onboarded, created_at, updated_at").eq("user_id", userId).maybeSingle(),
     supabase.from("subscriptions").select("provider, plan, status, current_period_start, current_period_end, cancel_at_period_end, grace_ends_at, created_at, updated_at").eq("user_id", userId).maybeSingle(),
@@ -81,7 +88,27 @@ export async function GET() {
     supabase.from("event_modes").select("*").eq("user_id", userId),
     supabase.from("app_feedback").select("category, rating, message, status, created_at, updated_at").eq("user_id", userId),
     supabase.from("support_requests").select("full_name, email, message, status, created_at, updated_at").eq("user_id", userId),
-    supabase.from("media_assets").select("id, content_type, size_bytes, context_type, processing_status, moderation_status, created_at, updated_at, deleted_at").eq("owner_id", userId)
+    supabase.from("media_assets").select("id, content_type, size_bytes, context_type, processing_status, moderation_status, created_at, updated_at, deleted_at").eq("owner_id", userId),
+    conference
+      .from("conference_topics")
+      .select("id, body, status, hype_count, pass_count, reply_count, expires_at, created_at, updated_at")
+      .eq("author_user_id", userId)
+      .order("created_at", { ascending: false }),
+    conference
+      .from("conference_replies")
+      .select("id, topic_id, body, status, hype_count, pass_count, created_at, updated_at")
+      .eq("author_user_id", userId)
+      .order("created_at", { ascending: false }),
+    conference
+      .from("conference_votes")
+      .select("topic_id, reply_id, value, created_at, updated_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+    conference
+      .from("conference_locations")
+      .select("last_updated")
+      .eq("user_id", userId)
+      .maybeSingle()
   ]);
 
   const failed = [
@@ -107,7 +134,11 @@ export async function GET() {
     eventModes,
     appFeedback,
     supportRequests,
-    mediaAssets
+    mediaAssets,
+    conferenceTopics,
+    conferenceReplies,
+    conferenceVotes,
+    conferenceLocation
   ].find((result) => result.error);
 
   if (failed?.error) {
@@ -182,7 +213,18 @@ export async function GET() {
       eventModes: eventModes.data ?? [],
       appFeedback: appFeedback.data ?? [],
       supportRequests: supportRequests.data ?? [],
-      mediaAssets: mediaAssets.data ?? []
+      mediaAssets: mediaAssets.data ?? [],
+      conference: {
+        topics: conferenceTopics.data ?? [],
+        voices: conferenceReplies.data ?? [],
+        votes: conferenceVotes.data ?? [],
+        locationSignal: conferenceLocation.data
+          ? {
+              last_updated: conferenceLocation.data.last_updated,
+              note: "Conference coordinates and GPS accuracy are excluded from exports."
+            }
+          : null
+      }
     }
   };
 
