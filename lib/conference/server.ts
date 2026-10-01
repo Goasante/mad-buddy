@@ -4,6 +4,7 @@ import { randomInt } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { batchBlockedIds, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
+import { CONFERENCE_FLAG, isFeatureEnabled } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   ConferenceFeedResult,
@@ -76,6 +77,10 @@ type RestrictionState = {
   writeRestricted: boolean;
   communityRestricted: boolean;
 };
+
+async function conferenceIsEnabled(admin: Admin) {
+  return isFeatureEnabled(admin, CONFERENCE_FLAG);
+}
 
 function conferenceDb(admin: Admin): ConferenceDb {
   // Conference tables are introduced by the unapplied feature migration, so
@@ -288,6 +293,9 @@ function hotScore(topic: ConferenceTopic): number {
 
 export async function loadConferenceFeed(userId: string, sort: ConferenceSort): Promise<ConferenceFeedResult> {
   const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return { locationAvailable: false, locationStale: false, accessRestricted: true, topics: [] };
+  }
   const restrictions = await getRestrictionState(admin, userId);
   if (restrictions.suspended) {
     return { locationAvailable: false, locationStale: false, accessRestricted: true, topics: [] };
@@ -445,6 +453,9 @@ export async function loadConferenceTopic(
   topicId: string
 ): Promise<ConferenceTopicDetail | null> {
   const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return null;
+  }
   const topic = await loadAccessibleTopicRow(admin, userId, topicId);
   if (!topic) return null;
 
@@ -536,6 +547,9 @@ function writeRestrictionMessage(state: RestrictionState) {
 
 export async function createConferenceTopic(userId: string, body: string) {
   const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return { ok: false, message: "Conference is unavailable." };
+  }
   const restrictions = await getRestrictionState(admin, userId);
   const restrictionMessage = writeRestrictionMessage(restrictions);
   if (restrictionMessage) return { ok: false, message: restrictionMessage };
@@ -578,6 +592,9 @@ export async function createConferenceTopic(userId: string, body: string) {
 
 export async function createConferenceReply(userId: string, topicId: string, body: string) {
   const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return { ok: false, message: "Conference is unavailable." };
+  }
   const restrictions = await getRestrictionState(admin, userId);
   const restrictionMessage = writeRestrictionMessage(restrictions);
   if (restrictionMessage) return { ok: false, message: restrictionMessage };
@@ -645,6 +662,9 @@ export async function voteConference(
   vote: ConferenceVote
 ) {
   const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return { ok: false, message: "Conference is unavailable." };
+  }
   const restrictions = await getRestrictionState(admin, userId);
   if (restrictions.suspended || restrictions.writeRestricted) {
     return { ok: false, message: "Conference voting is temporarily unavailable for this account." };
@@ -710,6 +730,9 @@ export async function reportConference(
   reason: ConferenceReportReason
 ) {
   const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return { ok: false, message: "Conference is unavailable." };
+  }
   const target = await resolveTarget(admin, userId, targetType, targetId);
   if (!target) return { ok: false, message: "That conversation isn't available Around You." };
   if (target.authorUserId === userId) {
@@ -766,6 +789,9 @@ export async function hideConferenceVoice(
   targetId: string
 ) {
   const admin = createSupabaseAdminClient();
+  if (!(await conferenceIsEnabled(admin))) {
+    return { ok: false, message: "Conference is unavailable." };
+  }
   const restrictions = await getRestrictionState(admin, userId);
   if (restrictions.suspended) {
     return { ok: false, message: "Conference is unavailable while this account restriction is active." };
