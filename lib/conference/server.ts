@@ -333,24 +333,25 @@ export async function loadConferenceFeed(userId: string): Promise<ConferenceFeed
   if (error) throw error;
 
   const candidates = (data ?? []) as TopicRow[];
-  const candidateAuthorIds = [...new Set(candidates.map((row) => row.author_user_id))];
+  const nearbyCandidates = candidates.filter(
+    (row) =>
+      distanceMeters(
+        viewer.location!.latitude,
+        viewer.location!.longitude,
+        row.origin_latitude,
+        row.origin_longitude
+      ) <= CONFERENCE_RADIUS_METERS
+  );
+  const candidateAuthorIds = [...new Set(nearbyCandidates.map((row) => row.author_user_id))];
   const [hidden, blocked, hiddenTopics] = await Promise.all([
     loadHiddenUserIds(conference, userId),
     batchBlockedIds(admin, userId, candidateAuthorIds),
     loadHiddenContentIds(admin, userId, "conference_topic")
   ]);
 
-  const rows = candidates
-    .filter((row) => !hidden.has(row.author_user_id) && !blocked.has(row.author_user_id) && !hiddenTopics.has(row.id))
-    .filter(
-      (row) =>
-        distanceMeters(
-          viewer.location!.latitude,
-          viewer.location!.longitude,
-          row.origin_latitude,
-          row.origin_longitude
-        ) <= CONFERENCE_RADIUS_METERS
-    );
+  const rows = nearbyCandidates.filter(
+    (row) => !hidden.has(row.author_user_id) && !blocked.has(row.author_user_id) && !hiddenTopics.has(row.id)
+  );
 
   if (rows.length === 0) {
     return { locationAvailable: true, locationStale: false, accessRestricted: false, topics: [] };
