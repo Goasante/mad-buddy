@@ -2,14 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { stripComments } from "@/lib/content/strip-comments";
-import { CONFERENCE_RADIUS_METERS } from "@/lib/conference/server";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 describe("Conference V1 product boundaries", () => {
   it("uses the same 15km outer radius chosen for Conference Around You", () => {
-    expect(CONFERENCE_RADIUS_METERS).toBe(15_000);
+    const conference = stripComments(read("lib/conference/server.ts"));
     const proximity = stripComments(read("lib/proximity/backend.ts"));
+    expect(conference).toContain("CONFERENCE_RADIUS_METERS = 15_000");
     expect(proximity).toContain("FAR_MAX_METERS = 15_000");
   });
 
