@@ -1,8 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, EyeOff, Flag, Loader2, MapPin, Send, Trash2 } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  EyeOff,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  MoreHorizontal,
+  Send,
+  Trash2
+} from "lucide-react";
 import {
   createConferenceReplyAction,
   deleteConferenceContentAction,
@@ -13,8 +23,25 @@ import {
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { detectLocationRisk } from "@/lib/content/safety";
-import type { ConferenceReply, ConferenceTopicDetail, ConferenceVote } from "@/lib/conference/types";
+import type {
+  ConferenceReply,
+  ConferenceReportReason,
+  ConferenceTopicDetail,
+  ConferenceVote
+} from "@/lib/conference/types";
 import { cn } from "@/lib/utils";
+
+const REPORT_REASONS: ReadonlyArray<[ConferenceReportReason, string]> = [
+  ["harassment", "Harassment"],
+  ["threat_or_violence", "Threat or violence"],
+  ["sexual_content", "Sexual content"],
+  ["hate_or_discrimination", "Hate or discrimination"],
+  ["spam", "Spam"],
+  ["scam", "Scam"],
+  ["private_information", "Private information"],
+  ["dangerous_location_sharing", "Dangerous location sharing"],
+  ["other", "Other"]
+];
 
 function timeAgo(value: string) {
   const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 60_000));
@@ -25,272 +52,459 @@ function timeAgo(value: string) {
   return `${Math.floor(hours / 24)}d`;
 }
 
+function voiceCount(count: number) {
+  return `${count} ${count === 1 ? "Voice" : "Voices"}`;
+}
+
+function nextVoteState(
+  current: ConferenceVote | null,
+  selected: ConferenceVote,
+  hypeCount: number,
+  passCount: number
+) {
+  if (current === selected) {
+    return {
+      vote: null,
+      hypeCount: selected === "hype" ? Math.max(0, hypeCount - 1) : hypeCount,
+      passCount: selected === "pass" ? Math.max(0, passCount - 1) : passCount
+    };
+  }
+
+  return {
+    vote: selected,
+    hypeCount:
+      hypeCount +
+      (selected === "hype" ? 1 : 0) -
+      (current === "hype" ? 1 : 0),
+    passCount:
+      passCount +
+      (selected === "pass" ? 1 : 0) -
+      (current === "pass" ? 1 : 0)
+  };
+}
+
 function ReactionButton({
   targetType,
   targetId,
-  topicId,
-  selected,
-  vote,
-  count,
-  onFeedback
+  initialVote,
+  initialHypeCount,
+  initialPassCount,
+  selectedVote,
+  onError
 }: {
   targetType: "topic" | "reply";
   targetId: string;
-  topicId: string;
-  selected: boolean;
-  vote: ConferenceVote;
-  count: number;
-  onFeedback: (value: string) => void;
+  initialVote: ConferenceVote | null;
+  initialHypeCount: number;
+  initialPassCount: number;
+  selectedVote: ConferenceVote;
+  onError: (value: string) => void;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const Icon = vote === "hype" ? ArrowUp : ArrowDown;
+  const [vote, setVote] = useState(initialVote);
+  const [hypeCount, setHypeCount] = useState(initialHypeCount);
+  const [passCount, setPassCount] = useState(initialPassCount);
+  const [, startMutation] = useTransition();
+  const count = selectedVote === "hype" ? hypeCount : passCount;
+  const Icon = selectedVote === "hype" ? ArrowUp : ArrowDown;
+
+  function react() {
+    const previous = { vote, hypeCount, passCount };
+    const next = nextVoteState(vote, selectedVote, hypeCount, passCount);
+    setVote(next.vote);
+    setHypeCount(next.hypeCount);
+    setPassCount(next.passCount);
+
+    startMutation(async () => {
+      const result = await voteConferenceAction(targetType, targetId, selectedVote);
+      if (!result.ok) {
+        setVote(previous.vote);
+        setHypeCount(previous.hypeCount);
+        setPassCount(previous.passCount);
+        onError(result.message);
+      }
+    });
+  }
+
   return (
     <button
       type="button"
-      disabled={pending}
-      aria-pressed={selected}
-      onClick={() =>
-        startTransition(async () => {
-          const result = await voteConferenceAction(targetType, targetId, vote, topicId);
-          onFeedback(result.message);
-          if (result.ok) router.refresh();
-        })
-      }
+      aria-pressed={vote === selectedVote}
+      onClick={react}
       className={cn(
-        "focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold",
-        selected ? "bg-primary/12 text-primary" : "bg-secondary/60 text-muted-foreground"
+        "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
+        vote === selectedVote ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
       )}
     >
-      {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />}
-      {vote === "hype" ? "Hype" : "Pass"} {count}
+      <Icon className="h-3.5 w-3.5" />
+      {selectedVote === "hype" ? "Hype" : "Pass"} {count}
     </button>
   );
 }
 
-function Actions({
-  targetType,
-  targetId,
+function ReplyCard({
+  reply,
   topicId,
-  onFeedback
+  onRemove,
+  onRestore,
+  onError
 }: {
-  targetType: "topic" | "reply";
-  targetId: string;
+  reply: ConferenceReply;
   topicId: string;
-  onFeedback: (value: string) => void;
+  onRemove: (id: string) => void;
+  onRestore: (reply: ConferenceReply) => void;
+  onError: (message: string) => void;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startMutation] = useTransition();
+  const optimistic = reply.id.startsWith("optimistic-");
+
+  function removeThen(task: () => Promise<{ ok: boolean; message: string }>) {
+    onRemove(reply.id);
+    startMutation(async () => {
+      const result = await task();
+      if (!result.ok) {
+        onRestore(reply);
+        onError(result.message);
+      }
+    });
+  }
 
   return (
-    <details className="relative">
-      <summary className="focus-ring flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-full px-2 text-xs text-muted-foreground hover:bg-secondary/60">
-        <Flag className="h-3.5 w-3.5" /> Actions
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-border bg-card p-1.5 shadow-lg">
-        {[
-          ["harassment", "Flag harassment"],
-          ["threat_or_violence", "Flag threat or violence"],
-          ["sexual_content", "Flag sexual content"],
-          ["hate_or_discrimination", "Flag hate or discrimination"],
-          ["spam", "Flag spam"],
-          ["scam", "Flag scam"],
-          ["private_information", "Flag private information"],
-          ["dangerous_location_sharing", "Flag dangerous location sharing"],
-          ["other", "Flag other"]
-        ].map(([reason, label]) => (
-          <button
-            key={reason}
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                const result = await reportConferenceAction(targetType, targetId, reason, topicId);
-                onFeedback(result.message);
-                if (result.ok) {
-                  if (targetType === "topic") router.push("/conference");
-                  else router.refresh();
-                }
-              })
-            }
-            className="focus-ring block min-h-10 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              const result = await hideConferenceVoiceAction(targetType, targetId, topicId);
-              onFeedback(result.message);
-              if (result.ok) {
-                if (targetType === "topic") router.push("/conference");
-                else router.refresh();
-              }
-            })
-          }
-          className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-secondary"
-        >
-          <EyeOff className="h-4 w-4" /> Hide this Voice
-        </button>
-      </div>
-    </details>
-  );
-}
+    <article id={reply.id} className="rounded-[16px] border border-border/65 bg-card/65 px-3 py-2.5">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 font-semibold text-primary">V</span>
+            <span className="font-semibold text-foreground">{reply.isYours ? "You" : reply.voiceLabel}</span>
+            <span>·</span>
+            <span>{timeAgo(reply.createdAt)}</span>
+            {optimistic ? <span className="text-primary">Sending…</span> : null}
+          </div>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-[1.45] text-foreground">{reply.body}</p>
+        </div>
 
-function DeleteOwnButton({
-  targetType,
-  targetId,
-  topicId,
-  onFeedback
-}: {
-  targetType: "topic" | "reply";
-  targetId: string;
-  topicId: string;
-  onFeedback: (value: string) => void;
-}) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const label = targetType === "topic" ? "Delete Topic" : "Delete Voice";
-
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => {
-        if (!window.confirm(`${label}? It will disappear from Conference.`)) return;
-        startTransition(async () => {
-          const result = await deleteConferenceContentAction(targetType, targetId, topicId);
-          onFeedback(result.message);
-          if (!result.ok) return;
-          if (targetType === "topic") router.push("/conference");
-          else router.refresh();
-        });
-      }}
-      className="focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
-    >
-      {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-      {label}
-    </button>
-  );
-}
-
-function ReplyCard({ reply, topicId, onFeedback }: { reply: ConferenceReply; topicId: string; onFeedback: (value: string) => void }) {
-  return (
-    <article className="rounded-2xl border border-border/70 bg-card/70 p-4">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 font-semibold text-primary">V</span>
-        <span className="font-semibold text-foreground">{reply.voiceLabel}</span><span>·</span><span>{timeAgo(reply.createdAt)}</span>
+        {!optimistic ? (
+          <details className="relative shrink-0">
+            <summary
+              aria-label="Voice actions"
+              className="focus-ring grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full text-muted-foreground hover:bg-secondary"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </summary>
+            <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-xl">
+              {reply.isYours ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    if (!window.confirm("Delete this Voice?")) return;
+                    removeThen(() => deleteConferenceContentAction("reply", reply.id, topicId));
+                  }}
+                  className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Voice
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      removeThen(() => hideConferenceVoiceAction("reply", reply.id, topicId));
+                    }}
+                    className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-secondary"
+                  >
+                    <EyeOff className="h-4 w-4" />
+                    Hide this Voice
+                  </button>
+                  <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flag Voice</div>
+                  {REPORT_REASONS.map(([reason, label]) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={(event) => {
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                        removeThen(() => reportConferenceAction("reply", reply.id, reason, topicId));
+                      }}
+                      className="focus-ring block min-h-9 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </details>
+        ) : null}
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{reply.body}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {reply.isYours ? (
-          <>
-            <span className="inline-flex min-h-9 items-center rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
-              Your Voice
-            </span>
-            <DeleteOwnButton targetType="reply" targetId={reply.id} topicId={topicId} onFeedback={onFeedback} />
-          </>
-        ) : (
-          <>
-            <ReactionButton targetType="reply" targetId={reply.id} topicId={topicId} selected={reply.yourVote === "hype"} vote="hype" count={reply.hypeCount} onFeedback={onFeedback} />
-            <ReactionButton targetType="reply" targetId={reply.id} topicId={topicId} selected={reply.yourVote === "pass"} vote="pass" count={reply.passCount} onFeedback={onFeedback} />
-            <div className="ml-auto"><Actions targetType="reply" targetId={reply.id} topicId={topicId} onFeedback={onFeedback} /></div>
-          </>
-        )}
-      </div>
+
+      {!reply.isYours && !optimistic ? (
+        <div className="mt-2.5 flex items-center gap-1.5">
+          <ReactionButton
+            targetType="reply"
+            targetId={reply.id}
+            initialVote={reply.yourVote}
+            initialHypeCount={reply.hypeCount}
+            initialPassCount={reply.passCount}
+            selectedVote="hype"
+            onError={onError}
+          />
+          <ReactionButton
+            targetType="reply"
+            targetId={reply.id}
+            initialVote={reply.yourVote}
+            initialHypeCount={reply.hypeCount}
+            initialPassCount={reply.passCount}
+            selectedVote="pass"
+            onError={onError}
+          />
+        </div>
+      ) : reply.isYours ? (
+        <div className="mt-2">
+          <span className="inline-flex h-7 items-center rounded-full bg-secondary/55 px-2 text-[11px] font-semibold text-muted-foreground">Your Voice</span>
+        </div>
+      ) : null}
     </article>
   );
 }
 
 export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail }) {
   const router = useRouter();
+  const [replies, setReplies] = useState(topic.replies);
+  const [replyCount, setReplyCount] = useState(topic.replyCount);
   const [body, setBody] = useState("");
   const [feedback, setFeedback] = useState("");
   const [sending, startSending] = useTransition();
+  const [, startTopicMutation] = useTransition();
   const locationRisk = detectLocationRisk(body);
 
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = window.setTimeout(() => setFeedback(""), 2800);
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
+
+  function removeReply(id: string) {
+    setReplies((current) => current.filter((item) => item.id !== id));
+    setReplyCount((count) => Math.max(0, count - 1));
+  }
+
+  function restoreReply(reply: ConferenceReply) {
+    setReplies((current) => (current.some((item) => item.id === reply.id) ? current : [...current, reply]));
+    setReplyCount((count) => count + 1);
+  }
+
+  function sendVoice() {
+    const text = body.trim();
+    if (!text || sending) return;
+
+    const tempId = `optimistic-${Date.now()}`;
+    const optimistic: ConferenceReply = {
+      id: tempId,
+      voiceLabel: "You",
+      body: text,
+      createdAt: new Date().toISOString(),
+      hypeCount: 0,
+      passCount: 0,
+      yourVote: null,
+      isYours: true
+    };
+
+    setBody("");
+    setReplies((current) => [...current, optimistic]);
+    setReplyCount((count) => count + 1);
+
+    window.requestAnimationFrame(() => {
+      document.getElementById(tempId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    startSending(async () => {
+      const result = await createConferenceReplyAction(topic.id, text);
+      if (!result.ok || !result.replyId) {
+        removeReply(tempId);
+        setFeedback(result.message);
+        return;
+      }
+
+      setReplies((current) =>
+        current.map((item) =>
+          item.id === tempId
+            ? { ...item, id: result.replyId!, createdAt: result.createdAt ?? item.createdAt }
+            : item
+        )
+      );
+    });
+  }
+
+  function leaveTopicThen(task: () => Promise<{ ok: boolean; message: string }>) {
+    router.push("/conference");
+    startTopicMutation(async () => {
+      const result = await task();
+      if (!result.ok) {
+        window.sessionStorage.setItem("conference-feedback", result.message);
+      }
+    });
+  }
+
   return (
-    <div className="mx-auto w-full max-w-[760px] space-y-5 pb-10 md:pt-6">
+    <div className="mx-auto w-full max-w-[640px] space-y-3 pb-6 md:pt-4">
       <ConferenceLocationSync />
       <PageHeader title="Conference" backHref="/conference" />
-      <div className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-primary/10 px-3 text-xs font-semibold text-primary">
+
+      <div className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary/10 px-3 text-xs font-semibold text-primary">
         <MapPin className="h-3.5 w-3.5" />
-        Around You
+        Around You · 15 km
       </div>
 
-      {feedback ? <p role="status" className="rounded-xl bg-secondary/60 px-3 py-2 text-sm text-muted-foreground">{feedback}</p> : null}
+      {feedback ? (
+        <p role="status" className="rounded-xl bg-secondary/65 px-3 py-2 text-sm text-muted-foreground">
+          {feedback}
+        </p>
+      ) : null}
 
-      <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 font-semibold text-primary">V</span>
-          <span className="font-semibold text-foreground">{topic.voiceLabel}</span><span>·</span><span>{timeAgo(topic.createdAt)}</span>
+      <article className="rounded-[18px] border border-border bg-card/80 px-3.5 py-3 shadow-sm">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 font-semibold text-primary">V</span>
+              <span className="font-semibold text-foreground">{topic.isYours ? "You" : topic.voiceLabel}</span>
+              <span>·</span>
+              <span>{timeAgo(topic.createdAt)}</span>
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.5] text-foreground">{topic.body}</p>
+          </div>
+
+          <details className="relative shrink-0">
+            <summary
+              aria-label="Topic actions"
+              className="focus-ring grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full text-muted-foreground hover:bg-secondary"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </summary>
+            <div className="absolute right-0 z-30 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-xl">
+              {topic.isYours ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    if (!window.confirm("Delete this Topic?")) return;
+                    leaveTopicThen(() => deleteConferenceContentAction("topic", topic.id, topic.id));
+                  }}
+                  className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Topic
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      leaveTopicThen(() => hideConferenceVoiceAction("topic", topic.id, topic.id));
+                    }}
+                    className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-secondary"
+                  >
+                    <EyeOff className="h-4 w-4" />
+                    Hide this Voice
+                  </button>
+                  <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flag Topic</div>
+                  {REPORT_REASONS.map(([reason, label]) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={(event) => {
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                        leaveTopicThen(() => reportConferenceAction("topic", topic.id, reason, topic.id));
+                      }}
+                      className="focus-ring block min-h-9 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </details>
         </div>
-        <p className="mt-4 whitespace-pre-wrap text-base leading-7">{topic.body}</p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {topic.isYours ? (
+
+        <div className="mt-3 flex items-center gap-1.5">
+          {!topic.isYours ? (
             <>
-              <span className="inline-flex min-h-9 items-center rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
-                Your Topic
-              </span>
-              <DeleteOwnButton targetType="topic" targetId={topic.id} topicId={topic.id} onFeedback={setFeedback} />
+              <ReactionButton
+                targetType="topic"
+                targetId={topic.id}
+                initialVote={topic.yourVote}
+                initialHypeCount={topic.hypeCount}
+                initialPassCount={topic.passCount}
+                selectedVote="hype"
+                onError={setFeedback}
+              />
+              <ReactionButton
+                targetType="topic"
+                targetId={topic.id}
+                initialVote={topic.yourVote}
+                initialHypeCount={topic.hypeCount}
+                initialPassCount={topic.passCount}
+                selectedVote="pass"
+                onError={setFeedback}
+              />
             </>
           ) : (
-            <>
-              <ReactionButton targetType="topic" targetId={topic.id} topicId={topic.id} selected={topic.yourVote === "hype"} vote="hype" count={topic.hypeCount} onFeedback={setFeedback} />
-              <ReactionButton targetType="topic" targetId={topic.id} topicId={topic.id} selected={topic.yourVote === "pass"} vote="pass" count={topic.passCount} onFeedback={setFeedback} />
-            </>
+            <span className="inline-flex h-8 items-center rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">Your Topic</span>
           )}
-          <span className="text-xs text-muted-foreground">{topic.replyCount} Voices</span>
-          {!topic.isYours ? <div className="ml-auto"><Actions targetType="topic" targetId={topic.id} topicId={topic.id} onFeedback={setFeedback} /></div> : null}
+          <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+            <MessageCircle className="h-3.5 w-3.5" />
+            {voiceCount(replyCount)}
+          </span>
         </div>
       </article>
 
-      <section>
-        <h2 className="mb-3 text-sm font-semibold">Voices</h2>
-        <div className="space-y-3">
-          {topic.replies.length ? topic.replies.map((reply) => <ReplyCard key={reply.id} reply={reply} topicId={topic.id} onFeedback={setFeedback} />) : (
-            <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No Voices yet. Add the first reply.</div>
-          )}
-        </div>
+      <section className="space-y-2">
+        {replies.length ? (
+          replies.map((reply) => (
+            <ReplyCard
+              key={reply.id}
+              reply={reply}
+              topicId={topic.id}
+              onRemove={removeReply}
+              onRestore={restoreReply}
+              onError={setFeedback}
+            />
+          ))
+        ) : (
+          <div className="rounded-[16px] border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+            No Voices yet.
+          </div>
+        )}
       </section>
 
-      <section className="sticky bottom-[calc(var(--mobile-nav-height,0px)+env(safe-area-inset-bottom,0px)+0.5rem)] rounded-2xl border border-border bg-card/95 p-3 shadow-lg backdrop-blur md:static">
-        <textarea
-          value={body}
-          maxLength={300}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder="Add your voice..."
-          className="focus-ring min-h-20 w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
-        />
-        {locationRisk.warn ? (
-          <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
-            {"This may reveal an exact location. Conference is visible to nearby members."}
-          </p>
-        ) : null}
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">{body.length}/300</span>
+      <section className="sticky bottom-[calc(var(--mobile-nav-height,0px)+env(safe-area-inset-bottom,0px)+0.35rem)] z-20 rounded-[16px] border border-border bg-card/95 p-2 shadow-lg backdrop-blur">
+        <div className="flex items-end gap-2">
+          <textarea
+            rows={1}
+            value={body}
+            maxLength={300}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder="Add your voice…"
+            className="focus-ring max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
+          />
           <button
             type="button"
+            aria-label="Add Voice"
             disabled={sending || body.trim().length === 0}
-            onClick={() =>
-              startSending(async () => {
-                const result = await createConferenceReplyAction(topic.id, body);
-                setFeedback(result.message);
-                if (result.ok) {
-                  setBody("");
-                  router.refresh();
-                }
-              })
-            }
-            className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            onClick={sendVoice}
+            className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-45"
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Add Voice
           </button>
         </div>
+        {locationRisk.warn ? (
+          <p className="mt-2 rounded-lg bg-amber-500/10 px-2.5 py-2 text-xs text-foreground">
+            This may reveal an exact location. Conference is visible to nearby members.
+          </p>
+        ) : null}
+        <div className="mt-1 px-1 text-[11px] text-muted-foreground">{body.length}/300</div>
       </section>
     </div>
   );
