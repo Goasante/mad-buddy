@@ -274,6 +274,10 @@ export function ConferencePage({
   const locationRisk = detectLocationRisk(body);
 
   useEffect(() => {
+    setTopics(feed.topics);
+  }, [feed.topics]);
+
+  useEffect(() => {
     if (!feedback) return;
     const timer = window.setTimeout(() => setFeedback(""), 2800);
     return () => window.clearTimeout(timer);
