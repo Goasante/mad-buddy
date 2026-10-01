@@ -152,6 +152,15 @@ describe("Conference V1 product boundaries", () => {
     expect(detailRoute).not.toContain("notFound()");
   });
 
+  it("does not treat the first dedicated Conference location seed as an area move", () => {
+    const route = stripComments(read("app/api/conference/location/route.ts"));
+    expect(route).toContain("const areaChanged = previous");
+    expect(route).toContain(": false;");
+    expect(route).toContain("anchorLatitude");
+    expect(route).toContain("anchorLongitude");
+    expect(route).not.toContain("const areaChanged =\n    !previous");
+  });
+
   it("dismisses Conference action menus on outside tap or Escape and avoids blocking browser confirms", () => {
     const menu = stripComments(read("components/conference/conference-action-menu.tsx"));
     const feed = stripComments(read("components/conference/conference-page.tsx"));
