@@ -30,7 +30,15 @@ export async function GET() {
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: rateLimitMessage(rateLimit.resetAt) }, { status: 429 });
   }
-  const conference = createSupabaseAdminClient() as unknown as SupabaseClient;
+  const conferenceAdmin = createSupabaseAdminClient();
+  const { data: conferenceFlag } = await conferenceAdmin
+    .from("feature_flags")
+    .select("key")
+    .eq("key", "conference")
+    .maybeSingle();
+  const conferenceReady = Boolean(conferenceFlag);
+  const conference = conferenceAdmin as unknown as SupabaseClient;
+  const emptyResult = <T,>(data: T) => Promise.resolve({ data, error: null });
   const [
     profile,
     subscription,
@@ -89,26 +97,34 @@ export async function GET() {
     supabase.from("app_feedback").select("category, rating, message, status, created_at, updated_at").eq("user_id", userId),
     supabase.from("support_requests").select("full_name, email, message, status, created_at, updated_at").eq("user_id", userId),
     supabase.from("media_assets").select("id, content_type, size_bytes, context_type, processing_status, moderation_status, created_at, updated_at, deleted_at").eq("owner_id", userId),
-    conference
-      .from("conference_topics")
-      .select("id, body, status, hype_count, pass_count, reply_count, expires_at, created_at, updated_at")
-      .eq("author_user_id", userId)
-      .order("created_at", { ascending: false }),
-    conference
-      .from("conference_replies")
-      .select("id, topic_id, body, status, hype_count, pass_count, created_at, updated_at")
-      .eq("author_user_id", userId)
-      .order("created_at", { ascending: false }),
-    conference
-      .from("conference_votes")
-      .select("topic_id, reply_id, value, created_at, updated_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false }),
-    conference
-      .from("conference_locations")
-      .select("last_updated")
-      .eq("user_id", userId)
-      .maybeSingle()
+    conferenceReady
+      ? conference
+          .from("conference_topics")
+          .select("id, body, status, hype_count, pass_count, reply_count, expires_at, created_at, updated_at")
+          .eq("author_user_id", userId)
+          .order("created_at", { ascending: false })
+      : emptyResult([]),
+    conferenceReady
+      ? conference
+          .from("conference_replies")
+          .select("id, topic_id, body, status, hype_count, pass_count, created_at, updated_at")
+          .eq("author_user_id", userId)
+          .order("created_at", { ascending: false })
+      : emptyResult([]),
+    conferenceReady
+      ? conference
+          .from("conference_votes")
+          .select("topic_id, reply_id, value, created_at, updated_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+      : emptyResult([]),
+    conferenceReady
+      ? conference
+          .from("conference_locations")
+          .select("last_updated")
+          .eq("user_id", userId)
+          .maybeSingle()
+      : emptyResult(null)
   ]);
 
   const failed = [
