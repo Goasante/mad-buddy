@@ -12,9 +12,10 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
-  PenLine
+  PenLine,
+  Trash2
 } from "lucide-react";
-import { createConferenceTopicAction, reportConferenceAction, voteConferenceAction } from "@/app/(app)/conference-actions";
+import { createConferenceTopicAction, deleteConferenceContentAction, reportConferenceAction, voteConferenceAction } from "@/app/(app)/conference-actions";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
 import { detectLocationRisk } from "@/lib/content/safety";
@@ -74,6 +75,7 @@ function VoteButton({
 function TopicCard({ topic, onFeedback }: { topic: ConferenceTopic; onFeedback: (message: string) => void }) {
   const router = useRouter();
   const [reporting, startReporting] = useTransition();
+  const [deleting, startDeleting] = useTransition();
 
   return (
     <article className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm">
@@ -89,9 +91,27 @@ function TopicCard({ topic, onFeedback }: { topic: ConferenceTopic; onFeedback: 
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {topic.isYours ? (
-          <span className="inline-flex min-h-9 items-center rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
-            Your Topic
-          </span>
+          <>
+            <span className="inline-flex min-h-9 items-center rounded-full bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
+              Your Topic
+            </span>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => {
+                if (!window.confirm("Delete this Topic? It will disappear from Conference.")) return;
+                startDeleting(async () => {
+                  const result = await deleteConferenceContentAction("topic", topic.id, topic.id);
+                  onFeedback(result.message);
+                  if (result.ok) router.refresh();
+                });
+              }}
+              className="focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Delete
+            </button>
+          </>
         ) : (
           <>
             <VoteButton topic={topic} vote="hype" icon={ArrowUp} label="Hype" count={topic.hypeCount} onDone={(m) => { onFeedback(m); router.refresh(); }} />
