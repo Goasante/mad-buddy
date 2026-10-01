@@ -124,7 +124,8 @@ describe("form fields read as fields", () => {
   });
 
   it("labels both ends of the schedule and exposes the end date", () => {
-    const when = page.slice(page.indexOf('id="event-date"'), page.indexOf('id="event-venue"'));
+    const dateIndex = page.indexOf('id="event-date"');
+    const when = page.slice(Math.max(0, dateIndex - 800), page.indexOf('id="event-venue"'));
     expect(flat(when)).toContain("> Start date <");
     expect(flat(when)).toContain("> Starts <");
     expect(flat(when)).toContain("> End date <");
