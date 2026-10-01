@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
 import { guardFeature } from "@/lib/admin/enforcement";
+import { CONFERENCE_FLAG, isFeatureEnabled } from "@/lib/features/feature-flags";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -43,6 +44,10 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdminClient();
+  if (!(await isFeatureEnabled(admin, CONFERENCE_FLAG))) {
+    return withCors(NextResponse.json({ error: "Conference is unavailable." }, { status: 404 }), request);
+  }
+
   const guard = await guardFeature(admin, "location_collection");
   if (!guard.allowed) {
     return withCors(NextResponse.json({ error: guard.message }, { status: 503 }), request);
