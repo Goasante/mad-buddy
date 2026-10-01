@@ -82,8 +82,13 @@ export async function POST(request: Request) {
 
   const nextLatitude = coarseCoordinate(parsed.data.latitude);
   const nextLongitude = coarseCoordinate(parsed.data.longitude);
+  // Seeding Conference's dedicated location for the first time is not an
+  // "area change". If the feed already loaded from a fresh Glow signal, forcing
+  // a reload here can race with an optimistic report/hide/vote and resurrect
+  // stale UI. The caller's refreshOnFirst path already handles a truly missing
+  // initial Conference location.
   const areaChanged =
-    !previous ||
+    Boolean(previous) &&
     distanceMeters(
       Number(previous.latitude),
       Number(previous.longitude),
