@@ -159,7 +159,7 @@ async function getViewerLocation(admin: Admin, userId: string): Promise<{
   stale: boolean;
 }> {
   const conference = conferenceDb(admin);
-  const [{ data: conferenceLocation }, { data: existingLocation }] = await Promise.all([
+  const [{ data: conferenceLocation }, { data: existingLocation }, { data: profile }] = await Promise.all([
     conference
       .from("conference_locations")
       .select("latitude, longitude, last_updated")
@@ -169,20 +169,26 @@ async function getViewerLocation(admin: Admin, userId: string): Promise<{
       .from("user_locations")
       .select("latitude, longitude, last_updated")
       .eq("user_id", userId)
+      .maybeSingle(),
+    admin
+      .from("profiles")
+      .select("visibility_status")
+      .eq("user_id", userId)
       .maybeSingle()
   ]);
 
   const conferenceCandidate = conferenceLocation as ViewerLocation | null;
   const existingCandidate = existingLocation as ViewerLocation | null;
+  const mayReuseGlowSignal = profile?.visibility_status !== "ghost";
 
-  const fresh = [conferenceCandidate, existingCandidate]
+  const fresh = [conferenceCandidate, ...(mayReuseGlowSignal ? [existingCandidate] : [])]
     .filter(isFreshLocation)
     .sort((a, b) => Date.parse(b.last_updated) - Date.parse(a.last_updated));
 
   if (fresh[0]) return { location: fresh[0], stale: false };
   return {
     location: null,
-    stale: Boolean(conferenceCandidate || existingCandidate)
+    stale: Boolean(conferenceCandidate || (mayReuseGlowSignal && existingCandidate))
   };
 }
 
@@ -192,6 +198,19 @@ async function loadHiddenUserIds(conference: ConferenceDb, viewerUserId: string)
     .select("hidden_user_id")
     .eq("viewer_user_id", viewerUserId);
   return new Set((data ?? []).map((row) => String(row.hidden_user_id)));
+}
+
+async function loadHiddenContentIds(
+  admin: Admin,
+  viewerUserId: string,
+  contentType: "conference_topic" | "conference_reply"
+): Promise<Set<string>> {
+  const { data } = await admin
+    .from("hidden_content")
+    .select("content_id")
+    .eq("user_id", viewerUserId)
+    .eq("content_type", contentType);
+  return new Set((data ?? []).map((row) => row.content_id));
 }
 
 async function isConferenceUserHidden(conference: ConferenceDb, viewerUserId: string, candidateUserId: string) {
@@ -245,7 +264,8 @@ async function ensureVoiceNumber(
 function buildTopicProjection(
   row: TopicRow,
   voiceNumbers: Map<string, number>,
-  yourVote: ConferenceVote | null
+  yourVote: ConferenceVote | null,
+  viewerUserId: string
 ): ConferenceTopic {
   const voiceNumber = voiceNumbers.get(voiceKey(row.id, row.author_user_id));
   return {
@@ -256,7 +276,8 @@ function buildTopicProjection(
     hypeCount: row.hype_count,
     passCount: row.pass_count,
     replyCount: row.reply_count,
-    yourVote
+    yourVote,
+    isYours: row.author_user_id === viewerUserId
   };
 }
 
@@ -305,13 +326,14 @@ export async function loadConferenceFeed(userId: string, sort: ConferenceSort): 
   if (error) throw error;
 
   const candidates = (data ?? []) as TopicRow[];
-  const [hidden, blocked] = await Promise.all([
+  const [hidden, blocked, hiddenTopics] = await Promise.all([
     loadHiddenUserIds(conference, userId),
-    batchBlockedIds(admin, userId, candidates.map((row) => row.author_user_id))
+    batchBlockedIds(admin, userId, candidates.map((row) => row.author_user_id)),
+    loadHiddenContentIds(admin, userId, "conference_topic")
   ]);
 
   const rows = candidates
-    .filter((row) => !hidden.has(row.author_user_id) && !blocked.has(row.author_user_id))
+    .filter((row) => !hidden.has(row.author_user_id) && !blocked.has(row.author_user_id) && !hiddenTopics.has(row.id))
     .filter(
       (row) =>
         distanceMeters(
@@ -351,7 +373,7 @@ export async function loadConferenceFeed(userId: string, sort: ConferenceSort): 
   );
 
   const topics = rows.map((row) =>
-    buildTopicProjection(row, voiceNumbers, yourVotes.get(row.id) ?? null)
+    buildTopicProjection(row, voiceNumbers, yourVotes.get(row.id) ?? null, userId)
   );
 
   if (sort === "hot") topics.sort((a, b) => hotScore(b) - hotScore(a));
@@ -391,11 +413,18 @@ async function loadAccessibleTopicRow(
   const row = data as TopicRow | null;
   if (!row) return null;
 
-  const [hidden, blocked] = await Promise.all([
+  const [{ data: hiddenTopic }, hidden, blocked] = await Promise.all([
+    admin
+      .from("hidden_content")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("content_type", "conference_topic")
+      .eq("content_id", row.id)
+      .maybeSingle(),
     isConferenceUserHidden(conference, userId, row.author_user_id),
     isBlockedEitherDirection(admin, userId, row.author_user_id)
   ]);
-  if (hidden || blocked) return null;
+  if (hiddenTopic || hidden || blocked) return null;
 
   if (
     distanceMeters(
@@ -425,18 +454,22 @@ export async function loadConferenceTopic(
     .select("id, topic_id, author_user_id, body, status, hype_count, pass_count, created_at")
     .eq("topic_id", topicId)
     .eq("status", "active")
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(300);
 
   if (replyError) throw replyError;
 
-  const replyCandidates = (replyData ?? []) as ReplyRow[];
-  const [hidden, blocked] = await Promise.all([
+  const replyCandidates = ((replyData ?? []) as ReplyRow[]).reverse();
+  const [hidden, blocked, hiddenReplies] = await Promise.all([
     loadHiddenUserIds(conference, userId),
-    batchBlockedIds(admin, userId, replyCandidates.map((reply) => reply.author_user_id))
+    batchBlockedIds(admin, userId, replyCandidates.map((reply) => reply.author_user_id)),
+    loadHiddenContentIds(admin, userId, "conference_reply")
   ]);
   const replies = replyCandidates.filter(
-    (reply) => !hidden.has(reply.author_user_id) && !blocked.has(reply.author_user_id)
+    (reply) =>
+      !hidden.has(reply.author_user_id) &&
+      !blocked.has(reply.author_user_id) &&
+      !hiddenReplies.has(reply.id)
   );
   const replyIds = replies.map((reply) => reply.id);
 
@@ -472,7 +505,8 @@ export async function loadConferenceTopic(
   const topicProjection = buildTopicProjection(
     { ...topic, reply_count: replies.length },
     voiceNumbers,
-    voteFromValue(topicVote?.value)
+    voteFromValue(topicVote?.value),
+    userId
   );
 
   const replyProjections: ConferenceReply[] = replies.map((reply) => {
@@ -485,7 +519,8 @@ export async function loadConferenceTopic(
       createdAt: reply.created_at,
       hypeCount: reply.hype_count,
       passCount: reply.pass_count,
-      yourVote: voteFromValue(vote?.value)
+      yourVote: voteFromValue(vote?.value),
+      isYours: reply.author_user_id === userId
     };
   });
 
@@ -696,17 +731,33 @@ export async function reportConference(
 
   if (existing) return { ok: true, message: "You've already flagged this." };
 
+  const { requiresHumanReview } = await import("@/lib/content/safety");
   const { error } = await admin.from("content_reports").insert({
     reporter_id: userId,
     content_type: contentType,
     content_id: targetId,
     reported_user_id: target.authorUserId,
-    category: reason
+    category: reason,
+    status: requiresHumanReview(reason) ? "under_review" : "received"
   });
 
-  return error
-    ? { ok: false, message: "Couldn't send the flag. Try again." }
-    : { ok: true, message: "Thanks. The flag was added to MadBuddy's safety review queue." };
+  if (error && error.code !== "23505") {
+    return { ok: false, message: "Couldn't send the flag. Try again." };
+  }
+
+  // Reporting immediately removes only this item from the reporter's view.
+  // "Hide this Voice" is the broader Conference-only account mute.
+  await admin.from("hidden_content").upsert(
+    { user_id: userId, content_type: contentType, content_id: targetId },
+    { onConflict: "user_id,content_type,content_id" }
+  );
+
+  return {
+    ok: true,
+    message: error?.code === "23505"
+      ? "You've already flagged this. It remains hidden from you."
+      : "Thanks. We've hidden this content and sent the flag for safety review."
+  };
 }
 
 export async function hideConferenceVoice(
@@ -716,8 +767,8 @@ export async function hideConferenceVoice(
 ) {
   const admin = createSupabaseAdminClient();
   const restrictions = await getRestrictionState(admin, userId);
-  if (restrictions.suspended || restrictions.writeRestricted) {
-    return { ok: false, message: "Conference controls are temporarily unavailable for this account." };
+  if (restrictions.suspended) {
+    return { ok: false, message: "Conference is unavailable while this account restriction is active." };
   }
 
   const rate = await consumeRateLimit({ action: "conference.hide", userId });
