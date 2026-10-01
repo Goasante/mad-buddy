@@ -105,8 +105,11 @@ describe("event emission", () => {
   });
 
   it("treats a duplicate as success rather than failure", () => {
-    expect(emit).toContain("23505");
-    expect(stripComments(emit)).toContain('status: "duplicate"');
+    const body = stripComments(emit);
+    expect(body).toContain('onConflict: "dedupe_key"');
+    expect(body).toContain("ignoreDuplicates: true");
+    expect(body).toContain('status: "duplicate"');
+    expect(body).not.toContain("23505");
   });
 
   it("logs a real failure so a missing event is observable", () => {
