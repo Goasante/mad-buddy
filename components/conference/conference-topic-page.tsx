@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, EyeOff, Flag, Loader2, MapPin, Send } from "lucide-react";
+import { ArrowDown, ArrowUp, EyeOff, Flag, Loader2, MapPin, Send } from "lucide-react";
 import {
   createConferenceReplyAction,
   hideConferenceVoiceAction,
@@ -11,6 +11,7 @@ import {
   voteConferenceAction
 } from "@/app/(app)/conference-actions";
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
+import { PageHeader } from "@/components/app-shell/page-header";
 import { detectLocationRisk } from "@/lib/content/safety";
 import type { ConferenceReply, ConferenceTopicDetail, ConferenceVote } from "@/lib/conference/types";
 import { cn } from "@/lib/utils";
@@ -174,14 +175,10 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
   return (
     <div className="mx-auto w-full max-w-[760px] space-y-5 pb-10 md:pt-6">
       <ConferenceLocationSync />
-      <div className="flex min-h-12 items-center gap-3">
-        <Link href="/conference" aria-label="Back to Conference" className="focus-ring grid h-11 w-11 place-items-center rounded-full hover:bg-secondary">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-xl font-semibold">Conference</h1>
-          <div className="mt-0.5 flex items-center gap-1 text-xs font-medium text-primary"><MapPin className="h-3.5 w-3.5" /> Around You</div>
-        </div>
+      <PageHeader title="Conference" backHref="/conference" />
+      <div className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-primary/10 px-3 text-xs font-semibold text-primary">
+        <MapPin className="h-3.5 w-3.5" />
+        Around You
       </div>
 
       {feedback ? <p role="status" className="rounded-xl bg-secondary/60 px-3 py-2 text-sm text-muted-foreground">{feedback}</p> : null}
