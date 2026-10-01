@@ -1,6 +1,6 @@
 export type ConferenceSort = "fresh" | "hot";
 export type ConferenceVote = "hype" | "pass";
-export type ConferenceReportReason = "spam" | "harassment" | "hate" | "false_info" | "other";
+export type ConferenceReportReason =\n  | "spam"\n  | "harassment"\n  | "hate_or_discrimination"\n  | "threat_or_violence"\n  | "private_information"\n  | "other";
 export type ConferenceTargetType = "topic" | "reply";
 
 export type ConferenceReply = {
