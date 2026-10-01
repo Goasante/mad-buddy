@@ -12,7 +12,11 @@ export default async function ConferenceTopicRoute({
 }: {
   params: Promise<{ topicId: string }>;
 }) {
-  const [identity, route, enabled] = await Promise.all([\n    getCurrentIdentity(),\n    params,\n    isFeatureEnabled(createSupabaseAdminClient(), CONFERENCE_FLAG)\n  ]);
+  const [identity, route, enabled] = await Promise.all([
+    getCurrentIdentity(),
+    params,
+    isFeatureEnabled(createSupabaseAdminClient(), CONFERENCE_FLAG)
+  ]);
   if (!identity) redirect(`/login?next=/conference/${encodeURIComponent(route.topicId)}`);
 
   const topic = await loadConferenceTopic(identity.id, route.topicId);
