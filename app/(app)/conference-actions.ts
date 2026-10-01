@@ -16,7 +16,19 @@ const uuid = z.string().uuid();
 const bodySchema = z.string().trim().min(1).max(300);
 const targetTypeSchema = z.enum(["topic", "reply"]);
 const voteSchema = z.enum(["hype", "pass"]);
-const reportReasonSchema = z.enum([\n  "spam",\n  "harassment",\n  "hate_or_discrimination",\n  "threat_or_violence",\n  "private_information",\n  "other"\n]);
+const reportReasonSchema = z.enum([
+  "harassment",
+  "threat_or_violence",
+  "sexual_content",
+  "hate_or_discrimination",
+  "spam",
+  "scam",
+  "impersonation",
+  "private_information",
+  "unwanted_contact",
+  "dangerous_location_sharing",
+  "other"
+]);
 
 async function userId() {
   const user = await getCurrentUserRecord();
