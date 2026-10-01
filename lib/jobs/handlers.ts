@@ -670,6 +670,13 @@ export const handleExpireFriendRequests: JobHandler = async (admin) => {
 
 /** Expired admin access must actually stop granting (batch 13 §6). */
 export const handleConferenceCleanup: JobHandler = async (admin) => {
+  const { data: flag } = await admin
+    .from("feature_flags")
+    .select("key")
+    .eq("key", "conference")
+    .maybeSingle();
+  if (!flag) return 0;
+
   const conference = admin as unknown as SupabaseClient;
   const { data, error } = await conference.rpc("cleanup_conference");
   if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
