@@ -50,6 +50,7 @@ describe("the launcher appears throughout the app", () => {
     expect(showsQuickActions("/scan")).toBe(false);
     expect(showsQuickActions("/safe-arrival")).toBe(false);
     expect(showsQuickActions("/linkr")).toBe(false);
+    expect(showsQuickActions("/conference")).toBe(false);
   });
 
   it("stays off focused configuration surfaces", () => {
@@ -104,7 +105,7 @@ describe("every action opens its canonical route", () => {
       "plans",
       "events",
       "safe_arrival",
-      "focus"
+      "conference"
     ]);
   });
 
@@ -119,7 +120,8 @@ describe("every action opens its canonical route", () => {
     expect(routes.plans).toBe("/plans");
     expect(routes.events).toBe("/events");
     expect(routes.safe_arrival).toBe("/safe-arrival");
-    expect(routes.focus).toBe("/settings/engagement");
+    expect(routes.conference).toBe("/conference");
+    expect(routes.focus).toBeUndefined();
   });
 
   it("never includes the camera", () => {
