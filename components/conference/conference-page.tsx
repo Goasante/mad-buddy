@@ -131,6 +131,7 @@ function TopicCard({ topic, onFeedback }: { topic: ConferenceTopic; onFeedback: 
                   startReporting(async () => {
                     const result = await reportConferenceAction("topic", topic.id, reason, topic.id);
                     onFeedback(result.message);
+                    if (result.ok) router.refresh();
                   })
                 }
                 className="focus-ring block min-h-10 w-full rounded-lg px-3 text-left text-sm hover:bg-secondary"
