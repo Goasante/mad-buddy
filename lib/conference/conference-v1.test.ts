@@ -52,6 +52,8 @@ describe("Conference V1 product boundaries", () => {
     expect(quick).not.toContain('id: "focus"');
     expect(shell).not.toContain('{ href: "/conference"');
     expect(read("app/(app)/settings/engagement/page.tsx")).toBeTruthy();
+    expect(shell).toContain('"/conference"');
+    expect(shell).toContain('pathname.startsWith("/conference/")');
   });
 
   it("keeps Conference location separate from Glow and respects Ghost Mode", () => {
