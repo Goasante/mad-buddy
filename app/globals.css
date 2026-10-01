@@ -6506,7 +6506,8 @@ select {
 }
 
 .qa-tone-conference {
-  --qa-tone: #7c62d9;
+  /* Conference belongs to Mad Buddy, not a separate visual brand. */
+  --qa-tone: hsl(var(--primary));
 }
 
 /* ---------------------------------------------------------------------------
