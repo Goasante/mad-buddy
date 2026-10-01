@@ -274,10 +274,6 @@ export function ConferencePage({
   const locationRisk = detectLocationRisk(body);
 
   useEffect(() => {
-    setTopics(feed.topics);
-  }, [feed.topics]);
-
-  useEffect(() => {
     if (!feedback) return;
     const timer = window.setTimeout(() => setFeedback(""), 2800);
     return () => window.clearTimeout(timer);
@@ -361,7 +357,7 @@ export function ConferencePage({
               accuracy: Math.min(10000, Math.max(0, position.coords.accuracy ?? 50))
             })
           });
-          if (response.ok) router.refresh();
+          if (response.ok) window.location.reload();
           else setFeedback("Couldn't update your area.");
         } catch {
           setFeedback("Couldn't update your area.");
@@ -379,7 +375,7 @@ export function ConferencePage({
 
   return (
     <div className="mx-auto w-full max-w-[640px] space-y-3 pb-8 md:pt-4">
-      <ConferenceLocationSync refreshOnFirst={!feed.locationAvailable} />
+      <ConferenceLocationSync refreshOnFirst={!feed.locationAvailable} hardRefresh />
       <PageHeader title="Conference" />
 
       <div className="flex items-center justify-between gap-3">
