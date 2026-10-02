@@ -5530,6 +5530,7 @@ export type Database = {
         Returns: Array<{ session_id: string; canonical_status: string; changed: boolean; expected_arrival_at: string }>;
       };
       process_due_safe_arrivals: { Args: { p_limit?: number }; Returns: number };
+      process_safe_arrival_deadline: { Args: { p_session_id: string }; Returns: number };
       admin_safe_arrival_health: { Args: Record<PropertyKey, never>; Returns: Json };
       can_view_safe_arrival_session: {
         Args: { p_session_id: string; p_require_accepted?: boolean };
