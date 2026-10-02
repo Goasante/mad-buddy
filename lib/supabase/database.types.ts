@@ -5526,7 +5526,13 @@ export type Database = {
         Returns: Array<{ session_id: string; replayed: boolean; canonical_status: string }>;
       };
       transition_safe_arrival: {
-        Args: { p_session_id: string; p_actor_id: string; p_action: string; p_extra_minutes?: number | null };
+        Args: {
+          p_session_id: string;
+          p_actor_id: string;
+          p_action: string;
+          p_extra_minutes?: number | null;
+          p_client_mutation_id?: string | null;
+        };
         Returns: Array<{ session_id: string; canonical_status: string; changed: boolean; expected_arrival_at: string }>;
       };
       process_due_safe_arrivals: { Args: { p_limit?: number }; Returns: number };
