@@ -24,6 +24,7 @@ import {
   JourneyCountdown,
   JourneyMark,
   JourneyStatusChip,
+  JourneyStageRail,
   JourneyTimeline,
   JourneyVisual,
   ContactStrip,
@@ -308,13 +309,13 @@ const HOME_STEPS = [
   },
   {
     icon: CalendarClock,
-    title: "Set your expected arrival",
-    text: "If you haven't confirmed after your grace period, your Muddies are told you haven't checked in."
+    title: "Set an arrival window",
+    text: "Choose when you expect to arrive and a small grace period for delays."
   },
   {
     icon: ShieldCheck,
-    title: "You stay in control",
-    text: "Extend or cancel any time. No live location is ever shared."
+    title: "Only meaningful updates",
+    text: "Extend, confirm, or end the journey. Your Muddies see the state, not a live position."
   }
 ];
 
@@ -465,13 +466,15 @@ function ActiveJourneyView({
         </div>
       </JourneyVisual>
 
+      <JourneyStageRail journey={journey} nowMs={nowMs} />
+
       {tone === "overdue" ? (
         <p
           role="status"
-          className="rounded-[1rem] border border-red-400/25 bg-red-400/10 px-3 py-2.5 text-xs leading-5 text-red-800 dark:text-red-100"
+          className="rounded-[1rem] border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:text-amber-100"
         >
-          Your grace period has passed, so your Safe Arrival contacts have been told you have not checked in
-          yet. Check in below whenever you can.
+          Your check-in window has ended. Your Safe Arrival contacts know you are due for an update.
+          Confirm you are safe or add more time below.
         </p>
       ) : null}
 
@@ -686,6 +689,8 @@ function WatcherJourneyView({
         </dl>
       </div>
 
+      <JourneyStageRail journey={journey} nowMs={nowMs} />
+
       {/* Reassurance panel. Says "checking in on", never "watching over" or
           "tracking": this viewer cannot see the traveller move and the copy must
           not imply they can. Anonymous contacts render as placeholders because
@@ -759,9 +764,9 @@ function WatcherJourneyView({
 
       {journey.status === "unconfirmed" && journey.myAcknowledgement === "accepted" ? (
         <div className="rounded-[1.25rem] border border-amber-400/30 bg-amber-400/10 p-4" role="status">
-          <p className="text-sm font-semibold">{firstName} hasn&apos;t confirmed arrival</p>
+          <p className="text-sm font-semibold">{firstName} is due for an update</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            This does not mean there is an emergency. A message is the most useful next step.
+            This does not mean there is an emergency. Their check-in window ended without a new update.
           </p>
           <Button
             type="button"
