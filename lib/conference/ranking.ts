@@ -25,13 +25,21 @@ export function isConferenceVoiceCollapsed(
 }
 
 /**
- * Hot is deliberately Hype-led. Voices add conversational momentum, but their
- * contribution is capped so a small argument cannot outrank broad community
- * interest. Positive activity moves lastActivityAt, allowing an old Topic to
- * reheat; otherwise heat has an eight-hour half-life.
+ * Hot is Hype-led:
+ * - Topic Hype: +4
+ * - Pass: -5
+ * - each distinct person joining with a Voice: +1.5
+ * - repeat Voices: +0.25 each, capped at 12 repeats
+ * - heat cools with an eight-hour half-life from the latest positive activity
+ *
+ * New Voices and positive Hypes move lastActivityAt, so creation age alone does
+ * not kill a Topic. Repeat replies cannot overpower broad Hype.
  */
 export function conferenceHotScore(
-  topic: Pick<ConferenceTopic, "hypeCount" | "passCount" | "replyCount" | "lastActivityAt">,
+  topic: Pick<
+    ConferenceTopic,
+    "hypeCount" | "passCount" | "replyCount" | "uniqueVoiceCount" | "lastActivityAt"
+  >,
   nowMs = Date.now()
 ) {
   const activityAgeHours = Math.max(
@@ -39,7 +47,11 @@ export function conferenceHotScore(
     (nowMs - Date.parse(topic.lastActivityAt)) / 3_600_000
   );
   const decay = Math.pow(0.5, activityAgeHours / 8);
-  const voiceMomentum = Math.min(topic.replyCount, 12) * 0.75;
+  const uniqueVoices = Math.min(topic.uniqueVoiceCount, topic.replyCount);
+  const repeatVoices = Math.max(0, topic.replyCount - uniqueVoices);
+  const voiceMomentum =
+    uniqueVoices * 1.5 +
+    Math.min(repeatVoices, 12) * 0.25;
   const engagement =
     topic.hypeCount * 4 +
     voiceMomentum -

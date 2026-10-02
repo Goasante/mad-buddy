@@ -350,6 +350,7 @@ export function ConferencePage({
       hypeCount: 0,
       passCount: 0,
       replyCount: 0,
+      uniqueVoiceCount: 0,
       yourVote: null,
       isYours: true
     };
@@ -495,7 +496,10 @@ export function ConferencePage({
             sort === "hot" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
           )}
         >
-          <Flame className={cn("h-4 w-4", styles.hotFlame)} aria-hidden="true" />
+          <span className={styles.hotFlameShell} aria-hidden="true">
+            <Flame className={styles.hotFlameOuter} />
+            <Flame className={styles.hotFlameInner} />
+          </span>
           Hot
         </button>
       </div>

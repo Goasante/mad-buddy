@@ -41,6 +41,7 @@ export type ConferenceTopic = {
   hypeCount: number;
   passCount: number;
   replyCount: number;
+  uniqueVoiceCount: number;
   yourVote: ConferenceVote | null;
   isYours: boolean;
 };

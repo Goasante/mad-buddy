@@ -43,6 +43,7 @@ type TopicRow = {
   hype_count: number;
   pass_count: number;
   reply_count: number;
+  unique_voice_count: number;
   expires_at: string;
   last_activity_at: string;
   created_at: string;
@@ -289,6 +290,7 @@ function buildTopicProjection(
     hypeCount: row.hype_count,
     passCount: row.pass_count,
     replyCount: row.reply_count,
+    uniqueVoiceCount: row.unique_voice_count,
     yourVote,
     isYours: row.author_user_id === viewerUserId
   };
@@ -320,7 +322,7 @@ export async function loadConferenceFeed(userId: string): Promise<ConferenceFeed
   const { data, error } = await conference
     .from("conference_topics")
     .select(
-      "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, last_activity_at, created_at"
+      "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, unique_voice_count, expires_at, last_activity_at, created_at"
     )
     .eq("status", "active")
     .gt("expires_at", nowIso)
@@ -419,7 +421,7 @@ async function loadAccessibleTopicRow(
     conference
       .from("conference_topics")
       .select(
-        "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, last_activity_at, created_at"
+        "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, unique_voice_count, expires_at, last_activity_at, created_at"
       )
       .eq("id", topicId)
       .eq("status", "active")

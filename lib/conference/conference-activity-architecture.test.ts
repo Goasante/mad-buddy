@@ -8,6 +8,7 @@ import {
 
 const read = (path: string) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20261002123000_conference_activity_architecture.sql");
+const momentumMigration = read("supabase/migrations/20261002125120_conference_unique_voice_momentum.sql");
 const server = read("lib/conference/server.ts");
 const feed = read("components/conference/conference-page.tsx");
 const detail = read("components/conference/conference-topic-page.tsx");
@@ -37,25 +38,32 @@ describe("Conference activity architecture", () => {
     expect(isConferenceTopicSuppressed({ hypeCount: 4, passCount: 9 })).toBe(true);
   });
 
-  it("keeps Hot Hype-led while Voices contribute capped momentum", () => {
+  it("keeps Hot Hype-led while distinct Voices matter more than repeat replies", () => {
     const now = Date.parse("2026-10-02T12:00:00Z");
     const recent = "2026-10-02T12:00:00Z";
     const hypeLed = conferenceHotScore(
-      { hypeCount: 3, passCount: 0, replyCount: 0, lastActivityAt: recent },
+      { hypeCount: 3, passCount: 0, replyCount: 0, uniqueVoiceCount: 0, lastActivityAt: recent },
       now
     );
-    const voiceHeavy = conferenceHotScore(
-      { hypeCount: 0, passCount: 0, replyCount: 30, lastActivityAt: recent },
+    const onePersonThread = conferenceHotScore(
+      { hypeCount: 0, passCount: 0, replyCount: 30, uniqueVoiceCount: 1, lastActivityAt: recent },
       now
     );
-    expect(hypeLed).toBeGreaterThan(voiceHeavy);
+    const communityThread = conferenceHotScore(
+      { hypeCount: 0, passCount: 0, replyCount: 8, uniqueVoiceCount: 8, lastActivityAt: recent },
+      now
+    );
+    expect(hypeLed).toBeGreaterThan(onePersonThread);
+    expect(communityThread).toBeGreaterThan(onePersonThread);
+    expect(momentumMigration).toContain("unique_voice_count");
+    expect(server).toContain("uniqueVoiceCount: row.unique_voice_count");
 
     const freshHeat = conferenceHotScore(
-      { hypeCount: 4, passCount: 0, replyCount: 4, lastActivityAt: recent },
+      { hypeCount: 4, passCount: 0, replyCount: 4, uniqueVoiceCount: 3, lastActivityAt: recent },
       now
     );
     const eightHoursOld = conferenceHotScore(
-      { hypeCount: 4, passCount: 0, replyCount: 4, lastActivityAt: "2026-10-02T04:00:00Z" },
+      { hypeCount: 4, passCount: 0, replyCount: 4, uniqueVoiceCount: 3, lastActivityAt: "2026-10-02T04:00:00Z" },
       now
     );
     expect(eightHoursOld).toBeCloseTo(freshHeat / 2, 6);
@@ -69,7 +77,7 @@ describe("Conference activity architecture", () => {
 
   it("can reheat an older Topic after recent positive activity", () => {
     const now = Date.parse("2026-10-02T12:00:00Z");
-    const base = { hypeCount: 5, passCount: 0, replyCount: 3 };
+    const base = { hypeCount: 5, passCount: 0, replyCount: 3, uniqueVoiceCount: 2 };
     const reheated = conferenceHotScore(
       { ...base, lastActivityAt: "2026-10-02T11:55:00Z" },
       now
@@ -91,9 +99,12 @@ describe("Conference activity architecture", () => {
   });
 
   it("animates Hot entirely on the client with reduced-motion support", () => {
-    expect(feed).toContain("styles.hotFlame");
+    expect(feed).toContain("styles.hotFlameShell");
+    expect(feed).toContain("styles.hotFlameOuter");
+    expect(feed).toContain("styles.hotFlameInner");
     expect(feed).toContain("lastActivityAt: reheatedAt");
-    expect(css).toContain("@keyframes conference-hot-flame");
+    expect(css).toContain("@keyframes conference-hot-flame-outer");
+    expect(css).toContain("@keyframes conference-hot-flame-inner");
     expect(css).toContain("prefers-reduced-motion: no-preference");
     expect(css).not.toContain("fetch(");
   });
