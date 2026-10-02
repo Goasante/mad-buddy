@@ -12,7 +12,10 @@ import {
 } from "@/lib/safety/safe-arrival";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { JobType } from "@/lib/jobs/rules";
-import { processDueSafeArrivals } from "@/lib/safety/safe-arrival-authority";
+import {
+  processDueSafeArrivals,
+  processSafeArrivalDeadline
+} from "@/lib/safety/safe-arrival-authority";
 import {
   deliverSafeArrivalNotificationIntent,
   type SafeArrivalNotificationIntent
@@ -335,7 +338,24 @@ export const handleSafeArrivalUnconfirmedAlert: JobHandler = async (admin) => {
   return sent;
 };
 
-/** S1 database-owned sweep: eligibility, mutation, audit and intents are atomic. */
+/**
+ * Primary Safe Arrival lifecycle path. A session-specific job wakes at the
+ * check-in deadline. The database re-reads canonical state under a row lock,
+ * so stale jobs after an extension, arrival, or cancellation are harmless.
+ */
+export const handleSafeArrivalDeadline: JobHandler = async (admin, payload) => {
+  const sessionId = typeof payload.sessionId === "string" ? payload.sessionId : "";
+  if (!UUID_PATTERN.test(sessionId)) {
+    throw new JobError("VALIDATION_FAILED", "Invalid Safe Arrival deadline session.");
+  }
+  return processSafeArrivalDeadline(admin, sessionId);
+};
+
+/**
+ * Priority-1 safety backstop. Deadline jobs above are the normal path; this
+ * indexed sweep stays every five minutes so an enqueue or worker edge case
+ * never removes the existing safety net.
+ */
 export const handleSafeArrivalDueSweep: JobHandler = async (admin) => processDueSafeArrivals(admin, 200);
 
 /** One durable semantic recipient/event intent. The notification row dedupes retries. */
@@ -1265,6 +1285,7 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
   "plans.lifecycle_side_effect": handlePlanLifecycleSideEffect,
   "events.update_fanout": handleEventUpdateFanout,
   "safe_arrival.unconfirmed_alert": handleSafeArrivalDueSweep,
+  "safe_arrival.deadline_check": handleSafeArrivalDeadline,
   "safe_arrival.lifecycle_notification": handleSafeArrivalLifecycleNotification,
   "upfor.announce_started": handleUpForAnnounceStarted,
   "media.cleanup_orphan_chat": handleCleanupOrphanChatMedia,
