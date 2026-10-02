@@ -25,6 +25,8 @@ import {
   ConferenceDeleteMenuItem
 } from "@/components/conference/conference-action-menu";
 import { detectLocationRisk } from "@/lib/content/safety";
+import { conferenceHotScore, isConferenceTopicSuppressed } from "@/lib/conference/ranking";
+import styles from "./conference-page.module.css";
 import type {
   ConferenceActionResult,
   ConferenceFeedResult,
@@ -55,11 +57,6 @@ function timeAgo(value: string) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
-}
-
-function hotScore(topic: ConferenceTopic) {
-  const ageHours = Math.max(0, (Date.now() - Date.parse(topic.createdAt)) / 3_600_000);
-  return topic.hypeCount - topic.passCount * 0.75 + Math.min(topic.replyCount, 20) * 1.5 - ageHours * 0.25;
 }
 
 function voiceCount(count: number) {
@@ -97,11 +94,16 @@ function TopicCard({
   topic,
   onRemove,
   onRestore,
+  onVoteState,
   onError
 }: {
   topic: ConferenceTopic;
   onRemove: (id: string) => void;
   onRestore: (topic: ConferenceTopic) => void;
+  onVoteState: (
+    id: string,
+    state: { yourVote: ConferenceVote | null; hypeCount: number; passCount: number }
+  ) => void;
   onError: (message: string) => void;
 }) {
   const [vote, setVote] = useState(topic.yourVote);
@@ -117,6 +119,11 @@ function TopicCard({
     setVote(next.vote);
     setHypeCount(next.hypeCount);
     setPassCount(next.passCount);
+    onVoteState(topic.id, {
+      yourVote: next.vote,
+      hypeCount: next.hypeCount,
+      passCount: next.passCount
+    });
 
     startMutation(async () => {
       const result = await voteConferenceAction("topic", topic.id, selected, topic.id);
@@ -129,6 +136,11 @@ function TopicCard({
         setVote(previous.vote);
         setHypeCount(previous.hypeCount);
         setPassCount(previous.passCount);
+        onVoteState(topic.id, {
+          yourVote: previous.vote,
+          hypeCount: previous.hypeCount,
+          passCount: previous.passCount
+        });
         onError(result.message);
       }
     });
@@ -279,8 +291,8 @@ export function ConferencePage({
   }, [feedback]);
 
   const visibleTopics = useMemo(() => {
-    const copy = [...topics];
-    if (sort === "hot") copy.sort((a, b) => hotScore(b) - hotScore(a));
+    const copy = topics.filter((topic) => !isConferenceTopicSuppressed(topic));
+    if (sort === "hot") copy.sort((a, b) => conferenceHotScore(b) - conferenceHotScore(a));
     else copy.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
     return copy.slice(0, 40);
   }, [sort, topics]);
@@ -298,6 +310,15 @@ export function ConferencePage({
     setTopics((current) => (current.some((item) => item.id === topic.id) ? current : [topic, ...current]));
   }
 
+  function updateTopicVote(
+    id: string,
+    state: { yourVote: ConferenceVote | null; hypeCount: number; passCount: number }
+  ) {
+    setTopics((current) =>
+      current.map((topic) => (topic.id === id ? { ...topic, ...state } : topic))
+    );
+  }
+
   function postTopic() {
     const text = body.trim();
     if (!text || postingRef.current) return;
@@ -309,6 +330,7 @@ export function ConferencePage({
       voiceLabel: "You",
       body: text,
       createdAt: new Date().toISOString(),
+      lastActivityAt: new Date().toISOString(),
       hypeCount: 0,
       passCount: 0,
       replyCount: 0,
@@ -457,7 +479,7 @@ export function ConferencePage({
             sort === "hot" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
           )}
         >
-          <Flame className="h-4 w-4" />
+          <Flame className={cn("h-4 w-4", styles.hotFlame)} aria-hidden="true" />
           Hot
         </button>
       </div>
@@ -495,6 +517,7 @@ export function ConferencePage({
               topic={topic}
               onRemove={removeTopic}
               onRestore={restoreTopic}
+              onVoteState={updateTopicVote}
               onError={setFeedback}
             />
           ))}

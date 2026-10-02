@@ -9,7 +9,8 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
-  Send
+  Send,
+  CornerUpLeft
 } from "lucide-react";
 import {
   createConferenceReplyAction,
@@ -167,12 +168,14 @@ function ReplyCard({
   topicId,
   onRemove,
   onRestore,
+  onReply,
   onError
 }: {
   reply: ConferenceReply;
   topicId: string;
   onRemove: (id: string) => void;
   onRestore: (reply: ConferenceReply) => void;
+  onReply: (reply: ConferenceReply) => void;
   onError: (message: string) => void;
 }) {
   const [, startMutation] = useTransition();
@@ -200,6 +203,12 @@ function ReplyCard({
             <span>{timeAgo(reply.createdAt)}</span>
             {optimistic ? <span className="text-primary">Sending…</span> : null}
           </div>
+          {reply.replyTo ? (
+            <div className="mt-2 rounded-xl border border-border/70 bg-secondary/35 px-2.5 py-2 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Replying to {reply.replyTo.voiceLabel}</span>
+              <p className="mt-0.5 truncate">{reply.replyTo.body}</p>
+            </div>
+          ) : null}
           <p className="mt-2 whitespace-pre-wrap text-sm leading-[1.45] text-foreground">{reply.body}</p>
         </div>
 
@@ -248,21 +257,31 @@ function ReplyCard({
         ) : null}
       </div>
 
-      {!reply.isYours && !optimistic ? (
-        <div className="mt-2.5 flex items-center gap-1.5">
-          <ReactionPair
-            targetType="reply"
-            targetId={reply.id}
-            initialVote={reply.yourVote}
-            initialHypeCount={reply.hypeCount}
-            initialPassCount={reply.passCount}
-            onError={onError}
-            onStale={() => window.location.assign("/conference?notice=unavailable")}
-          />
-        </div>
-      ) : reply.isYours ? (
-        <div className="mt-2">
-          <span className="inline-flex h-7 items-center rounded-full bg-secondary/55 px-2 text-[11px] font-semibold text-muted-foreground">Your Voice</span>
+      {!optimistic ? (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {!reply.isYours ? (
+            <ReactionPair
+              targetType="reply"
+              targetId={reply.id}
+              initialVote={reply.yourVote}
+              initialHypeCount={reply.hypeCount}
+              initialPassCount={reply.passCount}
+              onError={onError}
+              onStale={() => window.location.assign("/conference?notice=unavailable")}
+            />
+          ) : (
+            <span className="inline-flex h-8 items-center rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+              Your Voice
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onReply(reply)}
+            className="focus-ring inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <CornerUpLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            Reply
+          </button>
         </div>
       ) : null}
     </article>
@@ -275,6 +294,8 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
   const [replyCount, setReplyCount] = useState(topic.replyCount);
   const [body, setBody] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<ConferenceReply | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, startSending] = useTransition();
   const sendingRef = useRef(false);
@@ -297,12 +318,21 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
     setReplyCount((count) => count + 1);
   }
 
+  function openComposer(target: ConferenceReply | null = null) {
+    setReplyTarget(target);
+    setComposerOpen(true);
+    window.requestAnimationFrame(() => {
+      composerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }
+
   function sendVoice() {
     const text = body.trim();
     if (!text || sendingRef.current) return;
     sendingRef.current = true;
 
     const tempId = `optimistic-${Date.now()}`;
+    const target = replyTarget;
     const optimistic: ConferenceReply = {
       id: tempId,
       voiceLabel: "You",
@@ -311,10 +341,18 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
       hypeCount: 0,
       passCount: 0,
       yourVote: null,
-      isYours: true
+      isYours: true,
+      replyTo: target
+        ? {
+            id: target.id,
+            voiceLabel: target.isYours ? "You" : target.voiceLabel,
+            body: target.body
+          }
+        : null
     };
 
     setBody("");
+    setReplyTarget(null);
     setComposerOpen(false);
     setReplies((current) => [...current, optimistic]);
     setReplyCount((count) => count + 1);
@@ -325,7 +363,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
 
     startSending(async () => {
       try {
-        const result = await createConferenceReplyAction(topic.id, text);
+        const result = await createConferenceReplyAction(topic.id, text, target?.id ?? null);
         if (!result.ok || !result.replyId) {
           removeReply(tempId);
           if (result.stale) {
@@ -336,6 +374,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
           // rejected a send. Put the draft back exactly as they wrote it and
           // reopen the inline composer for one-tap retry.
           setBody(text);
+          setReplyTarget(target);
           setComposerOpen(true);
           setFeedback(result.message);
           return;
@@ -460,23 +499,40 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
 
       <section aria-label="Add your Voice">
         {composerOpen ? (
-          <div className="rounded-[18px] border border-border bg-card/80 p-3.5 shadow-sm">
+          <div
+            id="conference-voice-composer"
+            ref={composerRef}
+            className="rounded-[18px] border border-border bg-card/80 p-3.5 shadow-sm"
+          >
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold">Add your Voice</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Anonymous to other members in this Topic.</p>
+                <p className="text-sm font-semibold">
+                  {replyTarget ? `Reply to ${replyTarget.isYours ? "your Voice" : replyTarget.voiceLabel}` : "Add your Voice"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Anonymous to other members in this Topic. Replies stay in one flat Voice stream.
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => {
                   if (sending) return;
                   setComposerOpen(false);
+                  setReplyTarget(null);
                 }}
                 className="focus-ring min-h-9 rounded-full px-3 text-xs font-semibold text-muted-foreground hover:bg-secondary"
               >
                 Close
               </button>
             </div>
+            {replyTarget ? (
+              <div className="mb-2 rounded-xl border border-border/70 bg-secondary/35 px-2.5 py-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  Replying to {replyTarget.isYours ? "your Voice" : replyTarget.voiceLabel}
+                </span>
+                <p className="mt-0.5 truncate">{replyTarget.body}</p>
+              </div>
+            ) : null}
             <div className="flex items-end gap-2">
               <textarea
                 autoFocus
@@ -510,7 +566,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
         ) : (
           <button
             type="button"
-            onClick={() => setComposerOpen(true)}
+            onClick={() => openComposer(null)}
             className="focus-ring flex min-h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-border bg-card/75 px-4 text-sm font-semibold shadow-sm transition-colors hover:bg-secondary/45"
           >
             <MessageCircle className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -532,6 +588,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
               topicId={topic.id}
               onRemove={removeReply}
               onRestore={restoreReply}
+              onReply={(target) => openComposer(target)}
               onError={setFeedback}
             />
           ))

@@ -1,0 +1,27 @@
+.hotFlame {
+  transform-origin: 50% 82%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hotFlame {
+    animation: conference-hot-flame 4.2s ease-in-out infinite;
+  }
+}
+
+@keyframes conference-hot-flame {
+  0%,
+  100% {
+    transform: translateY(0) scale(0.97) rotate(-1deg);
+    opacity: 0.86;
+  }
+
+  38% {
+    transform: translateY(-0.08rem) scale(1.05, 1.1) rotate(1.5deg);
+    opacity: 1;
+  }
+
+  68% {
+    transform: translateY(-0.03rem) scale(1.01, 1.06) rotate(-1deg);
+    opacity: 0.93;
+  }
+}

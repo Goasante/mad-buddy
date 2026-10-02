@@ -46,14 +46,21 @@ export async function createConferenceTopicAction(body: string): Promise<Confere
   return result;
 }
 
-export async function createConferenceReplyAction(topicId: string, body: string): Promise<ConferenceActionResult> {
+export async function createConferenceReplyAction(
+  topicId: string,
+  body: string,
+  replyToReplyId?: string | null
+): Promise<ConferenceActionResult> {
   const user = await userId();
   if (!user) return { ok: false, message: "Log in to join Conference." };
   if (!uuid.safeParse(topicId).success) return { ok: false, message: "Topic not found." };
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) return { ok: false, message: "Keep your Voice between 1 and 300 characters." };
+  if (replyToReplyId && !uuid.safeParse(replyToReplyId).success) {
+    return { ok: false, message: "That Voice is unavailable." };
+  }
 
-  const result = await createConferenceReply(user, topicId, parsed.data);
+  const result = await createConferenceReply(user, topicId, parsed.data, replyToReplyId ?? null);
   return result;
 }
 

@@ -100,14 +100,14 @@ export async function GET() {
     conferenceReady
       ? conference
           .from("conference_topics")
-          .select("id, body, status, hype_count, pass_count, reply_count, expires_at, created_at, updated_at")
+          .select("id, body, status, hype_count, pass_count, reply_count, last_activity_at, expires_at, created_at, updated_at")
           .eq("author_user_id", userId)
           .order("created_at", { ascending: false })
       : emptyResult([]),
     conferenceReady
       ? conference
           .from("conference_replies")
-          .select("id, topic_id, body, status, hype_count, pass_count, created_at, updated_at")
+          .select("id, topic_id, reply_to_reply_id, body, status, hype_count, pass_count, created_at, updated_at")
           .eq("author_user_id", userId)
           .order("created_at", { ascending: false })
       : emptyResult([]),

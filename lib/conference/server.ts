@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { batchBlockedIds, isBlockedEitherDirection } from "@/lib/social/permissions";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { CONFERENCE_FLAG, isFeatureEnabled } from "@/lib/features/feature-flags";
+import { isConferenceTopicSuppressed } from "@/lib/conference/ranking";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   ConferenceFeedResult,
@@ -20,7 +21,6 @@ export const CONFERENCE_RADIUS_METERS = 15_000;
 export const CONFERENCE_LOCATION_MAX_AGE_MS = 15 * 60 * 1000;
 export const CONFERENCE_TOPIC_MAX_CHARS = 300;
 export const CONFERENCE_REPLY_MAX_CHARS = 300;
-export const CONFERENCE_FEED_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const EARTH_RADIUS_M = 6_371_000;
 
@@ -44,6 +44,7 @@ type TopicRow = {
   pass_count: number;
   reply_count: number;
   expires_at: string;
+  last_activity_at: string;
   created_at: string;
 };
 
@@ -55,6 +56,7 @@ type ReplyRow = {
   status: string;
   hype_count: number;
   pass_count: number;
+  reply_to_reply_id: string | null;
   created_at: string;
 };
 
@@ -283,6 +285,7 @@ function buildTopicProjection(
     voiceLabel: voiceNumber ? `Voice ${voiceNumber}` : "Voice",
     body: row.body,
     createdAt: row.created_at,
+    lastActivityAt: row.last_activity_at,
     hypeCount: row.hype_count,
     passCount: row.pass_count,
     replyCount: row.reply_count,
@@ -313,22 +316,20 @@ export async function loadConferenceFeed(userId: string): Promise<ConferenceFeed
   const conference = conferenceDb(admin);
   const box = boundingBox(viewer.location.latitude, viewer.location.longitude, CONFERENCE_RADIUS_METERS);
   const nowIso = new Date().toISOString();
-  const cutoffIso = new Date(Date.now() - CONFERENCE_FEED_LOOKBACK_MS).toISOString();
 
   const { data, error } = await conference
     .from("conference_topics")
     .select(
-      "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, created_at"
+      "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, last_activity_at, created_at"
     )
     .eq("status", "active")
     .gt("expires_at", nowIso)
-    .gte("created_at", cutoffIso)
     .gte("origin_latitude", box.minLat)
     .lte("origin_latitude", box.maxLat)
     .gte("origin_longitude", box.minLon)
     .lte("origin_longitude", box.maxLon)
-    .order("created_at", { ascending: false })
-    .limit(100);
+    .order("last_activity_at", { ascending: false })
+    .limit(120);
 
   if (error) throw error;
 
@@ -350,7 +351,14 @@ export async function loadConferenceFeed(userId: string): Promise<ConferenceFeed
   ]);
 
   const rows = nearbyCandidates.filter(
-    (row) => !hidden.has(row.author_user_id) && !blocked.has(row.author_user_id) && !hiddenTopics.has(row.id)
+    (row) =>
+      !hidden.has(row.author_user_id) &&
+      !blocked.has(row.author_user_id) &&
+      !hiddenTopics.has(row.id) &&
+      !isConferenceTopicSuppressed({
+        hypeCount: row.hype_count,
+        passCount: row.pass_count
+      })
   );
 
   if (rows.length === 0) {
@@ -411,7 +419,7 @@ async function loadAccessibleTopicRow(
     conference
       .from("conference_topics")
       .select(
-        "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, created_at"
+        "id, author_user_id, origin_latitude, origin_longitude, body, status, hype_count, pass_count, reply_count, expires_at, last_activity_at, created_at"
       )
       .eq("id", topicId)
       .eq("status", "active")
@@ -469,7 +477,7 @@ export async function loadConferenceTopic(
   const conference = conferenceDb(admin);
   const { data: replyData, error: replyError } = await conference
     .from("conference_replies")
-    .select("id, topic_id, author_user_id, body, status, hype_count, pass_count, created_at")
+    .select("id, topic_id, author_user_id, body, status, hype_count, pass_count, reply_to_reply_id, created_at")
     .eq("topic_id", topicId)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -490,6 +498,7 @@ export async function loadConferenceTopic(
       !hiddenReplies.has(reply.id)
   );
   const replyIds = replies.map((reply) => reply.id);
+  const replyById = new Map(replies.map((reply) => [reply.id, reply]));
   const voiceUserIds = [...new Set([topic.author_user_id, ...replies.map((reply) => reply.author_user_id)])];
 
   const [{ data: topicVoteRows }, { data: replyVoteRows }, { data: voiceRows }] = await Promise.all([
@@ -532,6 +541,10 @@ export async function loadConferenceTopic(
   const replyProjections: ConferenceReply[] = replies.map((reply) => {
     const vote = votes.find((item) => item.reply_id === reply.id);
     const voiceNumber = voiceNumbers.get(voiceKey(topicId, reply.author_user_id));
+    const parent = reply.reply_to_reply_id ? replyById.get(reply.reply_to_reply_id) : undefined;
+    const parentVoiceNumber = parent
+      ? voiceNumbers.get(voiceKey(topicId, parent.author_user_id))
+      : undefined;
     return {
       id: reply.id,
       voiceLabel: voiceNumber ? `Voice ${voiceNumber}` : "Voice",
@@ -540,7 +553,19 @@ export async function loadConferenceTopic(
       hypeCount: reply.hype_count,
       passCount: reply.pass_count,
       yourVote: voteFromValue(vote?.value),
-      isYours: reply.author_user_id === userId
+      isYours: reply.author_user_id === userId,
+      replyTo: parent
+        ? {
+            id: parent.id,
+            voiceLabel:
+              parent.author_user_id === userId
+                ? "You"
+                : parentVoiceNumber
+                  ? `Voice ${parentVoiceNumber}`
+                  : "Voice",
+            body: parent.body
+          }
+        : null
     };
   });
 
@@ -603,7 +628,12 @@ export async function createConferenceTopic(userId: string, body: string) {
   };
 }
 
-export async function createConferenceReply(userId: string, topicId: string, body: string) {
+export async function createConferenceReply(
+  userId: string,
+  topicId: string,
+  body: string,
+  replyToReplyId: string | null = null
+) {
   const admin = createSupabaseAdminClient();
   if (!(await conferenceIsEnabled(admin))) {
     return { ok: false, message: "Conference is unavailable." };
@@ -619,6 +649,13 @@ export async function createConferenceReply(userId: string, topicId: string, bod
   if (!topic) return { ok: false, stale: true, message: "That Topic is no longer available." };
 
   const conference = conferenceDb(admin);
+  if (replyToReplyId) {
+    const parent = await resolveTarget(admin, userId, "reply", replyToReplyId);
+    if (!parent || parent.topicId !== topicId) {
+      return { ok: false, stale: true, message: "That Voice is no longer available." };
+    }
+  }
+
   try {
     await ensureVoiceNumber(conference, topicId, userId);
   } catch {
@@ -627,7 +664,12 @@ export async function createConferenceReply(userId: string, topicId: string, bod
 
   const { data, error } = await conference
     .from("conference_replies")
-    .insert({ topic_id: topicId, author_user_id: userId, body })
+    .insert({
+      topic_id: topicId,
+      author_user_id: userId,
+      body,
+      reply_to_reply_id: replyToReplyId
+    })
     .select("id, created_at")
     .single();
 

@@ -14,6 +14,12 @@ export type ConferenceReportReason =
   | "other";
 export type ConferenceTargetType = "topic" | "reply";
 
+export type ConferenceReplyContext = {
+  id: string;
+  voiceLabel: string;
+  body: string;
+};
+
 export type ConferenceReply = {
   id: string;
   voiceLabel: string;
@@ -23,6 +29,7 @@ export type ConferenceReply = {
   passCount: number;
   yourVote: ConferenceVote | null;
   isYours: boolean;
+  replyTo: ConferenceReplyContext | null;
 };
 
 export type ConferenceTopic = {
@@ -30,6 +37,7 @@ export type ConferenceTopic = {
   voiceLabel: string;
   body: string;
   createdAt: string;
+  lastActivityAt: string;
   hypeCount: number;
   passCount: number;
   replyCount: number;
