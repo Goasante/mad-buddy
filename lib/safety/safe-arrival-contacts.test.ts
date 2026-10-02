@@ -133,6 +133,21 @@ describe("invited is never counted as confirmed", () => {
 // Contact identity privacy
 // ---------------------------------------------------------------------------
 
+describe("contact eligibility performance", () => {
+  it("batches relationship, block and Safe Arrival opt-out checks for Start", () => {
+    const fn = declaration(SERVICE, "export async function eligibleTrustedContacts");
+    expect(fn).toContain("batchEligibleMuddyIds(admin, travellerId, unique)");
+    expect(fn).toContain('.from("safe_arrival_blocks")');
+    expect(fn).toContain('.in("user_id", eligibleIds)');
+    expect(fn).not.toContain("unique.map(async");
+    expect(fn).not.toContain("canBeTrustedContact(admin");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contact identity privacy
+// ---------------------------------------------------------------------------
+
 describe("contact identity privacy", () => {
   const fn = declaration(SERVICE, "async function visibleContactsFor");
 
@@ -274,11 +289,16 @@ describe("check-in terminology", () => {
   it("does not alarm anyone when a contact declines", () => {
     const actions = stripComments(read("app/(app)/safe-arrival-actions.ts"));
     const ack = declaration(actions, "export async function acknowledgeSafeArrivalAction");
-    // A decline records the audit event but notifies nobody.
+    // A genuine decline records the audit event but notifies nobody. Replaying
+    // the same answer records neither a second event nor a second notification.
     expect(ack).toContain('eventType: parsed.data === "watching" ? "acknowledged" : "declined"');
+    const changedGuard = ack.indexOf("if (changed?.length) {");
+    const eventIndex = ack.indexOf("recordSafeArrivalEvent");
     const notifyIndex = ack.indexOf("deliverNotification");
     const acceptGuard = ack.indexOf('parsed.data === "watching" && changed?.length');
-    expect(acceptGuard).toBeGreaterThan(-1);
+    expect(changedGuard).toBeGreaterThan(-1);
+    expect(eventIndex).toBeGreaterThan(changedGuard);
+    expect(acceptGuard).toBeGreaterThan(eventIndex);
     expect(notifyIndex).toBeGreaterThan(acceptGuard);
   });
 

@@ -46,17 +46,33 @@ export async function hasOptedOutOfSafeArrival(
   return Boolean(data?.length);
 }
 
-/** Filters candidate contacts down to those eligible to be asked. */
+/**
+ * Filters candidate contacts down to those eligible to be asked.
+ *
+ * The relationship + block checks are batched for the whole selection, then
+ * Safe Arrival's feature-specific opt-out table is read once. A 50-contact
+ * technical maximum must never turn Start into 50 × three permission queries.
+ */
 export async function eligibleTrustedContacts(
   admin: Admin,
   travellerId: string,
   candidateIds: string[]
 ): Promise<string[]> {
   const unique = [...new Set(candidateIds)].filter((id) => id && id !== travellerId);
-  const results = await Promise.all(
-    unique.map(async (id) => ((await canBeTrustedContact(admin, travellerId, id)) ? id : null))
-  );
-  return results.filter((id): id is string => id !== null);
+  if (unique.length === 0) return [];
+
+  const eligibleMuddies = await batchEligibleMuddyIds(admin, travellerId, unique);
+  const eligibleIds = unique.filter((id) => eligibleMuddies.has(id));
+  if (eligibleIds.length === 0) return [];
+
+  const { data: optedOutRows } = await admin
+    .from("safe_arrival_blocks")
+    .select("user_id")
+    .eq("blocked_traveller_id", travellerId)
+    .in("user_id", eligibleIds);
+
+  const optedOut = new Set((optedOutRows ?? []).map((row) => row.user_id));
+  return eligibleIds.filter((id) => !optedOut.has(id));
 }
 
 /** Non-terminal sessions the traveller currently owns (tier cap, spec §17). */

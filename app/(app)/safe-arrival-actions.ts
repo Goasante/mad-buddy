@@ -212,11 +212,15 @@ export async function acknowledgeSafeArrivalAction(
     .select("id");
   if (error) return { ok: false, message: "Couldn't save your response." };
 
-  await recordSafeArrivalEvent(admin, {
-    sessionId,
-    eventType: parsed.data === "watching" ? "acknowledged" : "declined",
-    createdBy: userId
-  });
+  // The audit log describes real state transitions, not repeated taps or a
+  // second device replaying the same answer.
+  if (changed?.length) {
+    await recordSafeArrivalEvent(admin, {
+      sessionId,
+      eventType: parsed.data === "watching" ? "acknowledged" : "declined",
+      createdBy: userId
+    });
+  }
 
   if (parsed.data === "watching" && changed?.length) {
     const { grantReliableWatcherAchievement } = await import("@/lib/engagement/achievements");
