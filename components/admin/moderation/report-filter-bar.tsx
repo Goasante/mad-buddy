@@ -68,6 +68,7 @@ export function ReportFilterBar({ filters }: { filters: ReportFilterState }) {
   ];
   const typeOptions: AppSelectOption[] = [
     { value: ANY, label: "Any content type" },
+    { value: "conference", label: "Conference (Topics + Voices)" },
     ...Object.entries(CONTENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))
   ];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -274,8 +274,10 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
   const [replies, setReplies] = useState(topic.replies);
   const [replyCount, setReplyCount] = useState(topic.replyCount);
   const [body, setBody] = useState("");
+  const [composerOpen, setComposerOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [sending, startSending] = useTransition();
+  const sendingRef = useRef(false);
   const [, startTopicMutation] = useTransition();
   const locationRisk = detectLocationRisk(body);
 
@@ -297,7 +299,8 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
 
   function sendVoice() {
     const text = body.trim();
-    if (!text || sending) return;
+    if (!text || sendingRef.current) return;
+    sendingRef.current = true;
 
     const tempId = `optimistic-${Date.now()}`;
     const optimistic: ConferenceReply = {
@@ -312,6 +315,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
     };
 
     setBody("");
+    setComposerOpen(false);
     setReplies((current) => [...current, optimistic]);
     setReplyCount((count) => count + 1);
 
@@ -320,24 +324,33 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
     });
 
     startSending(async () => {
-      const result = await createConferenceReplyAction(topic.id, text);
-      if (!result.ok || !result.replyId) {
-        removeReply(tempId);
-        if (result.stale) {
-          router.replace("/conference?notice=unavailable");
+      try {
+        const result = await createConferenceReplyAction(topic.id, text);
+        if (!result.ok || !result.replyId) {
+          removeReply(tempId);
+          if (result.stale) {
+            router.replace("/conference?notice=unavailable");
+            return;
+          }
+          // Never throw away somebody's words because the network or server
+          // rejected a send. Put the draft back exactly as they wrote it and
+          // reopen the inline composer for one-tap retry.
+          setBody(text);
+          setComposerOpen(true);
+          setFeedback(result.message);
           return;
         }
-        setFeedback(result.message);
-        return;
-      }
 
-      setReplies((current) =>
-        current.map((item) =>
-          item.id === tempId
-            ? { ...item, id: result.replyId!, createdAt: result.createdAt ?? item.createdAt }
-            : item
-        )
-      );
+        setReplies((current) =>
+          current.map((item) =>
+            item.id === tempId
+              ? { ...item, id: result.replyId!, createdAt: result.createdAt ?? item.createdAt }
+              : item
+          )
+        );
+      } finally {
+        sendingRef.current = false;
+      }
     });
   }
 
@@ -399,7 +412,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
                     className="focus-ring flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-secondary"
                   >
                     <EyeOff className="h-4 w-4" />
-                    Hide this Voice
+                    Hide this Topic
                   </button>
                   <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Flag Topic</div>
                   {REPORT_REASONS.map(([reason, label]) => (
@@ -445,7 +458,72 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
         </div>
       </article>
 
-      <section className="space-y-2">
+      <section aria-label="Add your Voice">
+        {composerOpen ? (
+          <div className="rounded-[18px] border border-border bg-card/80 p-3.5 shadow-sm">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Add your Voice</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Anonymous to other members in this Topic.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (sending) return;
+                  setComposerOpen(false);
+                }}
+                className="focus-ring min-h-9 rounded-full px-3 text-xs font-semibold text-muted-foreground hover:bg-secondary"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex items-end gap-2">
+              <textarea
+                autoFocus
+                rows={3}
+                value={body}
+                maxLength={300}
+                onChange={(event) => setBody(event.target.value)}
+                placeholder="Add your voice…"
+                className="focus-ring max-h-36 min-h-24 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
+              />
+              <button
+                type="button"
+                aria-label="Post Voice"
+                disabled={sending || body.trim().length === 0}
+                onClick={sendVoice}
+                className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-45"
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </div>
+            {locationRisk.warn ? (
+              <p className="mt-2 rounded-lg bg-amber-500/10 px-2.5 py-2 text-xs text-foreground">
+                This may reveal an exact location. Conference is visible to nearby members.
+              </p>
+            ) : null}
+            <div className="mt-1 flex items-center justify-between gap-3 px-1 text-[11px] text-muted-foreground">
+              <span>Your anonymous Voice stays consistent inside this Topic.</span>
+              <span className="shrink-0">{body.length}/300</span>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setComposerOpen(true)}
+            className="focus-ring flex min-h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-border bg-card/75 px-4 text-sm font-semibold shadow-sm transition-colors hover:bg-secondary/45"
+          >
+            <MessageCircle className="h-4 w-4 text-primary" aria-hidden="true" />
+            Add your Voice
+          </button>
+        )}
+      </section>
+
+      <section className="space-y-2" aria-label="Voices">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <h2 className="text-sm font-semibold">Voices</h2>
+          <span className="text-xs text-muted-foreground">{voiceCount(replyCount)}</span>
+        </div>
         {replies.length ? (
           replies.map((reply) => (
             <ReplyCard
@@ -459,37 +537,9 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
           ))
         ) : (
           <div className="rounded-[16px] border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
-            No Voices yet.
+            No Voices yet. Be the first to join the Topic.
           </div>
         )}
-      </section>
-
-      <section className="sticky bottom-[calc(var(--mobile-nav-height,0px)+env(safe-area-inset-bottom,0px)+0.35rem)] z-20 rounded-[16px] border border-border bg-card/95 p-2 shadow-lg backdrop-blur">
-        <div className="flex items-end gap-2">
-          <textarea
-            rows={1}
-            value={body}
-            maxLength={300}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder="Add your voice…"
-            className="focus-ring max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
-          />
-          <button
-            type="button"
-            aria-label="Add Voice"
-            disabled={sending || body.trim().length === 0}
-            onClick={sendVoice}
-            className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-45"
-          >
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
-        </div>
-        {locationRisk.warn ? (
-          <p className="mt-2 rounded-lg bg-amber-500/10 px-2.5 py-2 text-xs text-foreground">
-            This may reveal an exact location. Conference is visible to nearby members.
-          </p>
-        ) : null}
-        <div className="mt-1 px-1 text-[11px] text-muted-foreground">{body.length}/300</div>
       </section>
     </div>
   );

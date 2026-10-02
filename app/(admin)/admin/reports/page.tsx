@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
-import { AlertTriangle, ChevronLeft, ChevronRight, FileWarning, ShieldCheck, ShieldOff } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, FileWarning, MessageCircle, ShieldCheck, ShieldOff } from "lucide-react";
 import { AdminEmptyState, AdminMetricCard, AdminPageHeader, AdminQueryError, AdminStatus, formatAdminDate, humanizeAdminValue } from "@/components/admin/admin-ui";
 import { ReportCategoryBadge, ReportStatusBadge } from "@/components/admin/moderation/report-badges";
 import { ReportFilterBar } from "@/components/admin/moderation/report-filter-bar";
@@ -42,11 +42,16 @@ export default async function AdminReportsPage({ searchParams }: ReportsPageProp
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
   // Headline metrics (cheap head counts, independent of the current source).
-  const [openUserReports, openContentReports, activeRestrictionsCount, blockedPairs] = await Promise.all([
+  const [openUserReports, openContentReports, activeRestrictionsCount, blockedPairs, openConferenceReports] = await Promise.all([
     admin.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
     admin.from("content_reports").select("id", { count: "exact", head: true }).in("status", ["received", "under_review"]),
     admin.from("user_restrictions").select("id", { count: "exact", head: true }).is("lifted_at", null),
-    admin.from("blocked_users").select("id", { count: "exact", head: true })
+    admin.from("blocked_users").select("id", { count: "exact", head: true }),
+    admin
+      .from("content_reports")
+      .select("id", { count: "exact", head: true })
+      .in("content_type", ["conference_topic", "conference_reply"])
+      .in("status", ["received", "under_review"])
   ]);
 
   // Resolve user matches for search (bounded) so search spans reports AND users.
@@ -108,7 +113,11 @@ export default async function AdminReportsPage({ searchParams }: ReportsPageProp
       .select("id, reporter_id, reported_user_id, content_type, content_id, category, status, created_at", { count: "exact" });
     if (status) query = query.eq("status", status as "received" | "under_review" | "actioned" | "dismissed");
     if (category) query = query.eq("category", category as ContentCategory);
-    if (type) query = query.eq("content_type", type as ContentType);
+    if (type === "conference") {
+      query = query.in("content_type", ["conference_topic", "conference_reply"] as ContentType[]);
+    } else if (type) {
+      query = query.eq("content_type", type as ContentType);
+    }
     if (from) query = query.gte("created_at", from);
     if (to) query = query.lte("created_at", `${to}T23:59:59.999Z`);
     if (q) {
@@ -166,6 +175,20 @@ export default async function AdminReportsPage({ searchParams }: ReportsPageProp
         <AdminMetricCard icon={ShieldOff} label="Active restrictions" value={activeRestrictionsCount.count ?? 0} />
         <AdminMetricCard icon={ShieldCheck} label="Blocked pairs" value={blockedPairs.count ?? 0} />
       </div>
+
+      <Link
+        href={"/admin/reports?source=content&type=conference" as Route}
+        className="focus-ring flex items-center gap-3 rounded-2xl border border-[#E88C2B]/20 bg-[#E88C2B]/[0.07] p-4 transition-colors hover:bg-[#E88C2B]/[0.11]"
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E88C2B]/12 text-[#f1a35c]">
+          <MessageCircle className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-white">Conference moderation</span>
+          <span className="mt-0.5 block text-xs text-[#aaa59f]">Review reported Topics and Voices through the main audited moderation system.</span>
+        </span>
+        <AdminStatus label={`${openConferenceReports.count ?? 0} open`} tone={(openConferenceReports.count ?? 0) > 0 ? "warning" : "success"} />
+      </Link>
 
       <ReportFilterBar filters={filters} />
 

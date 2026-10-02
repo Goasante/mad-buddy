@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -268,6 +268,7 @@ export function ConferencePage({
   const [body, setBody] = useState("");
   const [feedback, setFeedback] = useState(initialFeedback);
   const [posting, startPosting] = useTransition();
+  const postingRef = useRef(false);
   const [locating, setLocating] = useState(false);
   const locationRisk = detectLocationRisk(body);
 
@@ -299,7 +300,8 @@ export function ConferencePage({
 
   function postTopic() {
     const text = body.trim();
-    if (!text || posting) return;
+    if (!text || postingRef.current) return;
+    postingRef.current = true;
 
     const tempId = `optimistic-${Date.now()}`;
     const optimistic: ConferenceTopic = {
@@ -319,20 +321,26 @@ export function ConferencePage({
     setComposerOpen(false);
 
     startPosting(async () => {
-      const result = await createConferenceTopicAction(text);
-      if (!result.ok || !result.topicId) {
-        removeTopic(tempId);
-        setFeedback(result.message);
-        return;
-      }
+      try {
+        const result = await createConferenceTopicAction(text);
+        if (!result.ok || !result.topicId) {
+          removeTopic(tempId);
+          setBody(text);
+          setComposerOpen(true);
+          setFeedback(result.message);
+          return;
+        }
 
-      setTopics((current) =>
-        current.map((item) =>
-          item.id === tempId
-            ? { ...item, id: result.topicId!, createdAt: result.createdAt ?? item.createdAt }
-            : item
-        )
-      );
+        setTopics((current) =>
+          current.map((item) =>
+            item.id === tempId
+              ? { ...item, id: result.topicId!, createdAt: result.createdAt ?? item.createdAt }
+              : item
+          )
+        );
+      } finally {
+        postingRef.current = false;
+      }
     });
   }
 
