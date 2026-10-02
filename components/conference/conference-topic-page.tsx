@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -20,6 +20,7 @@ import {
   voteConferenceAction
 } from "@/app/(app)/conference-actions";
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
+import { useConferenceRealtime } from "@/hooks/use-conference-realtime";
 import {
   ConferenceActionMenu,
   ConferenceDeleteMenuItem
@@ -59,6 +60,22 @@ function timeAgo(value: string) {
 
 function voiceCount(count: number) {
   return `${count} ${count === 1 ? "Voice" : "Voices"}`;
+}
+
+function mergeLiveReplies(current: ConferenceReply[], incoming: ConferenceReply[]) {
+  const optimistic = current.filter((reply) => reply.id.startsWith("optimistic-"));
+  if (!optimistic.length) return incoming;
+
+  const canonical = incoming.filter(
+    (reply) =>
+      !optimistic.some(
+        (draft) =>
+          draft.body === reply.body &&
+          (draft.replyTo?.id ?? null) === (reply.replyTo?.id ?? null) &&
+          Math.abs(Date.parse(draft.createdAt) - Date.parse(reply.createdAt)) < 15_000
+      )
+  );
+  return [...canonical, ...optimistic];
 }
 
 function nextVoteState(
@@ -111,17 +128,20 @@ function ReactionPair({
     passCount: number;
   }) => void;
 }) {
-  const [vote, setVote] = useState(initialVote);
-  const [hypeCount, setHypeCount] = useState(initialHypeCount);
-  const [passCount, setPassCount] = useState(initialPassCount);
   const [pending, startMutation] = useTransition();
 
   function react(selected: ConferenceVote) {
-    const previous = { vote, hypeCount, passCount };
-    const next = nextVoteState(vote, selected, hypeCount, passCount);
-    setVote(next.vote);
-    setHypeCount(next.hypeCount);
-    setPassCount(next.passCount);
+    const previous = {
+      vote: initialVote,
+      hypeCount: initialHypeCount,
+      passCount: initialPassCount
+    };
+    const next = nextVoteState(
+      initialVote,
+      selected,
+      initialHypeCount,
+      initialPassCount
+    );
     onVoteState?.({
       yourVote: next.vote,
       hypeCount: next.hypeCount,
@@ -135,9 +155,6 @@ function ReactionPair({
           onStale();
           return;
         }
-        setVote(previous.vote);
-        setHypeCount(previous.hypeCount);
-        setPassCount(previous.passCount);
         onVoteState?.({
           yourVote: previous.vote,
           hypeCount: previous.hypeCount,
@@ -153,28 +170,28 @@ function ReactionPair({
       <button
         type="button"
         disabled={pending}
-        aria-pressed={vote === "hype"}
+        aria-pressed={initialVote === "hype"}
         onClick={() => react("hype")}
         className={cn(
           "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
-          vote === "hype" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
+          initialVote === "hype" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
         )}
       >
         <ArrowUp className="h-3.5 w-3.5" />
-        Hype {hypeCount}
+        Hype {initialHypeCount}
       </button>
       <button
         type="button"
         disabled={pending}
-        aria-pressed={vote === "pass"}
+        aria-pressed={initialVote === "pass"}
         onClick={() => react("pass")}
         className={cn(
           "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
-          vote === "pass" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
+          initialVote === "pass" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
         )}
       >
         <ArrowDown className="h-3.5 w-3.5" />
-        Pass {passCount}
+        Pass {initialPassCount}
       </button>
     </>
   );
@@ -186,6 +203,7 @@ function ReplyCard({
   onRemove,
   onRestore,
   onReply,
+  onVoteState,
   onError
 }: {
   reply: ConferenceReply;
@@ -193,17 +211,16 @@ function ReplyCard({
   onRemove: (id: string) => void;
   onRestore: (reply: ConferenceReply) => void;
   onReply: (reply: ConferenceReply) => void;
+  onVoteState: (
+    id: string,
+    state: { yourVote: ConferenceVote | null; hypeCount: number; passCount: number }
+  ) => void;
   onError: (message: string) => void;
 }) {
   const [, startMutation] = useTransition();
   const optimistic = reply.id.startsWith("optimistic-");
-  const [voteState, setVoteState] = useState({
-    yourVote: reply.yourVote,
-    hypeCount: reply.hypeCount,
-    passCount: reply.passCount
-  });
   const [revealed, setRevealed] = useState(false);
-  const communityCollapsed = !reply.isYours && isConferenceVoiceCollapsed(voteState);
+  const communityCollapsed = !reply.isYours && isConferenceVoiceCollapsed(reply);
 
   function removeThen(task: () => Promise<ConferenceActionResult>) {
     onRemove(reply.id);
@@ -304,7 +321,7 @@ function ReplyCard({
               initialPassCount={reply.passCount}
               onError={onError}
               onStale={() => window.location.assign("/conference?notice=unavailable")}
-              onVoteState={setVoteState}
+              onVoteState={(state) => onVoteState(reply.id, state)}
             />
           ) : (
             <span className="inline-flex h-8 items-center rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
@@ -327,8 +344,8 @@ function ReplyCard({
 
 export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail }) {
   const router = useRouter();
+  const [liveTopic, setLiveTopic] = useState(topic);
   const [replies, setReplies] = useState(topic.replies);
-  const [replyCount, setReplyCount] = useState(topic.replyCount);
   const [body, setBody] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<ConferenceReply | null>(null);
@@ -336,8 +353,10 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
   const [feedback, setFeedback] = useState("");
   const [sending, startSending] = useTransition();
   const sendingRef = useRef(false);
+  const liveRefreshRef = useRef(false);
   const [, startTopicMutation] = useTransition();
   const locationRisk = detectLocationRisk(body);
+  const replyCount = replies.length;
 
   useEffect(() => {
     if (!feedback) return;
@@ -345,14 +364,50 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
     return () => window.clearTimeout(timer);
   }, [feedback]);
 
+  const refreshLiveTopic = useCallback(async () => {
+    if (liveRefreshRef.current || document.visibilityState !== "visible") return;
+    liveRefreshRef.current = true;
+    try {
+      const response = await fetch(
+        `/api/conference/live?topicId=${encodeURIComponent(topic.id)}`,
+        { credentials: "include", cache: "no-store" }
+      );
+      if (response.status === 404) {
+        router.replace("/conference?notice=unavailable");
+        return;
+      }
+      if (!response.ok) return;
+      const payload = (await response.json().catch(() => null)) as
+        | { topic?: ConferenceTopicDetail }
+        | null;
+      if (!payload?.topic) return;
+      setLiveTopic(payload.topic);
+      setReplies((current) => mergeLiveReplies(current, payload.topic!.replies));
+    } finally {
+      liveRefreshRef.current = false;
+    }
+  }, [router, topic.id]);
+
+  useConferenceRealtime({
+    topicId: topic.id,
+    onRefresh: refreshLiveTopic
+  });
+
   function removeReply(id: string) {
     setReplies((current) => current.filter((item) => item.id !== id));
-    setReplyCount((count) => Math.max(0, count - 1));
   }
 
   function restoreReply(reply: ConferenceReply) {
     setReplies((current) => (current.some((item) => item.id === reply.id) ? current : [...current, reply]));
-    setReplyCount((count) => count + 1);
+  }
+
+  function updateReplyVote(
+    id: string,
+    state: { yourVote: ConferenceVote | null; hypeCount: number; passCount: number }
+  ) {
+    setReplies((current) =>
+      current.map((reply) => (reply.id === id ? { ...reply, ...state } : reply))
+    );
   }
 
   function openComposer(target: ConferenceReply | null = null) {
@@ -392,7 +447,6 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
     setReplyTarget(null);
     setComposerOpen(false);
     setReplies((current) => [...current, optimistic]);
-    setReplyCount((count) => count + 1);
 
     window.requestAnimationFrame(() => {
       document.getElementById(tempId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -461,16 +515,16 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 font-semibold text-primary">V</span>
-              <span className="font-semibold text-foreground">{topic.isYours ? "You" : topic.voiceLabel}</span>
+              <span className="font-semibold text-foreground">{liveTopic.isYours ? "You" : liveTopic.voiceLabel}</span>
               <span>·</span>
-              <span>{timeAgo(topic.createdAt)}</span>
+              <span>{timeAgo(liveTopic.createdAt)}</span>
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.5] text-foreground">{topic.body}</p>
+            <p className="mt-2 whitespace-pre-wrap text-[15px] leading-[1.5] text-foreground">{liveTopic.body}</p>
           </div>
 
           <ConferenceActionMenu label="Topic actions">
             {(close) =>
-              topic.isYours ? (
+              liveTopic.isYours ? (
                 <ConferenceDeleteMenuItem
                   label="Delete Topic"
                   close={close}
@@ -512,14 +566,17 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
         </div>
 
         <div className="mt-3 flex items-center gap-1.5">
-          {!topic.isYours ? (
+          {!liveTopic.isYours ? (
             <>
               <ReactionPair
                 targetType="topic"
                 targetId={topic.id}
-                initialVote={topic.yourVote}
-                initialHypeCount={topic.hypeCount}
-                initialPassCount={topic.passCount}
+                initialVote={liveTopic.yourVote}
+                initialHypeCount={liveTopic.hypeCount}
+                initialPassCount={liveTopic.passCount}
+                onVoteState={(state) =>
+                  setLiveTopic((current) => ({ ...current, ...state }))
+                }
                 onError={setFeedback}
                 onStale={() => router.replace("/conference?notice=unavailable")}
               />
@@ -626,6 +683,7 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
               onRemove={removeReply}
               onRestore={restoreReply}
               onReply={(target) => openComposer(target)}
+              onVoteState={updateReplyVote}
               onError={setFeedback}
             />
           ))

@@ -53,6 +53,7 @@ export type RateLimitAction =
   | "conversations.create"
   | "groups.create"
   | "conference.location"
+  | "conference.live"
   | "conference.topic.create"
   | "conference.reply.create"
   | "conference.vote"
@@ -146,6 +147,7 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   // Conference is intentionally lightweight: starting conversations is scarce,
   // joining them is more generous, and fast repetitive actions remain bounded.
   "conference.location": { limit: 60, windowSeconds: 60 },
+  "conference.live": { limit: 240, windowSeconds: 60 },
   "conference.topic.create": { limit: 5, windowSeconds: 60 * 60 },
   "conference.reply.create": { limit: 30, windowSeconds: 60 * 60 },
   "conference.vote": { limit: 120, windowSeconds: 60 * 60 },

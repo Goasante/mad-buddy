@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -20,6 +20,7 @@ import {
 } from "@/app/(app)/conference-actions";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ConferenceLocationSync } from "@/components/conference/conference-location-sync";
+import { useConferenceRealtime } from "@/hooks/use-conference-realtime";
 import {
   ConferenceActionMenu,
   ConferenceDeleteMenuItem
@@ -61,6 +62,21 @@ function timeAgo(value: string) {
 
 function voiceCount(count: number) {
   return `${count} ${count === 1 ? "Voice" : "Voices"}`;
+}
+
+function mergeLiveTopics(current: ConferenceTopic[], incoming: ConferenceTopic[]) {
+  const optimistic = current.filter((topic) => topic.id.startsWith("optimistic-"));
+  if (!optimistic.length) return incoming;
+
+  const canonical = incoming.filter(
+    (topic) =>
+      !optimistic.some(
+        (draft) =>
+          draft.body === topic.body &&
+          Math.abs(Date.parse(draft.createdAt) - Date.parse(topic.createdAt)) < 15_000
+      )
+  );
+  return [...optimistic, ...canonical];
 }
 
 function nextVoteState(
@@ -111,23 +127,27 @@ function TopicCard({
   ) => void;
   onError: (message: string) => void;
 }) {
-  const [vote, setVote] = useState(topic.yourVote);
-  const [hypeCount, setHypeCount] = useState(topic.hypeCount);
-  const [passCount, setPassCount] = useState(topic.passCount);
   const [pending, startMutation] = useTransition();
   const optimistic = topic.id.startsWith("optimistic-");
 
   function react(selected: ConferenceVote) {
     if (optimistic) return;
-    const previous = { vote, hypeCount, passCount, lastActivityAt: topic.lastActivityAt };
-    const next = nextVoteState(vote, selected, hypeCount, passCount);
+    const previous = {
+      vote: topic.yourVote,
+      hypeCount: topic.hypeCount,
+      passCount: topic.passCount,
+      lastActivityAt: topic.lastActivityAt
+    };
+    const next = nextVoteState(
+      topic.yourVote,
+      selected,
+      topic.hypeCount,
+      topic.passCount
+    );
     const reheatedAt =
       selected === "hype" && next.vote === "hype"
         ? new Date().toISOString()
         : topic.lastActivityAt;
-    setVote(next.vote);
-    setHypeCount(next.hypeCount);
-    setPassCount(next.passCount);
     onVoteState(topic.id, {
       yourVote: next.vote,
       hypeCount: next.hypeCount,
@@ -143,9 +163,6 @@ function TopicCard({
           onError(result.message);
           return;
         }
-        setVote(previous.vote);
-        setHypeCount(previous.hypeCount);
-        setPassCount(previous.passCount);
         onVoteState(topic.id, {
           yourVote: previous.vote,
           hypeCount: previous.hypeCount,
@@ -229,28 +246,28 @@ function TopicCard({
             <button
               type="button"
               disabled={optimistic || pending}
-              aria-pressed={vote === "hype"}
+              aria-pressed={topic.yourVote === "hype"}
               onClick={() => react("hype")}
               className={cn(
                 "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
-                vote === "hype" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
+                topic.yourVote === "hype" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
               )}
             >
               <ArrowUp className="h-3.5 w-3.5" />
-              Hype {hypeCount}
+              Hype {topic.hypeCount}
             </button>
             <button
               type="button"
               disabled={optimistic || pending}
-              aria-pressed={vote === "pass"}
+              aria-pressed={topic.yourVote === "pass"}
               onClick={() => react("pass")}
               className={cn(
                 "focus-ring inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors",
-                vote === "pass" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
+                topic.yourVote === "pass" ? "bg-primary/12 text-primary" : "bg-secondary/55 text-muted-foreground"
               )}
             >
               <ArrowDown className="h-3.5 w-3.5" />
-              Pass {passCount}
+              Pass {topic.passCount}
             </button>
           </>
         ) : (
@@ -292,6 +309,7 @@ export function ConferencePage({
   const [feedback, setFeedback] = useState(initialFeedback);
   const [posting, startPosting] = useTransition();
   const postingRef = useRef(false);
+  const liveRefreshRef = useRef(false);
   const [locating, setLocating] = useState(false);
   const locationRisk = detectLocationRisk(body);
 
@@ -300,6 +318,30 @@ export function ConferencePage({
     const timer = window.setTimeout(() => setFeedback(""), 2800);
     return () => window.clearTimeout(timer);
   }, [feedback]);
+
+  const refreshLiveFeed = useCallback(async () => {
+    if (liveRefreshRef.current || document.visibilityState !== "visible") return;
+    liveRefreshRef.current = true;
+    try {
+      const response = await fetch("/api/conference/live", {
+        credentials: "include",
+        cache: "no-store"
+      });
+      if (!response.ok) return;
+      const payload = (await response.json().catch(() => null)) as
+        | { feed?: ConferenceFeedResult }
+        | null;
+      if (!payload?.feed?.locationAvailable || payload.feed.accessRestricted) return;
+      setTopics((current) => mergeLiveTopics(current, payload.feed!.topics));
+    } finally {
+      liveRefreshRef.current = false;
+    }
+  }, []);
+
+  useConferenceRealtime({
+    enabled: feed.locationAvailable && !feed.accessRestricted,
+    onRefresh: refreshLiveFeed
+  });
 
   const visibleTopics = useMemo(() => {
     const copy = topics.filter((topic) => !isConferenceTopicSuppressed(topic));
