@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   conferenceHotScore,
-  isConferenceTopicSuppressed
+  isConferenceTopicSuppressed,
+  isConferenceVoiceCollapsed
 } from "@/lib/conference/ranking";
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -29,10 +30,41 @@ describe("Conference activity architecture", () => {
     expect(migration).toContain("Pass affects score");
   });
 
-  it("suppresses strongly negative discovery only after a meaningful vote sample", () => {
+  it("removes a Topic from discovery at the agreed net -5 approval score", () => {
     expect(isConferenceTopicSuppressed({ hypeCount: 0, passCount: 4 })).toBe(false);
-    expect(isConferenceTopicSuppressed({ hypeCount: 1, passCount: 4 })).toBe(true);
-    expect(isConferenceTopicSuppressed({ hypeCount: 4, passCount: 5 })).toBe(false);
+    expect(isConferenceTopicSuppressed({ hypeCount: 0, passCount: 5 })).toBe(true);
+    expect(isConferenceTopicSuppressed({ hypeCount: 4, passCount: 8 })).toBe(false);
+    expect(isConferenceTopicSuppressed({ hypeCount: 4, passCount: 9 })).toBe(true);
+  });
+
+  it("keeps Hot Hype-led while Voices contribute capped momentum", () => {
+    const now = Date.parse("2026-10-02T12:00:00Z");
+    const recent = "2026-10-02T12:00:00Z";
+    const hypeLed = conferenceHotScore(
+      { hypeCount: 3, passCount: 0, replyCount: 0, lastActivityAt: recent },
+      now
+    );
+    const voiceHeavy = conferenceHotScore(
+      { hypeCount: 0, passCount: 0, replyCount: 30, lastActivityAt: recent },
+      now
+    );
+    expect(hypeLed).toBeGreaterThan(voiceHeavy);
+
+    const freshHeat = conferenceHotScore(
+      { hypeCount: 4, passCount: 0, replyCount: 4, lastActivityAt: recent },
+      now
+    );
+    const eightHoursOld = conferenceHotScore(
+      { hypeCount: 4, passCount: 0, replyCount: 4, lastActivityAt: "2026-10-02T04:00:00Z" },
+      now
+    );
+    expect(eightHoursOld).toBeCloseTo(freshHeat / 2, 6);
+  });
+
+  it("collapses a Voice at net -5 without deleting the conversation", () => {
+    expect(isConferenceVoiceCollapsed({ hypeCount: 2, passCount: 6 })).toBe(false);
+    expect(isConferenceVoiceCollapsed({ hypeCount: 2, passCount: 7 })).toBe(true);
+    expect(detail).toContain("Voice hidden by community votes · Show Voice");
   });
 
   it("can reheat an older Topic after recent positive activity", () => {
@@ -60,6 +92,7 @@ describe("Conference activity architecture", () => {
 
   it("animates Hot entirely on the client with reduced-motion support", () => {
     expect(feed).toContain("styles.hotFlame");
+    expect(feed).toContain("lastActivityAt: reheatedAt");
     expect(css).toContain("@keyframes conference-hot-flame");
     expect(css).toContain("prefers-reduced-motion: no-preference");
     expect(css).not.toContain("fetch(");

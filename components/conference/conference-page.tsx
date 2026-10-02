@@ -102,7 +102,12 @@ function TopicCard({
   onRestore: (topic: ConferenceTopic) => void;
   onVoteState: (
     id: string,
-    state: { yourVote: ConferenceVote | null; hypeCount: number; passCount: number }
+    state: {
+      yourVote: ConferenceVote | null;
+      hypeCount: number;
+      passCount: number;
+      lastActivityAt: string;
+    }
   ) => void;
   onError: (message: string) => void;
 }) {
@@ -114,15 +119,20 @@ function TopicCard({
 
   function react(selected: ConferenceVote) {
     if (optimistic) return;
-    const previous = { vote, hypeCount, passCount };
+    const previous = { vote, hypeCount, passCount, lastActivityAt: topic.lastActivityAt };
     const next = nextVoteState(vote, selected, hypeCount, passCount);
+    const reheatedAt =
+      selected === "hype" && next.vote === "hype"
+        ? new Date().toISOString()
+        : topic.lastActivityAt;
     setVote(next.vote);
     setHypeCount(next.hypeCount);
     setPassCount(next.passCount);
     onVoteState(topic.id, {
       yourVote: next.vote,
       hypeCount: next.hypeCount,
-      passCount: next.passCount
+      passCount: next.passCount,
+      lastActivityAt: reheatedAt
     });
 
     startMutation(async () => {
@@ -139,7 +149,8 @@ function TopicCard({
         onVoteState(topic.id, {
           yourVote: previous.vote,
           hypeCount: previous.hypeCount,
-          passCount: previous.passCount
+          passCount: previous.passCount,
+          lastActivityAt: previous.lastActivityAt
         });
         onError(result.message);
       }
@@ -312,7 +323,12 @@ export function ConferencePage({
 
   function updateTopicVote(
     id: string,
-    state: { yourVote: ConferenceVote | null; hypeCount: number; passCount: number }
+    state: {
+      yourVote: ConferenceVote | null;
+      hypeCount: number;
+      passCount: number;
+      lastActivityAt: string;
+    }
   ) {
     setTopics((current) =>
       current.map((topic) => (topic.id === id ? { ...topic, ...state } : topic))

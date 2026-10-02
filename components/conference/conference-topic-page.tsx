@@ -26,6 +26,7 @@ import {
 } from "@/components/conference/conference-action-menu";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { detectLocationRisk } from "@/lib/content/safety";
+import { isConferenceVoiceCollapsed } from "@/lib/conference/ranking";
 import type {
   ConferenceActionResult,
   ConferenceReply,
@@ -94,7 +95,8 @@ function ReactionPair({
   initialHypeCount,
   initialPassCount,
   onError,
-  onStale
+  onStale,
+  onVoteState
 }: {
   targetType: "topic" | "reply";
   targetId: string;
@@ -103,6 +105,11 @@ function ReactionPair({
   initialPassCount: number;
   onError: (value: string) => void;
   onStale: () => void;
+  onVoteState?: (state: {
+    yourVote: ConferenceVote | null;
+    hypeCount: number;
+    passCount: number;
+  }) => void;
 }) {
   const [vote, setVote] = useState(initialVote);
   const [hypeCount, setHypeCount] = useState(initialHypeCount);
@@ -115,6 +122,11 @@ function ReactionPair({
     setVote(next.vote);
     setHypeCount(next.hypeCount);
     setPassCount(next.passCount);
+    onVoteState?.({
+      yourVote: next.vote,
+      hypeCount: next.hypeCount,
+      passCount: next.passCount
+    });
 
     startMutation(async () => {
       const result = await voteConferenceAction(targetType, targetId, selected);
@@ -126,6 +138,11 @@ function ReactionPair({
         setVote(previous.vote);
         setHypeCount(previous.hypeCount);
         setPassCount(previous.passCount);
+        onVoteState?.({
+          yourVote: previous.vote,
+          hypeCount: previous.hypeCount,
+          passCount: previous.passCount
+        });
         onError(result.message);
       }
     });
@@ -180,6 +197,13 @@ function ReplyCard({
 }) {
   const [, startMutation] = useTransition();
   const optimistic = reply.id.startsWith("optimistic-");
+  const [voteState, setVoteState] = useState({
+    yourVote: reply.yourVote,
+    hypeCount: reply.hypeCount,
+    passCount: reply.passCount
+  });
+  const [revealed, setRevealed] = useState(false);
+  const communityCollapsed = !reply.isYours && isConferenceVoiceCollapsed(voteState);
 
   function removeThen(task: () => Promise<ConferenceActionResult>) {
     onRemove(reply.id);
@@ -203,13 +227,25 @@ function ReplyCard({
             <span>{timeAgo(reply.createdAt)}</span>
             {optimistic ? <span className="text-primary">Sending…</span> : null}
           </div>
-          {reply.replyTo ? (
-            <div className="mt-2 rounded-xl border border-border/70 bg-secondary/35 px-2.5 py-2 text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">Replying to {reply.replyTo.voiceLabel}</span>
-              <p className="mt-0.5 truncate">{reply.replyTo.body}</p>
-            </div>
-          ) : null}
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-[1.45] text-foreground">{reply.body}</p>
+          {communityCollapsed && !revealed ? (
+            <button
+              type="button"
+              onClick={() => setRevealed(true)}
+              className="focus-ring mt-2 w-full rounded-xl border border-dashed border-border/80 bg-secondary/30 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Voice hidden by community votes · Show Voice
+            </button>
+          ) : (
+            <>
+              {reply.replyTo ? (
+                <div className="mt-2 rounded-xl border border-border/70 bg-secondary/35 px-2.5 py-2 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">Replying to {reply.replyTo.voiceLabel}</span>
+                  <p className="mt-0.5 truncate">{reply.replyTo.body}</p>
+                </div>
+              ) : null}
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-[1.45] text-foreground">{reply.body}</p>
+            </>
+          )}
         </div>
 
         {!optimistic ? (
@@ -268,6 +304,7 @@ function ReplyCard({
               initialPassCount={reply.passCount}
               onError={onError}
               onStale={() => window.location.assign("/conference?notice=unavailable")}
+              onVoteState={setVoteState}
             />
           ) : (
             <span className="inline-flex h-8 items-center rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
