@@ -271,7 +271,16 @@ function TopicCard({
             </button>
           </>
         ) : (
-          <span className="inline-flex h-8 items-center rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">Your Topic</span>
+          <div className="flex items-center gap-1.5" aria-label="Your Topic vote counts">
+            <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+              <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+              Hype {topic.hypeCount}
+            </span>
+            <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+              <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+              Pass {topic.passCount}
+            </span>
+          </div>
         )}
 
         {optimistic ? (

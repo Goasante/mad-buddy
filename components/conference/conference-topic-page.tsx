@@ -324,9 +324,16 @@ function ReplyCard({
               onVoteState={(state) => onVoteState(reply.id, state)}
             />
           ) : (
-            <span className="inline-flex h-8 items-center rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
-              Your Voice
-            </span>
+            <div className="flex items-center gap-1.5" aria-label="Your Voice vote counts">
+              <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+                <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                Hype {reply.hypeCount}
+              </span>
+              <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                Pass {reply.passCount}
+              </span>
+            </div>
           )}
           <button
             type="button"
@@ -582,7 +589,16 @@ export function ConferenceTopicPage({ topic }: { topic: ConferenceTopicDetail })
               />
             </>
           ) : (
-            <span className="inline-flex h-8 items-center rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">Your Topic</span>
+            <div className="flex items-center gap-1.5" aria-label="Your Topic vote counts">
+              <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+                <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                Hype {liveTopic.hypeCount}
+              </span>
+              <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                Pass {liveTopic.passCount}
+              </span>
+            </div>
           )}
           <span className="inline-flex h-8 items-center gap-1 rounded-full bg-secondary/55 px-2.5 text-xs font-semibold text-muted-foreground">
             <MessageCircle className="h-3.5 w-3.5" />
