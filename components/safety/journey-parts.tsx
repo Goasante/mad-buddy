@@ -86,9 +86,9 @@ export function journeyTone(journey: SafeArrivalJourney, nowMs: number): Journey
 }
 
 const TONE_LABEL: Record<JourneyTone, string> = {
-  transit: "IN TRANSIT",
-  extended: "EXTENDED",
-  overdue: "NOT CONFIRMED",
+  transit: "ON THE WAY",
+  extended: "ON THE WAY",
+  overdue: "NEEDS UPDATE",
   arrived: "ARRIVED",
   ended: "ENDED"
 };
@@ -96,7 +96,7 @@ const TONE_LABEL: Record<JourneyTone, string> = {
 const TONE_CHIP: Record<JourneyTone, string> = {
   transit: "border-orange-400/30 bg-orange-400/12 text-orange-700 dark:text-orange-200",
   extended: "border-orange-400/30 bg-orange-400/12 text-orange-700 dark:text-orange-200",
-  overdue: "border-red-400/30 bg-red-400/12 text-red-700 dark:text-red-200",
+  overdue: "border-amber-400/30 bg-amber-400/12 text-amber-700 dark:text-amber-200",
   arrived: "border-emerald-400/30 bg-emerald-400/12 text-emerald-700 dark:text-emerald-200",
   ended: "border-border bg-secondary text-muted-foreground"
 };
@@ -116,7 +116,7 @@ export function JourneyStatusChip({ tone, className }: { tone: JourneyTone; clas
           tone === "arrived"
             ? "bg-emerald-500"
             : tone === "overdue"
-              ? "bg-red-500"
+              ? "bg-amber-500"
               : tone === "ended"
                 ? "bg-muted-foreground"
                 : "bg-orange-500"
@@ -125,6 +125,122 @@ export function JourneyStatusChip({ tone, className }: { tone: JourneyTone; clas
       />
       {TONE_LABEL[tone]}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Privacy-safe journey stages
+// ---------------------------------------------------------------------------
+
+type JourneyStageState = "done" | "current" | "upcoming" | "success" | "attention";
+
+/**
+ * A boarding-pass style progress rail built only from canonical status and
+ * timestamps. It is not geographic progress: no route position or live device
+ * signal is represented here.
+ */
+export function JourneyStageRail({
+  journey,
+  nowMs,
+  className
+}: {
+  journey: SafeArrivalJourney;
+  nowMs: number;
+  className?: string;
+}) {
+  const expectedMs = Date.parse(journey.expectedArrivalAt);
+  const tone = journeyTone(journey, nowMs);
+  const arrived = tone === "arrived";
+  const needsUpdate = tone === "overdue";
+  const arrivalWindow =
+    Number.isFinite(expectedMs) &&
+    nowMs >= expectedMs &&
+    !arrived &&
+    !needsUpdate;
+
+  const steps: Array<{ label: string; state: JourneyStageState }> = [
+    { label: "Started", state: "done" },
+    {
+      label: "On the way",
+      state: arrived || needsUpdate || arrivalWindow ? "done" : "current"
+    },
+    {
+      label: "Arrival window",
+      state: arrived || needsUpdate ? "done" : arrivalWindow ? "current" : "upcoming"
+    },
+    {
+      label: arrived ? "Arrived" : needsUpdate ? "Needs update" : "Check-in",
+      state: arrived ? "success" : needsUpdate ? "attention" : "upcoming"
+    }
+  ];
+
+  const dotClass = (state: JourneyStageState) =>
+    state === "success"
+      ? "border-emerald-500 bg-emerald-500 text-white"
+      : state === "attention"
+        ? "border-amber-500 bg-amber-500 text-white"
+        : state === "current"
+          ? "border-orange-500 bg-orange-500 text-white"
+          : state === "done"
+            ? "border-orange-400/60 bg-orange-400/20 text-orange-700 dark:text-orange-200"
+            : "border-border bg-secondary text-muted-foreground";
+
+  return (
+    <div
+      className={cn(
+        "rounded-[1.25rem] border border-border/70 bg-card/60 px-4 py-3.5",
+        className
+      )}
+      aria-label="Safe Arrival journey stages"
+    >
+      <ol className="grid grid-cols-4 gap-1">
+        {steps.map((step, index) => (
+          <li key={step.label} className="relative flex min-w-0 flex-col items-center gap-2 text-center">
+            {index < steps.length - 1 ? (
+              <span
+                className={cn(
+                  "absolute left-[calc(50%+0.75rem)] top-[0.6875rem] h-px w-[calc(100%-0.5rem)]",
+                  step.state === "done" || step.state === "success"
+                    ? "bg-orange-400/45"
+                    : "bg-border"
+                )}
+                aria-hidden="true"
+              />
+            ) : null}
+            <span
+              className={cn(
+                "relative z-10 grid h-6 w-6 place-items-center rounded-full border text-[0.625rem] font-bold",
+                dotClass(step.state)
+              )}
+              aria-hidden="true"
+            >
+              {step.state === "done" || step.state === "success" ? (
+                <Check className="h-3 w-3" strokeWidth={3} />
+              ) : (
+                index + 1
+              )}
+            </span>
+            <span
+              className={cn(
+                "w-full truncate text-center text-[0.625rem] font-semibold leading-4",
+                step.state === "current"
+                  ? "text-orange-700 dark:text-orange-200"
+                  : step.state === "attention"
+                    ? "text-amber-700 dark:text-amber-200"
+                    : step.state === "success"
+                      ? "text-emerald-700 dark:text-emerald-300"
+                      : "text-muted-foreground"
+              )}
+            >
+              {step.label}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-2 text-center text-[0.625rem] text-muted-foreground">
+        Journey status only · no live position shared
+      </p>
+    </div>
   );
 }
 
@@ -489,11 +605,11 @@ export function JourneyCountdown({ journey, nowMs }: { journey: SafeArrivalJourn
         <p
           className={cn(
             "flex items-center gap-1.5 text-sm font-semibold",
-            tone === "overdue" ? "text-red-600 dark:text-red-300" : "text-orange-600 dark:text-orange-300"
+            tone === "overdue" ? "text-amber-700 dark:text-amber-200" : "text-orange-600 dark:text-orange-300"
           )}
         >
           <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {tone === "overdue" ? "Arrival not confirmed" : "Arrival time reached"}
+          {tone === "overdue" ? "Update needed" : "Arrival window open"}
         </p>
       )}
     </>
