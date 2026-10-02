@@ -5,22 +5,22 @@ const HOUR = 60 * 60 * 1000;
 const now = Date.parse("2026-07-23T12:00:00.000Z");
 
 describe("resolveJourneyState", () => {
-  it("shows In transit while active before the expected time", () => {
+  it("shows On the way while active before the expected time", () => {
     const state = resolveJourneyState("active", {
       expectedArrivalMs: now + HOUR,
       gracePeriodMinutes: 20,
       nowMs: now
     });
-    expect(state).toMatchObject({ key: "in_transit", status: "In transit", motion: "active", isLive: true });
+    expect(state).toMatchObject({ key: "in_transit", status: "On the way", motion: "active", isLive: true });
   });
 
-  it("softens to Still on the way past the expected time but within grace", () => {
+  it("moves into the Arrival window past the expected time but within grace", () => {
     const state = resolveJourneyState("active", {
       expectedArrivalMs: now - 5 * 60 * 1000,
       gracePeriodMinutes: 20,
       nowMs: now
     });
-    expect(state.status).toBe("Still on the way");
+    expect(state.status).toBe("Arrival window");
     expect(state.motion).toBe("active");
   });
 
@@ -31,7 +31,7 @@ describe("resolveJourneyState", () => {
 
   it("shows a neutral, non-alarmist waiting state for unconfirmed", () => {
     const state = resolveJourneyState("unconfirmed");
-    expect(state).toMatchObject({ key: "waiting", motion: "waiting", isLive: true, announce: true });
+    expect(state).toMatchObject({ key: "waiting", status: "Needs update", motion: "waiting", isLive: true, announce: true });
     // Never implies danger.
     expect(state.status.toLowerCase()).not.toMatch(/missing|danger|emergency|alert|lost/);
   });
