@@ -27,7 +27,9 @@ export function VoiceMessageBubbleV4({
   initialSeconds?: number;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
   const progressRef = useRef<HTMLButtonElement | null>(null);
+  const prefetchStartedRef = useRef(false);
   const lastPersistedRef = useRef(0);
   const elapsedRef = useRef(Math.max(0, initialSeconds));
   const [playback, setPlayback] = useState<AuthorizedVoicePlayback | null>(null);
@@ -80,21 +82,47 @@ export function VoiceMessageBubbleV4({
     return result.playback;
   }, [conversationId, messageId]);
 
-  // Prefetch the signed playback URL while the bubble is visible, so the
-  // <audio> element is already mounted (and audioRef populated) by the time
-  // someone taps play. This does NOT call play() itself.
+  // Prefetch only when this bubble is near the viewport. A thread can contain
+  // dozens of voice notes; authorising every one on mount creates a burst of
+  // media API + signing work before the reader has touched any of them.
   useEffect(() => {
+    const node = bubbleRef.current;
+    if (!node) return;
+    prefetchStartedRef.current = false;
     let disposed = false;
-    void getVoiceMessagePlaybackViaApi({ conversationId, messageId }).then((result) => {
-      if (disposed) return;
-      if (result.ok && result.playback) {
-        setPlayback(result.playback);
-        setFailed(false);
-      }
-    });
+    let observer: IntersectionObserver | null = null;
+    let fallbackTimer = 0;
+
+    const prefetch = () => {
+      if (prefetchStartedRef.current) return;
+      prefetchStartedRef.current = true;
+      void getVoiceMessagePlaybackViaApi({ conversationId, messageId }).then((result) => {
+        if (disposed) return;
+        if (result.ok && result.playback) {
+          setPlayback(result.playback);
+          setFailed(false);
+        }
+      });
+    };
+
+    if (typeof IntersectionObserver === "undefined") {
+      fallbackTimer = window.setTimeout(prefetch, 250);
+    } else {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return;
+          observer?.disconnect();
+          prefetch();
+        },
+        { rootMargin: "180px 0px" }
+      );
+      observer.observe(node);
+    }
+
     return () => {
       disposed = true;
-      audioRef.current?.pause();
+      observer?.disconnect();
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
     };
   }, [conversationId, messageId]);
 
@@ -165,7 +193,7 @@ export function VoiceMessageBubbleV4({
   }
 
   return (
-    <div>
+    <div ref={bubbleRef}>
       <div className="voice-bubble min-w-[220px]">
         {src ? (
           <audio

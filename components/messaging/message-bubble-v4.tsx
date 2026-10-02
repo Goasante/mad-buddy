@@ -6,9 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { ChatPollCard } from "@/components/messaging/chat-poll-card";
 import { MessageAttachmentImage } from "@/components/messaging/message-attachment-image";
 import { MessageInfoV4 } from "@/components/messaging/message-info-v4";
-import {
-  useConversationReactionSummaries
-} from "@/components/messaging/reaction-summary-cache-v4";
 import { RichMediaMessageV4 } from "@/components/messaging/rich-media-message-v4";
 import { StructuredMessageCardV4 } from "@/components/messaging/structured-message-card-v4";
 import { VoiceMessageBubbleV4 } from "@/components/messaging/voice-message-bubble-v4";
@@ -29,6 +26,7 @@ const REPLY_THRESHOLD = 58;
 const MAX_REPLY_DRAG = 82;
 const LONG_PRESS_MS = 430;
 const MOVE_CANCEL = 12;
+const MESSAGE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
 const REACTIONS = [
   ["heart", "❤️"],
@@ -123,8 +121,7 @@ export function MessageBubbleV4({
   const startRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
-  const reactionMap = useConversationReactionSummaries(conversationId);
-  const liveAggregates = reactionAggregates.length > 0 ? reactionAggregates : reactionMap[message.id] ?? [];
+  const liveAggregates = reactionAggregates;
   const canEdit = actionsOpen && canEditMessage({
     isSender: message.isMine,
     createdAtMs: Date.parse(message.createdAt),
@@ -292,7 +289,7 @@ export function MessageBubbleV4({
             <div className={cn("mt-1 flex items-center justify-end gap-1 text-xs font-normal", message.isMine ? "text-white/55" : "text-muted-foreground/75")}>
               {saved ? <Bookmark className="h-3 w-3 fill-current" aria-label="Saved" /> : null}
               {pinned ? <Pin className="h-3 w-3 fill-current" aria-label="Pinned" /> : null}
-              <span>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(message.createdAt))}</span>
+              <span>{MESSAGE_TIME_FORMATTER.format(new Date(message.createdAt))}</span>
               {message.isMine ? deliveryIcon(message.state) : null}
             </div>
           </div>

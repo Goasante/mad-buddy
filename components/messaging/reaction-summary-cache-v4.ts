@@ -16,7 +16,7 @@ type Entry = {
 const entries = new Map<string, Entry>();
 const EMPTY_SUMMARY: MessageReactionSummaryMap = {};
 const FRESH_MS = 2_500;
-const POLL_MS = 5_000;
+const POLL_MS = 15_000;
 
 function entryFor(conversationId: string): Entry {
   let entry = entries.get(conversationId);
@@ -110,15 +110,16 @@ export function optimisticallySetMessageReaction(input: {
   };
 }
 
-export function useConversationReactionSummaries(conversationId: string) {
-  const entry = entryFor(conversationId);
+export function useConversationReactionSummaries(conversationId: string | null) {
+  const entry = conversationId ? entryFor(conversationId) : null;
   const snapshot = useSyncExternalStore(
-    (listener) => subscribe(conversationId, listener),
-    () => entry.data,
+    (listener) => (conversationId ? subscribe(conversationId, listener) : () => undefined),
+    () => entry?.data ?? EMPTY_SUMMARY,
     () => EMPTY_SUMMARY
   );
 
   useEffect(() => {
+    if (!conversationId) return;
     const onVisible = () => {
       if (document.visibilityState === "visible") void load(conversationId, true);
     };

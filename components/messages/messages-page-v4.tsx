@@ -63,7 +63,8 @@ import { ConversationRowV4 } from "@/components/messaging/conversation-row-v4";
 import { MessageBubbleV4 } from "@/components/messaging/message-bubble-v4";
 import {
   invalidateConversationReactionSummaries,
-  optimisticallySetMessageReaction
+  optimisticallySetMessageReaction,
+  useConversationReactionSummaries
 } from "@/components/messaging/reaction-summary-cache-v4";
 import { MessageComposerV4Shell } from "@/components/messaging/message-composer-v4-shell";
 import { planChatClosedNotice } from "@/lib/messaging/plan-chat-closure";
@@ -321,7 +322,9 @@ export function MessagesPageV4({
      retried into the thread it came from, not the one currently on screen. */
   const retryDraftsRef = useRef<Map<string, { conversationId: string; clientMessageId: string; text: string | null; kind: "text" | "voice"; durationSeconds: number | null; mediaId?: string }>>(new Map());
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const composerHostRef = useRef<HTMLDivElement | null>(null);
   const nearBottomRef = useRef(true);
+  const previousOutgoingRef = useRef<{ conversationId: string | null; count: number }>({ conversationId: null, count: 0 });
   const initialScrollPendingRef = useRef(false);
   const mountedRef = useRef(true);
   const loadRequestIdRef = useRef(0);
@@ -384,6 +387,7 @@ export function MessagesPageV4({
   const pendingHiddenRef = useRef(new Set<string>());
 
   useImmersiveWhile(Boolean(selectedId));
+  const reactionSummaries = useConversationReactionSummaries(selectedId);
 
   useEffect(() => {
     const timers = confirmationTimersRef.current;
@@ -809,6 +813,28 @@ export function MessagesPageV4({
   }
 
   const outgoingCount = selectedId ? optimisticByConversation[selectedId]?.length ?? 0 : 0;
+
+  // An outgoing row belongs to the person who just pressed Send. Reveal it
+  // regardless of a stale near-bottom measurement caused by the recorder /
+  // review composer changing height. Only an INCREASE forces this jump; a
+  // later optimistic settlement never yanks somebody away from older messages.
+  useEffect(() => {
+    const previous = previousOutgoingRef.current;
+    const increased = previous.conversationId === selectedId && outgoingCount > previous.count;
+    previousOutgoingRef.current = { conversationId: selectedId, count: outgoingCount };
+    if (!selectedId || loadingMessages || !increased) return;
+
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      scrollToBottom("auto");
+      secondFrame = requestAnimationFrame(() => scrollToBottom("auto"));
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      if (secondFrame) cancelAnimationFrame(secondFrame);
+    };
+  }, [loadingMessages, outgoingCount, selectedId]);
+
   useEffect(() => {
     if (!selectedId || loadingMessages) return;
     if (initialScrollPendingRef.current) {
@@ -817,7 +843,36 @@ export function MessagesPageV4({
       return;
     }
     if (nearBottomRef.current) requestAnimationFrame(() => scrollToBottom("smooth"));
-  }, [loadingMessages, messages.length, outgoingCount, selectedId]);
+  }, [loadingMessages, messages.length, selectedId]);
+
+  // The composer transforms between text, recording and review rows. Because
+  // it sits outside the scroll owner, that height change changes the viewport.
+  // Preserve bottom anchoring when the reader was already at the bottom so the
+  // newest bubble never ends up visually tucked underneath the composer.
+  useEffect(() => {
+    const host = composerHostRef.current;
+    if (!host || !selectedId || typeof ResizeObserver === "undefined") return;
+
+    let previousHeight = host.getBoundingClientRect().height;
+    let frame = 0;
+    const observer = new ResizeObserver((entries) => {
+      const nextHeight = entries[0]?.contentRect.height ?? host.getBoundingClientRect().height;
+      if (Math.abs(nextHeight - previousHeight) < 1) return;
+      previousHeight = nextHeight;
+      if (!nearBottomRef.current) return;
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const thread = threadRef.current;
+        if (!thread) return;
+        thread.scrollTo({ top: thread.scrollHeight, behavior: "auto" });
+      });
+    });
+    observer.observe(host);
+    return () => {
+      observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [selectedId]);
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
   const selectedContext = selected ? conversationContext(selected) : { subtitle: null, shared: false };
@@ -876,6 +931,10 @@ export function MessagesPageV4({
     const outgoing = selectedId ? optimisticByConversation[selectedId] : undefined;
     return outgoing && outgoing.length > 0 ? pruneConfirmed(outgoing, messages) : EMPTY_OPTIMISTIC;
   }, [messages, optimisticByConversation, selectedId]);
+  const confirmedClientMessageIds = useMemo(
+    () => new Set(messages.map((message) => message.clientMessageId).filter((id): id is string => Boolean(id))),
+    [messages]
+  );
   const replyMessage = replyingToId ? messages.find((message) => message.id === replyingToId) ?? null : null;
   const matchingIds = useMemo(() => {
     const term = threadQuery.trim().toLowerCase();
@@ -1546,6 +1605,7 @@ export function MessagesPageV4({
                                 isGroup={Boolean(isGroup)}
                                 replyContext={replyContexts[message.id] ?? null}
                                 poll={pollByMessage.get(message.id) ?? null}
+                                reactionAggregates={reactionSummaries[message.id] ?? []}
                                 saved={savedIds.has(message.id)}
                                 pinned={pinnedIds.has(message.id)}
                                 highlighted={matchingIds.includes(message.id)}
@@ -1614,6 +1674,7 @@ export function MessagesPageV4({
                   );
                 })()
               ) : (
+              <div ref={composerHostRef} data-chat-composer-host className="shrink-0">
               <MessageComposerV4Shell
                 key={selected.id}
                 conversationId={selected.id}
@@ -1633,12 +1694,13 @@ export function MessagesPageV4({
                    unambiguous, rather than read from `selectedId` later. */
                 onOptimisticSend={(draft) => addOptimistic(selected.id, draft)}
                 onOptimisticSettled={(clientMessageId, outcome) => settleOptimistic(selected.id, clientMessageId, outcome)}
-                confirmedClientMessageIds={new Set(messages.map((message) => message.clientMessageId).filter((id): id is string => Boolean(id)))}
+                confirmedClientMessageIds={confirmedClientMessageIds}
                 /* The shell's ordinary-send path intentionally does not invoke
                    this anymore. It remains for non-message composer actions;
                    any reconciliation it triggers is non-blocking. */
                 onSent={() => { void refreshMessages(selected.id, false, false); void syncConversations(); scrollToBottom(); }}
               />
+              </div>
               )}
             </>
           )}
