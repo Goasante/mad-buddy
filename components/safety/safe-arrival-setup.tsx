@@ -306,9 +306,9 @@ export function SafeArrivalSetup({
         {step === "watchers" ? (
           <div className="space-y-3">
             <div>
-              <p className="text-sm font-semibold">Who should check on you?</p>
+              <p className="text-sm font-semibold">Who should check in on you?</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                They&apos;ll know when you arrive, and if you miss your check-in.
+                They&apos;ll know when you arrive, and if your check-in window ends without an update.
               </p>
             </div>
 
