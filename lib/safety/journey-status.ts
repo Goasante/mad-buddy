@@ -44,8 +44,8 @@ export type JourneyTiming = {
 
 /**
  * Maps a canonical Safe Arrival status (plus optional timing) to its animation
- * state. Timing only refines the wording of a still-live journey ("In transit"
- * before the expected time, "Still on the way" once it's passed but within the
+ * state. Timing only refines the wording of a still-live journey ("On the way"
+ * before the expected time, "Arrival window" once it's passed but within the
  * grace window); it never invents progress or movement.
  */
 export function resolveJourneyState(status: SafeArrivalStatus, timing?: JourneyTiming): JourneyState {
@@ -66,7 +66,7 @@ export function resolveJourneyState(status: SafeArrivalStatus, timing?: JourneyT
           });
       return {
         key: "in_transit",
-        status: stillOnTheWay ? "Still on the way" : "In transit",
+        status: stillOnTheWay ? "Arrival window" : "On the way",
         motion: "active",
         isLive: true,
         announce: false
@@ -74,14 +74,14 @@ export function resolveJourneyState(status: SafeArrivalStatus, timing?: JourneyT
     }
 
     case "grace_period":
-      return { key: "in_transit", status: "Still on the way", motion: "active", isLive: true, announce: false };
+      return { key: "in_transit", status: "Arrival window", motion: "active", isLive: true, announce: false };
 
     case "unconfirmed":
       // Neutral by construction: the confirmation simply hasn't arrived. Never
       // "missing", never an emergency (spec §9).
       return {
         key: "waiting",
-        status: "Waiting for the latest journey update",
+        status: "Needs update",
         motion: "waiting",
         isLive: true,
         announce: true
