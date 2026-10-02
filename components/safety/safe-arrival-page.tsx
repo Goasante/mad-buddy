@@ -617,6 +617,7 @@ function WatcherJourneyView({
 }) {
   const router = useRouter();
   const [messagePending, startMessageTransition] = useTransition();
+  const [messageError, setMessageError] = useState("");
   const reducedMotion = useReducedMotion();
   const tone = journeyTone(journey, nowMs);
   const realtime = useJourneyRealtime({
@@ -756,7 +757,7 @@ function WatcherJourneyView({
         </div>
       ) : null}
 
-      {journey.status === "unconfirmed" && journey.myAcknowledgement === "accepted" ? (
+      {tone === "overdue" && journey.myAcknowledgement === "accepted" ? (
         <div className="rounded-[1.25rem] border border-amber-400/30 bg-amber-400/10 p-4" role="status">
           <p className="text-sm font-semibold">{firstName} hasn&apos;t confirmed arrival</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -767,13 +768,21 @@ function WatcherJourneyView({
             size="lg"
             className="mt-3 min-h-11 w-full"
             disabled={messagePending}
-            onClick={() => startMessageTransition(async () => {
-              const result = await openDirectConversationAction(journey.travellerId);
-              if (result.ok && result.conversationId) router.push(conversationHref(result.conversationId));
-            })}
+            onClick={() => {
+              setMessageError("");
+              startMessageTransition(async () => {
+                const result = await openDirectConversationAction(journey.travellerId);
+                if (result.ok && result.conversationId) {
+                  router.push(conversationHref(result.conversationId));
+                  return;
+                }
+                setMessageError("Couldn’t open the chat. Try again, or open Messages from the bottom bar.");
+              });
+            }}
           >
-            Message {firstName}
+            {messagePending ? "Opening chat…" : `Message ${firstName}`}
           </Button>
+          {messageError ? <p className="mt-2 text-xs text-destructive" role="alert">{messageError}</p> : null}
         </div>
       ) : null}
 
