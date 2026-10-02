@@ -194,7 +194,9 @@ export function SafeArrivalPage({
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-[560px] space-y-4 pb-4 pt-4">
+    <div className="mx-auto w-full max-w-[560px] space-y-3 pb-2 pt-2 sm:pb-4 sm:pt-3">
+      <PageHeader title="Safe Arrival" backHref="/dashboard" />
+
       {toast ? (
         <div
           className="rounded-[1rem] border border-orange-400/20 bg-orange-400/10 px-3 py-2.5 text-sm text-orange-800 dark:text-orange-50"
@@ -323,10 +325,6 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
 
   return (
     <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW} className="space-y-4">
-      {/* Reached from Home's Quick Controls rather than a bottom-nav tab, so
-          the nested Back variant. The centred subtitle below is kept. */}
-      <PageHeader title="Safe Arrival" backHref="/dashboard" />
-
       <header className="px-1 text-center">
         {/* Hidden on mobile: the shared header carries the title there. */}
         <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Safe Arrival</h1>
@@ -452,10 +450,10 @@ function ActiveJourneyView({
   const extraExtensions = EXTENSION_OPTIONS_MINUTES.filter((minutes) => minutes !== 10 && minutes !== 20);
 
   return (
-    <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_ACTIVE} className="space-y-4">
+    <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_ACTIVE} className="space-y-3">
       <JourneyHeader title="Safe Arrival" tone={tone} />
 
-      <JourneyVisual tone={tone} className="min-h-[10rem]">
+      <JourneyVisual tone={tone} className="min-h-[8.5rem] sm:min-h-[10rem]">
         <JourneyMark tone={tone} />
         <div className="text-center">
           <h2 className="text-xl font-semibold tracking-tight">{journey.destinationLabel}</h2>
@@ -481,11 +479,12 @@ function ActiveJourneyView({
           acceptedCount={journey.acceptedCount}
           invitedCount={journey.invitedCount}
           viewerIsTraveller
+          className="p-3 sm:p-4"
           onOpenList={journey.contacts.length > 0 ? () => setWatcherListOpen(true) : undefined}
         />
       </div>
 
-      <JourneyStageRail journey={journey} nowMs={nowMs} />
+      <JourneyStageRail journey={journey} nowMs={nowMs} className="p-3 sm:p-4" />
 
       {journey.note ? (
         <p className="rounded-[1rem] border border-border/70 bg-card/60 px-4 py-3 text-sm text-muted-foreground">
@@ -493,7 +492,7 @@ function ActiveJourneyView({
         </p>
       ) : null}
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Button
           type="button"
           size="lg"
@@ -643,7 +642,7 @@ function WatcherJourneyView({
   return (
     <div data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW} className="space-y-4">
       <header className="px-1 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">Safe Arrival</h1>
+        <h1 className="hidden text-xl font-semibold tracking-tight md:block">Safe Arrival</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">Checking in on {firstName}</p>
       </header>
 
@@ -926,8 +925,8 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 function JourneyHeader({ title, tone }: { title: string; tone: Parameters<typeof JourneyStatusChip>[0]["tone"] }) {
   return (
-    <header className="flex flex-col items-center gap-2 px-1">
-      <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+    <header className="flex flex-col items-center gap-1.5 px-1">
+      <h1 className="hidden text-xl font-semibold tracking-tight md:block">{title}</h1>
       <JourneyStatusChip tone={tone} />
     </header>
   );

@@ -465,6 +465,7 @@ export function ContactStrip({
   invitedCount,
   viewerIsTraveller,
   maxVisible = 4,
+  className,
   onOpenList
 }: {
   contacts: SafeArrivalContact[];
@@ -472,6 +473,7 @@ export function ContactStrip({
   invitedCount: number;
   viewerIsTraveller: boolean;
   maxVisible?: number;
+  className?: string;
   onOpenList?: () => void;
 }) {
   const reducedMotion = useReducedMotion();
@@ -490,7 +492,7 @@ export function ContactStrip({
 
   if (contacts.length === 0 && acceptedCount === 0 && invitedCount === 0) {
     return (
-      <div className="rounded-[1.25rem] border border-border/70 bg-card/60 p-4">
+      <div className={cn("rounded-[1.25rem] border border-border/70 bg-card/60 p-4", className)}>
         <p className="text-sm font-semibold">{viewerIsTraveller ? "Checking in on you" : "Safe Arrival contacts"}</p>
         <p className="mt-1 text-xs text-muted-foreground">Nobody is set to check in on this journey.</p>
       </div>
@@ -541,14 +543,14 @@ export function ContactStrip({
   );
 
   if (!onOpenList) {
-    return <div className="rounded-[1.25rem] border border-border/70 bg-card/60 p-4">{body}</div>;
+    return <div className={cn("rounded-[1.25rem] border border-border/70 bg-card/60 p-4", className)}>{body}</div>;
   }
   return (
     <button
       type="button"
       onClick={onOpenList}
       aria-label={`${headline}. ${detail}. Open the full list.`}
-      className="focus-ring safe-motion w-full rounded-[1.25rem] border border-border/70 bg-card/60 p-4 text-left hover:bg-secondary/40"
+      className={cn("focus-ring safe-motion w-full rounded-[1.25rem] border border-border/70 bg-card/60 p-4 text-left hover:bg-secondary/40", className)}
     >
       {body}
     </button>
