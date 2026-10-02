@@ -8,6 +8,15 @@ create index if not exists jobs_safe_arrival_deadline_idx
   on public.jobs(status, run_at, created_at)
   where job_type = 'safe_arrival.deadline_check';
 
+-- Older staging snapshots can predate the extension-idempotency migration.
+-- Keep this migration replayable without weakening the production contract.
+alter table public.safe_arrival_events
+  add column if not exists client_mutation_id uuid;
+
+create unique index if not exists safe_arrival_events_client_mutation_idx
+  on public.safe_arrival_events(session_id,event_type,client_mutation_id)
+  where client_mutation_id is not null;
+
 create or replace function public.enqueue_safe_arrival_deadline(
   p_session_id uuid,
   p_run_at timestamptz,
