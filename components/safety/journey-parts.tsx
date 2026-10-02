@@ -86,9 +86,9 @@ export function journeyTone(journey: SafeArrivalJourney, nowMs: number): Journey
 }
 
 const TONE_LABEL: Record<JourneyTone, string> = {
-  transit: "IN TRANSIT",
-  extended: "EXTENDED",
-  overdue: "NOT CONFIRMED",
+  transit: "ON THE WAY",
+  extended: "TIME UPDATED",
+  overdue: "NEEDS UPDATE",
   arrived: "ARRIVED",
   ended: "ENDED"
 };
@@ -227,6 +227,100 @@ export function JourneyMark({ tone, large = false }: { tone: JourneyTone; large?
         <MapPin className={large ? "h-9 w-9" : "h-7 w-7"} />
       )}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Lightweight journey stages
+// ---------------------------------------------------------------------------
+
+/**
+ * Boarding-pass style progress using only canonical status and time. It never
+ * represents distance, route or live movement.
+ */
+export function JourneyStageRail({
+  journey,
+  nowMs,
+  className
+}: {
+  journey: SafeArrivalJourney;
+  nowMs: number;
+  className?: string;
+}) {
+  const expectedMs = Date.parse(journey.expectedArrivalAt);
+  const graceEndMs = gracePeriodEndMs({
+    expectedArrivalMs: expectedMs,
+    gracePeriodMinutes: journey.gracePeriodMinutes
+  });
+  const ended = journey.status === "cancelled" || journey.status === "expired";
+  const activeIndex = journey.status === "completed"
+    ? 3
+    : journey.status === "unconfirmed" || nowMs >= graceEndMs
+      ? 2
+      : nowMs >= expectedMs
+        ? 1
+        : 0;
+
+  if (ended) {
+    return (
+      <div className={cn("rounded-[1.25rem] border border-border/70 bg-card/60 px-4 py-3", className)}>
+        <p className="text-sm font-semibold">Journey ended</p>
+        <p className="mt-1 text-xs text-muted-foreground">This Safe Arrival is no longer active.</p>
+      </div>
+    );
+  }
+
+  const stages = [
+    { label: "On the way", hint: "Journey active" },
+    { label: "Arrival window", hint: journeyTime(journey.expectedArrivalAt) },
+    { label: "Needs update", hint: journeyTime(new Date(graceEndMs).toISOString()) },
+    { label: "Arrived", hint: journey.confirmedAt ? journeyTime(journey.confirmedAt) : "Confirm safe" }
+  ];
+
+  return (
+    <div className={cn("rounded-[1.25rem] border border-border/70 bg-card/60 p-4", className)}>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <p className="text-sm font-semibold">Journey progress</p>
+        <p className="text-xs text-muted-foreground">No live location</p>
+      </div>
+      <ol className="grid grid-cols-4 gap-1" aria-label="Safe Arrival journey stages">
+        {stages.map((stage, index) => {
+          const reached = index <= activeIndex;
+          const current = index === activeIndex;
+          return (
+            <li key={stage.label} className="relative min-w-0 text-center">
+              {index < stages.length - 1 ? (
+                <span
+                  className={cn(
+                    "absolute left-[calc(50%+0.7rem)] right-[calc(-50%+0.7rem)] top-[0.45rem] h-px",
+                    index < activeIndex ? (activeIndex === 3 ? "bg-emerald-400/70" : "bg-orange-400/70") : "bg-border"
+                  )}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "relative z-10 mx-auto block h-3.5 w-3.5 rounded-full border-2 ring-4 ring-card",
+                  reached
+                    ? activeIndex === 3
+                      ? "border-emerald-500 bg-emerald-500"
+                      : current && activeIndex === 2
+                        ? "border-amber-500 bg-amber-500"
+                        : "border-orange-500 bg-orange-500"
+                    : "border-border bg-secondary"
+                )}
+                aria-hidden="true"
+              />
+              <span className={cn("mt-2 block truncate text-[0.65rem] font-semibold", current ? "text-foreground" : "text-muted-foreground")}>
+                {stage.label}
+              </span>
+              <span className="mt-0.5 block truncate text-[0.6rem] text-muted-foreground">{stage.hint}</span>
+              {current ? <span className="sr-only">Current stage</span> : null}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -493,7 +587,7 @@ export function JourneyCountdown({ journey, nowMs }: { journey: SafeArrivalJourn
           )}
         >
           <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {tone === "overdue" ? "Arrival not confirmed" : "Arrival time reached"}
+          {tone === "overdue" ? "Waiting for an update" : "Arrival window open"}
         </p>
       )}
     </>

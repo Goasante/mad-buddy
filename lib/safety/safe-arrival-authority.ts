@@ -40,6 +40,12 @@ export async function transitionSafeArrival(
   };
 }
 
+export async function processSafeArrivalDeadline(admin: Admin, sessionId: string): Promise<number> {
+  const { data, error } = await admin.rpc("process_safe_arrival_deadline", { p_session_id: sessionId });
+  if (error) throw error;
+  return data === "unconfirmed" || data === "expired" ? 1 : 0;
+}
+
 export async function processDueSafeArrivals(admin: Admin, limit = 200): Promise<number> {
   const { data, error } = await admin.rpc("process_due_safe_arrivals", { p_limit: limit });
   if (error) throw error;

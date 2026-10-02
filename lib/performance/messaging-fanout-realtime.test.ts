@@ -22,7 +22,7 @@ describe("messaging fan-out and realtime hardening", () => {
   });
 
   it("reuses one broad message INSERT stream instead of a second delivery channel", () => {
-    expect((unread.match(/\\.channel\\(/g) ?? []).length).toBe(1);
+    expect((unread.match(/\.channel\(/g) ?? []).length).toBe(1);
     expect(unread).toContain('export const MESSAGE_INSERTED_EVENT = "mad-buddy:message-inserted"');
     expect(unread).toContain("if (record.sender_id === userId) return;");
     expect(unread).toContain("new CustomEvent(MESSAGE_INSERTED_EVENT");

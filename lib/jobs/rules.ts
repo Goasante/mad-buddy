@@ -21,6 +21,7 @@ export type JobStatus =
 export type JobType =
   // The six that batches 5-13 left un-run.
   | "safe_arrival.unconfirmed_alert"
+  | "safe_arrival.deadline"
   | "safe_arrival.lifecycle_notification"
   | "upfor.announce_started"
   | "media.strip_exif"
@@ -179,9 +180,10 @@ export type ScheduleSpec = {
 };
 
 /**
- * The recurring schedule. Priority 1 is the Safe Arrival alert deliberately:
- * it is the only job here where being late has a safety consequence rather
- * than a cosmetic one.
+ * The recurring schedule. Safe Arrival now schedules a tiny per-session
+ * deadline job at its actual check-in deadline. This five-minute sweep remains
+ * as a safety backstop: in the normal path it finds nothing, but it can recover
+ * a missed/failed deadline job without changing the safety contract.
  */
 export const SCHEDULE: readonly ScheduleSpec[] = [
   { jobType: "safe_arrival.unconfirmed_alert", everyMinutes: 5, priority: 1 },

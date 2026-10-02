@@ -24,7 +24,7 @@ import {
   JourneyCountdown,
   JourneyMark,
   JourneyStatusChip,
-  JourneyTimeline,
+  JourneyStageRail,
   JourneyVisual,
   ContactStrip,
   journeyDayTime,
@@ -309,7 +309,7 @@ const HOME_STEPS = [
   {
     icon: CalendarClock,
     title: "Set your expected arrival",
-    text: "If you haven't confirmed after your grace period, your Muddies are told you haven't checked in."
+    text: "When the arrival window closes without a check-in, your chosen Muddies get a simple update."
   },
   {
     icon: ShieldCheck,
@@ -331,7 +331,7 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
         {/* Hidden on mobile: the shared header carries the title there. */}
         <h1 className="hidden text-2xl font-semibold tracking-tight md:block sm:text-3xl">Safe Arrival</h1>
         <p className="mx-auto mt-1 max-w-[17rem] text-sm text-muted-foreground">
-          Let trusted Muddies know you got there safely.
+          A lightweight check-in for journeys that matter.
         </p>
       </header>
 
@@ -485,7 +485,7 @@ function ActiveJourneyView({
         />
       </div>
 
-      <JourneyTimeline journey={journey} nowMs={nowMs} />
+      <JourneyStageRail journey={journey} nowMs={nowMs} />
 
       {journey.note ? (
         <p className="rounded-[1rem] border border-border/70 bg-card/60 px-4 py-3 text-sm text-muted-foreground">
@@ -778,7 +778,7 @@ function WatcherJourneyView({
         </div>
       ) : null}
 
-      <JourneyTimeline journey={journey} nowMs={nowMs} />
+      <JourneyStageRail journey={journey} nowMs={nowMs} />
 
       {/* Reuses the app's single push transport and its existing preferences.
           No separate notification system, no duplicated preference store. */}
