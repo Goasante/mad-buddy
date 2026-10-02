@@ -3,7 +3,7 @@
 import { useCallback, useEffect } from "react";
 
 import { markInboxDeliveredAction } from "@/app/(app)/messaging-delivery-actions";
-import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { MESSAGE_INSERTED_EVENT } from "@/hooks/use-unread-message-count";
 
 /**
  * A direct-message delivery acknowledgement for an actively connected Messages
@@ -40,30 +40,14 @@ export function MessageDeliveryAck() {
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibility);
 
-    let supabase: ReturnType<typeof createSupabaseBrowserClient> | null = null;
-    try {
-      supabase = createSupabaseBrowserClient();
-    } catch {
-      supabase = null;
-    }
-
-    const channel = supabase
-      ?.channel("messages-delivery-ack")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        acknowledge
-      );
-
-    if (supabase && channel) {
-      void authenticateRealtime(supabase).then(() => channel.subscribe());
-    }
+    const onIncomingMessage = () => acknowledge();
+    window.addEventListener(MESSAGE_INSERTED_EVENT, onIncomingMessage);
 
     return () => {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisibility);
-      if (supabase && channel) void supabase.removeChannel(channel);
+      window.removeEventListener(MESSAGE_INSERTED_EVENT, onIncomingMessage);
     };
   }, [acknowledge]);
 

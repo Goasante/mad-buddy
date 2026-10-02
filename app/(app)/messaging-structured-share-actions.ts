@@ -8,7 +8,7 @@ import { deliverNotification } from "@/lib/notifications/server";
 import { buildNotificationPreview } from "@/lib/messaging/rules";
 import {
   canSendMessage,
-  loadCommunicationPreferences,
+  loadCommunicationPreferencesForUsers,
   resolveConversationAccess
 } from "@/lib/messaging/service";
 import type {
@@ -111,10 +111,15 @@ async function notifyStructuredMembers(
     : { data: null };
   const senderName = senderProfile?.full_name?.trim() || "A Muddy";
   const recipients = (members ?? []).filter((member) => !member.muted_until || member.muted_until < nowIso);
+  const preferencesByUserId = await loadCommunicationPreferencesForUsers(
+    admin,
+    recipients.map((member) => member.user_id)
+  );
 
   await Promise.all(
     recipients.map(async (member) => {
-      const prefs = await loadCommunicationPreferences(admin, member.user_id);
+      const prefs = preferencesByUserId.get(member.user_id);
+      if (!prefs) return;
       const preview = buildNotificationPreview({
         mode: prefs.notificationPreview,
         senderName,

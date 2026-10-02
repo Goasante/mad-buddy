@@ -5,6 +5,7 @@ import { fetchWithTimeout } from "@/lib/network/resilience";
 import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export const MESSAGES_UPDATED_EVENT = "mad-buddy:messages-updated";
+export const MESSAGE_INSERTED_EVENT = "mad-buddy:message-inserted";
 
 /**
  * Canonical unread chat count for navigation badges. Conversation read state
@@ -108,9 +109,19 @@ export function useUnreadMessageCount(userId: string | null) {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel(`message-unread:${userId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
-        // RLS decides which inserts this user may observe. Never trust the raw
-        // payload for a count; refetch the canonical conversation projection.
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        // RLS decides which inserts this user may observe. An own send cannot
+        // increase this user's unread count, so skip that redundant refetch.
+        const record = payload.new as Record<string, unknown>;
+        if (record.sender_id === userId) return;
+
+        window.dispatchEvent(
+          new CustomEvent(MESSAGE_INSERTED_EVENT, {
+            detail: {
+              conversationId: typeof record.conversation_id === "string" ? record.conversation_id : null
+            }
+          })
+        );
         void refresh();
       });
 

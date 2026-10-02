@@ -95,6 +95,35 @@ export async function loadCommunicationPreferences(
   return normalizeCommunicationPreferences(data?.communication_preferences);
 }
 
+/**
+ * Batched communication-preference lookup for recipient fan-out. Every
+ * requested user gets an entry, including users without a stored row, so the
+ * same privacy-first defaults as loadCommunicationPreferences apply.
+ */
+export async function loadCommunicationPreferencesForUsers(
+  admin: Admin,
+  userIds: readonly string[]
+): Promise<Map<string, CommunicationPreferences>> {
+  const uniqueIds = [...new Set(userIds)].filter(Boolean);
+  if (uniqueIds.length === 0) return new Map();
+
+  const { data } = await admin
+    .from("user_preferences")
+    .select("user_id, communication_preferences")
+    .in("user_id", uniqueIds);
+
+  const rawByUserId = new Map(
+    (data ?? []).map((row) => [row.user_id, row.communication_preferences] as const)
+  );
+
+  return new Map(
+    uniqueIds.map((userId) => [
+      userId,
+      normalizeCommunicationPreferences(rawByUserId.get(userId))
+    ])
+  );
+}
+
 /** Whether `senderId` may open/continue a direct conversation with `recipientId`. */
 export async function canCreateDirectConversation(
   admin: Admin,

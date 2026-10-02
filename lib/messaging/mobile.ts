@@ -11,6 +11,7 @@ import {
   canSendMessage,
   getOrCreateDirectConversation,
   loadCommunicationPreferences,
+  loadCommunicationPreferencesForUsers,
   resolveConversationAccess
 } from "@/lib/messaging/service";
 import { guardAction } from "@/lib/admin/enforcement";
@@ -628,11 +629,16 @@ async function notifyOtherMembers(
     .eq("user_id", senderId)
     .maybeSingle();
   const senderName = senderProfile?.full_name?.trim() || "A Muddy";
+  const preferencesByUserId = await loadCommunicationPreferencesForUsers(
+    admin,
+    recipients.map((member) => member.user_id)
+  );
+  const { buildNotificationPreview } = await import("@/lib/messaging/rules");
 
   await Promise.all(
     recipients.map(async (member) => {
-      const prefs = await loadCommunicationPreferences(admin, member.user_id);
-      const { buildNotificationPreview } = await import("@/lib/messaging/rules");
+      const prefs = preferencesByUserId.get(member.user_id);
+      if (!prefs) return;
       const preview = buildNotificationPreview({
         mode: prefs.notificationPreview,
         senderName,
