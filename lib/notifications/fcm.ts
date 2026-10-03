@@ -67,6 +67,38 @@ export type NativePushPayload = {
   data?: Record<string, string>;
 };
 
+/** One target per outbox row, so partial success never replays every device. */
+export async function sendNativePushTarget(
+  admin: ReturnType<typeof createSupabaseAdminClient>, userId: string, targetId: string,
+  payload: NativePushPayload, dispatchId: string, expiresAt: string
+): Promise<"delivered" | "gone"> {
+  const app = getFirebaseApp();
+  if (!app) throw Object.assign(new Error("Push configuration unavailable"), { name: "PushConfigurationUnavailable" });
+  const { data: row, error } = await admin.from("device_push_tokens").select("token")
+    .eq("id", targetId).eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  if (!row) return "gone";
+  try {
+    await getMessaging(app).send({
+      token: row.token, notification: { title: payload.title, body: payload.body },
+      data: { ...payload.data, dispatchId },
+      android: { priority: "high", ttl: Math.max(0, Date.parse(expiresAt) - Date.now()),
+        notification: { sound: "default", tag: dispatchId } },
+      apns: { headers: { "apns-collapse-id": dispatchId,
+        "apns-expiration": String(Math.floor(Date.parse(expiresAt) / 1000)) },
+      payload: { aps: { sound: "default" } } }
+    });
+    return "delivered";
+  } catch (caught) {
+    const code = (caught as { code?: string }).code;
+    if (code !== "messaging/registration-token-not-registered" && code !== "messaging/invalid-registration-token") throw caught;
+    const removed = await admin.from("device_push_tokens").delete().eq("id", targetId)
+      .eq("user_id", userId).eq("token", row.token);
+    if (removed.error) throw removed.error;
+    return "gone";
+  }
+}
+
 /**
  * Sends a push to every device token registered for `userId`. Best-effort:
  * returns silently when unconfigured or the user has no devices, and prunes

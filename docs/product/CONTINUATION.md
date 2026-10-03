@@ -1,5 +1,40 @@
 # God Mode hardening — continuation report
 
+## Current audit release — 3 October 2026
+
+- Durable push follow-up is prepared on `fix/durable-push-delivery`: transactional
+  dispatch persistence, independent device retries, fenced acknowledgements,
+  cron recovery, send-time preference/block/deletion checks and deletion cleanup.
+  Both new migrations (`20261003213820`, `20261003214905`) are staging-only.
+  Apply both before deploying code. Delivery remains at least once; no real
+  device push or production readiness diagnosis has been verified.
+  Validation: 576 files / 9,400 passing tests / one skipped; types and production
+  build passed. See the operations report for limits and staging rollback proof.
+
+- PR #125 merged as `2cb0ecd6bd3f77d1b10c1940688ca9ca18fa8028`.
+  Exact candidate `2f40af42ceb4e3e34ec9e5009af9dd5b1c1ec4e3` passed all
+  three GitHub CI jobs (quality, production build, mobile).
+- Both reviewed database migrations are applied to Production
+  `cabkhxxnrybzhkbtoiiz`, with canonical versions `20261003205830` and
+  `20261003210234`. Verified history: 172 entries, head `20261003210234`.
+- Production grants and all four new guards were verified. Four stalled
+  deletion requests remain untouched; never auto-resume them.
+- Production domain serves commit `2cb0ecd6bd3f77d1b10c1940688ca9ca18fa8028`,
+  deployment `dpl_3L6ioT5Ly78Bh28svqvA3E53Knwv`. Homepage, login, version and
+  shallow health return 200; deeper readiness still returns 503. All three
+  post-merge CI jobs also passed. Readiness remains an open release limitation.
+- Focused deletion cascade, membership, block precedence, immutable-event and
+  budget checks passed on synthetic staging fixtures, all rolled back.
+  Full browser/Auth API/Storage deletion and real-device push are unverified.
+- Remaining work: exact readiness failure/configuration, durable push retries,
+  independent monitoring, backup/restore proof, provider patch/hosting review,
+  real-device and load evidence. See
+  `docs/operations/AUDIT-HARDENING-2026-10-03.md` for boundaries and scope.
+- Code rollback baseline: `941631d4d04e4503887ebbea29ea8b5dcf3de028`.
+  Additive database guards remain in place; do not blindly reverse migrations.
+
+The historical report below predates this release and is retained as history.
+
 **Written at the end of session 24 — PRE-MONETIZATION BASELINE.** The next session continues from here.
 
 ```
