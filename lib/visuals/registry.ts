@@ -173,16 +173,22 @@ const PLAN_ACTIVITY_ART: Partial<Record<PlanCategory, VisualAsset>> = {
  * Versioned paths prevent stale image-optimizer and browser caches.
  */
 const UPFOR_PHOTOGRAPHIC_ART: Partial<Record<PlanCategory, VisualAsset>> = {
-  dinner: { id: "upfor-dinner-natural-v1", path: "/visuals/upfor/dinner-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends sharing a casual meal at a daytime restaurant" },
-  beach: { id: "upfor-beach-natural-v1", path: "/visuals/upfor/beach-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends chatting beside the beach in neutral daytime light" },
-  football: { id: "upfor-football-natural-v1", path: "/visuals/upfor/football-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "A casual football game on a community grass pitch" },
-  study: { id: "upfor-study-natural-v1", path: "/visuals/upfor/study-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Two friends studying together in a naturally lit library" },
-  walk: { id: "upfor-walk-natural-v1", path: "/visuals/upfor/walk-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends walking along a shaded neighbourhood path" },
-  gaming: { id: "upfor-gaming-natural-v1", path: "/visuals/upfor/gaming-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Two friends playing console games in a daytime living room" },
-  coffee: { id: "upfor-coffee-natural-v1", path: "/visuals/upfor/coffee-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Two friends talking over coffee at a daytime cafe" },
-  movie: { id: "upfor-movie-natural-v1", path: "/visuals/upfor/movie-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends watching a film in cinema seats" },
-  party: { id: "upfor-party-natural-v1", path: "/visuals/upfor/party-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends dancing at a casual afternoon courtyard gathering" },
+  dinner: { id: "upfor-dinner-natural-v2", path: "/visuals/upfor/dinner-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Friends sharing a casual meal at a daytime restaurant" },
+  beach: { id: "upfor-beach-natural-v2", path: "/visuals/upfor/beach-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Friends chatting beside the beach in neutral daytime light" },
+  football: { id: "upfor-football-natural-v2", path: "/visuals/upfor/football-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "A casual football game on a community grass pitch" },
+  study: { id: "upfor-study-natural-v2", path: "/visuals/upfor/study-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Two friends studying together in a naturally lit library" },
+  walk: { id: "upfor-walk-natural-v2", path: "/visuals/upfor/walk-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Friends walking along a shaded neighbourhood path" },
+  gaming: { id: "upfor-gaming-natural-v2", path: "/visuals/upfor/gaming-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Two friends playing console games in a daytime living room" },
+  coffee: { id: "upfor-coffee-natural-v2", path: "/visuals/upfor/coffee-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Two friends talking over coffee at a daytime cafe" },
+  movie: { id: "upfor-movie-natural-v2", path: "/visuals/upfor/movie-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Friends watching a film in cinema seats" },
+  party: { id: "upfor-party-natural-v2", path: "/visuals/upfor/party-natural-v2.jpg", family: "activity", role: "plan_cover", width: 480, height: 320, depicts: "Friends dancing at a casual afternoon courtyard gathering" },
 };
+
+// Keep the previous immutable URLs valid for already-open app tabs while the
+// deployment changes. Resolvers use v2; old client bundles can still fetch v1.
+const LEGACY_UPFOR_PHOTOGRAPHIC_ART: VisualAsset[] = Object.values(UPFOR_PHOTOGRAPHIC_ART)
+  .filter((asset): asset is VisualAsset => Boolean(asset))
+  .map((asset) => ({ ...asset, id: asset.id.replace("-v2", "-v1"), path: asset.path.replace("-v2.jpg", "-v1.jpg"), width: 960, height: 640 }));
 
 export function upForActivityArt(category: PlanCategory): VisualAsset | null {
   return UPFOR_PHOTOGRAPHIC_ART[category] ?? null;
@@ -373,6 +379,7 @@ export function homeCardBBackground(): VisualAsset {
 /** Every asset the runtime can reach. Used by tests to police the boundary. */
 export function allRegisteredAssets(): VisualAsset[] {
   return [
+    ...LEGACY_UPFOR_PHOTOGRAPHIC_ART,
     ...Object.values(UPFOR_PHOTOGRAPHIC_ART).filter((a): a is VisualAsset => Boolean(a)),
     ...Object.values(PLAN_ACTIVITY_ART).filter((a): a is VisualAsset => Boolean(a)),
     ...Object.values(SAFE_ARRIVAL_ART),
