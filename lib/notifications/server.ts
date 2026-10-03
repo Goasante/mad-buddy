@@ -189,6 +189,16 @@ export async function deliverNotification(
   }
 
   if (decision.push) {
+    if (priority !== "critical" && priority !== "high") {
+      const reservation = await supabase.rpc("reserve_notification_budget", {
+        p_user_id: input.userId,
+        p_day_key: dayKey,
+        p_budget: clampNotificationBudget(engagement?.daily_notification_budget ?? Number.NaN)
+      });
+      if (reservation.error || !reservation.data) {
+        return { inApp: shouldPersistInApp, push: false, reason: reservation.error ? "budget_unavailable" : "budget_exhausted" };
+      }
+    }
     const safePush = privacySafePushPayload(input);
     // The push round trip is an external network call and must not hold open
     // the actor's request. It is deferred with Next's established after()
@@ -215,20 +225,6 @@ export async function deliverNotification(
         // A transport failure must not fail the originating action.
       }
     });
-  }
-
-  // Only budgeted pushes consume the budget, critical/high bypass it, so
-  // counting them would let an emergency alert starve tomorrow's normal ones.
-  if (decision.push && priority !== "critical" && priority !== "high") {
-    await supabase.from("notification_budget_usage").upsert(
-      {
-        user_id: input.userId,
-        day_key: dayKey,
-        sent_count: (usageRes.data?.sent_count ?? 0) + 1,
-        updated_at: now.toISOString()
-      },
-      { onConflict: "user_id,day_key" }
-    );
   }
 
   return { ...decision, inApp: shouldPersistInApp };

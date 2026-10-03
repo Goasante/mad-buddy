@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 /**
  * Account deletion, as one resumable workflow.
@@ -48,6 +49,7 @@ export type DeletionOutcome =
 
 /** The tables purged, in one place so the list is auditable at a glance. */
 export const DELETION_TABLES = [
+  "messages",
   "proximity_events",
   "notifications",
   "meetup_requests",
@@ -129,12 +131,21 @@ export async function purgeUserData(
   admin: SupabaseClient,
   userId: string
 ): Promise<{ ok: boolean; failedTable?: string }> {
-  const { data: conferenceFlag } = await admin
+  const { data: conferenceFlag, error: conferenceError } = await admin
     .from("feature_flags")
     .select("key")
     .eq("key", "conference")
     .maybeSingle();
+  if (conferenceError) return { ok: false, failedTable: "feature_flags" };
   const conferenceReady = Boolean(conferenceFlag);
+
+  // Keep shared thread identities/replies, but erase this author's content.
+  // Clear attachments BEFORE Auth sets sender_id to NULL: the attachment
+  // validator correctly refuses a live media message without an owner.
+  const { error: messageError } = await admin.from("messages")
+    .update({ status: "deleted", deleted_at: new Date().toISOString(), text_content: null, media_id: null, waveform_data: null })
+    .eq("sender_id", userId);
+  if (messageError) return { ok: false, failedTable: "messages" };
 
   const scoped: Array<[string, PromiseLike<{ error: unknown }>]> = [
     ["proximity_events", admin.from("proximity_events").delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`)],
@@ -251,6 +262,7 @@ export async function deleteAccountForUser(
 
   const purge = await purgeUserData(admin, userId);
   if (!purge.ok) {
+    logBackendEvent("error", { action: "account.delete.purge", userId, errorType: `purge_failed:${purge.failedTable}` });
     return { ok: false, stage: "reports_anonymised", resumable: true, message: "Your account data could not be removed." };
   }
   await recordDeletionStage(admin, userId, "data_purged");
@@ -286,6 +298,7 @@ export async function deleteAccountForUser(
 
   const { error: authError } = await admin.auth.admin.deleteUser(userId);
   if (authError) {
+    logBackendEvent("error", { action: "account.delete.auth", userId, errorType: errorType(authError) });
     return {
       ok: false,
       stage: "audited",
@@ -308,11 +321,14 @@ export async function pendingDeletion(
   admin: SupabaseClient,
   userId: string
 ): Promise<DeletionStage | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("account_deletion_requests")
     .select("stage")
     .eq("user_id", userId)
     .maybeSingle();
+
+  // Bootstrap must fail closed when the deletion-intent read is unavailable.
+  if (error) throw error;
 
   return (data?.stage as DeletionStage | undefined) ?? null;
 }

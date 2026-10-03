@@ -68,16 +68,18 @@ export async function enqueueDueSchedules(admin: Admin, nowMs = Date.now()): Pro
       .maybeSingle();
 
     // An overlapping tick returns no row instead of generating a 23505.
-    if (!error && data?.id) enqueued += 1;
+    if (error) throw error;
+    if (data?.id) enqueued += 1;
   }
   return enqueued;
 }
 
 async function completeJob(admin: Admin, jobId: string) {
-  await admin
+  const { error } = await admin
     .from("jobs")
     .update({ status: "completed", completed_at: new Date().toISOString(), locked_at: null, locked_by: null })
     .eq("id", jobId);
+  if (error) throw error;
 }
 
 async function failJob(
@@ -92,7 +94,7 @@ async function failJob(
     nowMs: Date.now()
   });
 
-  await admin
+  const { error } = await admin
     .from("jobs")
     .update({
       status: outcome.status,
@@ -103,6 +105,7 @@ async function failJob(
       locked_by: null
     })
     .eq("id", job.id);
+  if (error) throw error;
 
   return outcome.status === "dead_letter" ? "dead_letter" : "retrying";
 }
@@ -142,7 +145,7 @@ export async function runTick(admin: Admin, workerId: string): Promise<TickResul
 
   if (error) {
     logBackendEvent("warn", { route: "jobs/tick", errorType: errorType(error) });
-    return result;
+    throw error;
   }
 
   for (const job of claimed ?? []) {
@@ -162,14 +165,6 @@ export async function runTick(admin: Admin, workerId: string): Promise<TickResul
     const startedAt = Date.now();
     try {
       const count = await handler(admin, (job.payload ?? {}) as Record<string, unknown>);
-      await completeJob(admin, job.id);
-      result.succeeded += 1;
-      logBackendEvent("info", {
-        route: "jobs/run",
-        latencyMs: Date.now() - startedAt,
-        // Counts only, a job payload may reference private resources.
-        statusCode: 200
-      });
       void count;
     } catch (caught) {
       const code = concreteFailureCode(caught);
@@ -181,7 +176,14 @@ export async function runTick(admin: Admin, workerId: string): Promise<TickResul
         latencyMs: Date.now() - startedAt,
         errorType: code
       });
+      continue;
     }
+    // A failed acknowledgement is not a failed handler: do not immediately
+    // rerun or release work whose external side effects may have succeeded.
+    // Leave its lease for stale recovery, and make the tick fail visibly.
+    await completeJob(admin, job.id);
+    result.succeeded += 1;
+    logBackendEvent("info", { route: "jobs/run", latencyMs: Date.now() - startedAt, statusCode: 200 });
   }
 
   return result;

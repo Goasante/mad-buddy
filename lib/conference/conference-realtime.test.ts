@@ -35,6 +35,10 @@ describe("Conference realtime delivery", () => {
     expect(hook).toContain("OFFLINE_FALLBACK_MS = 8_000");
     expect(hook).toContain("CONNECTED_SAFETY_REFRESH_MS = 45_000");
     expect(hook).toContain("if (disposed || queued) return");
+    const queue = hook.slice(hook.indexOf("const queueRefresh"), hook.indexOf("const channelName"));
+    expect(queue).toContain('document.visibilityState !== "visible"');
+    expect(queue.indexOf('document.visibilityState !== "visible"')).toBeLessThan(queue.indexOf("queued = true"));
+    expect(queue.slice(queue.indexOf("window.setTimeout"))).toContain('document.visibilityState !== "visible"');
   });
 
   it("re-reads canonical server-filtered Conference data", () => {

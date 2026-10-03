@@ -344,7 +344,7 @@ export async function blockUserAction(targetUserId: string): Promise<Integration
   const admin = createSupabaseAdminClient();
   const pair = orderedPair(userId, parsedTarget.data);
   const blockedAt = new Date().toISOString();
-  await Promise.all([
+  const cleanupResults = await Promise.all([
     // Blocking ENDS the friendship; it does not erase it. Access is revoked
     // the moment ended_at is set (every active-friend read filters on it), and
     // the block itself independently overrides everything on top of that.
@@ -367,6 +367,10 @@ export async function blockUserAction(targetUserId: string): Promise<Integration
         `and(owner_id.eq.${userId},friend_id.eq.${parsedTarget.data}),and(owner_id.eq.${parsedTarget.data},friend_id.eq.${userId})`
       )
   ]);
+
+  if (cleanupResults.some((result) => result.error)) {
+    return { ok: false, message: "User blocked, but relationship cleanup could not finish. Try again." };
+  }
 
   // Life event, COMPENSATING. Blocking is an ending, so the timeline records
   // one — otherwise a blocked relationship would read as still running.

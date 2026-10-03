@@ -5286,6 +5286,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      reserve_notification_budget: {
+        Args: { p_user_id: string; p_day_key: string; p_budget: number };
+        Returns: boolean;
+      };
       blog_image_is_published: { Args: { p_id: string }; Returns: boolean };
       save_blog_post: { Args: { p_id: string | null; p_version: number; p_draft: Json; p_intent: string; p_actor: string }; Returns: Json };
       /* Atomic photo-slot swap. Three writes in one transaction, so the -1
