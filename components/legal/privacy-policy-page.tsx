@@ -77,11 +77,15 @@ function parsePolicy(markdown: string) {
 function InlineText({ text }: { text: string }) {
   return (
     <>
-      {text.split(/(\*\*.*?\*\*)/g).map((part, index) =>
+      {text.split(/(\*\*.*?\*\*|https:\/\/[^\s]+[^\s.,;:)])/g).map((part, index) =>
         part.startsWith("**") && part.endsWith("**") ? (
           <strong key={index} className="font-semibold text-[#4E0401] dark:text-[#FFF8F1]">
             {part.slice(2, -2)}
           </strong>
+        ) : part.startsWith("https://") ? (
+          <a key={index} href={part} className="underline underline-offset-4 break-words">
+            {part}
+          </a>
         ) : (
           <Fragment key={index}>{part}</Fragment>
         )

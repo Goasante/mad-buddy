@@ -15,6 +15,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/manifest.webmanifest",
   "/sw.js",
   "/robots.txt",
+  "/ads.txt",
   "/sitemap.xml",
   "/llms.txt"
 ]);

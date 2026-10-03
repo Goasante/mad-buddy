@@ -1,4 +1,4 @@
-export const PRIVACY_POLICY_VERSION = "2026-10-01" as const;
+export const PRIVACY_POLICY_VERSION = "2026-10-03" as const;
 
 export type PolicyConsentEvent = {
   userId: string;

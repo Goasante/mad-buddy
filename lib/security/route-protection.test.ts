@@ -44,6 +44,13 @@ describe("authenticated visitors on guest-only routes", () => {
 });
 
 describe("route protection (deny-by-default, audit I-08)", () => {
+  it("lets crawlers read ads.txt without exposing adjacent or private routes", () => {
+    expect(requiredLoginRedirect("/ads.txt")).toBeNull();
+    expect(authenticatedRedirect("/ads.txt")).toBeNull();
+    for (const path of ["/ads.txt/private", "/ads.txtx", "/dashboard", "/messages"]) {
+      expect(requiredLoginRedirect(path)).toBe("/login");
+    }
+  });
   it("allows sharing the founder portfolio while keeping adjacent routes private", () => {
     for (const path of ["/godfred", "/godfred/opengraph-image", "/founder/Godfred-Ofosu-Asante-CV.pdf"]) {
       expect(requiredLoginRedirect(path)).toBeNull();
