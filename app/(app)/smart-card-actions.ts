@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
-import { acknowledgeSmartCard } from "@/lib/smart-card/smart-card-service";
+import { acknowledgeSmartCard, recordSmartCardImpression } from "@/lib/smart-card/smart-card-service";
 import { DISMISSIBLE_SMART_CARD_IDS } from "@/lib/smart-card/smart-card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -54,4 +54,22 @@ export async function acknowledgeSmartCardAction(acknowledgementKey: string): Pr
 
   await acknowledgeSmartCard(user.id, acknowledgementKey);
   revalidatePath("/dashboard");
+}
+
+
+/**
+ * Low-stakes exposure tracking for the one evergreen fallback. This action is
+ * intentionally narrow: live safety, invitation and coordination cards are
+ * never suppressible by impression.
+ */
+export async function recordSmartCardImpressionAction(cardId: string): Promise<void> {
+  if (cardId !== "upfor_fallback") return;
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await recordSmartCardImpression(user.id, "upfor_fallback");
 }

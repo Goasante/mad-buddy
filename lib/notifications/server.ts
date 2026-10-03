@@ -48,7 +48,8 @@ export type CreateNotificationInput = {
     | `achievement:${string}`
     | `birthday:${string}`
     | `staff_message:${string}`
-    | `support_user_reply:${string}`;
+    | `support_user_reply:${string}`
+    | `conference_reply:${string}`;
   title: string;
   message: string;
   /** Stable semantic identity for crash-safe worker retries. */
@@ -289,23 +290,44 @@ export async function createNearbyNotificationsIfAllowed(
   }
 
   const recentMessages = (existing ?? []).map((row) => row.message.toLowerCase());
-  const namesToAnnounce = allowedFriends
-    .map((friend) => friend.displayName)
-    .filter((name) => !recentMessages.some((message) => message.startsWith(name.toLowerCase())));
+  const friendsToAnnounce = allowedFriends.filter(
+    (friend) =>
+      !recentMessages.some((message) =>
+        message.startsWith(friend.displayName.toLowerCase())
+      )
+  );
 
-  if (namesToAnnounce.length === 0) {
+  if (friendsToAnnounce.length === 0) {
     return { data: null, error: null };
   }
 
-  return supabase.from("notifications").insert(
-    namesToAnnounce.map((name) => ({
-      user_id: input.userId,
-      type: "friend_nearby",
-      title: `${name} is nearby`,
-      message: `${name} is glowing nearby. Exact location stays private.`,
-      is_read: false
-    }))
-  );
+  /*
+   * Nearby used to insert Pulse rows directly here. That made the phone and
+   * Pulse disagree: the row existed in-app, but Web Push / FCM were never
+   * attempted. Keep the one-hour anti-spam check above, then use the canonical
+   * delivery path so category preferences, quiet hours, Focus Mode and the
+   * daily budget are applied exactly once.
+   */
+  const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+  try {
+    await Promise.all(
+      friendsToAnnounce.map((friend) =>
+        deliverNotification(supabase, {
+          userId: input.userId,
+          type: "friend_nearby",
+          title: `${friend.displayName} is nearby`,
+          message: `${friend.displayName} is glowing nearby. Exact location stays private.`,
+          category: "proximity",
+          priority: "low",
+          senderId: friend.friendId,
+          dedupeKey: `friend-nearby:${friend.friendId}:${hourBucket}`
+        })
+      )
+    );
+    return { data: null, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
 export type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];

@@ -1,12 +1,10 @@
-import { RemindersPage } from "@/components/reminders/reminders-page";
-import { loadUpcomingPlans } from "@/lib/social/upcoming-plans";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function RemindersRoute() {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const result = user ? await loadUpcomingPlans(user.id, 20) : { plans: [], hasMore: false };
-  return <RemindersPage plans={result.plans} hasMore={result.hasMore} />;
+/**
+ * Reminder delivery is controlled from Notification preferences. The old
+ * Reminders page duplicated the Plans agenda while pretending to be a reminder
+ * manager, so old bookmarks now land on the canonical Plans surface.
+ */
+export default function RemindersPage() {
+  redirect("/plans");
 }

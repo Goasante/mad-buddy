@@ -6,7 +6,7 @@
  * one tested place.
  */
 
-export type NotificationCategory = "waves" | "pings" | "proximity" | "plans" | "status" | "birthdays";
+export type NotificationCategory = "waves" | "pings" | "proximity" | "plans" | "status" | "birthdays" | "conference";
 export type NotificationPriority = "critical" | "high" | "normal" | "low";
 export type CategorySetting = "all" | "close_friends" | "in_app_only" | "off";
 
@@ -28,7 +28,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     proximity: "close_friends",
     plans: "all",
     status: "close_friends",
-    birthdays: "all"
+    birthdays: "all",
+    conference: "all"
   },
   quietHoursEnabled: true,
   birthdayAnnouncementsEnabled: true,

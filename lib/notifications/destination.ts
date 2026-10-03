@@ -80,6 +80,19 @@ export function resolveNotificationDestination(type: string): NotificationDestin
    * Both halves are validated; a malformed pair falls through to the Event
    * rather than producing a broken URL. Authorization is re-checked when the
    * Room is read, so a link held by someone since removed opens nothing. */
+  /* CONFERENCE REPLY: "conference_reply:<topicId>:<replyId>".
+   * Conference remains one flat Voice stream; the hash only targets the Voice
+   * that triggered the update. */
+  if (base === "conference_reply" && entityId) {
+    const [topicId, replyId] = entityId.split(":");
+    if (topicId && replyId && UUID_PATTERN.test(topicId) && UUID_PATTERN.test(replyId)) {
+      return { type: "internal", href: `/conference/${topicId}#${replyId}` as Route };
+    }
+    if (topicId && UUID_PATTERN.test(topicId)) {
+      return { type: "internal", href: `/conference/${topicId}` as Route };
+    }
+  }
+
   if (base === "event_room" && entityId) {
     const [eventId, roomId] = entityId.split(":");
     if (eventId && roomId && UUID_PATTERN.test(eventId) && UUID_PATTERN.test(roomId)) {

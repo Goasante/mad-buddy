@@ -234,7 +234,10 @@ function ReplyCard({
   }
 
   return (
-    <article id={reply.id} className="rounded-[16px] border border-border/65 bg-card/65 px-3 py-2.5">
+    <article
+      id={reply.id}
+      className="scroll-mt-24 rounded-[16px] border border-border/65 bg-card/65 px-3 py-2.5 target:border-primary/40 target:bg-primary/[0.06] target:ring-2 target:ring-primary/15"
+    >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

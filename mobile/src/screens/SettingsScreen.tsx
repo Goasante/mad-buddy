@@ -1,15 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { SettingsPageContent } from "@/components/settings/settings-page";
 import { isBuiltForMobile } from "@/lib/platform";
-import type { VisibilityStatus } from "@/lib/supabase/database.types";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "../auth/AuthProvider";
-import { supabase } from "../lib/supabase";
 import { deleteAccount } from "../lib/api";
-import { mobileSettingsClient } from "../lib/settings-client";
-import { Spinner } from "../components/Spinner";
 
 /**
  * Settings on Android.
@@ -34,32 +30,7 @@ import { Spinner } from "../components/Spinner";
 export function SettingsScreen() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const [initial, setInitial] = useState<{ visibility: VisibilityStatus; nearbyAlerts: boolean } | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    void Promise.all([
-      supabase.from("profiles").select("visibility_status").eq("user_id", user.id).maybeSingle(),
-      supabase.from("user_preferences").select("notification_preferences").eq("user_id", user.id).maybeSingle()
-    ]).then(([profile, preferences]) => {
-      if (!active) return;
-      const raw = (preferences.data?.notification_preferences ?? {}) as Record<string, unknown>;
-      setInitial({
-        visibility: (profile.data?.visibility_status ?? "visible") as VisibilityStatus,
-        // Matches lib/settings/service.ts: on unless explicitly disabled.
-        nearbyAlerts: raw.nearbyAlerts !== false
-      });
-    });
-    return () => {
-      active = false;
-    };
-  }, [user]);
-
-  // Waiting avoids rendering the toggles in a default position and then
-  // visibly correcting them a moment later.
-  if (!initial) {
-    return (
+  return (
       <div className="flex justify-center py-16">
         <Spinner />
       </div>
@@ -69,9 +40,6 @@ export function SettingsScreen() {
   return (
     <div className="mx-auto w-full max-w-lg px-4 pt-6">
       <SettingsPageContent
-        client={mobileSettingsClient}
-        initialVisibilityStatus={initial.visibility}
-        initialNearbyAlerts={initial.nearbyAlerts}
         isDestinationAvailable={isBuiltForMobile}
         /* No `header`: the shared AppHeader in this app's shell already carries
            one, and the web PageHeader would drag next/navigation in. */

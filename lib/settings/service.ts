@@ -115,12 +115,37 @@ export async function updateNotificationPreference(
   if (parsed.data.quietNearby !== undefined) updates.quietNearby = parsed.data.quietNearby;
   if (parsed.data.planAlerts !== undefined) updates.planAlerts = parsed.data.planAlerts;
 
+  /*
+   * These booleans are retained for backwards-compatible clients, but the
+   * Smart Notifications categories are the delivery authority. Keep both
+   * representations synchronized so a quick toggle can never say "off" while
+   * the canonical engine continues sending.
+   */
+  const { normalizePreferences } = await import("@/lib/notifications/preferences");
+  const smart = normalizePreferences(prior);
+  const proximityWasEnabled = smart.categories.proximity !== "off";
+
+  if (parsed.data.nearbyAlerts !== undefined) {
+    smart.categories.proximity = parsed.data.nearbyAlerts ? "all" : "off";
+  }
+  if (parsed.data.quietNearby !== undefined) {
+    smart.categories.proximity = parsed.data.quietNearby
+      ? "in_app_only"
+      : (parsed.data.nearbyAlerts ?? proximityWasEnabled)
+        ? "all"
+        : "off";
+  }
+  if (parsed.data.planAlerts !== undefined) {
+    smart.categories.plans = parsed.data.planAlerts ? "all" : "off";
+  }
+
   const { error } = await admin.from("user_preferences").upsert(
     {
       user_id: userId,
       notification_preferences: {
         ...prior,
         ...updates,
+        smart,
         updatedAt: new Date().toISOString()
       }
     },

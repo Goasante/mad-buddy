@@ -288,6 +288,9 @@ export function resolveSmartCard(
      * a non-dismissible live fact must still render.
      */
     if (card.dismissible && acknowledged.has(acknowledgementKey)) continue;
+    // The UpFor fallback is not permanently dismissible. A recent impression
+    // suppresses it only for the service-level cooldown window.
+    if (card.id === "upfor_fallback" && acknowledged.has("upfor_fallback")) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;
     return { ...card, priority: SMART_CARD_PRIORITY[card.id] };
   }

@@ -6,6 +6,7 @@ import { batchBlockedIds, isBlockedEitherDirection } from "@/lib/social/permissi
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { CONFERENCE_FLAG, isFeatureEnabled } from "@/lib/features/feature-flags";
 import { isConferenceTopicSuppressed } from "@/lib/conference/ranking";
+import { deliverNotification } from "@/lib/notifications/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   ConferenceFeedResult,
@@ -651,11 +652,13 @@ export async function createConferenceReply(
   if (!topic) return { ok: false, stale: true, message: "That Topic is no longer available." };
 
   const conference = conferenceDb(admin);
+  let parentAuthorUserId: string | null = null;
   if (replyToReplyId) {
     const parent = await resolveTarget(admin, userId, "reply", replyToReplyId);
     if (!parent || parent.topicId !== topicId) {
       return { ok: false, stale: true, message: "That Voice is no longer available." };
     }
+    parentAuthorUserId = parent.authorUserId;
   }
 
   try {
@@ -675,14 +678,34 @@ export async function createConferenceReply(
     .select("id, created_at")
     .single();
 
-  return error || !data?.id
-    ? { ok: false, message: "Couldn't add your Voice. Try again." }
-    : {
-        ok: true,
-        message: "Your Voice was added.",
-        replyId: String(data.id),
-        createdAt: typeof data.created_at === "string" ? data.created_at : new Date().toISOString()
-      };
+  if (error || !data?.id) {
+    return { ok: false, message: "Couldn't add your Voice. Try again." };
+  }
+
+  const replyId = String(data.id);
+
+  if (parentAuthorUserId && parentAuthorUserId !== userId) {
+    try {
+      await deliverNotification(admin, {
+        userId: parentAuthorUserId,
+        type: `conference_reply:${topicId}:${replyId}`,
+        title: "Someone replied to your Voice",
+        message: "Open Conference to see the reply.",
+        category: "conference",
+        priority: "normal",
+        dedupeKey: `conference-reply:${replyId}:${parentAuthorUserId}`
+      });
+    } catch {
+      // The Voice already exists; notification delivery is best-effort.
+    }
+  }
+
+  return {
+    ok: true,
+    message: "Your Voice was added.",
+    replyId,
+    createdAt: typeof data.created_at === "string" ? data.created_at : new Date().toISOString()
+  };
 }
 
 async function resolveTarget(

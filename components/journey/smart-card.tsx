@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
-import { acknowledgeSmartCardAction } from "@/app/(app)/smart-card-actions";
+import { acknowledgeSmartCardAction, recordSmartCardImpressionAction } from "@/app/(app)/smart-card-actions";
 import { GlareHover } from "@/components/ui/glare-hover";
 import { PrismBackground } from "@/components/ui/prism-background";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -19,8 +19,8 @@ import {
 /**
  * Home's canonical Smart Card.
  *
- * There is exactly one of these on Home, always. It never becomes a carousel
- * and never disappears — only its content changes, driven entirely by the
+ * Home renders at most one of these at a time. It never becomes a carousel;
+ * the low-stakes fallback may cool down when there is nothing meaningful to say.
  * server-selected card. Nothing here is hardcoded per state: title, subtitle,
  * CTA, destination, artwork and the optional progress meter all arrive as
  * data, so a new card type plugs in as a provider without touching this file.
@@ -137,6 +137,11 @@ export function SmartCardHero({
     const frame = requestAnimationFrame(() => setAnimatedPercent(percent));
     return () => cancelAnimationFrame(frame);
   }, [percent]);
+
+  useEffect(() => {
+    if (card.id !== "upfor_fallback") return;
+    void recordSmartCardImpressionAction("upfor_fallback");
+  }, [card.id]);
 
   // A dismissible card is retired by the same tap that follows its CTA:
   // acting on it IS the acknowledgement, so there is no separate dismiss

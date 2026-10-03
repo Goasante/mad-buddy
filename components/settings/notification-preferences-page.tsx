@@ -18,7 +18,8 @@ const categoryMeta: Array<{ id: NotificationCategory; label: string; description
   { id: "proximity", label: "Nearby Muddies", description: "When friends become nearby." },
   { id: "plans", label: "Plans", description: "Invites, changes, and reminders." },
   { id: "status", label: "Status updates", description: "When friends set a status." },
-  { id: "birthdays", label: "Birthdays", description: "Birthday reminders from approved Muddies." }
+  { id: "birthdays", label: "Birthdays", description: "Birthday reminders from approved Muddies." },
+  { id: "conference", label: "Conference", description: "Direct replies to your anonymous Voices." }
 ];
 
 const settingOptions: Array<{ id: CategorySetting; label: string }> = [
@@ -73,7 +74,9 @@ export function NotificationPreferencesPage({
             <p className="text-sm font-semibold">{category.label}</p>
             <p className="mb-2 text-xs text-muted-foreground">{category.description}</p>
             <div className="flex flex-wrap gap-1.5">
-              {settingOptions.map((option) => (
+              {settingOptions
+                .filter((option) => category.id !== "conference" || option.id !== "close_friends")
+                .map((option) => (
                 <button
                   key={option.id}
                   type="button"
