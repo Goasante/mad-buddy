@@ -2,7 +2,17 @@
 
 ## Release boundaries
 
-### Durable push follow-up (prepared; not yet deployed)
+### Durable push follow-up (PR #126)
+
+PR #126 merged as `6d33b84aa035811868e2e22f5c29cc2445855462` after all
+candidate CI jobs passed (`37157003404`). Production version verification at
+22:06 UTC confirms that exact commit from deployment
+`dpl_58SCDusTumZJLT92qPJg33Evfize`; Vercel reports success.
+Homepage, login and shallow health return 200; unauthenticated account deletion
+returns 401. Deeper readiness still returns its pre-existing 503. Private Vercel
+log tools are not exposed in this session despite the successful connection;
+the failing check has not been identified. No push rows existed at the initial
+post-deployment checkpoint, so this is not live transport delivery proof.
 
 Notifications now have a private database outbox with independent web/native
 device deliveries. In-app persistence, semantic deduplication and ordinary push
@@ -21,8 +31,9 @@ recover after five minutes. Expired dispatches are removed in bounded batches
 after roughly seven days. Payloads exclude device addresses and tokens.
 
 Migrations `20261003213820_durable_push_delivery.sql` and
-`20261003214905_push_claim_maintenance_alias.sql` are applied to staging only.
-Both must be applied to Production before application deployment. The second
+`20261003214905_push_claim_maintenance_alias.sql` are applied to staging and
+Production before application deployment. Production history has 174 entries,
+head `20261003214905`; canonical versions, grants and RLS were verified. The second
 qualifies the maintenance query's ID to avoid a PL/pgSQL output-name ambiguity.
 Browser roles have no table or RPC access; service-role RPCs use invoker security.
 
@@ -120,7 +131,7 @@ The full unit suite, lint, types and production build must pass before merge.
 ## Audit items still open
 
 - Exact production-readiness failing subcheck and provider configuration.
-- Deploy the prepared durable push outbox; verify real iOS/Android delivery.
+- Verify real iOS/Android delivery and full authenticated account deletion.
 - Independent heartbeat/uptime alerts, backed-up database and Storage restore
   evidence, provider patch availability and commercial hosting eligibility.
 - Load envelope, Ghana-device performance and targeted query-plan/index work.

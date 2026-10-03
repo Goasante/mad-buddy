@@ -2,11 +2,15 @@
 
 ## Current audit release — 3 October 2026
 
-- Durable push follow-up is prepared on `fix/durable-push-delivery`: transactional
+- Durable push follow-up merged through PR #126 as
+  `6d33b84aa035811868e2e22f5c29cc2445855462`: transactional
   dispatch persistence, independent device retries, fenced acknowledgements,
   cron recovery, send-time preference/block/deletion checks and deletion cleanup.
-  Both new migrations (`20261003213820`, `20261003214905`) are staging-only.
-  Apply both before deploying code. Delivery remains at least once; no real
+  Both new migrations (`20261003213820`, `20261003214905`) are applied to staging
+  and Production (174 history entries, verified private grants). Candidate CI
+  passed; the production version endpoint confirms that exact main commit from
+  `dpl_58SCDusTumZJLT92qPJg33Evfize` at 22:06 UTC; Vercel reports success.
+  Delivery remains at least once; no real
   device push or production readiness diagnosis has been verified.
   Validation: 576 files / 9,400 passing tests / one skipped; types and production
   build passed. See the operations report for limits and staging rollback proof.
