@@ -53,10 +53,12 @@ export function useConferenceRealtime(input: {
 
     const queueRefresh = (delayMs = SIGNAL_DEBOUNCE_MS) => {
       if (disposed || queued) return;
+      if (document.visibilityState !== "visible") return;
       queued = true;
       queueTimer = window.setTimeout(() => {
         if (disposed) return;
         queued = false;
+        if (document.visibilityState !== "visible") return;
         lastRefreshAt = Date.now();
         requestRefresh();
       }, delayMs);

@@ -1,7 +1,44 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { deleteAccountForUser, removeUserStorage } from "./deletion";
+import { deleteAccountForUser, purgeUserData, removeUserStorage } from "./deletion";
+
+function workflowFixture(options: { failTable?: string; authFailure?: boolean; featureFailure?: boolean } = {}) {
+  const calls: Array<{ table: string; operation: string; value?: unknown; filter?: unknown[] }> = [];
+  let audited = false;
+  const deleteUser = vi.fn().mockResolvedValue({ error: options.authFailure ? new Error("Auth unavailable") : null });
+  const admin = {
+    storage: storageFixture().storage,
+    auth: { admin: { deleteUser } },
+    rpc: vi.fn().mockResolvedValue({ error: null }),
+    from(table: string) {
+      const query = (operation: string, value?: unknown) => {
+        const call = { table, operation, value, filter: [] as unknown[] };
+        calls.push(call);
+        const result = () => {
+          const error = table === options.failTable || (table === "feature_flags" && options.featureFailure)
+            ? { code: "08006" } : null;
+          let data: unknown = null;
+          if (table === "feature_flags" && !error) data = { key: "conference" };
+          if (table === "deletion_audit_logs" && operation === "select" && audited) data = { id: "audit" };
+          if (table === "deletion_audit_logs" && operation === "insert" && !error) audited = true;
+          return { data, error };
+        };
+        const chain = {
+          eq: (...args: unknown[]) => { call.filter.push(args); return chain; },
+          or: (...args: unknown[]) => { call.filter.push(args); return chain; },
+          limit: () => chain,
+          maybeSingle: async () => result(),
+          then: (resolve: (value: unknown) => unknown) => Promise.resolve(result()).then(resolve)
+        };
+        return chain;
+      };
+      return { select: () => query("select"), update: (v: unknown) => query("update", v),
+        insert: (v: unknown) => query("insert", v), upsert: (v: unknown) => query("upsert", v), delete: () => query("delete") };
+    }
+  };
+  return { admin: admin as unknown as SupabaseClient, calls, deleteUser };
+}
 
 function storageFixture(options: { failBucket?: string } = {}) {
   const removed: Array<{ bucket: string; paths: string[] }> = [];
@@ -67,5 +104,43 @@ describe("account deletion storage cleanup", () => {
     expect(result).toMatchObject({ ok: false, stage: "reports_anonymised", resumable: true });
     expect(deleteRows).not.toHaveBeenCalled();
     expect(deleteUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("account deletion failure and retry boundaries", () => {
+  it("tombstones only the deleting author's messages before erasing profile/Auth", async () => {
+    const f = workflowFixture();
+    await expect(deleteAccountForUser(f.admin, "person", null)).resolves.toEqual({ ok: true, stage: "auth_removed" });
+    const messageAt = f.calls.findIndex((c) => c.table === "messages");
+    const profileAt = f.calls.findIndex((c) => c.table === "profiles" && c.operation === "delete");
+    expect(messageAt).toBeLessThan(profileAt);
+    expect(f.calls[messageAt]).toMatchObject({ operation: "update", value: { status: "deleted", text_content: null, media_id: null }, filter: [["sender_id", "person"]] });
+    expect(f.deleteUser).toHaveBeenCalledWith("person");
+    expect(f.calls.at(-1)).toMatchObject({ table: "account_deletion_requests", operation: "delete", filter: [["user_id", "person"]] });
+  });
+  it("does not remove Auth or the intent after a data failure", async () => {
+    const f = workflowFixture({ failTable: "messages" });
+    await expect(deleteAccountForUser(f.admin, "person", null)).resolves.toMatchObject({ ok: false, resumable: true });
+    expect(f.deleteUser).not.toHaveBeenCalled();
+    expect(f.calls.some((c) => c.table === "profiles" && c.operation === "delete")).toBe(false);
+    expect(f.calls.some((c) => c.table === "account_deletion_requests" && c.operation === "delete")).toBe(false);
+  });
+  it("retains the request and reports partial completion when Auth removal fails", async () => {
+    const f = workflowFixture({ authFailure: true });
+    await expect(deleteAccountForUser(f.admin, "person", null)).resolves.toMatchObject({ ok: false, stage: "audited", resumable: true });
+    expect(f.calls.some((c) => c.table === "account_deletion_requests" && c.operation === "delete")).toBe(false);
+    f.deleteUser.mockResolvedValue({ error: null });
+    await expect(deleteAccountForUser(f.admin, "person", null)).resolves.toMatchObject({ ok: true });
+    expect(f.calls.filter((c) => c.table === "deletion_audit_logs" && c.operation === "insert")).toHaveLength(1);
+  });
+  it("does not silently skip Conference cleanup when its readiness lookup fails", async () => {
+    const f = workflowFixture({ featureFailure: true });
+    await expect(purgeUserData(f.admin, "person")).resolves.toEqual({ ok: false, failedTable: "feature_flags" });
+    expect(f.calls.some((c) => c.operation === "delete")).toBe(false);
+  });
+  it("preserves the profile when a scoped purge fails", async () => {
+    const f = workflowFixture({ failTable: "notifications" });
+    await expect(purgeUserData(f.admin, "person")).resolves.toEqual({ ok: false, failedTable: "notifications" });
+    expect(f.calls.some((c) => c.table === "profiles")).toBe(false);
   });
 });

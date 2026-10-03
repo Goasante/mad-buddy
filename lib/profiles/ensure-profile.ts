@@ -2,6 +2,7 @@ import "server-only";
 
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { pendingDeletion } from "@/lib/account/deletion";
 
 export async function ensureProfileForUser(user: User) {
   const admin = createSupabaseAdminClient();
@@ -13,6 +14,12 @@ export async function ensureProfileForUser(user: User) {
 
   if (existingProfile) {
     return existingProfile;
+  }
+
+  // Deletion can stop after the profile is erased but before Auth removal.
+  // Never turn that resumable account into a fresh profile on a Home visit.
+  if (await pendingDeletion(admin, user.id)) {
+    throw new Error("Account deletion is in progress. Return to Settings to finish it.");
   }
 
   const metadata = user.user_metadata;

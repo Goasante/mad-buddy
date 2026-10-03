@@ -8,6 +8,10 @@ import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 
+// Storage pagination and cross-system cleanup must not inherit a short
+// default route duration. Work remains synchronous and retryable.
+export const maxDuration = 60;
+
 /**
  * Account deletion for the native app.
  *
@@ -70,7 +74,7 @@ export async function POST(request: Request) {
   if (!outcome.ok) {
     return withCors(
       NextResponse.json(
-        { error: outcome.message, dataDeleted: outcome.stage === "audited" },
+        { error: outcome.message, dataDeleted: outcome.stage === "data_purged" || outcome.stage === "audited", resumable: outcome.resumable },
         { status: 500 }
       ),
       request

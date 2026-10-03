@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getMissingPaystackWebhookConfig } from "@/lib/paystack/config";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
+import { logBackendEvent } from "@/lib/observability/logger";
 
 export type ReadinessCheck = {
   name: string;
@@ -69,7 +70,7 @@ export async function getReadinessReport(): Promise<ReadinessReport> {
   if (hasValue(env.url) && hasValue(env.serviceRoleKey)) {
     try {
       const admin = createSupabaseAdminClient();
-      const { error } = await admin.from("profiles").select("id", { head: true, count: "exact" }).limit(1);
+      const { error } = await admin.from("profiles").select("id", { head: true }).limit(1);
 
       checks.push({
         name: "supabase_database",
@@ -91,6 +92,11 @@ export async function getReadinessReport(): Promise<ReadinessReport> {
     });
   }
 
+  const failedChecks = checks.filter((check) => !check.ok).map((check) => check.name);
+  if (failedChecks.length) {
+    // Keep diagnostics private, and never print environment values or keys.
+    logBackendEvent("error", { action: "health.readiness", statusCode: 503, errorType: `failed_checks:${failedChecks.join(",")}` });
+  }
   return {
     ok: checks.every((check) => check.ok),
     checkedAt: new Date().toISOString(),
