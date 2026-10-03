@@ -36,7 +36,7 @@ export function getPaystackSecretKey() {
 }
 
 export function getPaystackWebhookSecret() {
-  return process.env.PAYSTACK_WEBHOOK_SECRET ?? process.env.PAYSTACK_SECRET_KEY;
+  return process.env.PAYSTACK_WEBHOOK_SECRET?.trim() || process.env.PAYSTACK_SECRET_KEY;
 }
 
 export function getPaystackPlan(plan: PaidPlanId) {
@@ -62,9 +62,15 @@ export function getMissingPaystackConfig(plan?: PaidPlanId) {
 }
 
 export function getMissingPaystackWebhookConfig() {
-  const missing = getMissingPaystackConfig();
+  // Hosted checkout is initialized by the server with its secret key. The
+  // browser public key belongs to the retired inline checkout and is neither
+  // used by this webhook nor needed to verify a provider event's signature.
+  const missing: string[] = [];
+  if (!getPaystackSecretKey()?.trim()) {
+    missing.push("PAYSTACK_SECRET_KEY");
+  }
 
-  if (!getPaystackWebhookSecret()) {
+  if (!getPaystackWebhookSecret()?.trim()) {
     missing.push("PAYSTACK_WEBHOOK_SECRET");
   }
 
