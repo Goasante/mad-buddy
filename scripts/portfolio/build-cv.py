@@ -34,23 +34,23 @@ add('Accra, Ghana | +233 555 501 626','contact')
 add('<link href="mailto:godfred@mad-buddy.com">godfred@mad-buddy.com</link> | <link href="mailto:godfredasante004@gmail.com">godfredasante004@gmail.com</link>','contact')
 add('<link href="https://www.linkedin.com/in/goasante">linkedin.com/in/goasante</link> | <link href="https://mad-buddy.com/godfred">mad-buddy.com/godfred</link>','contact')
 section('Professional Summary')
-add('Operations leader and digital marketing professional with experience managing a 30-person team, coordinating client campaigns, and researching B2B and M&amp;A prospects. Built practical tools for performance tracking and workplace recognition, and founded Mad Buddy. Combines client communication, data quality, web development, and visual design with a hands-on approach to solving everyday problems.')
+add('Operations leader and digital marketing professional with experience leading multidisciplinary teams, coordinating client campaigns, and researching B2B and M&amp;A prospects. Built practical tools for performance tracking and workplace recognition, and founded Mad Buddy. Combines client communication, data quality, web development, and visual design with a hands-on approach to solving everyday problems.')
 section('Core Skills')
 add('<b>Operations &amp; client support:</b> Team supervision, campaign coordination, account management, client communication, scheduling, reporting, and workflow improvement.')
 add('<b>Lead generation &amp; research:</b> B2B and M&amp;A prospecting, LinkedIn Sales Navigator, Endole, company research, data enrichment and validation, email marketing, and copywriting.')
 add('<b>Digital &amp; creative:</b> Google Sheets, Microsoft Office, WordPress, Adobe Photoshop, InDesign, XD, Premiere Pro, social media management, graphic design, and video editing.')
 section('Professional Experience')
-role('Operations Lead | TouchForce Ltd Ghana','Accra, Ghana | August 2024 - Present',[
- 'Manage day-to-day delivery for lead generation campaigns and coordinate client requirements with the team.',
- 'Supervise 30 employees across account management and support functions, with responsibility for performance standards and quality control.',
- 'Develop reporting and workflow systems, identify process bottlenecks, and improve communication between teams.',
- 'Maintain client relationships and translate campaign data into clear performance updates.'
+role('Operations Officer | TouchForce Ltd Ghana','Accra, Ghana | August 2024 - March 2026',[
+ 'Managed day-to-day delivery for lead generation campaigns and coordinated client requirements with the team.',
+ 'Led teams across account management and support functions, maintaining performance standards and overseeing quality control.',
+ 'Developed reporting and workflow systems, identified process bottlenecks, and improved communication between teams.',
+ 'Maintained client relationships and translated campaign data into clear performance updates.'
 ])
 role('Business Partner | FlowmingoAI','Remote contract | September 2025 - Present',[
  'Connect businesses and candidates with an AI-powered interview platform and explain how it supports recruitment workflows.'
 ])
 role('Senior Account Manager | TouchForce Ltd Ghana','Accra, Ghana | July 2023 - August 2024',[
- 'Led account managers supporting more than 20 client accounts and coordinated tailored outreach campaigns.',
+ 'Led an account management team, oversaw client relationships, and coordinated tailored outreach campaigns.',
  'Researched prospects using LinkedIn Sales Navigator and Endole; arranged meetings between clients and potential business partners.',
  'Created a Google Sheets system to track employee efficiency and make daily work easier to manage.',
  'Worked with sales and marketing teams to refine targeting, maintain client communication, and improve campaign delivery.'

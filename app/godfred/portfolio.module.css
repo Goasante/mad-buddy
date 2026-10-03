@@ -50,7 +50,7 @@
 .portraitImage img { width: 100%; height: auto; display: block; }
 .portraitFrame figcaption { display: flex; align-items: center; justify-content: space-between; margin-top: 21px; font-size: 11px; line-height: 1.7; }
 .portraitFrame figcaption strong { font-weight: 600; }
-.portraitFrame figcaption svg { color: var(--accent); width: 31px; height: 31px; }
+.portraitMonogram { color: var(--accent); font-size: 22px; font-weight: 700; letter-spacing: -1.5px; }
 .portraitLabel { position: absolute; right: -17px; bottom: -22px; padding: 16px 20px; background: var(--accent); color: #fff7e9; font-size: 9px; font-weight: 600; letter-spacing: 1.3px; text-transform: uppercase; }
 .heroCopy, .portraitFrame { animation: arrive .8s ease-out both; }
 .portraitFrame { animation-delay: .12s; }

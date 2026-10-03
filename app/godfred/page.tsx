@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowRight, ArrowUpRight, Download, Mail, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, Download, Mail } from "lucide-react";
 import styles from "./portfolio.module.css";
 
 const linkedin = "https://www.linkedin.com/in/goasante";
@@ -56,13 +56,13 @@ export default function GodfredPortfolio() {
             <div className={styles.portraitImage}>
               <Image src="/founder/godfred.jpg" alt="Godfred Ofosu Asante wearing a suit, with his arms folded" width={400} height={400} preload sizes="(max-width: 700px) 85vw, 400px" />
             </div>
-            <figcaption><span>Ideas are a start.<br /><strong>Building is the difference.</strong></span><Sparkles aria-hidden="true" /></figcaption>
+            <figcaption><span>Ideas are a start.<br /><strong>Building is the difference.</strong></span><span className={styles.portraitMonogram} aria-hidden="true">GOA.</span></figcaption>
             <span className={styles.portraitLabel}>Builder · Operator · Creative</span>
           </figure>
         </section>
 
         <div className={styles.disciplineStrip} aria-label="Areas of work">
-          <div className={styles.container}><span>Product</span><span aria-hidden="true">✳</span><span>People</span><span aria-hidden="true">✳</span><span>Growth</span><span aria-hidden="true">✳</span><span>Design</span></div>
+          <div className={styles.container}><span>Product</span><span aria-hidden="true">·</span><span>People</span><span aria-hidden="true">·</span><span>Growth</span><span aria-hidden="true">·</span><span>Design</span></div>
         </div>
 
         <section id="work" className={`${styles.work} ${styles.container}`} aria-labelledby="work-heading">
