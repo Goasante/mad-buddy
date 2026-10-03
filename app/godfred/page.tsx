@@ -138,7 +138,8 @@ export default function GodfredPortfolio() {
             <article><span>AI recruitment</span><div><h3>FlowmingoAI</h3><p>Business Partner · Remote contract</p></div><span>September 2025–Present</span></article>
             <article><span>Earlier experience</span><div><h3>Sambus Geospatial</h3><p>Digital Marketing & Graphic Design</p></div><span>October 2021–October 2022</span></article>
             <article><span>Early foundation</span><div><h3>Complete Farmer</h3><p>Graphic Design Intern · Web support</p></div><span>June–August 2018</span></article>
-            <article><span>Education</span><div><h3>University of Ghana</h3><p>BA, Geography & Resource Development and Political Science · 2017–2021</p></div><span>Master’s in Marketing · In progress since 2025</span></article>
+            <article><span>Graduate study</span><div><h3>University of Ghana Business School</h3><p>Master’s degree in Marketing · In progress</p></div><span>2025–Present</span></article>
+            <article><span>Education</span><div><h3>University of Ghana</h3><p>BA, Geography & Resource Development and Political Science</p></div><span>2017–2021</span></article>
           </div>
         </section>
 

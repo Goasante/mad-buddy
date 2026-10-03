@@ -2,7 +2,7 @@
 
 Public share URL: `https://mad-buddy.com/godfred`.
 
-Entry points: public About page, shared public footer (including Landing), and signed-in Settings → About. The page is a web-only server component with scoped CSS, no database calls, no embeds, and motion respecting reduced-motion preferences. Only the portfolio and its generated share image are added to the public exact-route allowlist; descendant product routes remain private.
+Entry points: public About page, shared public footer (including Landing), and signed-in Settings → About. The page is a web-only server component with scoped CSS, no database calls, no embeds, and motion respecting reduced-motion preferences. Only the portfolio, its generated share image, and the exact CV file are added to the public exact-route allowlist; descendant product routes remain private.
 
 ## Content sources
 
