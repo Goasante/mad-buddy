@@ -4,7 +4,7 @@ import { LandingPage } from "@/components/landing/landing-page";
 import { absoluteUrl } from "@/lib/seo";
 
 const description =
-  "Mad Buddy is a free social app for privacy-safe proximity, Linkr discovery, UpFor, plans and messaging. Light ads support the free experience, and Mad Buddy Access removes ads, without live maps, exact coordinates, precise measured distances, or location history.";
+  "Meet people and make real plans with Mad Buddy. Connect with nearby friends, discover someone new through Linkr, and share what you're UpFor—without revealing your exact location to other users.";
 
 export const metadata: Metadata = {
   title: "When your Muddies are close, they glow",
@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     url: "/",
     siteName: "Mad Buddy",
     type: "website",
-    images: [{ url: "/brand/mad-buddy-social-share.jpg", width: 1200, height: 630, alt: "Mad Buddy" }]
+    images: [{ url: "/brand/mad-buddy-social-share-v2.jpg", width: 1200, height: 630, alt: "Mad Buddy — Meet people. Make real plans. Your exact location stays private." }]
   },
   twitter: {
     card: "summary_large_image",
     title: "Mad Buddy | When your Muddies are close, they glow",
     description,
-    images: ["/brand/mad-buddy-social-share.jpg"]
+    images: ["/brand/mad-buddy-social-share-v2.jpg"]
   }
 };
 
