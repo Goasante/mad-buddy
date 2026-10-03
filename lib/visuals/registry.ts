@@ -168,6 +168,26 @@ const PLAN_ACTIVITY_ART: Partial<Record<PlanCategory, VisualAsset>> = {
   }
 };
 
+/** Generated editorial scenes, reviewed 2026-10-03. Kept separate from Plan
+ * covers so this UpFor refresh does not alter unrelated product surfaces.
+ * Versioned paths prevent stale image-optimizer and browser caches.
+ */
+const UPFOR_PHOTOGRAPHIC_ART: Partial<Record<PlanCategory, VisualAsset>> = {
+  dinner: { id: "upfor-dinner-natural-v1", path: "/visuals/upfor/dinner-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends sharing a casual meal at a daytime restaurant" },
+  beach: { id: "upfor-beach-natural-v1", path: "/visuals/upfor/beach-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends chatting beside the beach in neutral daytime light" },
+  football: { id: "upfor-football-natural-v1", path: "/visuals/upfor/football-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "A casual football game on a community grass pitch" },
+  study: { id: "upfor-study-natural-v1", path: "/visuals/upfor/study-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Two friends studying together in a naturally lit library" },
+  walk: { id: "upfor-walk-natural-v1", path: "/visuals/upfor/walk-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends walking along a shaded neighbourhood path" },
+  gaming: { id: "upfor-gaming-natural-v1", path: "/visuals/upfor/gaming-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Two friends playing console games in a daytime living room" },
+  coffee: { id: "upfor-coffee-natural-v1", path: "/visuals/upfor/coffee-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Two friends talking over coffee at a daytime cafe" },
+  movie: { id: "upfor-movie-natural-v1", path: "/visuals/upfor/movie-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends watching a film in cinema seats" },
+  party: { id: "upfor-party-natural-v1", path: "/visuals/upfor/party-natural-v1.jpg", family: "activity", role: "plan_cover", width: 960, height: 640, depicts: "Friends dancing at a casual afternoon courtyard gathering" },
+};
+
+export function upForActivityArt(category: PlanCategory): VisualAsset | null {
+  return UPFOR_PHOTOGRAPHIC_ART[category] ?? null;
+}
+
 /**
  * NO GENERAL ACTIVITY MASTER.
  *
@@ -353,6 +373,7 @@ export function homeCardBBackground(): VisualAsset {
 /** Every asset the runtime can reach. Used by tests to police the boundary. */
 export function allRegisteredAssets(): VisualAsset[] {
   return [
+    ...Object.values(UPFOR_PHOTOGRAPHIC_ART).filter((a): a is VisualAsset => Boolean(a)),
     ...Object.values(PLAN_ACTIVITY_ART).filter((a): a is VisualAsset => Boolean(a)),
     ...Object.values(SAFE_ARRIVAL_ART),
     HOME_CARD_A_BACKGROUND,
