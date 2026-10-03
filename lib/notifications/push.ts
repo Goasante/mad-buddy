@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { logBackendEvent } from "@/lib/observability/logger";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 import { readVapidConfiguration } from "@/lib/notifications/vapid";
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdminClient>;
@@ -40,18 +40,37 @@ export async function sendPushToUser(
   }
 
   try {
-    const { data: subscriptions } = await admin
+    const { data: subscriptions, error: subscriptionError } = await admin
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
       .eq("user_id", userId);
-    if (!subscriptions?.length) return;
+
+    if (subscriptionError) {
+      logBackendEvent("warn", {
+        action: "notifications.web_push.subscription_read",
+        statusCode: 500,
+        userId,
+        errorType: errorType(subscriptionError)
+      });
+      return;
+    }
+
+    if (!subscriptions?.length) {
+      logBackendEvent("info", {
+        action: "notifications.web_push.delivery",
+        statusCode: 204,
+        userId,
+        errorType: "no_subscription"
+      });
+      return;
+    }
 
     const webPush = (await import("web-push")).default;
-    webPush.setVapidDetails(
-      vapid.subject,
-      vapid.publicKey,
-      vapid.privateKey
-    );
+    webPush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
+
+    let delivered = 0;
+    let stale = 0;
+    let failed = 0;
 
     await Promise.all(
       subscriptions.map(async (subscription) => {
@@ -64,15 +83,36 @@ export async function sendPushToUser(
             JSON.stringify(payload),
             { TTL: 60 * 60 }
           );
-        } catch (error) {
-          const statusCode = (error as { statusCode?: number }).statusCode;
+          delivered += 1;
+        } catch (caught) {
+          const statusCode = (caught as { statusCode?: number }).statusCode;
           if (statusCode === 404 || statusCode === 410) {
+            stale += 1;
             await admin.from("push_subscriptions").delete().eq("id", subscription.id);
+            return;
           }
+          failed += 1;
         }
       })
     );
-  } catch {
-    // Push is best-effort by design.
+
+    logBackendEvent(failed > 0 ? "warn" : "info", {
+      action: "notifications.web_push.delivery",
+      statusCode: failed > 0 ? 207 : delivered > 0 ? 200 : 410,
+      userId,
+      errorType:
+        failed > 0
+          ? "partial_delivery_failure"
+          : delivered === 0 && stale > 0
+            ? "stale_subscriptions_pruned"
+            : undefined
+    });
+  } catch (caught) {
+    logBackendEvent("warn", {
+      action: "notifications.web_push.delivery",
+      statusCode: 502,
+      userId,
+      errorType: errorType(caught)
+    });
   }
 }

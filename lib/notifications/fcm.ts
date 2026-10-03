@@ -3,6 +3,7 @@ import "server-only";
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 /**
  * Native push (FCM/APNs) via the Firebase Admin SDK. Reads a base64-encoded
@@ -76,16 +77,52 @@ export async function sendNativePushToUser(userId: string, payload: NativePushPa
   if (!app) return;
 
   const admin = createSupabaseAdminClient();
-  const { data: rows } = await admin.from("device_push_tokens").select("token").eq("user_id", userId);
-  const tokens = (rows ?? []).map((row) => row.token);
-  if (tokens.length === 0) return;
+  const { data: rows, error: tokenError } = await admin.from("device_push_tokens").select("token").eq("user_id", userId);
+  if (tokenError) {
+    logBackendEvent("warn", {
+      action: "notifications.native_push.token_read",
+      statusCode: 500,
+      userId,
+      errorType: errorType(tokenError)
+    });
+    return;
+  }
 
-  const response = await getMessaging(app).sendEachForMulticast({
-    tokens,
-    notification: { title: payload.title, body: payload.body },
-    data: payload.data,
-    android: { priority: "high", notification: { sound: "default" } },
-    apns: { payload: { aps: { sound: "default" } } }
+  const tokens = (rows ?? []).map((row) => row.token);
+  if (tokens.length === 0) {
+    logBackendEvent("info", {
+      action: "notifications.native_push.delivery",
+      statusCode: 204,
+      userId,
+      errorType: "no_device_token"
+    });
+    return;
+  }
+
+  let response;
+  try {
+    response = await getMessaging(app).sendEachForMulticast({
+      tokens,
+      notification: { title: payload.title, body: payload.body },
+      data: payload.data,
+      android: { priority: "high", notification: { sound: "default" } },
+      apns: { payload: { aps: { sound: "default" } } }
+    });
+  } catch (caught) {
+    logBackendEvent("warn", {
+      action: "notifications.native_push.delivery",
+      statusCode: 502,
+      userId,
+      errorType: errorType(caught)
+    });
+    return;
+  }
+
+  logBackendEvent(response.failureCount > 0 ? "warn" : "info", {
+    action: "notifications.native_push.delivery",
+    statusCode: response.failureCount > 0 ? 207 : 200,
+    userId,
+    errorType: response.failureCount > 0 ? "partial_delivery_failure" : undefined
   });
 
   // Prune tokens the transport says will never deliver again.

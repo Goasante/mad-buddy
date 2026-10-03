@@ -1,5 +1,6 @@
 import { WebNotificationsPage } from "@/components/notifications/web-notifications-page";
 import { toNotificationResponse } from "@/lib/notifications/server";
+import { normalizePreferences } from "@/lib/notifications/preferences";
 import { getCurrentIdentity } from "@/lib/supabase/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { birthdayTitle } from "@/lib/profile/birthday-experience";
@@ -40,13 +41,12 @@ export default async function NotificationsPage({
       ])
     : [null, null];
 
-  /* Defaults match lib/settings/service.ts: nearby and plan alerts are ON
-     unless explicitly disabled, quiet is OFF unless explicitly enabled. */
   const storedPreferences = (preferencesResult?.data?.notification_preferences ?? {}) as Record<string, unknown>;
+  const smartPreferences = normalizePreferences(storedPreferences);
   const initialPreferences = {
-    nearbyAlerts: storedPreferences.nearbyAlerts !== false,
-    quietNearby: storedPreferences.quietNearby === true,
-    planAlerts: storedPreferences.planAlerts !== false
+    nearbyAlerts: smartPreferences.categories.proximity !== "off",
+    quietNearby: smartPreferences.categories.proximity === "in_app_only",
+    planAlerts: smartPreferences.categories.plans !== "off"
   };
 
   const initialNotifications: Array<ReturnType<typeof toNotificationResponse> & { previewOnly?: boolean }> =

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NotificationsPageContent } from "@/components/notifications/notifications-page";
 import type { NotificationPreferences } from "@/lib/notifications/client";
+import { normalizePreferences } from "@/lib/notifications/preferences";
 import { resolveMobileNotificationDestination } from "@/lib/notifications/mobile-destination";
 import { useAuth } from "../auth/AuthProvider";
 import { supabase } from "../lib/supabase";
@@ -43,14 +44,11 @@ export function NotificationsScreen() {
       .then(({ data }) => {
         if (!active) return;
         const raw = (data?.notification_preferences ?? {}) as Record<string, unknown>;
-        /* Defaults match the service: nearby and plan alerts are ON unless
-           explicitly disabled, quiet is OFF unless explicitly enabled. Reading
-           them the other way round would show every switch in the wrong
-           position for anyone who has never opened this sheet. */
+        const smart = normalizePreferences(raw);
         setPreferences({
-          nearbyAlerts: raw.nearbyAlerts !== false,
-          quietNearby: raw.quietNearby === true,
-          planAlerts: raw.planAlerts !== false
+          nearbyAlerts: smart.categories.proximity !== "off",
+          quietNearby: smart.categories.proximity === "in_app_only",
+          planAlerts: smart.categories.plans !== "off"
         });
       });
     return () => {

@@ -5,39 +5,29 @@ import type { Route } from "next";
 import {
   Bell,
   BadgeCheck,
-  Blocks,
   BookOpen,
-  CalendarClock,
   ChevronRight,
   Gauge,
-  Ghost,
   HelpCircle,
   Info,
   Laptop,
-  MapPinOff,
   MessageSquare,
   Palette,
-  PartyPopper,
   ShieldCheck,
   ShieldAlert,
-  RadioTower,
   Trash2,
   Trophy,
   UserPlus,
   UserRound
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 /* NO Server Action imports: this renders in the native app too, and a
    "use server" import drags next/headers, lib/supabase/server and the
    service-role client into the mobile bundle -- the PR #84 failure. Both
    writes arrive through `client`, which each platform supplies. */
-import type { SettingsClient } from "@/lib/settings/client";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/settings-section";
-import { PrivacyToggle } from "@/components/settings/privacy-toggle";
-import { LocationForGlowSetting } from "@/components/settings/location-for-glow-setting";
-import type { VisibilityStatus } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 /* PageHeader is NOT imported: it reaches next/link and next/navigation through
@@ -64,18 +54,6 @@ import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 const DestinationAvailability = createContext<((href: string) => boolean) | null>(null);
 
 type SettingsPageContentProps = {
-  initialVisibilityStatus?: VisibilityStatus;
-  initialNearbyAlerts?: boolean;
-  /**
-   * How this screen reaches the server.
-   *
-   * Injected rather than calling Server Actions directly, so the same
-   * component serves both apps: a "use server" import would drag
-   * next/headers, lib/supabase/server and the service-role client into the
-   * mobile bundle — the PR #84 failure. Both platforms end up in
-   * lib/settings/service.ts regardless.
-   */
-  client: SettingsClient;
   /**
    * The page header, supplied by the platform.
    *
@@ -118,69 +96,12 @@ type SettingsPageContentProps = {
 };
 
 export function SettingsPageContent({
-  initialVisibilityStatus = "visible",
-  initialNearbyAlerts = true,
-  client,
   header = null,
   renderDeleteAccountModal,
   footer = null,
   isDestinationAvailable
 }: SettingsPageContentProps) {
-  const [visibilityStatus, setVisibilityStatus] = useState<VisibilityStatus>(initialVisibilityStatus);
-  const [nearbyAlerts, setNearbyAlerts] = useState(initialNearbyAlerts);
-  const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
-  const toastTimerRef = useRef<number | null>(null);
-  const [, startTransition] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    };
-  }, []);
-
-  function showToast(message: string, error = false) {
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    setToast({ message, error });
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 2600);
-  }
-
-  function saveVisibility(nextStatus: VisibilityStatus) {
-    const previousStatus = visibilityStatus;
-    setVisibilityStatus(nextStatus);
-    startTransition(async () => {
-      const result = await client.setVisibilityStatus(nextStatus);
-
-      if (!result.ok) {
-        setVisibilityStatus(previousStatus);
-        showToast("Couldn’t update this setting. Try again.", true);
-        return;
-      }
-
-      window.dispatchEvent(
-        new CustomEvent("mad-buddy:location-sync-status", {
-          detail: { enabled: nextStatus !== "ghost" }
-        })
-      );
-      showToast("Settings updated");
-    });
-  }
-
-  function saveNearbyAlerts(checked: boolean) {
-    const previousValue = nearbyAlerts;
-    setNearbyAlerts(checked);
-    startTransition(async () => {
-      const result = await client.setNearbyAlerts(checked);
-
-      if (!result.ok) {
-        setNearbyAlerts(previousValue);
-        showToast("Couldn’t update this setting. Try again.", true);
-        return;
-      }
-
-      showToast("Settings updated");
-    });
-  }
 
   return (
     <DestinationAvailability.Provider value={isDestinationAvailable ?? null}>
@@ -204,12 +125,6 @@ export function SettingsPageContent({
             title="Profile"
             description="Manage how approved friends see you."
             href="/profile"
-          />
-          <SettingsLinkRow
-            icon={ShieldCheck}
-            title="Account Privacy"
-            description="Control who can see you and message you."
-            href="/settings/privacy"
           />
           <SettingsLinkRow
             icon={ShieldCheck}
@@ -253,50 +168,10 @@ export function SettingsPageContent({
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_PRIVACY}>
         <SettingsSection title="Privacy & safety">
           <SettingsLinkRow
-            /* Same concept, same glyph as the Glow settings page itself and
-               the public pages: Glow is proximity presence being broadcast, so
-               a signal mark rather than a sparkle. */
-            icon={RadioTower}
-            title="Glow & Visibility"
-            description="Control who can see you and for how long."
-            href="/settings/glow-visibility"
-          />
-          <SettingsLinkRow
-            icon={PartyPopper}
-            title="UpFor"
-            description="Let people know you're down to hang out right now."
-            href="/hangout-mode"
-          />
-          <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW}>
-            <LocationForGlowSetting onFeedback={showToast} onEnable={client.enableLocationForGlow} />
-          </div>
-          <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_GHOST_MODE}>
-            <PrivacyToggle
-              icon={Ghost}
-              title="Ghost Mode"
-              description="Pause your visibility until you turn it back on."
-              checked={visibilityStatus === "ghost"}
-              onCheckedChange={(checked) => saveVisibility(checked ? "ghost" : "visible")}
-            />
-          </div>
-          <PrivacyToggle
-            icon={MapPinOff}
-            title="Only while app is open"
-            description="Update your nearby status only while Mad Buddy is open."
-            checked={visibilityStatus === "app_open_only"}
-            onCheckedChange={(checked) => saveVisibility(checked ? "app_open_only" : "visible")}
-          />
-          <SettingsLinkRow
-            icon={Blocks}
-            title="Blocked users"
-            description="Review or unblock people."
-            href="/friends"
-          />
-          <SettingsLinkRow
             icon={ShieldCheck}
-            title="Privacy setup"
-            description="Who can see your glow, and who can reach you."
-            href="/settings/privacy-setup"
+            title="Account Privacy"
+            description="Glow visibility, messaging privacy, contact discovery and blocked users."
+            href="/settings/privacy"
           />
           <SettingsLinkRow
             icon={ShieldCheck}
@@ -315,36 +190,17 @@ export function SettingsPageContent({
 
         <div data-tour-id={TOUR_TARGET_IDS.SETTINGS_NOTIFICATIONS}>
         <SettingsSection title="Notifications">
-          <PrivacyToggle
+          <SettingsLinkRow
             icon={Bell}
-            title="Nearby alerts"
-            description="Get notified when approved friends are nearby."
-            checked={nearbyAlerts}
-            onCheckedChange={saveNearbyAlerts}
+            title="Notification preferences"
+            description="Categories, quiet hours, push, and how you're reached."
+            href="/settings/notifications"
           />
           <SettingsLinkRow
             icon={Bell}
             title="Focus & balance"
             description="Focus Mode, notification limits, recaps and milestones."
             href="/settings/engagement"
-          />
-          <SettingsLinkRow
-            icon={Bell}
-            title="Notification preferences"
-            description="Categories, quiet hours, and how you're reached."
-            href="/settings/notifications"
-          />
-          <SettingsLinkRow
-            icon={MessageSquare}
-            title="Messaging privacy"
-            description="Who can message you, Group adds, read receipts, previews."
-            href="/settings/communication"
-          />
-          <SettingsLinkRow
-            icon={CalendarClock}
-            title="Reminders"
-            description="Plan reminders and notification preferences."
-            href="/reminders"
           />
         </SettingsSection>
         </div>
@@ -423,19 +279,6 @@ export function SettingsPageContent({
 
       {renderDeleteAccountModal?.({ open: deleteOpen, onOpenChange: setDeleteOpen }) ?? null}
 
-      {toast ? (
-        <div
-          role="status"
-          className={cn(
-            "fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-sm font-medium shadow-lg md:bottom-6",
-            toast.error
-              ? "border-red-300/30 bg-red-950 text-red-50"
-              : "border-border bg-foreground text-background"
-          )}
-        >
-          {toast.message}
-        </div>
-      ) : null}
     </div>
     </DestinationAvailability.Provider>
   );
@@ -462,7 +305,6 @@ type SettingsLinkRowProps = {
     | "/hangout-mode"
     | "/badges"
     | "/buddy-score"
-    | "/reminders"
     | "/settings/sessions"
     | "/settings/verification"
     | "/settings/account-status"
