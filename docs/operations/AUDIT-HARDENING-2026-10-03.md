@@ -2,6 +2,25 @@
 
 ## Release boundaries
 
+### Paystack readiness repair — 22:37 UTC
+
+PR #127 merged as `7e565644eee78910ef1599d2bbca02f4f9daa549`, confirmed
+live from deployment `dpl_EcyqfL1Q5wqR5cotA2CentkJVArx`. The authenticated
+App Health page shows all seven readiness checks passing, including Paystack.
+The webhook configuration helper incorrectly required the retired inline
+checkout public key, despite hosted checkout using the server API secret.
+It now checks the actual API/signing credentials and treats a blank optional
+webhook override as absent. Missing required credentials still fail closed;
+signature, amount and entitlement verification remain intact. No credentials,
+transactions or billing settings were changed. All candidate CI jobs passed;
+local verification: 577 files, 9,404 tests passed, one skipped; types, lint,
+secret scan and production build passed.
+
+The App Health page also shows 90 historical dead-letter jobs. Those were not
+replayed. Real payment lifecycle, device push, complete authenticated deletion,
+restore proof and other operational audit checks remain open. The readiness
+503 described in the earlier checkpoints below is resolved by this release.
+
 ### Durable push follow-up (prepared; not yet deployed)
 
 Notifications now have a private database outbox with independent web/native
