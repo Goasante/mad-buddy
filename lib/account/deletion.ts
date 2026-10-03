@@ -49,6 +49,7 @@ export type DeletionOutcome =
 
 /** The tables purged, in one place so the list is auditable at a glance. */
 export const DELETION_TABLES = [
+  "notification_dispatches",
   "messages",
   "proximity_events",
   "notifications",
@@ -150,6 +151,7 @@ export async function purgeUserData(
   const scoped: Array<[string, PromiseLike<{ error: unknown }>]> = [
     ["proximity_events", admin.from("proximity_events").delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`)],
     ["notifications", admin.from("notifications").delete().eq("user_id", userId)],
+    ["notification_dispatches", admin.from("notification_dispatches").delete().eq("user_id", userId)],
     ["meetup_requests", admin.from("meetup_requests").delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)],
     ["best_buddies", admin.from("best_buddies").delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`)],
     ["event_modes", admin.from("event_modes").delete().eq("user_id", userId)],

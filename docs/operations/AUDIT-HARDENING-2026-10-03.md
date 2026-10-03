@@ -2,6 +2,55 @@
 
 ## Release boundaries
 
+### Durable push follow-up (prepared; not yet deployed)
+
+Notifications now have a private database outbox with independent web/native
+device deliveries. In-app persistence, semantic deduplication and ordinary push
+budget reservation happen in one transaction. Immediate delivery runs after the
+response; the existing cron tick recovers queued or stale deliveries. Preference,
+block and account-deletion checks are repeated before transport. Deleting an
+account purges its dispatches and delivery children.
+
+Retries are bounded to five attempts and a one-hour delivery lifetime, with
+exponential backoff and fenced leases. Acknowledgement failures retain the lease
+instead of immediately repeating a successful provider call. Stable notification
+tags help collapse duplicates, but delivery is at least once, not exactly once.
+Web requests have a ten-second timeout. Native SDK calls can outlast the local
+25-second claim budget; the worker stops claiming new batches, and stale leases
+recover after five minutes. Expired dispatches are removed in bounded batches
+after roughly seven days. Payloads exclude device addresses and tokens.
+
+Migrations `20261003213820_durable_push_delivery.sql` and
+`20261003214905_push_claim_maintenance_alias.sql` are applied to staging only.
+Both must be applied to Production before application deployment. The second
+qualifies the maintenance query's ID to avoid a PL/pgSQL output-name ambiguity.
+Browser roles have no table or RPC access; service-role RPCs use invoker security.
+
+Verification: 576 test files passed, 9,400 tests passed and one skipped; type
+checking and production build passed. Full lint had zero errors and 118 existing
+warnings. Synthetic staging checks covered atomic persistence, budget limits,
+deduplication, partial device recovery, lease fencing, retry exhaustion, expiry,
+global maintenance, deletion cascades and browser denial. Every fixture rolled
+back, with no synthetic Auth users remaining. No real device push was sent.
+Readiness diagnosis and the other operational audit gaps remain open.
+
+### Production status at 21:35 UTC
+
+PR #125 is merged as `2cb0ecd6bd3f77d1b10c1940688ca9ca18fa8028`.
+`mad-buddy.com/api/version` serves that exact main commit from deployment
+`dpl_3L6ioT5Ly78Bh28svqvA3E53Knwv`. Candidate and post-merge quality,
+production-build and mobile CI jobs passed. Both migrations below are applied
+to Production with their repository versions; migration history has 172 entries
+and head `20261003210234`. Grants, guards and function definitions were checked
+without mutating customer accounts. The four stalled requests were not replayed.
+
+Homepage, login and shallow health respond 200. The pre-existing deeper
+readiness failure still responds 503 and requires private provider diagnostics.
+Full authenticated deletion and real-device push remain unverified. This release
+deploys the focused fixes; it does not close the full audit.
+
+The preparation statement below describes work before deployment approval.
+
 This batch is a focused repair, not a redesign or a claim that every audit item
 is closed. Production has not been changed during preparation. Database changes
 were applied and checked on staging only. Never auto-resume the four stalled
@@ -71,7 +120,7 @@ The full unit suite, lint, types and production build must pass before merge.
 ## Audit items still open
 
 - Exact production-readiness failing subcheck and provider configuration.
-- Durable push outbox/retries and real iOS/Android delivery tests.
+- Deploy the prepared durable push outbox; verify real iOS/Android delivery.
 - Independent heartbeat/uptime alerts, backed-up database and Storage restore
   evidence, provider patch availability and commercial hosting eligibility.
 - Load envelope, Ghana-device performance and targeted query-plan/index work.

@@ -118,6 +118,9 @@ self.addEventListener("push", (event) => {
       body: payload.body,
       icon: "/icons/pwa/icon-192.png",
       badge: "/icons/notification-badge.png",
+      // The same saved delivery can be recovered after an acknowledgement
+      // failure. Replace its existing notification instead of stacking it.
+      ...(typeof payload.tag === "string" ? { tag: payload.tag, renotify: false } : {}),
       data: { url: payload.url }
     })
   );

@@ -410,6 +410,18 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
         Relationships: [];
       };
+      notification_dispatches: {
+        Row: { id: string; user_id: string; dedupe_key: string | null; payload: Json; context: Json; created_at: string; expires_at: string };
+        Insert: { id?: string; user_id: string; dedupe_key?: string | null; payload: Json; context?: Json; created_at?: string; expires_at?: string };
+        Update: Partial<Database["public"]["Tables"]["notification_dispatches"]["Insert"]>;
+        Relationships: [];
+      };
+      notification_push_deliveries: {
+        Row: { id: string; dispatch_id: string; transport: string; target_id: string; status: string; attempts: number; run_at: string; locked_at: string | null; lease_id: string | null; last_error: string | null };
+        Insert: { id?: string; dispatch_id: string; transport: string; target_id: string; status?: string; attempts?: number; run_at?: string; locked_at?: string | null; lease_id?: string | null; last_error?: string | null };
+        Update: Partial<Database["public"]["Tables"]["notification_push_deliveries"]["Insert"]>;
+        Relationships: [];
+      };
       blocked_users: {
         Row: { id: string; blocker_id: string; blocked_id: string; created_at: string };
         Insert: { id?: string; blocker_id: string; blocked_id: string; created_at?: string };
@@ -5288,6 +5300,20 @@ export type Database = {
     Functions: {
       reserve_notification_budget: {
         Args: { p_user_id: string; p_day_key: string; p_budget: number };
+        Returns: boolean;
+      };
+      enqueue_notification_dispatch: {
+        Args: { p_user_id: string; p_type: string; p_title: string; p_message: string; p_dedupe_key: string | null;
+          p_persist: boolean; p_push: boolean; p_day_key: string; p_budget: number; p_bypass_budget: boolean; p_payload: Json; p_context: Json };
+        Returns: Json;
+      };
+      claim_notification_push: {
+        Args: { p_dispatch_id?: string | null; p_limit?: number };
+        Returns: { id: string; dispatch_id: string; transport: string; target_id: string; attempts: number; lease_id: string;
+          user_id: string; payload: Json; context: Json; expires_at: string }[];
+      };
+      finish_notification_push: {
+        Args: { p_id: string; p_lease_id: string; p_outcome: string; p_error?: string | null };
         Returns: boolean;
       };
       blog_image_is_published: { Args: { p_id: string }; Returns: boolean };

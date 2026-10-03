@@ -14,6 +14,7 @@ import {
 } from "@/lib/notifications/preferences";
 import type { Database } from "@/lib/supabase/database.types";
 import { privacySafePushPayload } from "@/lib/notifications/push-content";
+import { errorType, logBackendEvent } from "@/lib/observability/logger";
 
 type SupabaseAdmin = ReturnType<typeof import("@/lib/supabase/admin").createSupabaseAdminClient>;
 
@@ -129,7 +130,7 @@ export async function deliverNotification(
           .eq("owner_id", input.userId)
           .eq("friend_id", input.senderId)
           .maybeSingle()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
     supabase
       .from("notification_budget_usage")
       .select("sent_count")
@@ -164,13 +165,17 @@ export async function deliverNotification(
     budget: clampNotificationBudget(engagement?.daily_notification_budget ?? Number.NaN),
     nowMs: now.getTime()
   });
+  // A failed preference read must never be interpreted as permission to push.
+  if (prefsRes.error || engagementRes.error || closeFriendRes.error) {
+    decision.push = false;
+  }
 
   const shouldPersistInApp = decision.inApp && input.persistInApp !== false;
   if (!shouldPersistInApp && !decision.push) {
     return { ...decision, inApp: false };
   }
 
-  if (shouldPersistInApp) {
+  if (!decision.push && shouldPersistInApp) {
     const persisted = await createNotification(supabase, {
       userId: input.userId,
       type: input.type,
@@ -189,42 +194,35 @@ export async function deliverNotification(
   }
 
   if (decision.push) {
-    if (priority !== "critical" && priority !== "high") {
-      const reservation = await supabase.rpc("reserve_notification_budget", {
-        p_user_id: input.userId,
-        p_day_key: dayKey,
-        p_budget: clampNotificationBudget(engagement?.daily_notification_budget ?? Number.NaN)
-      });
-      if (reservation.error || !reservation.data) {
-        return { inApp: shouldPersistInApp, push: false, reason: reservation.error ? "budget_unavailable" : "budget_exhausted" };
+    const safePush = privacySafePushPayload(input);
+    const queued = await supabase.rpc("enqueue_notification_dispatch", {
+      p_user_id: input.userId, p_type: input.type, p_title: input.title,
+      p_message: input.message, p_dedupe_key: input.dedupeKey ?? null,
+      p_persist: shouldPersistInApp, p_push: true, p_day_key: dayKey,
+      p_budget: clampNotificationBudget(engagement?.daily_notification_budget ?? Number.NaN),
+      p_bypass_budget: priority === "critical" || priority === "high",
+      p_payload: safePush,
+      p_context: { priority, category: input.category ?? null, senderId: input.senderId ?? null, type: input.type }
+    });
+    if (queued.error) throw queued.error;
+    const result = queued.data as { dispatchId?: string; inApp: boolean; push: boolean; reason: string };
+    if (result.push && result.dispatchId) {
+      // Durable first, immediate delivery after the response. If scheduling or
+      // transport fails, the existing cron tick claims the saved target rows.
+      try {
+        after(async () => {
+          try {
+            const { drainPushOutbox } = await import("@/lib/notifications/outbox");
+            await drainPushOutbox(supabase, result.dispatchId);
+          } catch (caught) {
+            logBackendEvent("warn", { action: "notifications.outbox.immediate", errorType: errorType(caught) });
+          }
+        });
+      } catch (caught) {
+        logBackendEvent("warn", { action: "notifications.outbox.schedule", errorType: errorType(caught) });
       }
     }
-    const safePush = privacySafePushPayload(input);
-    // The push round trip is an external network call and must not hold open
-    // the actor's request. It is deferred with Next's established after()
-    // pattern and remains independent from optional Pulse persistence.
-    after(async () => {
-      try {
-        const { sendPushToUser } = await import("@/lib/notifications/push");
-        await sendPushToUser(supabase, input.userId, safePush);
-      } catch {
-        // A transport failure must not fail the originating action.
-      }
-
-      // Native push (FCM/APNs) to the user's mobile devices. Best-effort and a
-      // silent no-op until FIREBASE_SERVICE_ACCOUNT_BASE64 is configured; never
-      // let a push transport error interrupt the originating action.
-      try {
-        const { sendNativePushToUser } = await import("@/lib/notifications/fcm");
-        await sendNativePushToUser(input.userId, {
-          title: safePush.title,
-          body: safePush.body,
-          data: { url: safePush.url, type: input.type }
-        });
-      } catch {
-        // A transport failure must not fail the originating action.
-      }
-    });
+    return { inApp: result.inApp, push: result.push, reason: result.reason };
   }
 
   return { ...decision, inApp: shouldPersistInApp };

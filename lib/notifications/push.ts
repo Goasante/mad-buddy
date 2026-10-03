@@ -6,6 +6,34 @@ import { readVapidConfiguration } from "@/lib/notifications/vapid";
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdminClient>;
 
+/** A single durable target: errors are classified by the outbox, not swallowed. */
+export async function sendWebPushTarget(
+  admin: SupabaseAdmin, userId: string, targetId: string,
+  payload: { title: string; body: string; url: string; tag: string }, ttlSeconds: number
+): Promise<"delivered" | "gone"> {
+  const vapid = readVapidConfiguration(process.env);
+  if (!vapid.ok) throw Object.assign(new Error("Push configuration unavailable"), { name: "PushConfigurationUnavailable" });
+  const { data: subscription, error } = await admin.from("push_subscriptions")
+    .select("id, endpoint, p256dh, auth").eq("id", targetId).eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  if (!subscription) return "gone";
+  const webPush = (await import("web-push")).default;
+  webPush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
+  try {
+    await webPush.sendNotification({ endpoint: subscription.endpoint,
+      keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify(payload),
+    { TTL: Math.max(0, ttlSeconds), timeout: 10_000 });
+    return "delivered";
+  } catch (caught) {
+    const status = (caught as { statusCode?: number }).statusCode;
+    if (status !== 404 && status !== 410) throw caught;
+    const removed = await admin.from("push_subscriptions").delete().eq("id", targetId).eq("user_id", userId)
+      .eq("endpoint", subscription.endpoint).eq("p256dh", subscription.p256dh).eq("auth", subscription.auth);
+    if (removed.error) throw removed.error;
+    return "gone";
+  }
+}
+
 /**
  * Web push transport (batch 4 deferred). Fails safe in every direction:
  * missing VAPID env → silent no-op (in-app delivery is unaffected); a gone

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { runTick } from "@/lib/jobs/worker";
 import { buildTickSummary, resolveSchedulerSource, workerIdFor } from "@/lib/jobs/scheduler-source";
@@ -76,6 +76,17 @@ export async function GET(request: Request) {
     const source = resolveSchedulerSource(new URL(request.url).searchParams.get("source"));
     const tickId = randomUUID().slice(0, 8);
     const result = await runTick(admin, workerIdFor(source, tickId));
+
+    // Recovery uses the same private outbox as the immediate delivery path.
+    // Run after the response so push transports never hold up safety jobs.
+    after(async () => {
+      try {
+        const { drainPushOutbox } = await import("@/lib/notifications/outbox");
+        await drainPushOutbox(admin);
+      } catch (caught) {
+        logBackendEvent("warn", { action: "notifications.outbox.recovery", errorType: errorType(caught) });
+      }
+    });
 
     // Check the scheduler's own health after the work is done, so a slow or
     // failing health check can never delay or fail the jobs themselves, and
