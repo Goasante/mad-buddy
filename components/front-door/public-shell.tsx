@@ -40,15 +40,16 @@ export function PublicHeader({
           <span className="text-[15px] font-bold tracking-[-0.02em] text-[#4E0401] dark:text-[#FFF8F1]">Mad Buddy</span>
         </Link>
 
-        <div className="hidden items-center gap-0.5 md:flex">
+        <div className="hidden items-center gap-0.5 lg:flex">
           <Link className={navItemClass} href="/#how-it-works">How it works</Link>
           <Link className={navItemClass} href="/#connect">Muddies + Linkr</Link>
           <Link className={navItemClass} href="/safety">Safety</Link>
           <Link className={navItemClass} href="/about">About</Link>
+          <Link className={navItemClass} href="/blog">Journal</Link>
           <Link className={navItemClass} href="/pricing">Pricing</Link>
         </div>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-2 lg:flex">
           <Link
             href="/login"
             className="focus-ring inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-semibold text-[#4E0401]/70 transition-colors hover:bg-[#E88C2B]/10 hover:text-[#4E0401] dark:text-[#FFF8F1]/75 dark:hover:bg-white/[0.06] dark:hover:text-[#FFF8F1]"
@@ -70,6 +71,7 @@ export function PublicHeader({
 }
 
 const footerLinks = [
+  { href: "/blog", label: "Journal" },
   { href: "/about", label: "About" },
   { href: "/godfred", label: "Meet the founder" },
   { href: "/safety", label: "Safety" },

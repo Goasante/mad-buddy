@@ -127,6 +127,18 @@ type RowWithTimestamps = {
 export type Database = {
   public: {
     Tables: {
+      blog_posts: {
+        Row: { id: string; slug: string; draft: Json; published: Json | null; published_at: string | null; published_updated_at: string | null; version: number; updated_at: string; updated_by: string | null };
+        Insert: { id?: string; slug: string; draft: Json; published?: Json | null; published_at?: string | null; published_updated_at?: string | null; version?: number; updated_at?: string; updated_by?: string | null };
+        Update: { draft?: Json; published?: Json | null; published_at?: string | null; published_updated_at?: string | null; version?: number; updated_at?: string; updated_by?: string | null };
+        Relationships: [];
+      };
+      blog_revisions: {
+        Row: { id: string; post_id: string; version: number; draft: Json; published: Json | null; saved_at: string };
+        Insert: { id?: string; post_id: string; version: number; draft: Json; published?: Json | null; saved_at?: string };
+        Update: never;
+        Relationships: [];
+      };
       profiles: {
         Row: RowWithTimestamps & {
           id: string;
@@ -5268,6 +5280,7 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      save_blog_post: { Args: { p_id: string | null; p_version: number; p_draft: Json; p_intent: string; p_actor: string }; Returns: Json };
       /* Atomic photo-slot swap. Three writes in one transaction, so the -1
          parking value the unique (user_id, position) constraint forces is
          never observable and no photo is left without a slot. */

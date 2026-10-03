@@ -20,6 +20,7 @@ const PUBLIC_EXACT_PATHS = new Set([
 ]);
 
 const PUBLIC_PREFIXES = [
+  "/blog",
   "/pricing",
   "/about",
   "/faq",

@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 const publicLinks = [
+  { href: "/blog", label: "Journal" },
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#connect", label: "Muddies + Linkr" },
   { href: "/safety", label: "Safety" },
@@ -67,7 +68,7 @@ export function PublicMobileMenu() {
   }, [open, close]);
 
   return (
-    <div className="md:hidden">
+    <div className="lg:hidden">
       <button
         ref={triggerRef}
         type="button"

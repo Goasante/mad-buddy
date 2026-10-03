@@ -13,6 +13,7 @@ import {
   Compass,
   CreditCard,
   FileKey2,
+  FileText,
   FlaskConical,
   Gauge,
   Headphones,
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils";
 
 type AdminHref =
   | "/admin"
+  | "/admin/blog"
   | "/admin/users"
   | "/admin/trusted-members"
   | "/admin/verifications"
@@ -85,6 +87,7 @@ const adminNavigationGroups: AdminNavigationGroup[] = [
     label: "Operations",
     items: [
       { href: "/admin", label: "Overview", icon: Gauge },
+      { href: "/admin/blog", label: "Journal", icon: FileText, ownerOnly: true },
       { href: "/admin/users", label: "Users", icon: UsersRound, permission: "admin.users.view_summary" },
       { href: "/admin/trusted-members", label: "Trusted Members", icon: ShieldCheck, permission: "admin.verification.review" },
       { href: "/admin/verifications", label: "Verifications", icon: ShieldCheck, permission: "admin.verification.review" },
