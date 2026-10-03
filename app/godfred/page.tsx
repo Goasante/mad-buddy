@@ -114,7 +114,10 @@ export default function GodfredPortfolio() {
             </article>
             <article className={styles.designProject}>
               <p className={styles.projectType}>04 — Visual / Design practice</p>
-              <div className={styles.designVisual} aria-hidden="true"><span>ALPHA</span><span>Make it<br /><em>mean</em><br />something.</span><span>GRAPHICS / CREATIVE PRACTICE</span></div>
+              <div className={styles.designVisual}>
+                <Image src="/founder/event-design.webp" alt="Godfred’s red and white SRC inter-hall football tournament poster" width={1080} height={1080} sizes="(max-width: 700px) 42vw, 240px" />
+                <Image src="/founder/seasonal-design.webp" alt="Godfred’s blue and white seasonal greetings design for Sambus Geospatial" width={1080} height={1080} sizes="(max-width: 700px) 42vw, 240px" />
+              </div>
               <h3>A visual point of view.</h3>
               <p>Graphic design, content management, social media, and video editing. My work at Alpha Graphix brings a clear message and a considered visual identity together.</p>
               <a href={instagram} className={styles.textLink}>See designs on Instagram <ArrowUpRight aria-hidden="true" /></a><br /><a href="https://www.behance.net/gallery/249204525/Goasante-Portfolio" className={styles.textLink}>Explore selected creative work <ArrowUpRight aria-hidden="true" /></a>
