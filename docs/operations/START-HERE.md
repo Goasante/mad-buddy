@@ -83,7 +83,7 @@ This handoff tranche identified and resolved several reconciliation items on thi
 
 - `.env.example` now lists the newer runtime variables, including native Firebase service-account configuration and the independent database cron credential.
 - Payment/readiness/deployment documentation now leads with Mad Buddy Access; retired Buddy Plus / Buddy Pro references are explicitly labeled legacy compatibility only.
-- `AI_HANDOFF.md` and the root `CONTINUATION.md` are explicitly marked historical and point to current authority.
+- `docs/archive/AI_HANDOFF.md` and `docs/archive/CONTINUATION.md` preserve historical handoff context without cluttering the repository root.
 - `ios/.gitignore` now excludes signing/export material to the same standard as Android.
 - A full Git history secret scan (`node scripts/security/scan-secrets.mjs --history`) has been run from a complete, non-shallow clone and returned clean. `.github/workflows/security-history-audit.yml` lets this be re-run on demand.
 
