@@ -2,6 +2,23 @@
 
 ## Release boundaries
 
+### Production status at 21:35 UTC
+
+PR #125 is merged as `2cb0ecd6bd3f77d1b10c1940688ca9ca18fa8028`.
+`mad-buddy.com/api/version` serves that exact main commit from deployment
+`dpl_3L6ioT5Ly78Bh28svqvA3E53Knwv`. Candidate and post-merge quality,
+production-build and mobile CI jobs passed. Both migrations below are applied
+to Production with their repository versions; migration history has 172 entries
+and head `20261003210234`. Grants, guards and function definitions were checked
+without mutating customer accounts. The four stalled requests were not replayed.
+
+Homepage, login and shallow health respond 200. The pre-existing deeper
+readiness failure still responds 503 and requires private provider diagnostics.
+Full authenticated deletion and real-device push remain unverified. This release
+deploys the focused fixes; it does not close the full audit.
+
+The preparation statement below describes work before deployment approval.
+
 This batch is a focused repair, not a redesign or a claim that every audit item
 is closed. Production has not been changed during preparation. Database changes
 were applied and checked on staging only. Never auto-resume the four stalled
