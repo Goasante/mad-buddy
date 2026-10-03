@@ -3,19 +3,19 @@ import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
 
 describe("UpFor activity artwork", () => {
   it("maps only activities that existing photography honestly depicts", () => {
-    expect(resolveUpForActivityArtwork("food")?.asset.path).toBe("/visuals/upfor/dinner-natural-v1.jpg");
-    expect(resolveUpForActivityArtwork("sports")?.asset.path).toBe("/visuals/upfor/football-natural-v1.jpg");
+    expect(resolveUpForActivityArtwork("food")?.asset.path).toBe("/visuals/upfor/dinner-natural-v2.jpg");
+    expect(resolveUpForActivityArtwork("sports")?.asset.path).toBe("/visuals/upfor/football-natural-v2.jpg");
     // walk gained its own approved photograph on 2026-09-10 and no longer
     // borrows beach's as a placeholder.
-    expect(resolveUpForActivityArtwork("walk")?.asset.path).toBe("/visuals/upfor/walk-natural-v1.jpg");
-    expect(resolveUpForActivityArtwork("chill")?.asset.path).toBe("/visuals/upfor/beach-natural-v1.jpg");
-    expect(resolveUpForActivityArtwork("coffee")?.asset.path).toBe("/visuals/upfor/coffee-natural-v1.jpg");
-    expect(resolveUpForActivityArtwork("football")?.asset.path).toBe("/visuals/upfor/football-natural-v1.jpg");
-    expect(resolveUpForActivityArtwork("movie")?.asset.path).toBe("/visuals/upfor/movie-natural-v1.jpg");
-    expect(resolveUpForActivityArtwork("party")?.asset.path).toBe("/visuals/upfor/party-natural-v1.jpg");
+    expect(resolveUpForActivityArtwork("walk")?.asset.path).toBe("/visuals/upfor/walk-natural-v2.jpg");
+    expect(resolveUpForActivityArtwork("chill")?.asset.path).toBe("/visuals/upfor/beach-natural-v2.jpg");
+    expect(resolveUpForActivityArtwork("coffee")?.asset.path).toBe("/visuals/upfor/coffee-natural-v2.jpg");
+    expect(resolveUpForActivityArtwork("football")?.asset.path).toBe("/visuals/upfor/football-natural-v2.jpg");
+    expect(resolveUpForActivityArtwork("movie")?.asset.path).toBe("/visuals/upfor/movie-natural-v2.jpg");
+    expect(resolveUpForActivityArtwork("party")?.asset.path).toBe("/visuals/upfor/party-natural-v2.jpg");
     // study and gaming gained approved replacement photography on 2026-09-10.
-    expect(resolveUpForActivityArtwork("study")?.asset.path).toBe("/visuals/upfor/study-natural-v1.jpg");
-    expect(resolveUpForActivityArtwork("gaming")?.asset.path).toBe("/visuals/upfor/gaming-natural-v1.jpg");
+    expect(resolveUpForActivityArtwork("study")?.asset.path).toBe("/visuals/upfor/study-natural-v2.jpg");
+    expect(resolveUpForActivityArtwork("gaming")?.asset.path).toBe("/visuals/upfor/gaming-natural-v2.jpg");
   });
 
   it("never substitutes misleading photography for missing activity art", () => {

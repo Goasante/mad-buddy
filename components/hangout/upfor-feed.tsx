@@ -145,6 +145,7 @@ export function UpForFeed({
               src={resolveUpForActivityArtwork("chill")!.asset.path}
               alt=""
               fill
+              unoptimized
               priority
               sizes="110px"
               className={`${styles.heroTileImage} ${imageStyles.bleedImage}`}
@@ -155,6 +156,7 @@ export function UpForFeed({
               src={resolveUpForActivityArtwork("football")!.asset.path}
               alt=""
               fill
+              unoptimized
               priority
               sizes="110px"
               className={`${styles.heroTileImage} ${imageStyles.bleedImage}`}
@@ -165,6 +167,7 @@ export function UpForFeed({
               src={resolveUpForActivityArtwork("food")!.asset.path}
               alt=""
               fill
+              unoptimized
               priority
               sizes="120px"
               className={`${styles.heroTileImage} ${imageStyles.bleedImage}`}
@@ -238,6 +241,7 @@ export function UpForFeed({
                           src={artwork.asset.path}
                           alt=""
                           fill
+                          unoptimized
                           sizes="168px"
                           className={`${styles.popularImage} ${imageStyles.bleedImage}`}
                           style={{ objectPosition: artwork.objectPosition }}
