@@ -3,6 +3,8 @@ import type { Metadata, Route } from "next";
 import { PublicPageShell } from "@/components/front-door/public-shell";
 import { listPublishedArticles } from "@/lib/blog/service";
 import { readingMinutes } from "@/lib/blog/model";
+import Image from "next/image";
+import { articleImageUrl } from "@/lib/blog/image-model";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -24,6 +26,7 @@ export default async function BlogPage() {
       <p className="mt-8 text-xs font-semibold uppercase tracking-[0.14em] opacity-60">Latest articles</p>
       <div className="mt-5 grid gap-6 md:grid-cols-2">
         {articles.map((article, index) => <Link key={article.slug} href={`/blog/${article.slug}` as Route} className={`focus-ring group rounded-2xl border border-current/15 p-7 transition-colors hover:border-[#a45121]/60 sm:p-10 ${index === 0 ? "bg-[#E88C2B]/10" : ""}`}>
+          {article.cover && <Image src={articleImageUrl(article.cover.id)} alt={article.cover.alt} width={article.cover.width} height={article.cover.height} unoptimized loading="lazy" className="mb-7 aspect-[16/9] w-full rounded-xl object-cover" />}
           <div className="flex items-center justify-between gap-4 text-xs font-semibold uppercase tracking-[0.12em] opacity-65"><span>{article.category}</span><span>{readingMinutes(article.body)} min read</span></div>
           <h2 className="mt-8 text-3xl font-semibold leading-tight tracking-[-0.025em]">{article.title}</h2>
           <p className="mt-4 text-base leading-7 opacity-75">{article.description}</p>
