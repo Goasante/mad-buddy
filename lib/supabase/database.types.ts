@@ -127,6 +127,12 @@ type RowWithTimestamps = {
 export type Database = {
   public: {
     Tables: {
+      blog_images: {
+        Row: { id: string; sha256: string; width: number; height: number; bytes: number; created_by: string; created_at: string };
+        Insert: { id?: string; sha256: string; width: number; height: number; bytes: number; created_by: string; created_at?: string };
+        Update: never;
+        Relationships: [];
+      };
       blog_posts: {
         Row: { id: string; slug: string; draft: Json; published: Json | null; published_at: string | null; published_updated_at: string | null; version: number; updated_at: string; updated_by: string | null };
         Insert: { id?: string; slug: string; draft: Json; published?: Json | null; published_at?: string | null; published_updated_at?: string | null; version?: number; updated_at?: string; updated_by?: string | null };
@@ -5280,6 +5286,7 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      blog_image_is_published: { Args: { p_id: string }; Returns: boolean };
       save_blog_post: { Args: { p_id: string | null; p_version: number; p_draft: Json; p_intent: string; p_actor: string }; Returns: Json };
       /* Atomic photo-slot swap. Three writes in one transaction, so the -1
          parking value the unique (user_id, position) constraint forces is

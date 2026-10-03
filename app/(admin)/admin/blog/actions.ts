@@ -14,6 +14,14 @@ export async function saveArticleAction(input: unknown): Promise<{ ok: boolean; 
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check your article." };
   const { id, version, article, intent } = parsed.data;
+  const attached = [...(article.cover ? [article.cover] : []), ...(article.images ?? [])];
+  if (attached.length) {
+    const ids = [...new Set(attached.map((image) => image.id))];
+    const { data: stored, error } = await auth.admin.from("blog_images").select("id, width, height, bytes").in("id", ids);
+    if (error || attached.some((image) => !stored?.some((row) => row.id === image.id && row.width === image.width && row.height === image.height && row.bytes === image.bytes))) {
+      return { ok: false, message: "An image could not be verified. Upload it again before saving." };
+    }
+  }
   if (intent === "publish") {
     const issues = publishIssues(article);
     if (issues.length) return { ok: false, message: issues.join(" ") };

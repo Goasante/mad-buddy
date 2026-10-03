@@ -32,6 +32,7 @@ const nextConfig: NextConfig = {
   // Everything else relies on normal Next.js output tracing and does not get a
   // duplicate copy of Sharp/libvips forced into its function bundle.
   outputFileTracingIncludes: {
+    "/admin/blog/**": sharpRuntimeFiles,
     "/profile": sharpRuntimeFiles,
     "/events": sharpRuntimeFiles,
     "/moments": sharpRuntimeFiles,

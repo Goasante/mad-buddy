@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { articleBlocks, BLOG_FEATURES, readingMinutes, type Article } from "@/lib/blog/model";
+import { ArticleFigure } from "./article-image";
 
 export function ArticleContent({ article, publishedAt }: { article: Article; publishedAt?: string }) {
   const blocks = articleBlocks(article.body);
@@ -18,9 +19,14 @@ export function ArticleContent({ article, publishedAt }: { article: Article; pub
           <span>{readingMinutes(article.body)} min read</span>
         </div>
       </header>
+      {article.cover && <ArticleFigure image={article.cover} cover />}
       <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-20">
         <article className="min-w-0 max-w-[720px]">
-          {blocks.map((block) => block.kind === "heading"
+          {blocks.map((block) => block.kind === "image"
+            ? (article.images ?? []).find((image) => image.id === block.imageId)
+              ? <ArticleFigure key={block.id} image={(article.images ?? []).find((image) => image.id === block.imageId)!} />
+              : <p key={block.id} className="mb-6 text-sm opacity-60">Image unavailable.</p>
+            : block.kind === "heading"
             ? <h2 id={block.id} key={block.id} className="mb-5 mt-12 scroll-mt-28 text-2xl font-semibold tracking-tight first:mt-0">{block.text}</h2>
             : block.kind === "list"
               ? <ul key={block.id} className="mb-6 list-disc space-y-3 pl-6 text-[17px] leading-8 opacity-85">{block.items.map((item, i) => <li key={i}>{item}</li>)}</ul>

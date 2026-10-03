@@ -8,6 +8,7 @@ import { jsonLdString } from "@/lib/blog/model";
 import { absoluteUrl } from "@/lib/seo";
 import Link from "next/link";
 import type { Route } from "next";
+import { articleImageUrl } from "@/lib/blog/image-model";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -18,7 +19,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: article.title, description: article.description,
     alternates: { canonical: `/blog/${article.slug}` },
-    openGraph: { type: "article", title: article.title, description: article.description, url: `/blog/${article.slug}`, publishedTime: article.publishedAt, modifiedTime: article.updatedAt, authors: [absoluteUrl("/godfred")] }
+    openGraph: { type: "article", title: article.title, description: article.description, url: `/blog/${article.slug}`, publishedTime: article.publishedAt, modifiedTime: article.updatedAt, authors: [absoluteUrl("/godfred")], ...(article.cover ? { images: [{ url: absoluteUrl(articleImageUrl(article.cover.id)), width: article.cover.width, height: article.cover.height, alt: article.cover.alt, type: "image/jpeg" }] } : {}) },
+    ...(article.cover ? { twitter: { card: "summary_large_image", title: article.title, description: article.description, images: [absoluteUrl(articleImageUrl(article.cover.id))] } } : {})
   };
 }
 export default async function ArticlePage({ params }: Props) {
@@ -30,6 +32,7 @@ export default async function ArticlePage({ params }: Props) {
   const structured = {
     "@context": "https://schema.org", "@type": "BlogPosting",
     headline: article.title, description: article.description,
+    ...(article.cover ? { image: absoluteUrl(articleImageUrl(article.cover.id)) } : {}),
     datePublished: article.publishedAt, dateModified: article.updatedAt,
     mainEntityOfPage: absoluteUrl(`/blog/${article.slug}`),
     author: { "@type": "Person", name: "Godfred Ofosu Asante", url: absoluteUrl("/godfred") },
