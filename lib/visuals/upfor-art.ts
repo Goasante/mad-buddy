@@ -1,5 +1,5 @@
 import type { HangoutActivityType, PlanCategory } from "@/lib/supabase/database.types";
-import { planActivityArt, type VisualAsset } from "@/lib/visuals/registry";
+import { upForActivityArt, type VisualAsset } from "@/lib/visuals/registry";
 
 /**
  * One semantic authority for photographic UpFor artwork.
@@ -54,7 +54,7 @@ export function resolveUpForActivityArtwork(
   const rule = UPFOR_ACTIVITY_ART[activity];
   if (!rule) return null;
 
-  const asset = planActivityArt(rule.category);
+  const asset = upForActivityArt(rule.category);
   if (!asset) return null;
   return { asset, objectPosition: rule.objectPosition };
 }

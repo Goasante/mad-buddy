@@ -142,7 +142,7 @@ export function UpForFeed({
         <div className={styles.heroGallery} aria-hidden="true">
           <span className={`${styles.heroTile} ${styles.heroTileBack}`}>
             <Image
-              src="/visuals/activities/beach.jpg"
+              src={resolveUpForActivityArtwork("chill")!.asset.path}
               alt=""
               fill
               priority
@@ -152,7 +152,7 @@ export function UpForFeed({
           </span>
           <span className={`${styles.heroTile} ${styles.heroTileMiddle}`}>
             <Image
-              src="/visuals/activities/football.jpg"
+              src={resolveUpForActivityArtwork("football")!.asset.path}
               alt=""
               fill
               priority
@@ -162,7 +162,7 @@ export function UpForFeed({
           </span>
           <span className={`${styles.heroTile} ${styles.heroTileFront}`}>
             <Image
-              src="/visuals/activities/dinner.jpg"
+              src={resolveUpForActivityArtwork("food")!.asset.path}
               alt=""
               fill
               priority
