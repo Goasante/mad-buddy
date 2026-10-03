@@ -73,6 +73,13 @@ export function AboutPage() {
           </p>
         </section>
 
+        <section className="mt-12 rounded-2xl border border-[#4E0401]/10 bg-[#E88C2B]/[0.06] p-6 sm:p-8 dark:border-white/10" aria-labelledby="founder-heading">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A45A18]">The person behind Mad Buddy</p>
+          <h2 id="founder-heading" className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-[#4E0401] dark:text-[#FFF8F1]">Meet Godfred Ofosu Asante.</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-[#4E0401]/65 dark:text-[#FFF8F1]/65">A Ghana-based builder, operations leader, and creative bringing people, technology, and thoughtful design together.</p>
+          <Link href="/godfred" className="focus-ring mt-4 inline-flex min-h-11 items-center gap-3 rounded-lg text-sm font-semibold text-[#4E0401] dark:text-[#FFF8F1]">Explore the founder’s portfolio <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+        </section>
+
         <section className="mt-14 border-t border-[#4E0401]/10 pt-9 dark:border-white/10" aria-labelledby="what-heading">
           <h2 id="what-heading" className="text-2xl font-semibold tracking-[-0.025em] text-[#4E0401] dark:text-[#FFF8F1]">What lives inside Mad Buddy</h2>
           <div className="mt-7 grid gap-x-9 gap-y-1 sm:grid-cols-2">

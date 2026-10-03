@@ -71,6 +71,7 @@ export function PublicHeader({
 
 const footerLinks = [
   { href: "/about", label: "About" },
+  { href: "/godfred", label: "Meet the founder" },
   { href: "/safety", label: "Safety" },
   { href: "/faq", label: "FAQ" },
   { href: "/support", label: "Support" },
