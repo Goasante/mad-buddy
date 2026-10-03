@@ -44,7 +44,7 @@ import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 /**
  * Whether a destination exists on the platform rendering this screen.
  *
- * Context rather than a prop on all 24 rows: the answer is the same for every
+ * Context rather than a prop on every row: the answer is the same for every
  * row, and threading it by hand invites the one row someone forgets — which is
  * precisely how a dead-end link ships.
  *
@@ -83,9 +83,8 @@ type SettingsPageContentProps = {
   /**
    * Whether a linked destination exists on this platform.
    *
-   * Android passes isBuiltForMobile: 17 of the 24 destinations here are
-   * unreachable — 13 settings-related web features with no native screen,
-   * /about, and the pre-existing /hangout-mode, /badges and /safety-center.
+   * Android passes isBuiltForMobile so web-only destinations render as
+   * unavailable rather than falling through to the native SPA catch-all.
    * Left alone, every one rendered as a tappable row that reached the SPA
    * catch-all. They now render dimmed and non-navigating, with the reason in
    * the accessible name.
@@ -195,12 +194,6 @@ export function SettingsPageContent({
             title="Notification preferences"
             description="Categories, quiet hours, push, and how you're reached."
             href="/settings/notifications"
-          />
-          <SettingsLinkRow
-            icon={Bell}
-            title="Focus & balance"
-            description="Focus Mode, notification limits, recaps and milestones."
-            href="/settings/engagement"
           />
         </SettingsSection>
         </div>

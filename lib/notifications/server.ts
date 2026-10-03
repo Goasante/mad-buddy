@@ -310,20 +310,23 @@ export async function createNearbyNotificationsIfAllowed(
    */
   const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
   try {
-    await Promise.all(
-      friendsToAnnounce.map((friend) =>
-        deliverNotification(supabase, {
-          userId: input.userId,
-          type: "friend_nearby",
-          title: `${friend.displayName} is nearby`,
-          message: `${friend.displayName} is glowing nearby. Exact location stays private.`,
-          category: "proximity",
-          priority: "low",
-          senderId: friend.friendId,
-          dedupeKey: `friend-nearby:${friend.friendId}:${hourBucket}`
-        })
-      )
-    );
+    /*
+     * Keep these sequential. Each canonical delivery reads and increments the
+     * user's daily push budget; parallel sends could all observe the same
+     * pre-increment count and burst past that limit.
+     */
+    for (const friend of friendsToAnnounce) {
+      await deliverNotification(supabase, {
+        userId: input.userId,
+        type: "friend_nearby",
+        title: `${friend.displayName} is nearby`,
+        message: `${friend.displayName} is glowing nearby. Exact location stays private.`,
+        category: "proximity",
+        priority: "low",
+        senderId: friend.friendId,
+        dedupeKey: `friend-nearby:${friend.friendId}:${hourBucket}`
+      });
+    }
     return { data: null, error: null };
   } catch (error) {
     return { data: null, error };

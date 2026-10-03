@@ -44,6 +44,10 @@ describe("normalizePreferences", () => {
     expect(normalizePreferences({ categories: { waves: "nonsense" } }).categories.waves).toBe("all");
   });
 
+  it("defaults direct Conference replies to normal delivery", () => {
+    expect(DEFAULT_NOTIFICATION_PREFERENCES.categories.conference).toBe("all");
+  });
+
   it("keeps valid overrides", () => {
     const merged = normalizePreferences({ categories: { waves: "off" }, quietHoursEnabled: false });
     expect(merged.categories.waves).toBe("off");

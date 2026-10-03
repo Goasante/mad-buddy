@@ -89,6 +89,15 @@ describe("Home Smart Card convergence", () => {
     expect(card?.destination).toBe("/hangout-mode");
   });
 
+  it("allows Home to go quiet while the evergreen UpFor fallback is snoozed", () => {
+    const built = input();
+    const card = resolveSmartCard(smartCardProviders(built), {
+      now: built.now.getTime(),
+      acknowledgedIds: new Set(["journey_complete", "upfor_fallback"])
+    });
+    expect(card).toBeNull();
+  });
+
   it("keeps cold-start people help ahead of the UpFor fallback", () => {
     /* A real cold-start user has an INCOMPLETE Journey. `add_first_muddy` is
        step 2 of 8, so `muddyCount: 0` with the default complete-Journey fixture

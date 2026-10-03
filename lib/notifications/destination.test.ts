@@ -16,6 +16,14 @@ describe("record-specific notification destinations", () => {
     expect(resolveNotificationDestination(type)).toEqual({ type: "internal", href });
   });
 
+  it("opens a Conference reply at the exact Voice in the flat stream", () => {
+    const replyId = "4f8c1e2a-0000-4000-8000-000000000000";
+    expect(resolveNotificationDestination(`conference_reply:${ID}:${replyId}`)).toEqual({
+      type: "internal",
+      href: `/conference/${ID}#${replyId}`
+    });
+  });
+
   it("opens friendship milestones on their real private surface", () => {
     expect(resolveNotificationDestination("friendship_milestone")).toEqual({
       type: "internal",
