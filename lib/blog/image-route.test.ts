@@ -22,12 +22,15 @@ describe("draft image access", () => {
     mocks.owner.mockResolvedValue({ context: {} });
     const response = await get(); expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("Vary")).toBe("Cookie");
   });
   it("serves current published images as compact, cached JPEGs", async () => {
     mocks.rpc.mockResolvedValue({ data: true, error: null });
     const response = await get(); expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("image/jpeg");
     expect(response.headers.get("Cache-Control")).toContain("s-maxage=300");
+    expect(response.headers.get("Vary")).toBeNull();
+    expect(response.headers.get("Set-Cookie")).toBeNull();
     expect(mocks.owner).not.toHaveBeenCalled();
   });
   it("rejects malformed IDs and fails closed on visibility errors", async () => {
@@ -41,5 +44,25 @@ describe("draft image access", () => {
     mocks.rpc.mockResolvedValue({ data: true, error: null });
     mocks.download.mockResolvedValue({ data: new Blob([new Uint8Array(205000)]), error: null });
     expect((await get()).status).toBe(404);
+  });
+  it("does not serve an image after its publication reference is removed", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: true, error: null });
+    expect((await get()).status).toBe(200);
+    mocks.download.mockClear();
+    mocks.rpc.mockResolvedValueOnce({ data: false, error: null });
+    const response = await get();
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mocks.download).not.toHaveBeenCalled();
+  });
+  it("starts visibility and metadata lookups together but waits before downloading", async () => {
+    let resolveVisibility!: (value: { data: boolean; error: null }) => void;
+    mocks.rpc.mockReturnValue(new Promise((resolve) => { resolveVisibility = resolve; }));
+    const response = get();
+    await Promise.resolve();
+    expect(mocks.maybeSingle).toHaveBeenCalled();
+    expect(mocks.download).not.toHaveBeenCalled();
+    resolveVisibility({ data: true, error: null });
+    expect((await response).status).toBe(200);
   });
 });
