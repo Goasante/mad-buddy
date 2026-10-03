@@ -128,7 +128,7 @@ export default function GodfredPortfolio() {
         <section id="about" className={styles.aboutSection} aria-labelledby="about-heading">
           <div className={`${styles.container} ${styles.aboutGrid}`}>
             <div><p className={styles.eyebrow}>02 / The person behind the work</p><h2 id="about-heading">Curious by nature.<br /><em>Practical by choice.</em></h2></div>
-            <div className={styles.aboutCopy}><p>I’m Godfred, a Ghana-based builder and operations professional with a creative streak. I like the point where people, business, and technology meet.</p><p>That shows up in the products I build, the teams I lead, the prospects I research, and the visuals I create. My approach is simple: understand the problem, make something useful, and keep improving it.</p><a href={linkedin} className={styles.textLink}>My full professional profile <ArrowUpRight aria-hidden="true" /></a></div>
+            <div className={styles.aboutCopy}><p>I’m Godfred, a Ghana-based builder and operations professional with a creative streak. I like the point where people, business, and technology meet.</p><p>That shows up in the products I build, the teams I’ve led, the prospects I’ve researched, and the visuals I create. My approach is simple: understand the problem, make something useful, and keep improving it.</p><a href={linkedin} className={styles.textLink}>My full professional profile <ArrowUpRight aria-hidden="true" /></a></div>
             <div className={styles.capabilities}>{capabilities.map((item) => <div key={item.number}><span>{item.number}</span><h3>{item.title}</h3><p>{item.detail}</p></div>)}</div>
           </div>
         </section>
@@ -136,9 +136,9 @@ export default function GodfredPortfolio() {
         <section className={`${styles.experience} ${styles.container}`} aria-labelledby="experience-heading">
           <div className={styles.sectionHeader}><div><p className={styles.eyebrow}>03 / Experience & foundations</p><h2 id="experience-heading">Built along the way<span>.</span></h2></div><a href={linkedin} className={styles.textLink}>View experience on LinkedIn <ArrowUpRight aria-hidden="true" /></a></div>
           <div className={styles.experienceRows}>
-            <article><span>Leadership</span><div><h3>Touchforce</h3><p>Operations Lead · Previously Senior Account Manager</p></div><span>August 2024–Present</span></article>
+            <article><span>Leadership</span><div><h3>Touchforce</h3><p>Operations Officer · Previously Senior Account Manager</p></div><span>August 2024–March 2026</span></article>
             <article><span>Building</span><div><h3>Mad Buddy</h3><p>Founder & creator</p></div><span>Product, experience & technology</span></article>
-            <article><span>AI recruitment</span><div><h3>FlowmingoAI</h3><p>Business Partner · Remote contract</p></div><span>September 2025–Present</span></article>
+            <article><span>AI recruitment</span><div><h3>FlowmingoAI</h3><p>Business Partner · Remote contract</p></div><span>September 2025–March 2026</span></article>
             <article><span>Earlier experience</span><div><h3>Sambus Geospatial</h3><p>Digital Marketing & Graphic Design</p></div><span>October 2021–October 2022</span></article>
             <article><span>Early foundation</span><div><h3>Complete Farmer</h3><p>Graphic Design Intern · Web support</p></div><span>June–August 2018</span></article>
             <article><span>Graduate study</span><div><h3>University of Ghana Business School</h3><p>Master’s degree in Marketing · In progress</p></div><span>2025–Present</span></article>

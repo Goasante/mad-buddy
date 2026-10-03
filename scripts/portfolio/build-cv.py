@@ -46,8 +46,8 @@ role('Operations Officer | TouchForce Ltd Ghana','Accra, Ghana | August 2024 - M
  'Developed reporting and workflow systems, identified process bottlenecks, and improved communication between teams.',
  'Maintained client relationships and translated campaign data into clear performance updates.'
 ])
-role('Business Partner | FlowmingoAI','Remote contract | September 2025 - Present',[
- 'Connect businesses and candidates with an AI-powered interview platform and explain how it supports recruitment workflows.'
+role('Business Partner | FlowmingoAI','Remote contract | September 2025 - March 2026',[
+ 'Connected businesses and candidates with an AI-powered interview platform and explained how it supports recruitment workflows.'
 ])
 role('Senior Account Manager | TouchForce Ltd Ghana','Accra, Ghana | July 2023 - August 2024',[
  'Led an account management team, oversaw client relationships, and coordinated tailored outreach campaigns.',
