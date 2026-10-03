@@ -9,6 +9,9 @@ import { POST_LOGIN_ROUTE } from "@/lib/routes";
 
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
+  "/godfred",
+  "/godfred/opengraph-image",
+  "/founder/Godfred-Ofosu-Asante-CV.pdf",
   "/manifest.webmanifest",
   "/sw.js",
   "/robots.txt",

@@ -44,6 +44,16 @@ describe("authenticated visitors on guest-only routes", () => {
 });
 
 describe("route protection (deny-by-default, audit I-08)", () => {
+  it("allows sharing the founder portfolio while keeping adjacent routes private", () => {
+    for (const path of ["/godfred", "/godfred/opengraph-image", "/founder/Godfred-Ofosu-Asante-CV.pdf"]) {
+      expect(requiredLoginRedirect(path)).toBeNull();
+      expect(authenticatedRedirect(path)).toBeNull();
+    }
+    for (const path of ["/godfred-private", "/godfred/admin", "/founder/private.pdf"]) {
+      expect(requiredLoginRedirect(path)).toBe("/login");
+    }
+  });
+
   it("treats the documented public pages as public", () => {
     for (const path of [
       "/",

@@ -39,6 +39,7 @@ export default function AboutAppPage() {
           { href: "/settings/privacy", label: "Privacy settings" },
           { href: "/safety-center", label: "Safety Center" },
           { href: "/help", label: "Help & Support" },
+          { href: "/godfred", label: "Meet the founder" },
           { href: "/settings", label: "Back to Settings" }
         ] as const).map((item) => (
           <Link key={item.href} href={item.href} className="focus-ring flex min-h-11 items-center justify-between rounded-xl border border-border/70 px-4 text-sm font-medium hover:bg-secondary/40">
