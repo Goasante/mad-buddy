@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import type { Metadata, Viewport } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import { ADSENSE_VERIFICATION_CLIENT_ID } from "@/content/site-verification";
 import CapacitorBackButton from "@/components/CapacitorBackButton";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { ThemeProvider } from "@/components/theme/theme-provider";
@@ -74,6 +75,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  other: { "google-adsense-account": ADSENSE_VERIFICATION_CLIENT_ID },
   metadataBase: getSiteUrl(),
   title: {
     default: "Mad Buddy",

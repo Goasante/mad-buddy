@@ -1,6 +1,6 @@
 export { PRIVACY_POLICY_VERSION } from "@/lib/legal/consent";
 export const PRIVACY_POLICY_EFFECTIVE_DATE = "23 July 2026";
-export const PRIVACY_POLICY_LAST_UPDATED = "1 October 2026";
+export const PRIVACY_POLICY_LAST_UPDATED = "3 October 2026";
 
 export const legalContact = {
   companyName: "Godfred Ofosu Asante",
@@ -90,7 +90,17 @@ Subscriptions are processed by Paystack. Payment webhooks from Paystack are cryp
 
 ## Logging and analytics
 
-Our server logs record request metadata (route, status, timing, error category) for reliability and abuse prevention. Our logging layer is built to refuse location fields, so coordinates are not written to logs. We do not currently use third-party analytics.
+Our server logs record request metadata (route, status, timing, error category) for reliability and abuse prevention. Our logging layer is built to refuse location fields, so coordinates are not written to logs.
+
+Our website uses Google Analytics to understand how visitors use it and improve the experience. Google Analytics may use cookies and collect page views, interactions, browser and device information, referral information, and an approximate region derived from the request's IP address. This website analytics is separate from the location signals used for Mad Buddy's proximity features.
+
+## Cookies and advertising
+
+Mad Buddy uses essential cookies and browser storage for functions such as signing in and remembering preferences. Google Analytics also uses cookies for website measurement.
+
+We have applied to use Google AdSense. Applying and verifying ownership do not mean that advertising has been approved or enabled. When advertising is enabled, Google and its advertising partners may use cookies, web beacons, IP addresses and device information to deliver and measure ads and prevent fraud. Third parties may place or read cookies in your browser as a result of ad serving. Google advertising cookies can support personalised ads based on visits to this and other websites, subject to applicable consent requirements and your choices.
+
+You can manage Google's personalised advertising choices at https://myadcenter.google.com. You can also restrict cookies in your browser and use Google's Analytics opt-out browser add-on at https://tools.google.com/dlpage/gaoptout. Blocking essential cookies can affect sign-in and other app functions. Google's explanation of data use on partner websites is available at https://policies.google.com/technologies/partner-sites.
 
 ## Your rights and choices
 
