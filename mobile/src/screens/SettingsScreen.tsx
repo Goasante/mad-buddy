@@ -30,12 +30,6 @@ import { deleteAccount } from "../lib/api";
 export function SettingsScreen() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  return (
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 pt-6">
@@ -48,9 +42,6 @@ export function SettingsScreen() {
             email={user?.email ?? null}
             onSignOut={() => void signOut()}
             onDeleted={async () => {
-              // The account is gone, so the local session is meaningless.
-              // Signing out clears it and unregisters this device's push token
-              // rather than leaving a token pointed at a deleted user.
               await signOut();
               navigate("/login", { replace: true });
             }}
