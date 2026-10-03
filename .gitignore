@@ -82,3 +82,8 @@ supabase/.temp/
 **/supabase/.temp/
 # Staging seed manifest: synthetic ids, machine-specific, never committed.
 staging-manifest.local.json
+
+# Local AI-assistant permissions and machine-specific paths.
+# Shared project instructions belong in normal repository documentation instead.
+.claude/settings.json
+.claude/settings.local.json

@@ -1,60 +1,60 @@
+<div align="center">
+
 # Mad Buddy
 
-Mad Buddy is a privacy-first social proximity app. Approved friends can appear as coarse Glow signals when they are nearby, without exposing exact coordinates, raw distance, GPS accuracy, location history, maps, or street-level location.
+### When your friends are close, they glow.
 
-## Start Here
+**A privacy-first proximity social app built to help people spend less time scrolling and more time connecting in real life.**
 
-For current operational/developer authority, begin with:
+[Live product](https://mad-buddy.com) · [Developer setup](docs/operations/START-HERE.md) · [Product invariants](docs/operations/PRODUCT-INVARIANTS.md)
 
-- `docs/operations/START-HERE.md`
-- `docs/product/CONTINUATION.md`
-- `docs/database-map.md`
-- `docs/operations/PRODUCT-INVARIANTS.md`
+<img src="public/brand/mad-buddy-hero-mockup-v2.png" alt="Mad Buddy product preview" width="760" />
 
-Historical stage checklists and old handoff files are not release authority.
+</div>
 
-## Current Architecture
+## What Mad Buddy does
 
-- Next.js App Router + React + TypeScript
-- Supabase for Auth, Postgres, Storage, Realtime, RLS, RPCs and local/staging tooling
-- Vercel for the production web/API deployment
-- Paystack for Mad Buddy Access billing
-- Firebase Admin / FCM for native push when configured
-- Web Push via VAPID
-- Capacitor Android/iOS shells plus the mobile bundle
+Mad Buddy helps approved friends — **Muddies** — notice when they are nearby without exposing exact coordinates, street locations, raw distances, GPS accuracy or location history.
 
-The server/database remain the authority for authentication, authorisation, relationships, Linkr mutuality, UpFor ownership, Plans, Safe Arrival, billing and notification membership. Client/native bundles must never contain service-role or other privileged credentials.
+The product combines lightweight proximity awareness with private social coordination: people can see nearby friends, signal what they are **UpFor**, make Plans, create Events and Groups, use Safe Arrival, share temporary Stories, and join local anonymous Conference conversations.
 
-## Product / Privacy Invariants
+The product principle is simple: **use technology to create more real-world connection, not more endless scrolling.**
 
-Do not change these casually:
+## Core experiences
 
-- No exact location, numerical distance, GPS accuracy, geohash, street location or location history may be exposed to clients.
-- Safe Arrival must never imply live tracking when the data is stale/unknown.
-- One-sided Linkr decisions remain private; only mutual connections become relationship context.
-- Existing relationships and commitments survive Mad Buddy Access expiry.
-- Mad Buddy Access unlocks social expansion through Linkr and the relevant expansion side of UpFor; it does not paywall the user's existing social world.
-- Moments is retired as a product surface. Stories is the current private temporary-sharing system: photo-only, 12-hour expiry, maximum 5 active Stories, with Muddy-scoped audiences.
+- **Glow** — privacy-safe proximity signals for approved friends.
+- **UpFor** — show what you feel like doing and find Muddies who want in.
+- **Plans & Events** — coordinate real-world meetups.
+- **Messages & Groups** — private conversation and coordination.
+- **Safe Arrival** — lightweight arrival check-ins with trusted Muddies.
+- **Stories** — private photo sharing with a 12-hour lifetime.
+- **Conference** — anonymous, radius-limited local conversations.
+- **Linkr** — mutual social discovery without revealing one-sided interest.
+- **Badges, achievements and Buddy Score** — lightweight trust and participation signals.
 
-See `docs/operations/PRODUCT-INVARIANTS.md` for the complete current rules.
+## Privacy by design
 
-## Mad Buddy Access / Paystack
+Location is a product input, not a social feed.
 
-The current consumer billing product is **Mad Buddy Access**, not the retired Buddy Plus / Buddy Pro ladder.
+Mad Buddy does **not** expose exact coordinates, numerical distance, GPS accuracy, geohashes, street-level location or location history to other users. Nearby experiences use coarse privacy-safe projections, and users can pause visibility with controls such as Ghost Mode.
 
-Current source authority lives in:
+The complete non-negotiable privacy and product rules live in [`docs/operations/PRODUCT-INVARIANTS.md`](docs/operations/PRODUCT-INVARIANTS.md).
 
-- `lib/access/product.ts`
-- `lib/access/resolver.ts`
-- `app/api/access/checkout/route.ts`
-- `app/api/paystack/webhook/route.ts`
-- `docs/product/MONETIZATION-ACCESS-MODEL.md`
+## Technology
 
-The client sends only the stable product identifier. Price and provider plan authority are server-owned. The legacy Plus/Pro configuration remains only for retained compatibility paths and is not current onboarding authority.
+| Area | Stack |
+| --- | --- |
+| Web | Next.js, React, TypeScript |
+| Backend | Supabase Auth, PostgreSQL, RLS, RPCs, Realtime, Storage |
+| Native | Capacitor with a bundled mobile SPA |
+| Hosting | Vercel |
+| Push | Web Push / VAPID and Firebase Cloud Messaging |
+| Payments | Paystack for Mad Buddy Access |
+| Quality | Vitest, ESLint, TypeScript, GitHub Actions |
 
-Before live billing, configure the Paystack provider transport values listed in `.env.example` and `docs/deployment-checklist.md`, and configure the webhook endpoint at `/api/paystack/webhook`.
+The server and database remain authoritative for authentication, authorization, relationships, privacy boundaries, billing, Plans, Safe Arrival and notification membership. Client bundles never receive service-role credentials.
 
-## Getting Started
+## Local development
 
 ```bash
 npm install
@@ -64,35 +64,32 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-For local Supabase/Docker, safe environment setup and staging rules, follow `docs/operations/NEW-DEVELOPER-CHECKLIST.md` and `docs/operations/DATABASE-RUNBOOK.md` rather than guessing from old worktree state.
+For local Supabase, staging and environment setup, use [`docs/operations/NEW-DEVELOPER-CHECKLIST.md`](docs/operations/NEW-DEVELOPER-CHECKLIST.md) and [`docs/operations/DATABASE-RUNBOOK.md`](docs/operations/DATABASE-RUNBOOK.md).
 
-## Useful Commands
+## Quality gates
 
 ```bash
-npm run dev
-npm run preflight
-npm run preflight:production
-npm run preflight:paystack
-npm run test:release
 npm run lint
 npm run typecheck
+npm test
 npm run build
+npm run preflight
 ```
 
-## Environment Variables
+CI independently validates web quality, production buildability, the mobile bundle, secret scanning and native/server boundary rules.
 
-Copy `.env.example` to `.env.local` for local work. Never commit `.env.local`, production credentials, service-role keys, provider private keys, signing keys or recovery codes.
+## Repository guide
 
-The safe inventory and secret classification live in `docs/operations/ENVIRONMENT-INVENTORY.md`. Actual secret values belong in the private Mad Buddy vault, not in GitHub documentation.
+- [`docs/operations/START-HERE.md`](docs/operations/START-HERE.md) — developer and operator entry point
+- [`docs/product/CONTINUATION.md`](docs/product/CONTINUATION.md) — current product/release continuation authority
+- [`docs/database-map.md`](docs/database-map.md) — domain and database map
+- [`docs/operations/PRODUCT-INVARIANTS.md`](docs/operations/PRODUCT-INVARIANTS.md) — privacy and product rules
+- [`docs/operations/DEPLOYMENT-RUNBOOK.md`](docs/operations/DEPLOYMENT-RUNBOOK.md) — release process
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution and branch conventions
+- [`SECURITY.md`](SECURITY.md) — security reporting guidance
 
-## Production Safety
+Historical handoffs and audits are retained under [`docs/archive/`](docs/archive/) rather than mixed into the active repository root.
 
-Before any release or destructive database operation:
+## Project status
 
-1. Verify the exact Git SHA/branch.
-2. Verify the Supabase project target explicitly.
-3. Run the required release gates.
-4. Never reset/seed/load Production.
-5. Follow `docs/operations/DEPLOYMENT-RUNBOOK.md` and `docs/operations/DATABASE-RUNBOOK.md`.
-
-The repository's current production/staging references and migration status are recorded in the operational handoff and continuation documents.
+Mad Buddy is under active development. The public repository is the engineering source of truth; production credentials, provider secrets, signing material and recovery codes are intentionally kept outside GitHub.

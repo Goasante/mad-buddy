@@ -118,17 +118,19 @@ export function GlowVisibilityPage({
           <RadioTower className="h-4 w-4" aria-hidden="true" />
           {isPaused ? "Glow paused" : "Glow active"}
         </span>
-        <Button
-          type="button"
-          variant={isPaused ? "primary" : "outline"}
-          size="sm"
-          onClick={toggleGlow}
-          disabled={isPending}
-          data-tour-id={TOUR_TARGET_IDS.GLOW_VISIBILITY_TOGGLE}
-        >
-          <Ghost className="h-4 w-4" aria-hidden="true" />
-          {isPaused ? "Resume Glow" : "Pause Glow"}
-        </Button>
+        <span data-tour-id={TOUR_TARGET_IDS.SETTINGS_GHOST_MODE}>
+          <Button
+            type="button"
+            variant={isPaused ? "primary" : "outline"}
+            size="sm"
+            onClick={toggleGlow}
+            disabled={isPending}
+            data-tour-id={TOUR_TARGET_IDS.GLOW_VISIBILITY_TOGGLE}
+          >
+            <Ghost className="h-4 w-4" aria-hidden="true" />
+            {isPaused ? "Resume Glow" : "Pause Glow"}
+          </Button>
+        </span>
       </div>
       {feedback ? <p className="text-sm text-muted-foreground" role="status">{feedback}</p> : null}
 
@@ -220,7 +222,10 @@ export function GlowVisibilityPage({
         ) : null}
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-card/50 p-4">
+      <div
+        data-tour-id={TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW}
+        className="flex items-start gap-3 rounded-xl border border-border/70 bg-card/50 p-4"
+      >
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <div>
           <p className="text-sm font-semibold">Privacy guarantee</p>

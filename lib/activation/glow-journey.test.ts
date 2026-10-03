@@ -165,18 +165,15 @@ describe("Settings keeps its controls, and loses the floating pill", () => {
     expect(showsQuickActions("/settings/glow-visibility")).toBe(false);
   });
 
-  it("leaves the manual privacy controls in place", () => {
-    // This changes how activation USES Settings, not whether it exists.
+  it("keeps manual privacy controls on the dedicated Glow surface", () => {
     const settings = readFileSync("components/settings/settings-page.tsx", "utf8");
-    expect(settings).toContain("Ghost Mode");
-    /* The control still writes visibility; the Server Action call moved to the
-       web boundary when Settings became shared with Android, because a
-       "use server" import would drag the server graph into the mobile bundle.
-       The shared screen calls it through the injected client instead. */
-    expect(settings).toContain("client.setVisibilityStatus");
-    expect(readFileSync("components/settings/web-settings-page.tsx", "utf8")).toContain(
-      "updateVisibilityStatusAction"
-    );
+    const glow = readFileSync("components/settings/glow-visibility-page.tsx", "utf8");
+
+    // Root Settings is intentionally compact; the real control still exists.
+    expect(settings).not.toContain("Ghost Mode");
+    expect(glow).toContain("Pause Glow");
+    expect(glow).toContain("Resume Glow");
+    expect(glow).toContain("updateVisibilityStatusAction");
   });
 
   it("keeps the launcher on ordinary browsing surfaces", () => {
