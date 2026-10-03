@@ -219,8 +219,10 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.PRIVACY_GLOW, "Glow privacy", "/settings/privacy", "Link to Glow visibility choices."),
   target(TOUR_TARGET_IDS.PRIVACY_MESSAGING, "Messaging privacy", "/settings/privacy", "Who may contact and add the viewer."),
   target(TOUR_TARGET_IDS.PRIVACY_BLOCKED, "Blocked users", "/settings/privacy", "Review blocked accounts."),
-  target(TOUR_TARGET_IDS.SETTINGS_GHOST_MODE, "Ghost Mode", "/settings", "Pause visibility immediately."),
-  target(TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW, "Location for Glow", "/settings", "Device permission used only to calculate general Glow."),
+  // Legacy Settings target ids remain valid for already-authored tours, but
+  // the controls now live on their canonical dedicated privacy surface.
+  target(TOUR_TARGET_IDS.SETTINGS_GHOST_MODE, "Pause or resume Glow", "/settings/glow-visibility", "Pause or resume Glow visibility."),
+  target(TOUR_TARGET_IDS.SETTINGS_LOCATION_GLOW, "Location privacy", "/settings/glow-visibility", "Why location is used and what is never exposed."),
 
   target(TOUR_TARGET_IDS.BADGES_OVERVIEW, "Achievements", "/badges", "Personal achievements and recaps."),
   target(TOUR_TARGET_IDS.BADGES_TABS, "Achievement views", "/badges", "Achievements, milestones, and recaps."),
