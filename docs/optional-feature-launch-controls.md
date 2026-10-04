@@ -29,6 +29,6 @@ Deploy this change and its migration together during a controlled release. The b
 ## Validation
 
 - Full root unit suite: 9,416 passing tests across 578 suites; native unit suite: 26 passing tests.
-- Native TypeScript and production build pass. Lint has zero errors (123 warnings). Web production compilation passes, but the full build stalls at its final TypeScript worker in this workspace and needs a clean CI build before release.
+- Web and native production builds pass, including TypeScript checks. Lint has zero errors (123 warnings).
 - Isolated PostgreSQL migration exercise verifies server/client insert denial, restrictive reads, retained records, unlocking, active Safe Arrival completion and ongoing expiry. Staging schema was read to check table compatibility; no live/staging flags or data were changed.
 - Browser verification could not run in this workspace. The visual treatment requires a browser check before live release.
