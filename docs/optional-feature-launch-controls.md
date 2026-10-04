@@ -24,15 +24,25 @@ Availability filters provider output before the existing selection engine. Prior
 
 The migration adds three controls and switches all five optional launch flags off. It retains data and ownership policies, adds restrictive authenticated access policies, and blocks new server-RPC inserts for Events, UpFor and Safe Arrival. No core tables are gated. Existing Safe Arrival journeys finish through the existing authority. Promotional notifications check flags before persistence and queued push delivery rechecks on dispatch. Cleanup keeps running.
 
-Deploy this change and its migration together during a controlled release. The branch does not itself change the live app. Re-enable each feature from Admin → Features, using its existing audited confirmation flow; no redeploy or record reset is needed. Roll back availability by re-enabling the flags, keeping the protection code in place. Reverting code alone while leaving the database guards installed is not a complete rollback.
+Deploy this change and its migration together during a controlled release. The reviewed release is now deployed to the live app. Re-enable each feature from Admin → Features, using its existing audited confirmation flow; no redeploy or record reset is needed. Roll back availability by re-enabling the flags, keeping the protection code in place. Reverting code alone while leaving the database guards installed is not a complete rollback.
 
 ## Validation
 
-- Full root unit suite: 9,416 passing tests across 578 suites; native unit suite: 26 passing tests.
+- Full root unit suite: 9,418 passing tests across 578 suites; native unit suite: 26 passing tests.
 - Web and native production builds pass, including TypeScript checks. Lint has zero errors (123 warnings).
-- Isolated PostgreSQL migration exercise verifies server/client insert denial, restrictive reads, retained records, unlocking, active Safe Arrival completion and ongoing expiry. Staging schema was read to check table compatibility; no live/staging flags or data were changed.
+- Isolated PostgreSQL migration exercise verifies server/client insert denial, restrictive reads, retained records, unlocking, active Safe Arrival completion and ongoing expiry. Staging schema was checked for compatibility before the migration; synthetic migration and rollback exercises retained existing data.
 - Final review corrected stale availability responses, locked QR action copy, a missing guide padlock and an already-open Safe Arrival setup sheet. Targeted review suite: 2,227 passing tests; root/native TypeScript checks and changed-file lint pass.
-- Migration applied to synthetic staging and verified: five flags off, 42 restrictive policies, four insert triggers, server insert guards deny locked activity, zero added release policies on core tables. Staging migration head: `20261004202823`. Production remains at 174 migrations with head `20261003214905` until release.
+- Migration applied to synthetic staging and verified: five flags off, 42 restrictive policies, four insert triggers, server insert guards deny locked activity, zero added release policies on core tables. Staging migration head: `20261004202823`. Production migration is applied: 175 entries, remote head `20261004205231`; all five optional flags are off.
 - Vercel preview and exact-head CI pass. Browser review uses the real lock components in an isolated preview-only fixture because this branch has no Supabase preview credentials. Padlocks, product copy and blur render correctly; the background is clipped to keep the lock message in view. Production rejects the fixture route.
 - Event Linkr now requires both launch controls for eligibility, candidates, pool copy and event context; consent withdrawal remains available. Two regression cases exercise each independent lock.
 - Full local DB suites and local production preflight cannot run without a local Supabase stack/operator credentials. Production readiness was checked directly and returns HTTP 200; production configuration metadata includes the required Supabase credentials. No production credentials were copied to Preview.
+
+## Production release — 4 October 2026
+
+PR [#128](https://github.com/Goasante/mad-buddy/pull/128) merged as `e9c836d079ae443d728dd57be37cb4a7b7047264`. Production deployment `dpl_DFeQ9QPFiTLZFQqDf1FxKoPWwN96` is READY and `mad-buddy.com/api/version` serves this exact main commit. Direct production readiness returns HTTP 200 with `ok: true`.
+
+Signed-in production browser checks verified UpFor, Linkr, Events, Conference and Safe Arrival show the blurred sample layouts, padlocks and Coming soon copy. Quick Actions and Settings show the relevant locks. Home/Glow, Muddies, Messages and Plans load normally; the observed Home SmartCard recommends Plans. The preview review fixture returns 404 in production. No messages were sent, new journeys started or production feature flags toggled during these checks.
+
+The production migration has 42 restrictive release policies and four guarded insert triggers, with zero added release policies on core tables. No active Safe Arrival journeys existed at migration time; existing-journey completion remains supported and was exercised in isolated database verification. Unlock/relock behavior was exercised transactionally on staging and rolled back.
+
+Exact candidate CI passed; the final full root suite passed 578 suites and 9,418 tests. Native tests and web/native builds passed. Native source is updated; this release publishes the web app, not a new app-store binary. Full local DB suites remain unavailable without a local stack/operator configuration. Runtime log retrieval returned an access error, so no claim of a clean runtime-log review is made. Live authenticated page checks and the production readiness endpoint passed.
