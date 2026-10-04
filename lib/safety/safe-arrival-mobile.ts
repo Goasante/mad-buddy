@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import "server-only";
 
 import { z } from "zod";
@@ -140,6 +142,8 @@ export async function loadSafeArrival(userId: string): Promise<SafeArrivalData> 
 
 
 export async function createSafeArrival(userId: string, input: unknown): Promise<SafeArrivalResult> {
+  if (!(await optionalFeatureEnabled("safe_arrival"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const envMessage = serviceRoleEnvMessage();
   if (envMessage) return { ok: false, message: envMessage };
 

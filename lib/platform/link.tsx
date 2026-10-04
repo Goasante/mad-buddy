@@ -1,23 +1,17 @@
-/**
- * Platform Link — web implementation.
- *
- * This is a VERBATIM re-export of next/link, deliberately. Two consequences
- * matter and both are intentional:
- *
- * 1. Web behaviour is byte-identical. A component that swaps
- *    `import Link from "next/link"` for `import { Link } from "@/lib/platform"`
- *    compiles to the same thing, so a migration sweep can be verified by
- *    diffing the build output (see docs in the shared-packages plan).
- *
- * 2. `typedRoutes: true` is on in next.config.ts, and 49 files already rely on
- *    `as Route` casts. Re-exporting the real component keeps that type
- *    checking exactly as it is. A hand-written wrapper typed `href: string`
- *    would silently disable typed routes across the whole app — a real loss of
- *    safety traded for nothing.
- *
- * The mobile build resolves `@/lib/platform` to `link.mobile.tsx` via a
- * resolve.alias in mobile/vite.config.ts; that file provides the same surface
- * without Next.
- */
-export { default as Link } from "next/link";
+"use client";
+import NextLink, { type LinkProps } from "next/link";
+import { forwardRef, type AnchorHTMLAttributes, type ReactElement, type RefAttributes } from "react";
+import { LockKeyhole } from "lucide-react";
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { featureForHref } from "@/lib/features/availability";
 export type { LinkProps } from "next/link";
+type Props<RouteType> = LinkProps<RouteType> & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps<RouteType>>;
+export const Link = forwardRef<HTMLAnchorElement, Props<string>>(function Link({ href, children, ...props }, ref) {
+  const availability = useFeatureAvailability();
+  const rawHref = typeof href === "string" ? href : href.pathname ?? "";
+  const feature = featureForHref(rawHref);
+  const locked = Boolean(feature && availability && !availability[feature]);
+  return <NextLink {...props} ref={ref} href={href} title={locked ? "Coming soon" : props.title} data-feature-locked={locked || undefined}>
+    {children}{locked ? <LockKeyhole className="ml-1 inline-block h-3.5 w-3.5 shrink-0 align-middle" aria-label="Coming soon" /> : null}
+  </NextLink>;
+}) as <RouteType>(props: Props<RouteType> & RefAttributes<HTMLAnchorElement>) => ReactElement;

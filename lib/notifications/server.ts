@@ -1,3 +1,7 @@
+
+import { featureForNotification } from "@/lib/features/availability";
+
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import "server-only";
 
 import { after } from "next/server";
@@ -107,6 +111,9 @@ export async function deliverNotification(
   supabase: SupabaseAdmin,
   input: DeliverNotificationInput
 ): Promise<DeliveryResult> {
+  const releaseFeature = featureForNotification(input.type);
+  if (releaseFeature && !(await optionalFeatureEnabled(releaseFeature))) return { inApp: false, push: false, reason: "feature_locked" };
+
   const priority = input.priority ?? "normal";
   const now = new Date();
   const localMinute = minuteOfDayInTimeZone(now, DEFAULT_RECIPIENT_TIMEZONE);

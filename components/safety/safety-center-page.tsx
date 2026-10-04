@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { Ban, Eye, MapPin, MessageCircle, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app-shell/page-header";

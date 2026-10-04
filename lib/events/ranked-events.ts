@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import "server-only";
 
 import {
@@ -74,6 +76,8 @@ export async function getRankedUpcomingEvents(
   userId: string,
   { limit = HOME_RANKED_EVENTS_LIMIT }: { limit?: number } = {}
 ): Promise<RankedEvent[]> {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   if (!hasServiceRoleEnv()) return [];
 
   const boundedLimit = Math.max(0, Math.min(limit, MAX_RANKED_EVENTS));

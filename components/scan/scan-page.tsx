@@ -2,7 +2,7 @@
 
 import { Camera, CameraOff, KeyRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { resolveScannedCodeAction } from "@/app/(app)/scan-actions";
 import type { ScanResultState } from "@/lib/scan/types";
 import { Button } from "@/components/ui/button";

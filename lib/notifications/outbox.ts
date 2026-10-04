@@ -1,3 +1,7 @@
+
+import { featureForNotification } from "@/lib/features/availability";
+
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import "server-only";
 import { z } from "zod";
 
@@ -24,6 +28,10 @@ const contextSchema = z.object({
 
 /** Recheck preferences on retries; a queued push must not override a new mute. */
 async function pushStillAllowed(admin: Admin, row: Claim): Promise<boolean> {
+  const releaseContext = contextSchema.parse(row.context);
+  const releaseFeature = featureForNotification(releaseContext.type ?? "");
+  if (releaseFeature && !(await optionalFeatureEnabled(releaseFeature))) return false;
+
   const context = contextSchema.parse(row.context);
   const priority = (context.priority ?? "normal") as NotificationPriority;
   const [prefs, engagement, closeFriend, blocked, deletion] = await Promise.all([

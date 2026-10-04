@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import "server-only";
 
 import { isFeatureKilled, activeRestrictions } from "@/lib/admin/service";
@@ -88,6 +90,8 @@ export async function guardAction(
   admin: Admin,
   input: { userId: string; surface: GuardedSurface; control?: EmergencyControl }
 ): Promise<GuardResult> {
+  if (input.surface === "linkr" && !(await optionalFeatureEnabled("linkr"))) return { allowed: false, message: FEATURE_LOCK_MESSAGE };
+
   if (input.control && (await isFeatureKilled(admin, input.control))) {
     return {
       allowed: false,

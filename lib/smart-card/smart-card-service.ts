@@ -1,3 +1,5 @@
+
+import { loadFeatureAvailability } from "@/lib/features/availability-server";
 import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -109,7 +111,7 @@ export async function loadSmartCard(
       ? await loadAcknowledgedSmartCardIds(createSupabaseAdminClient(), userId)
       : new Set<string>());
 
-  return resolveSmartCard(smartCardProviders({ ...input, now }), {
+  return resolveSmartCard(smartCardProviders({ ...input, now, availability: input.availability ?? await loadFeatureAvailability() }), {
     now: now.getTime(),
     acknowledgedIds,
     excludedIds: input.excludedIds

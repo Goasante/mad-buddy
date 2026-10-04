@@ -1,3 +1,4 @@
+import { MobileFeatureAvailabilityProvider, MobileFeatureBoundary } from "./components/FeatureAvailability";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthProvider";
 import { FullScreenLoader } from "./components/Spinner";
@@ -89,7 +90,7 @@ export default function App() {
       <Route
         element={
           <RequireAuth>
-            <AppShell />
+            <MobileFeatureAvailabilityProvider><AppShell /></MobileFeatureAvailabilityProvider>
           </RequireAuth>
         }
       >
@@ -101,9 +102,9 @@ export default function App() {
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/messages" element={<MessagesScreen />} />
         <Route path="/moments" element={<Navigate to="/profile" replace />} />
-        <Route path="/socialize" element={<SocializeScreen />} />
+        <Route path="/socialize" element={<MobileFeatureBoundary feature="linkr"><SocializeScreen /></MobileFeatureBoundary>} />
         <Route path="/pings" element={<MeetingPingsScreen />} />
-        <Route path="/events" element={<EventsScreen />} />
+        <Route path="/events" element={<MobileFeatureBoundary feature="events"><EventsScreen /></MobileFeatureBoundary>} />
         <Route path="/groups" element={<Navigate to="/messages?filter=groups" replace />} />
         <Route path="/safety" element={<SafetyScreen />} />
         <Route path="/subscription" element={<SubscriptionScreen />} />

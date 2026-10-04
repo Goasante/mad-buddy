@@ -1,5 +1,7 @@
 import "server-only";
 
+import { featureForHref, OPTIONAL_FEATURES } from "@/lib/features/availability";
+
 import { recordProductEvent } from "@/lib/analytics/track";
 import { loadGlobalFeatureFlags, MANAGED_FEATURES } from "@/lib/features/feature-flags";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -98,6 +100,7 @@ type StepRow = {
 };
 
 function toStep(row: StepRow): TourStep {
+  const feature = featureForHref(row.route ?? "") ?? featureForHref(row.cta_href ?? "");
   return {
     id: row.id,
     stepKey: row.step_key,
@@ -109,7 +112,7 @@ function toStep(row: StepRow): TourStep {
     mediaPath: row.media_path,
     ctaLabel: row.cta_label,
     ctaHref: row.cta_href,
-    requiresFeatureFlag: row.requires_feature_flag,
+    requiresFeatureFlag: row.requires_feature_flag ?? (feature ? OPTIONAL_FEATURES[feature].flag : null),
     entitlementKeys: row.entitlement_keys ?? []
   };
 }

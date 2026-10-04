@@ -37,6 +37,7 @@ export type SmartCardClassification = {
 };
 
 export const SMART_CARD_STATE_OWNERSHIP: Record<string, SmartCardClassification> = {
+  core_fallback: { ownership: "CARD_B_WIRED", reason: "An available core action replaces the UpFor fallback only while UpFor is locked." },
   // ---- Tier 0: safety / truth -------------------------------------------
   safe_arrival_overdue: {
     ownership: "CARD_B_WIRED",

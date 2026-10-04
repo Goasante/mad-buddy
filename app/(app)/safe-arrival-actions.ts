@@ -1,5 +1,7 @@
 "use server";
 
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
+
 import { z } from "zod";
 import { recordProductEvent } from "@/lib/analytics/track";
 import { deliverNotification } from "@/lib/notifications/server";
@@ -85,6 +87,8 @@ const createSchema = z.object({
 });
 
 export async function createSafeArrivalAction(input: unknown): Promise<SafeArrivalActionState> {
+  if (!(await optionalFeatureEnabled("safe_arrival"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 

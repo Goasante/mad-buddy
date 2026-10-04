@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import { upForCountdownLabel } from "@/lib/social/upfor-countdown";
 import { motion, useMotionValue, useTransform } from "framer-motion";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useCallback, useState, type CSSProperties } from "react";
 

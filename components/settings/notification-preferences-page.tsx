@@ -1,5 +1,8 @@
 "use client";
 
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { LockKeyhole } from "lucide-react";
+
 import { useState, useTransition } from "react";
 import { updateSmartNotificationPreferencesAction } from "@/app/(app)/settings-actions";
 import { Button } from "@/components/ui/button";
@@ -46,6 +49,7 @@ export function NotificationPreferencesPage({
 }: {
   initialPreferences: NotificationPreferences;
 }) {
+  const availability = useFeatureAvailability();
   const [prefs, setPrefs] = useState(initialPreferences);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -71,8 +75,8 @@ export function NotificationPreferencesPage({
       <section className="space-y-4">
         {categoryMeta.map((category) => (
           <div key={category.id} className="rounded-xl border border-border/70 bg-card/50 p-3">
-            <p className="text-sm font-semibold">{category.label}</p>
-            <p className="mb-2 text-xs text-muted-foreground">{category.description}</p>
+            <p className="text-sm font-semibold">{category.label}{category.id === "conference" && availability && !availability.conference ? <LockKeyhole className="ml-2 inline h-3.5 w-3.5" aria-label="Coming soon" /> : null}</p>
+            <p className="mb-2 text-xs text-muted-foreground">{category.id === "conference" && availability && !availability.conference ? "Coming soon. Your saved preferences will be kept." : category.description}</p>
             <div className="flex flex-wrap gap-1.5">
               {settingOptions
                 .filter((option) => category.id !== "conference" || option.id !== "close_friends")
@@ -80,6 +84,7 @@ export function NotificationPreferencesPage({
                 <button
                   key={option.id}
                   type="button"
+                  disabled={category.id === "conference" && availability !== null && !availability.conference}
                   onClick={() => setCategory(category.id, option.id)}
                   aria-pressed={prefs.categories[category.id] === option.id}
                   className={cn(

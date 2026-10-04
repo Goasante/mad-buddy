@@ -39,9 +39,9 @@ describe("a paused feature offers no way in", () => {
     expect(filterLine.slice(0, 260)).toContain("hiddenNavigationHrefs");
   });
 
-  it("still hides paused features from navigation", () => {
+  it("retains optional feature navigation behind the availability provider", () => {
     expect(layout).toContain('momentsEnabled ? [] : ["/moments"]');
-    expect(layout).toContain('socializeEnabled ? [] : ["/discover"]');
+    expect(layout).toContain("FeatureAvailabilityProvider initial={featureAvailability}");
   });
 });
 

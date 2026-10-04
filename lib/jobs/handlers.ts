@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -188,6 +190,7 @@ export const handlePlanLifecycleSideEffect: JobHandler = async (admin, payload) 
  * audience twice.
  */
 export const handleUpForAnnounceStarted: JobHandler = async (admin) => {
+  if (!(await optionalFeatureEnabled("upfor"))) return 0;
   const nowIso = new Date().toISOString();
   const { data: sessions, error } = await admin
     .from("hangout_sessions")

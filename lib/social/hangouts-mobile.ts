@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import "server-only";
 
 import { areApprovedMuddies, isBlockedEitherDirection, isCloseFriend } from "@/lib/social/permissions";
@@ -47,6 +49,8 @@ async function canView(
 }
 
 export async function listOpenToPlans(userId: string): Promise<OpenToPlan[]> {
+  if (!(await optionalFeatureEnabled("upfor"))) return [];
+
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return [];
 

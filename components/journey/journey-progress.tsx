@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Image from "next/image";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { ArrowRight, Check, ChevronDown, Circle, PartyPopper } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { Card } from "@/components/ui/card";

@@ -62,6 +62,7 @@ export const LIFE_FLAGS = [
 ] as const;
 
 export const MANAGED_FEATURES = [
+  ...([ ["upfor", "UpFor"], ["events", "Events"], ["safe_arrival", "Safe Arrival"] ] as const).map(([key, title]) => ({ key, title, category: "Launch controls", description: `Release ${title} when it is ready for members.`, enabledImpact: `${title} becomes available across the app and eligible SmartCard suggestions return.`, disabledImpact: `${title} shows a locked preview. New activity and recommendations stop. Existing Safe Arrival journeys can finish.` })),
   {
     key: ADS_ENABLED_FLAG,
     title: "Advertising",
@@ -126,7 +127,7 @@ export const MANAGED_FEATURES = [
     category: "Local conversation",
     description: "Anonymous-to-peers text conversations from members within a 15 km Around You radius.",
     enabledImpact: "Conference appears in Quick Actions and authenticated members can read and join local Topics.",
-    disabledImpact: "Conference is hidden from Quick Actions and direct Conference routes fail closed."
+    disabledImpact: "Conference shows a locked preview and new activity is blocked."
   },
   {
     key: SOCIALIZE_FLAG,
@@ -134,7 +135,7 @@ export const MANAGED_FEATURES = [
     category: "Social discovery",
     description: "Lets members opt in briefly to discover other nearby people who are also open to connecting.",
     enabledImpact: "Socialize appears in navigation and members can start or update an opt-in session.",
-    disabledImpact: "Socialize is hidden and new sessions, updates, and discovery requests are blocked."
+    disabledImpact: "Linkr shows a locked preview and new sessions, updates, and discovery requests are blocked."
   },
   {
     key: LIFE_TIMELINE_FLAG,

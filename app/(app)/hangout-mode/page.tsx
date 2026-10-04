@@ -1,3 +1,6 @@
+
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { getVisibleHangoutsAction, type VisibleHangout } from "@/app/(app)/hangout-actions";
 import {
   HangoutModePage,
@@ -18,6 +21,8 @@ export const dynamic = "force-dynamic";
  * never whether a member may create, discover, join or manage an UpFor.
  */
 export default async function HangoutModeRoute() {
+  if (!(await optionalFeatureEnabled("upfor"))) return <LockedFeaturePreview feature="upfor" />;
+
   const user = await getCurrentUserRecord();
 
   const env = getSupabaseServerEnv();

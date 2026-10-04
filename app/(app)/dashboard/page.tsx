@@ -1,3 +1,5 @@
+
+import { loadFeatureAvailability } from "@/lib/features/availability-server";
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
@@ -29,6 +31,7 @@ function isStatusActiveAtRequestTime(expiresAt: string) {
 export default async function DashboardPage() {
   const [supabase, user] = await Promise.all([createSupabaseServerClient(), getCurrentUserRecord()]);
   const admin = createSupabaseAdminClient();
+  const availability = await loadFeatureAvailability();
   const acknowledgedIdsPromise = user
     ? loadAcknowledgedSmartCardIds(admin, user.id)
     : Promise.resolve(new Set<string>());
@@ -52,10 +55,10 @@ export default async function DashboardPage() {
         countIncomingRequests(user.id),
         admin.from("profile_birth_details").select("date_of_birth").eq("user_id", user.id).maybeSingle(),
         loadBuddyScore(admin, user.id),
-        getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }),
+        availability.events ? getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }) : Promise.resolve([]),
         loadActivationProjection(user.id),
-        loadHomeUpForContext(admin, user.id),
-        loadClickedPeople(user.id)
+        availability.upfor ? loadHomeUpForContext(admin, user.id) : Promise.resolve(null),
+        availability.linkr ? loadClickedPeople(user.id) : Promise.resolve([])
       ])
     : [null, null, { items: [], hasMore: false }, null, null, {}, null, 0, null, null, [], null, null, []];
 
@@ -123,6 +126,7 @@ export default async function DashboardPage() {
   const smartCard = user
     ? await loadSmartCard(user.id, {
         now,
+        availability,
         journey,
         safeArrival: safeArrival
           ? {

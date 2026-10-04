@@ -1,3 +1,6 @@
+
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { TopEventsList } from "@/components/events/top-events-list";
 import { getRankedUpcomingEvents } from "@/lib/events/ranked-events";
@@ -13,6 +16,8 @@ import { getCurrentIdentity } from "@/lib/supabase/auth";
  * hundred is the system's cap, not a promise about how many exist.
  */
 export default async function TopEventsPage() {
+  if (!(await optionalFeatureEnabled("events"))) return <LockedFeaturePreview feature="events" />;
+
   const user = await getCurrentIdentity();
   const events = user ? await getRankedUpcomingEvents(user.id, { limit: MAX_RANKED_EVENTS }) : [];
 

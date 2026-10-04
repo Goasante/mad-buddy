@@ -1,3 +1,6 @@
+
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { redirect } from "next/navigation";
 import { ConferencePage } from "@/components/conference/conference-page";
 import { loadConferenceFeed } from "@/lib/conference/server";
@@ -11,6 +14,8 @@ export default async function ConferenceRoute({
 }: {
   searchParams: Promise<{ sort?: string; notice?: string }>;
 }) {
+  if (!(await optionalFeatureEnabled("conference"))) return <LockedFeaturePreview feature="conference" />;
+
   const [identity, params] = await Promise.all([getCurrentIdentity(), searchParams]);
   if (!identity) redirect("/login?next=/conference");
 

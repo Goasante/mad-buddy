@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import "server-only";
 
 import { z } from "zod";
@@ -244,6 +246,8 @@ async function loadAudienceContext(
 }
 
 export async function listEvents(userId: string): Promise<EventView[]> {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   if (!hasServiceRoleEnv()) return [];
 
   const admin = createSupabaseAdminClient();
@@ -446,6 +450,8 @@ export async function listEvents(userId: string): Promise<EventView[]> {
  * idempotency key gives cron enqueues.
  */
 export async function setEventRsvp(userId: string, eventId: string, status: unknown): Promise<EventResult> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!hasServiceRoleEnv()) return { ok: false, message: "This action needs the server database configuration." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
 
@@ -505,6 +511,8 @@ export async function setEventRsvp(userId: string, eventId: string, status: unkn
 }
 
 export async function createEvent(userId: string, input: unknown): Promise<EventResult> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!hasServiceRoleEnv()) {
     return { ok: false, message: "This action needs the server database configuration." };
   }
@@ -622,6 +630,8 @@ export async function checkInToEvent(
   eventId: string,
   eventGlowEnabled = false
 ): Promise<EventResult> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!hasServiceRoleEnv()) return { ok: false, message: "This action needs the server database configuration." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
 
@@ -721,6 +731,8 @@ export async function checkOutEvent(userId: string, checkInId: string): Promise<
  * exactly as before.
  */
 export async function getEventViewForViewer(userId: string, eventId: string): Promise<EventView | null> {
+  if (!(await optionalFeatureEnabled("events"))) return null;
+
   if (!hasServiceRoleEnv()) return null;
 
   const { getEventForViewer } = await import("@/lib/events/access");
@@ -836,6 +848,8 @@ export type EventDraft = {
  * why.
  */
 export async function getEventDraftForHost(userId: string, eventId: string): Promise<EventDraft | null> {
+  if (!(await optionalFeatureEnabled("events"))) return null;
+
   if (!hasServiceRoleEnv()) return null;
 
   const admin = createSupabaseAdminClient();
@@ -910,6 +924,8 @@ export async function updateEventDraft(
   eventId: string,
   input: unknown
 ): Promise<EventResult> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!hasServiceRoleEnv()) {
     return { ok: false, message: "This action needs the server database configuration." };
   }
@@ -1045,6 +1061,8 @@ export async function getEventAudienceSettingsForHost(
   userId: string,
   eventId: string
 ): Promise<EventAudienceSettings | null> {
+  if (!(await optionalFeatureEnabled("events"))) return null;
+
   if (!hasServiceRoleEnv() || !uuidSchema.safeParse(eventId).success) return null;
 
   const admin = createSupabaseAdminClient();
@@ -1103,6 +1121,8 @@ export async function updateEventAudienceSettings(
   eventId: string,
   input: unknown
 ): Promise<EventResult> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!hasServiceRoleEnv()) {
     return { ok: false, message: "This action needs the server database configuration." };
   }

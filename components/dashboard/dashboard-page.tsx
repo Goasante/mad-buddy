@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/platform";
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
 import type { Route } from "next";
 import {
   AlertTriangle,
@@ -321,6 +322,7 @@ export function DashboardPageContent({
   topEvents = [],
   incomingRequestCount = 0
 }: DashboardPageContentProps) {
+  const availability = useFeatureAvailability();
   const reducedMotion = useReducedMotion();
   const [ghostMode, setGhostMode] = useState(initialVisibilityStatus === "ghost");
   /* SEEDED FROM THE SERVER, not from nothing.
@@ -1187,7 +1189,7 @@ export function DashboardPageContent({
         {/* Discovery does not outrank a first relationship. Somebody who has
             just added their first Muddy is pointed at the core loop, not at
             what the wider community is doing. */}
-        {composition.showTrending ? <TopEventsHome events={topEvents} /> : null}
+        {composition.showTrending && (!availability || availability.events) ? <TopEventsHome events={topEvents} /> : null}
 
         {/* Upcoming Plans sits directly under Near: both answer "what is
             happening with my people", so they belong together, above the

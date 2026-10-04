@@ -2,7 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Circle, PlayCircle, RotateCcw } from "lucide-react";
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { featureForHref } from "@/lib/features/availability";
+import { LockKeyhole, CheckCircle2, Circle, PlayCircle, RotateCcw } from "lucide-react";
 import { startTourReplayAction } from "@/app/(app)/tour-replay-actions";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -28,6 +30,7 @@ function guideStatus(status: ReplayableTour["progressStatus"]) {
 
 export function WalkthroughReplay({ tours }: { tours: ReplayableTour[] }) {
   const router = useRouter();
+  const availability = useFeatureAvailability();
   const [error, setError] = useState("");
   const [startingId, setStartingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -53,6 +56,8 @@ export function WalkthroughReplay({ tours }: { tours: ReplayableTour[] }) {
   }
 
   const start = (tour: ReplayableTour) => {
+    const feature = featureForHref(findFeatureGuide(tour.slug)?.entryRoute ?? "");
+    if (feature && availability && !availability[feature]) { router.push(findFeatureGuide(tour.slug)!.entryRoute as Parameters<typeof router.push>[0]); return; }
     setError("");
     setStartingId(tour.tourVersionId);
     startTransition(async () => {
@@ -81,6 +86,8 @@ export function WalkthroughReplay({ tours }: { tours: ReplayableTour[] }) {
             <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/45">
               {entries.map((tour, index) => {
                 const state = guideStatus(tour.progressStatus);
+                const feature = featureForHref(findFeatureGuide(tour.slug)?.entryRoute ?? "");
+                const locked = Boolean(feature && availability && !availability[feature]);
                 const StateIcon = state.icon;
                 const replay = tour.progressStatus !== null;
                 return (
@@ -107,8 +114,8 @@ export function WalkthroughReplay({ tours }: { tours: ReplayableTour[] }) {
                       onClick={() => start(tour)}
                       aria-label={`${replay ? "Replay" : "Start"} ${findFeatureGuide(tour.slug)?.label ?? tour.title} guide`}
                     >
-                      {replay ? <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> : <PlayCircle className="h-3.5 w-3.5" aria-hidden="true" />}
-                      {startingId === tour.tourVersionId ? "Starting..." : replay ? "Replay" : "Start"}
+                      {locked ? <LockKeyhole className="h-3.5 w-3.5" aria-label="Coming soon" /> : replay ? <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> : <PlayCircle className="h-3.5 w-3.5" aria-hidden="true" />}
+                      {locked ? "Coming soon" : startingId === tour.tourVersionId ? "Starting..." : replay ? "Replay" : "Start"}
                     </Button>
                   </div>
                 );

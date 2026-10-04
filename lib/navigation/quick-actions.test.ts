@@ -110,8 +110,8 @@ describe("every action opens its canonical route", () => {
     ]);
   });
 
-  it("keeps Conference dark until its server-resolved flag is enabled", () => {
-    expect(component).toContain('action.id !== "conference"');
+  it("keeps Conference visible with a locked destination when unavailable", () => {
+    expect(component).toContain("const visibleActions = QUICK_ACTIONS");
     expect(shell).toContain('conferenceEnabled={conferenceEnabled}');
   });
 

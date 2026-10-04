@@ -68,6 +68,7 @@ export async function setFeatureFlagAction(input: unknown): Promise<FeatureFlagA
   revalidatePath("/moments");
   revalidatePath("/discover");
   revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   const feature = MANAGED_FEATURES.find((item) => item.key === parsed.data.key);
   const title = feature?.title ?? "Feature";
   return {

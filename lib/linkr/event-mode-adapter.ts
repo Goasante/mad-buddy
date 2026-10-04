@@ -1,4 +1,9 @@
 import "server-only";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
+
+async function eventModeReleased(): Promise<boolean> {
+  return (await optionalFeatureEnabled("events")) && (await optionalFeatureEnabled("linkr"));
+}
 
 import * as eventConsentModule from "@/lib/events/linkr-consent";
 
@@ -44,6 +49,7 @@ export type EventModeEligibility = {
   eligible: boolean;
   reason:
     | "eligible"
+    | "feature_locked"
     | "event_not_found"
     | "event_not_live"
     | "not_checked_in"
@@ -88,6 +94,7 @@ export async function resolveViewerEventMode(
   userId: string,
   eventId: string
 ): Promise<EventModeEligibility> {
+  if (!(await eventModeReleased())) return { eligible: false, reason: "feature_locked" };
   const mod = await loadConsentModule();
   if (!mod) return { eligible: false, reason: "consent_module_unavailable" };
   const result = await mod.resolveEventLinkrEligibility(admin, userId, eventId);
@@ -110,6 +117,7 @@ export async function eventModeCandidateIds(
   viewerId: string,
   eventId: string
 ): Promise<Set<string>> {
+  if (!(await eventModeReleased())) return new Set();
   const mod = await loadConsentModule();
   if (!mod) return new Set();
   try {
@@ -127,6 +135,7 @@ export async function eventModeCandidateIds(
  * and the lower of them would be the real policy by accident.
  */
 export async function describeEventPool(count: number): Promise<string | null> {
+  if (!(await eventModeReleased())) return null;
   const mod = await loadConsentModule();
   if (!mod) return count > 0 ? "People here are open to connecting." : null;
   return mod.describeEventLinkrPool(count);
@@ -137,6 +146,7 @@ export async function loadEventContext(
   admin: Admin,
   eventId: string
 ): Promise<{ id: string; name: string; startsAt: string | null; venueLabel: string | null } | null> {
+  if (!(await eventModeReleased())) return null;
   const { data } = await admin
     .from("events")
     .select("id, name, starts_at, ends_at, status, venue_label")

@@ -3,7 +3,7 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { Route } from "next";
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {

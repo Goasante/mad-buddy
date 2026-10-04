@@ -32,6 +32,8 @@ import {
   journeyTone
 } from "@/components/safety/journey-parts";
 import { SafeArrivalSetup, type SafeArrivalSetupInput } from "@/components/safety/safe-arrival-setup";
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { openDirectConversationAction } from "@/app/(app)/messaging-actions";
 import { conversationHref } from "@/lib/messaging/open-conversation";
@@ -62,6 +64,7 @@ export function SafeArrivalPage({
   requestedSessionId: string | null;
 }) {
   const router = useRouter();
+  const availability = useFeatureAvailability();
   const [setupOpen, setSetupOpen] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [toast, setToast] = useState("");
@@ -247,7 +250,7 @@ export function SafeArrivalPage({
           }
         />
       ) : (
-        <SafeArrivalHome onStart={() => setSetupOpen(true)} />
+        availability && !availability.safe_arrival ? <LockedFeaturePreview feature="safe_arrival" /> : <SafeArrivalHome onStart={() => setSetupOpen(true)} />
       )}
 
       {otherWatching.length > 0 ? (
@@ -266,7 +269,7 @@ export function SafeArrivalPage({
       ) : null}
 
       <SafeArrivalSetup
-        open={setupOpen}
+        open={setupOpen && availability?.safe_arrival !== false}
         watcherOptions={watcherOptions}
         maxWatchers={maxWatchers}
         pending={isPending}

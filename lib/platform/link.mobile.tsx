@@ -1,3 +1,6 @@
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { featureForHref } from "@/lib/features/availability";
+import { LockKeyhole } from "lucide-react";
 import { forwardRef, type AnchorHTMLAttributes, type MouseEvent } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { toMobilePath, urlObjectToPath, type UrlObject } from "./routes.mobile";
@@ -37,6 +40,9 @@ export const Link = forwardRef<HTMLAnchorElement, PlatformLinkProps>(function Li
   ref
 ) {
   const rawHref = typeof href === "string" ? href : urlObjectToPath(href);
+  const availability = useFeatureAvailability();
+  const feature = featureForHref(rawHref);
+  const locked = Boolean(feature && availability && !availability[feature]);
   const target = toMobilePath(rawHref);
 
   // An absolute URL is a genuine external link (mailto:, tel:, https://...).
@@ -59,7 +65,7 @@ export const Link = forwardRef<HTMLAnchorElement, PlatformLinkProps>(function Li
       onClick={onClick as (event: MouseEvent<HTMLAnchorElement>) => void}
       {...rest}
     >
-      {children}
+      {children}{locked ? <LockKeyhole className="ml-1 inline-block h-3.5 w-3.5 shrink-0" aria-label="Coming soon" /> : null}
     </RouterLink>
   );
 });

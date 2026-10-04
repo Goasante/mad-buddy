@@ -1,5 +1,8 @@
 "use client";
 
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { availableSmartCard } from "@/lib/smart-card/availability";
+
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -89,7 +92,7 @@ const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["safe_arrival", "journey"])
 const PRISM_CARD_IDS = new Set<SmartCard["id"]>(["suggestions"]);
 
 export function SmartCardHero({
-  card,
+  card: inputCard,
   /**
    * Something more urgent already owns the screen.
    *
@@ -108,6 +111,9 @@ export function SmartCardHero({
   card: SmartCard;
   deferred?: boolean;
 }) {
+  const availability = useFeatureAvailability();
+  const eligible = availability ? availableSmartCard(inputCard, availability) : inputCard;
+  const card = eligible ?? inputCard;
   const [animatedPercent, setAnimatedPercent] = useState(0);
   const [pending, startTransition] = useTransition();
   const percent = card.progress?.percent ?? 0;
@@ -156,6 +162,8 @@ export function SmartCardHero({
   const ariaLabel = card.progress
     ? `${card.title}. ${card.subtitle} ${card.progress.percent}% complete, ${card.progress.label.toLowerCase()}.`
     : `${card.title}. ${card.subtitle}`;
+
+  if (!eligible) return null;
 
   return (
     <Link

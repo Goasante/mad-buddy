@@ -1,3 +1,7 @@
+
+import { FeatureAvailabilityProvider } from "@/components/features/feature-availability-provider";
+import { FeatureRouteBoundary } from "@/components/features/feature-route-boundary";
+import { loadFeatureAvailability } from "@/lib/features/availability-server";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -199,6 +203,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   const flagEnabled = (key: string) =>
     resolveGlobalFeatureFlag(flagRows.find((row) => row.key === key));
 
+  const featureAvailability = await loadFeatureAvailability();
   const socializeEnabled = flagEnabled(SOCIALIZE_FLAG);
   const momentsEnabled = flagEnabled(MOMENTS_FLAG);
   const madCamEnabled = flagEnabled(MAD_CAM_FLAG);
@@ -220,7 +225,6 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
   // A paused feature stops existing in navigation rather than appearing as a
   // dead or "coming soon" entry.
   const hiddenNavigationHrefs = [
-    ...(socializeEnabled ? [] : ["/discover"]),
     ...(momentsEnabled ? [] : ["/moments"])
   ];
 
@@ -236,6 +240,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
         adFree
       }}
     >
+      <FeatureAvailabilityProvider initial={featureAvailability}>
       <AppShell
         showAdminLink={isStaff}
         initialUnreadCount={unreadResult.count ?? 0}
@@ -253,7 +258,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
         conferenceEnabled={conferenceEnabled}
         wallpaperPromise={wallpaperPromise}
       >
-        {children}
+        <FeatureRouteBoundary>{children}</FeatureRouteBoundary>
         {/* Only offered once the user is signed in (mounted in the authed layout). */}
         <InstallAppPrompt />
         {user ? <EnableNotificationsPrompt userId={user.id} /> : null}
@@ -267,6 +272,7 @@ export default async function ProtectedAppLayout({ children }: ProtectedAppLayou
           </Suspense>
         ) : null}
       </AppShell>
+      </FeatureAvailabilityProvider>
     </WebAdsProvider>
   );
 }

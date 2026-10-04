@@ -43,6 +43,7 @@ export type SmartCardStateSpec = {
  * for this phase, so it cannot win Home through the Smart Card engine.
  */
 export const SMART_CARD_APPROVED_STATES = [
+  { id: "core_fallback", tier: 6, family: "muddies", purpose: "An available core connection action while UpFor is paused." },
   { id: "safe_arrival_overdue", tier: 0, family: "safety", purpose: "A Safe Arrival check-in is overdue." },
   { id: "safe_arrival_action", tier: 0, family: "safety", purpose: "A live Safe Arrival needs the traveller's action." },
   { id: "failed_action", tier: 0, family: "system", purpose: "A consequential action failed and needs recovery." },

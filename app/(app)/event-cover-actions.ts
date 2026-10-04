@@ -1,5 +1,7 @@
 "use server";
 
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
+
 import { z } from "zod";
 
 import { guardAction } from "@/lib/admin/enforcement";
@@ -66,6 +68,8 @@ function serverReady(): boolean {
  * the canonical retention/orphan path rather than being hard-deleted here.
  */
 export async function uploadEventCoverAction(formData: FormData): Promise<ActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!serverReady()) {
     return { ok: false, message: "This action needs the server database configuration." };
   }
@@ -230,6 +234,8 @@ export async function uploadEventCoverAction(formData: FormData): Promise<Action
 
 /** Reposition the focal point. No re-upload: one image, many crops (§5). */
 export async function setEventCoverFocalAction(input: unknown): Promise<ActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!serverReady()) {
     return { ok: false, message: "This action needs the server database configuration." };
   }
@@ -262,6 +268,8 @@ export async function setEventCoverFocalAction(input: unknown): Promise<ActionSt
  * between upload and publish.
  */
 export async function publishEventAction(eventId: string): Promise<ActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!serverReady()) {
     return { ok: false, message: "This action needs the server database configuration." };
   }
