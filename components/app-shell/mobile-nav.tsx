@@ -1,10 +1,12 @@
 "use client";
 
-import { Compass, Hand, MessageCircle, Users, type LucideIcon } from "lucide-react";
+import { Compass, Hand, LockKeyhole, MessageCircle, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BrandNavigationIcon } from "@/components/brand/brand-navigation-icon";
 import type { BrandNavigationIconName } from "@/lib/brand/assets";
 import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { featureForHref } from "@/lib/features/availability";
 import { CountBadge } from "@/components/ui/count-badge";
 import { Link, usePathname, type LinkProps } from "@/lib/platform";
 import { cn } from "@/lib/utils";
@@ -229,6 +231,14 @@ function MobileNavTab({
 }) {
   const isActive = isNavigationItemActive({ href: tab.href }, pathname);
   const Icon = tab.icon;
+  const availability = useFeatureAvailability();
+  const feature = featureForHref(tab.href);
+  const locked = unavailable || Boolean(feature && availability && !availability[feature]);
+  const lockBadge = locked ? (
+    <span className="pointer-events-none absolute bottom-0 right-0 grid h-[14px] w-[14px] place-items-center rounded-full bg-background text-muted-foreground dark:bg-[#151517]" aria-hidden="true">
+      <LockKeyhole className="h-[10px] w-[10px]" strokeWidth={2} />
+    </span>
+  ) : null;
 
   /* Shared by both branches so a disabled tab is visually identical to an
      enabled one apart from its dimming -- same 40px target, same 56px row,
@@ -272,7 +282,7 @@ function MobileNavTab({
             "cursor-default"
           )}
         >
-          <span className={iconWrapperClass}>{iconNode}</span>
+          <span className={iconWrapperClass}>{iconNode}{lockBadge}</span>
         </button>
       </li>
     );
@@ -290,11 +300,12 @@ function MobileNavTab({
     <li className="min-w-0 flex-1 pb-0 pt-4">
       <Link
         href={tab.href}
+        featureLockIndicator={false}
         prefetch={false}
         // Stable targeting contract for guided tours. Derived from the route,
         // so a tour step never depends on a fragile positional selector.
         data-tour-id={`nav-${tab.href.slice(1)}`}
-        aria-label={tab.label}
+        aria-label={locked ? `${tab.label}. Coming soon.` : tab.label}
         aria-current={isActive ? "page" : undefined}
         className={cn(
           "safe-motion flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
@@ -310,6 +321,7 @@ function MobileNavTab({
             56px row height preserves the touch target. */}
         <span className={iconWrapperClass}>
           {iconNode}
+          {lockBadge}
           {tab.href === "/messages" && messageUnreadCount > 0 ? <UnreadBadge count={messageUnreadCount} /> : null}
           {tab.href === "/friends" && muddyRequestCount > 0 ? <UnreadBadge count={muddyRequestCount} /> : null}
         </span>

@@ -33,10 +33,11 @@ type PlatformLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> &
   href: string | UrlObject;
   prefetch?: boolean;
   replace?: boolean;
+  featureLockIndicator?: boolean;
 };
 
 export const Link = forwardRef<HTMLAnchorElement, PlatformLinkProps>(function Link(
-  { href, prefetch: _prefetch, replace, children, onClick, ...rest },
+  { href, prefetch: _prefetch, replace, children, onClick, featureLockIndicator = true, ...rest },
   ref
 ) {
   const rawHref = typeof href === "string" ? href : urlObjectToPath(href);
@@ -65,7 +66,7 @@ export const Link = forwardRef<HTMLAnchorElement, PlatformLinkProps>(function Li
       onClick={onClick as (event: MouseEvent<HTMLAnchorElement>) => void}
       {...rest}
     >
-      {children}{locked ? <LockKeyhole className="ml-1 inline-block h-3.5 w-3.5 shrink-0" aria-label="Coming soon" /> : null}
+      {children}{locked && featureLockIndicator ? <LockKeyhole className="ml-1 inline-block h-3.5 w-3.5 shrink-0" aria-label="Coming soon" /> : null}
     </RouterLink>
   );
 });
