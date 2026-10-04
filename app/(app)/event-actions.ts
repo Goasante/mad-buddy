@@ -1361,7 +1361,7 @@ const QR_TOKEN_TTL_MS = 5 * 60 * 1000;
 export async function createEventCheckInQrAction(
   eventId: string
 ): Promise<{ ok: boolean; message: string; token?: string; expiresAtMs?: number; eventName?: string }> {
-  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: "Log in first." };
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
 
   const missing = missingEnvState();
   if (missing) return { ok: false, message: missing.message };
@@ -1402,7 +1402,7 @@ export async function createEventCheckInQrAction(
 export async function createRoomJoinQrAction(
   roomId: string
 ): Promise<{ ok: boolean; message: string; token?: string; expiresAtMs?: number; roomName?: string }> {
-  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: "Log in first." };
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
 
   const missing = missingEnvState();
   if (missing) return { ok: false, message: missing.message };

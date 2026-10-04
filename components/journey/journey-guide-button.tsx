@@ -34,7 +34,7 @@ export function JourneyGuideButton({ tourVersionId, destination, label, compact 
           onClick={replay}
           className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
           aria-label={`Replay ${label} guide`}
-          title="Replay guide"
+          title={locked ? "Coming soon" : "Replay guide"}
         >
           {locked ? <LockKeyhole className="h-4 w-4" aria-label="Coming soon" /> : <RotateCcw className="h-4 w-4" aria-hidden="true" />}
         </button>
@@ -42,5 +42,5 @@ export function JourneyGuideButton({ tourVersionId, destination, label, compact 
       </div>
     );
   }
-  return <div className="shrink-0 text-right"><button type="button" disabled={pending || locked} onClick={replay} className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary/50 hover:text-foreground" aria-label={`Replay ${label} guide`}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />{pending ? "Starting..." : "Replay guide"}</button>{error ? <p className="mt-1 max-w-40 text-xs text-destructive" role="alert">{error}</p> : null}</div>;
+  return <div className="shrink-0 text-right"><button type="button" disabled={pending || locked} onClick={replay} className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary/50 hover:text-foreground" aria-label={`Replay ${label} guide`}>{locked ? <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" /> : <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />}{locked ? "Coming soon" : pending ? "Starting..." : "Replay guide"}</button>{error ? <p className="mt-1 max-w-40 text-xs text-destructive" role="alert">{error}</p> : null}</div>;
 }

@@ -7,9 +7,11 @@ export function MobileFeatureAvailabilityProvider({ children }: { children: Reac
   const [availability, setAvailability] = useState<FeatureAvailability>({ ...LOCKED_FEATURES });
   useEffect(() => {
     let active = true;
+    let latestRequest = 0;
     async function refresh() {
+      const requestId = ++latestRequest;
       const result = await api.get<FeatureAvailability>("/api/features/availability");
-      if (active) setAvailability(result.ok ? result.data : { ...LOCKED_FEATURES });
+      if (active && requestId === latestRequest) setAvailability(result.ok ? result.data : { ...LOCKED_FEATURES });
     }
     void refresh();
     const timer = window.setInterval(refresh, 30000);

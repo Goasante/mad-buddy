@@ -31,4 +31,6 @@ Deploy this change and its migration together during a controlled release. The b
 - Full root unit suite: 9,416 passing tests across 578 suites; native unit suite: 26 passing tests.
 - Web and native production builds pass, including TypeScript checks. Lint has zero errors (123 warnings).
 - Isolated PostgreSQL migration exercise verifies server/client insert denial, restrictive reads, retained records, unlocking, active Safe Arrival completion and ongoing expiry. Staging schema was read to check table compatibility; no live/staging flags or data were changed.
-- Browser verification could not run in this workspace. The visual treatment requires a browser check before live release.
+- Final review corrected stale availability responses, locked QR action copy, a missing guide padlock and an already-open Safe Arrival setup sheet. Targeted review suite: 2,227 passing tests; root/native TypeScript checks and changed-file lint pass.
+- Migration applied to synthetic staging and verified: five flags off, 42 restrictive policies, four insert triggers, server insert guards deny locked activity, zero added release policies on core tables. Staging migration head: `20261004202823`. Production remains at 174 migrations with head `20261003214905` until release.
+- Vercel preview build is READY; exact-head GitHub CI passes. Browser review is blocked by Vercel authentication; sign-in is required before live release.
