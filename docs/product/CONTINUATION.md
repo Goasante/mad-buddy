@@ -1,5 +1,17 @@
 # God Mode hardening — continuation report
 
+## Navigation lock refinement — 4 October 2026
+
+- PR #129 passed all three CI jobs and merged as
+  `947779258fc67f8846f85b0094ac66c87e2585b7`. Bottom navigation locks are
+  now 10px badges attached to each locked icon’s lower-right corner.
+  Core tabs have no lock; shared web/native navigation keeps the same layout.
+  SmartCard eligibility and launch controls are unchanged.
+- Validation: 734 focused tests, web/native typechecks and zero lint errors;
+  exact-head CI also passed production build, mobile build/tests and full quality.
+  Production deployment `dpl_JBfztafRMZTuRdh5CePFZLpvc6jz` is READY;
+  the live version endpoint serves the merged commit and readiness returns 200.
+
 ## Optional feature launch release — 4 October 2026
 
 - PR #128 merged as `e9c836d079ae443d728dd57be37cb4a7b7047264`.
@@ -336,89 +348,58 @@ data contract is proven, the network attack was not run.
 
 ## Superseded: the two remaining domains
 
-**Domain 6 — Profile media (NOT STARTED)** is the larger pie…14768 tokens truncated…n
-- Live GHS 5 payment test NOT RUN — see the section above.
-- No clean production QA identities exist, so every authenticated production E2E
-  remains NOT EXECUTED. Design is in the schema-wide audit report; creating the
-  accounts needs separate authorisation. Never reuse a real customer account.
-- Dead 4-argument `transition_safe_arrival` overload — unreachable by any caller
-  (PostgreSQL cannot disambiguate it), harmless, worth dropping in a future
-  cleanup.
-- `v4-actions.local.test.ts` flakes once on the first local run after
-  `db reset` + seed; passes in isolation and on re-runs.
-- The `storage` schema still grants browser EXECUTE on postgres-owned functions.
-  Supabase platform territory, deliberately untouched.
+**Domain 6 — Profile media (NOT STARTED)** is the larger piece. It needs real
+storage + DB work, not a UI test:
+- add / replace / reorder / visibility / remove, verifying DB *and* storage
+  object state after each
+- the replacement invariant: upload new → confirm ready → DB swap → retire old.
+  Never delete-then-upload, or a failed replacement destroys working media
+- failure injection: upload ok / DB swap fails; DB ok / refresh fails; duplicate
+  replace; stale slot id
+- capacity stays **3 showcase images** — do not expand it
+- visibility as self / approved Muddy / Linkr stranger / blocked / unrelated,
+  tested against the real storage path (a URL that is not rendered is still a URL
+  that can be fetched)
+- one multi-tab: Tab A holds stale slots, Tab B reorders, Tab A submits
 
----
+**Domain 5 — Event check-in / Event Linkr (PARTIAL)** needs the wiring, not the
+rules. The consent decision is proven (MB-GOD-028, mutation-tested); what remains
+is that the system actually recomputes from changed state:
+- checkout / opt-out / Event end → next candidate computation excludes the user
+- attendee enumeration against live payloads, with enough seeded attendees that a
+  leak would be visible
+- the five audience authorities: invite / link / community / nearby / public
 
-## Smart Card V2 — Home's one adaptive card
+## Things the next session should not re-derive
 
-```
-CURRENT MAIN            b6fc25431b48c57dd38ef042743b70519534d454 (PR #28 merged in)
-PRODUCTION MIGRATIONS   137 (unchanged — this programme added none)
-SMART CARD PR           #27 (DRAFT)
-SMART CARD FINAL HEAD   see PR #27 head; last code commit 402313b, merged with main
-STATUS                  COMPLETE / READY FOR CHATGPT FINAL REVIEW
-PRODUCTION              UNTOUCHED
-```
+- **Event revocation is immediate because nothing is cached** (MB-GOD-032):
+  `resolveEventLinkrEligibility` reads liveness → check-in → consent live on every
+  call. There is no eligibility column to go stale.
+- **Four separate flags, four separate meanings**: `event_rsvps.status='going'`
+  (intent), `check_ins.status='checked_in'` (presence),
+  `event_linkr_opt_ins.enabled` (consent), `check_ins.event_glow_enabled`
+  (Glow — NOT consent). Do not conflate any two.
+- **`link` Events are viewable but NOT discoverable** (MB-GOD-031). That gap is
+  the point of an unlisted audience; do not "simplify" the two authorities into one.
+- **The Event/Linkr seam fails closed** and Linkr re-derives no consent. Do not
+  move consent logic into `candidate-service.ts`.
+- **Real schema notes**: Event status enum is
+  `draft|scheduled|active|ended|cancelled` (NOT `published`); check-in lives in
+  `check_ins` (context_type/context_id), not `event_rsvps`.
 
-### The architecture, in one place
-
-Home runs three surfaces with different jobs, and they are never collapsed:
-
-```
-CARD A       FirstMuddyCard / ActivationCard   activation + relationship progression
-CARD B       SmartCardHeroV2                   obligations, live context, opportunity
-NEARBY HERO  NearbyHero                        the proximity payoff
-```
-
-Eligibility is decided by TIER, not by a list of ids, so a new catalog state
-inherits the right behaviour without anybody editing Home. Tiers 0–2 always
-qualify; 3–6 wait until early activation stops owning the screen. Card B renders
-quiet whenever Card A is on screen — except tier 0, which keeps full authority
-because a live Safe Arrival outranks every teaching moment.
-
-### What closed
-
-- **Family 1 HOME/V2** and **Family 2 UPFOR** — complete before this tranche.
-- **Family 3 LINKR/RELATIONSHIP** — `linkr_mutual_event`, `event_linkr_ready`,
-  `muddy_birthday` wired on top of the existing `muddy_request` + `linkr_mutual`.
-- **Family 4 DECISIONS** — `plan_decision`, `plan_chat_decision`.
-- **Family 5 GROWTH/RECOVERY** — `profile_blocking`.
-- Action, media and query/fanout audits; runtime proof extended.
-
-```
-TOTAL APPROVED CATALOG STATES   57
-WIRED CARD B                    31 catalog entries / 30 providers
-                                (safe_arrival_overdue + safe_arrival_action
-                                 share one live-journey provider)
-CARD A OWNED                     6
-NEARBY HERO OWNED                2
-OTHER EXISTING HOME SURFACE      7
-DEFERRED — NO CANONICAL AUTHORITY 10
-DEFERRED — PRODUCT PAUSED        1
-```
-
-Every one of the 57 is classified individually in
-`lib/smart-card/catalog-classification.ts`, and the classification is VERIFIED
-AGAINST THE ENGINE by `catalog-classification.test.ts` rather than maintained by
-hand — a matrix that rots is worse than none.
-
-The split that matters is between the two kinds of absence, which an earlier
-draft of this document conflated into a single "23 deliberately unwired":
-
-- **7 states another Home surface already owns** — the "Coming Up" agenda rail
-  (`plan_upcoming`), the Trending Events rail (`event_saved`,
-  `event_friend_context`), Home's Safe Arrival section
-  (`safe_arrival_watcher_request`), the profile completion reminder
-  (`profile_completion`), Tours (`walkthrough`), and Groups
-  (`group_invitation`). These are settled answers. A Smart Card for any of them
-  would be one screen saying the same thing twice.
-- **10 real authority gaps** — the table below.
-- Plus 6 Card A owns, 2 NearbyHero owns, and 1 paused product decision.
-
-The catalog is a product vocabulary, not a quota. Several states are correctly
-absent, and the reasons are recorded as tests in
+- **Messages idempotency is a DATABASE guarantee** (MB-GOD-030): unique index on
+  `(sender_id, client_message_id)`. Do not "improve" it with client-side debounce.
+- **Plan Chat membership follows RSVP, not invitation** (MB-GOD-029). An invitee
+  who has not accepted is correctly absent from the chat.
+- **Conversations link to Plans via `context_type`/`context_id`**, NOT a `plan_id`
+  column. Querying `plan_id` returns nothing and looks like a missing chat.
+- **Valid `system_event_type` values** are the 14 in the check constraint;
+  `plan_created` is NOT one of them (`plan_confirmed` is).
+- **Event Linkr consent is proven** (MB-GOD-028), behaviourally and
+  mutation-tested: attendance does not imply discoverability, a block beats Event
+  eligibility, and revocation is immediate with no grace window. Do NOT re-derive
+  the decision rules — `isCandidateEligible` is the single authority and it is a
+  pure function, so it can be tested dir…14950 tokens truncated…bsent, and the reasons are recorded as tests in
 `lib/smart-card/recovery-family.test.ts` so a future provider cannot be added
 without confronting the gap.
 
