@@ -728,7 +728,7 @@ export async function setEventLinkrConsentAction(
   eventId: string,
   enabled: boolean
 ): Promise<EventActionState> {
-  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+  if (enabled && (!(await optionalFeatureEnabled("events")) || !(await optionalFeatureEnabled("linkr")))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
 
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
@@ -778,7 +778,7 @@ export async function nearbyEventIdsAction(eventIds: string[]): Promise<string[]
 export async function getEventLinkrStateAction(
   eventId: string
 ): Promise<{ eligible: boolean; reason: string; consented: boolean; poolLabel: string | null }> {
-  if (!(await optionalFeatureEnabled("events"))) return { eligible: false, reason: "not_checked_in", consented: false, poolLabel: null };
+  if (!(await optionalFeatureEnabled("events")) || !(await optionalFeatureEnabled("linkr"))) return { eligible: false, reason: "feature_locked", consented: false, poolLabel: null };
 
   const userId = await getAuthedUserId();
   if (!userId) return { eligible: false, reason: "not_checked_in", consented: false, poolLabel: null };

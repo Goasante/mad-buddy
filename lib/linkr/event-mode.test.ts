@@ -4,6 +4,7 @@ import {
   __setEventConsentModuleForTests,
   describeEventPool,
   eventModeCandidateIds,
+  loadEventContext,
   resolveViewerEventMode
 } from "@/lib/linkr/event-mode-adapter";
 import { isCandidateEligible } from "@/lib/linkr/rules";
@@ -16,9 +17,13 @@ import { isCandidateEligible } from "@/lib/linkr/rules";
  * every path fails closed, and that Event eligibility can only ever narrow.
  */
 
+const releaseFlag = vi.hoisted(() => vi.fn<(feature: string) => Promise<boolean>>().mockResolvedValue(true));
+vi.mock("@/lib/features/availability-server", () => ({ optionalFeatureEnabled: releaseFlag }));
+
 const admin = {} as never;
 
 afterEach(() => {
+  releaseFlag.mockReset().mockResolvedValue(true);
   __setEventConsentModuleForTests(undefined);
 });
 
@@ -220,5 +225,24 @@ describe("Event Mode mutation tests", () => {
     for (const count of [1, 2, 3, 4]) {
       expect(await describeEventPool(count)).not.toMatch(/\d/);
     }
+  });
+});
+
+
+describe("independent Event Linkr launch controls", () => {
+  it.each(["events", "linkr"])("does not expose Event Mode when %s is locked", async locked => {
+    releaseFlag.mockImplementation(async feature => feature !== locked);
+    const eligibility = vi.fn();
+    const candidates = vi.fn();
+    __setEventConsentModuleForTests(eventsModule({
+      resolveEventLinkrEligibility: eligibility,
+      eventLinkrCandidateIds: candidates
+    }));
+    expect(await resolveViewerEventMode(admin, "viewer", "old-event-link")).toEqual({ eligible: false, reason: "feature_locked" });
+    expect(await eventModeCandidateIds(admin, "viewer", "old-event-link")).toEqual(new Set());
+    expect(await loadEventContext(admin, "old-event-link")).toBeNull();
+    expect(await describeEventPool(10)).toBeNull();
+    expect(eligibility).not.toHaveBeenCalled();
+    expect(candidates).not.toHaveBeenCalled();
   });
 });

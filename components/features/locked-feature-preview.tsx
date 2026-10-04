@@ -6,7 +6,7 @@ import { OPTIONAL_FEATURES, type OptionalFeature } from "@/lib/features/availabi
 export function LockedFeaturePreview({ feature }: { feature: OptionalFeature }) {
   const product = OPTIONAL_FEATURES[feature];
   return <section className="relative isolate min-h-[72dvh] overflow-hidden rounded-3xl bg-background" aria-labelledby="locked-feature-title">
-    <div aria-hidden="true" className="pointer-events-none select-none space-y-6 p-6 opacity-65" style={{ filter: "blur(18px)" }}>
+    <div aria-hidden="true" className="absolute inset-0 pointer-events-none select-none space-y-6 p-6 opacity-65" style={{ filter: "blur(18px)" }}>
       <div className="h-10 w-40 rounded-xl bg-foreground/15" />
       <div className="flex gap-3">{[0,1,2].map(i => <div key={i} className="h-10 w-24 rounded-full bg-accent/30" />)}</div>
       <div className={feature === "linkr" ? "mx-auto max-w-sm space-y-5" : "space-y-5"}>
