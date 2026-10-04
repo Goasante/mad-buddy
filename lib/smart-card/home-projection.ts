@@ -1,3 +1,5 @@
+
+import { loadFeatureAvailability } from "@/lib/features/availability-server";
 import "server-only";
 
 import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
@@ -572,6 +574,7 @@ export async function loadHomeSmartCardProjection(input: {
   if (!serverReady()) return EMPTY;
   const admin = createSupabaseAdminClient();
 
+  const availability = await loadFeatureAvailability();
   try {
     const [
       eventLinkrOffer,
@@ -581,7 +584,7 @@ export async function loadHomeSmartCardProjection(input: {
       blockedFeature,
       recentAchievement
     ] = await Promise.all([
-      loadEventLinkrOffer(admin, input.userId),
+      availability.events && availability.linkr ? loadEventLinkrOffer(admin, input.userId) : Promise.resolve(null),
       loadMuddyBirthdays(admin, input.userId, input.now),
       loadPlanDecisions(
         admin,
@@ -598,7 +601,7 @@ export async function loadHomeSmartCardProjection(input: {
         input.planEndById,
         input.now
       ),
-      loadBlockedFeature(admin, input.userId),
+      availability.linkr ? loadBlockedFeature(admin, input.userId) : Promise.resolve(null),
       loadRecentAchievement(admin, input.userId, input.now)
     ]);
 

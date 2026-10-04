@@ -1,5 +1,7 @@
 "use server";
 
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { loadEffectivePlansForUsers } from "@/lib/billing/service";
@@ -229,6 +231,8 @@ const MAX_UPFOR_CAPACITY = 50;
 const DEFAULT_UPFOR_CAPACITY = 5;
 
 export async function startHangoutAction(input: unknown): Promise<HangoutActionState> {
+  if (!(await optionalFeatureEnabled("upfor"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -506,6 +510,8 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
 export async function canEditUpForAction(
   hangoutId: string
 ): Promise<{ ok: boolean; message: string }> {
+  if (!(await optionalFeatureEnabled("upfor"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return { ok: false, message: missing.message };
   if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
@@ -834,6 +840,8 @@ async function filterStrangerDiscoverable(
 }
 
 export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
+  if (!(await optionalFeatureEnabled("upfor"))) return [];
+
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return [];
   const userId = await getAuthedUserId();
@@ -1150,6 +1158,8 @@ export async function requestHangoutAction(
    */
   intent: "pending" | "maybe" = "pending"
 ): Promise<HangoutActionState> {
+  if (!(await optionalFeatureEnabled("upfor"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
   if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
@@ -1319,6 +1329,8 @@ export async function respondHangoutRequestAction(
   requestId: string,
   response: string
 ): Promise<HangoutActionState> {
+  if (!(await optionalFeatureEnabled("upfor"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
   if (!uuidSchema.safeParse(requestId).success) return { ok: false, message: "Request not found." };
@@ -1416,6 +1428,8 @@ export async function convertHangoutToPlanAction(
   hangoutId: string,
   title?: string
 ): Promise<HangoutActionState> {
+  if (!(await optionalFeatureEnabled("upfor"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   if (!uuidSchema.safeParse(hangoutId).success) return { ok: false, message: "UpFor not found." };
 
   const userId = await getAuthedUserId();

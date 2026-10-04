@@ -121,7 +121,7 @@ describe("Home inline ad placement", () => {
     const home = read("components/dashboard/dashboard-page.tsx");
     const near = home.indexOf("{composition.showNearby ? (");
     const ad = home.indexOf('{composition.showNearby ? <InlineAdSlot placement="home-after-near" /> : null}');
-    const trending = home.indexOf("{composition.showTrending ?");
+    const trending = home.indexOf("{composition.showTrending &&");
     expect(near).toBeGreaterThan(-1);
     expect(ad).toBeGreaterThan(near);
     expect(home.slice(near, ad).trimEnd()).toMatch(/\) : null\}$/);

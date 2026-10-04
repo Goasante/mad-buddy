@@ -45,10 +45,11 @@ describe("no mobile implementation may touch Next", () => {
 });
 
 describe("web implementations stay verbatim re-exports", () => {
-  it("Link re-exports next/link rather than wrapping it", () => {
+  it("Link keeps Next Link types while decorating locked destinations", () => {
     // A hand-written wrapper typed `href: string` would disable typedRoutes
     // across the 49 files that rely on `as Route`.
-    expect(read("lib/platform/link.tsx")).toContain('export { default as Link } from "next/link"');
+    expect(read("lib/platform/link.tsx")).toContain("type Props<RouteType> = LinkProps<RouteType> &");
+    expect(read("lib/platform/link.tsx")).toContain("data-feature-locked");
   });
 
   it("Image re-exports next/image, keeping the optimizer", () => {

@@ -1,3 +1,6 @@
+import { availableSmartCard } from "@/lib/smart-card/availability";
+
+import { type FeatureAvailability } from "@/lib/features/availability";
 /**
  * Pure Smart Card providers.
  *
@@ -50,6 +53,7 @@ export type SmartCardNearbyFriend = {
 
 export type SmartCardInput = {
   now: Date;
+  availability?: FeatureAvailability;
   journey: JourneyData | null;
   safeArrival:
     | {
@@ -1283,7 +1287,7 @@ function profileBlockingProvider(input: SmartCardInput): SmartCard | null {
 }
 
 export function smartCardProviders(input: SmartCardInput): readonly SmartCardProvider[] {
-  return [
+  const providers: SmartCardProvider[] = [
     { id: "safe_arrival", build: () => safeArrivalProvider(input) },
     { id: "plan_rsvp", build: () => planRsvpProvider(input) },
     { id: "plan_decision", build: () => planDecisionProvider(input) },
@@ -1315,6 +1319,9 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "achievement", build: () => achievementProvider(input) },
     { id: "suggestions", build: () => suggestionsProvider(input) },
     { id: "profile_blocking", build: () => profileBlockingProvider(input) },
-    { id: "upfor_fallback", build: () => upForFallbackProvider() }
+    { id: "upfor_fallback", build: () => upForFallbackProvider() },
+    ...(input.availability && !input.availability.upfor ? [{ id: "core_fallback" as const, build: (): SmartCard => ({ id: "core_fallback", priority: 0, illustration: "people", eyebrow: "YOUR MUDDIES", title: "Make room for a real connection", subtitle: "Say hello to a Muddy or make a Plan to catch up.", cta: "Open Muddies", destination: "/friends" }) }] : [])
   ];
+  if (!input.availability) return providers;
+  return providers.map(provider => ({ ...provider, build: () => availableSmartCard(provider.build(), input.availability!) }));
 }

@@ -1,3 +1,6 @@
+
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { redirect } from "next/navigation";
 
 import { LinkrPage } from "@/components/linkr/linkr-page";
@@ -35,6 +38,8 @@ export default async function LinkrRoute({
 }: {
   searchParams: Promise<{ eventId?: string; intent?: string; connection?: string }>;
 }) {
+  if (!(await optionalFeatureEnabled("linkr"))) return <LockedFeaturePreview feature="linkr" />;
+
   const user = await getCurrentUserRecord();
   if (!user) redirect("/login");
 

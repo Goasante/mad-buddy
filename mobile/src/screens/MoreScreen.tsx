@@ -1,3 +1,5 @@
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { featureForHref } from "@/lib/features/availability";
 import { useNavigate } from "react-router-dom";
 import {
   User,
@@ -7,6 +9,7 @@ import {
   Compass,
   ShieldCheck,
   Crown,
+  LockKeyhole,
   ChevronRight,
   type LucideIcon
 } from "lucide-react";
@@ -37,6 +40,7 @@ const sections: { title: string; items: Entry[] }[] = [
 
 export function MoreScreen() {
   const navigate = useNavigate();
+  const availability = useFeatureAvailability();
 
   return (
     <Screen title="More">
@@ -71,7 +75,7 @@ export function MoreScreen() {
                         Soon
                       </span>
                     ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      featureForHref(item.to ?? "") && availability && !availability[featureForHref(item.to ?? "")!] ? <LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Coming soon" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                     )}
                   </button>
                 </li>

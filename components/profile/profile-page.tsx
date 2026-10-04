@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { BookOpen, CakeSlice, CalendarCheck2, CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Edit3, Film, Gamepad2, MessageSquareText, MoonStar, Mountain, Music2, Plane, Plus, ShieldCheck, Smile, TrendingUp, UtensilsCrossed, UsersRound } from "lucide-react";

@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import type { Route } from "next";
 import {
   CircleDollarSign,

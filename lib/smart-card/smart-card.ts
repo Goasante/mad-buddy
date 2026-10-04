@@ -93,7 +93,8 @@ export const SMART_CARD_IDS = [
   "achievement",
   "journey",
   "buddy_progress",
-  "upfor_fallback"
+  "upfor_fallback",
+  "core_fallback"
 ] as const;
 
 export type SmartCardId = (typeof SMART_CARD_IDS)[number];

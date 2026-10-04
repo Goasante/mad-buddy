@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Check, MapPin, Search, ShieldCheck, X } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

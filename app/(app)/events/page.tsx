@@ -1,3 +1,6 @@
+
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { getEventsAction } from "@/app/(app)/event-actions";
 import { EventsPageContent } from "@/components/events/events-page";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +21,8 @@ function readServerNow(): number {
 }
 
 export default async function EventsPage() {
+  if (!(await optionalFeatureEnabled("events"))) return <LockedFeaturePreview feature="events" />;
+
   /* SERVER CLOCK, PASSED EXPLICITLY.
    *
    * Every Events surface is time-dependent -- which Event is live, what is on

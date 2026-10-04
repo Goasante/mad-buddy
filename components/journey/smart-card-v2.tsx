@@ -1,5 +1,8 @@
 "use client";
 
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { availableSmartCard } from "@/lib/smart-card/availability";
+
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -79,8 +82,11 @@ function MetadataIcon({ card }: { card: SmartCard }) {
   return <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />;
 }
 
-export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; deferred?: boolean }) {
+export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: SmartCard; deferred?: boolean }) {
   const [pending, startTransition] = useTransition();
+  const availability = useFeatureAvailability();
+  const eligible = availability ? availableSmartCard(inputCard, availability) : inputCard;
+  const card = eligible ?? inputCard;
   const [animatedPercent, setAnimatedPercent] = useState(0);
   const [intentPending, setIntentPending] = useState(false);
   const [intentError, setIntentError] = useState<string | null>(null);
@@ -200,6 +206,8 @@ export function SmartCardHeroV2({ card, deferred = false }: { card: SmartCard; d
   );
 
   const displayedPercent = reducedMotion ? percent : animatedPercent;
+
+  if (!eligible) return null;
 
   return (
     <article

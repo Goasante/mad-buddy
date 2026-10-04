@@ -1,5 +1,7 @@
 "use server";
 
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
+
 import { z } from "zod";
 
 import { getEventForViewer } from "@/lib/events/access";
@@ -23,6 +25,8 @@ type RefreshEventCoverResult = {
  * getEventForViewer authority used by direct Event opening.
  */
 export async function refreshEventCoverUrlAction(eventId: string): Promise<RefreshEventCoverResult> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, coverUrl: null };
+
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, coverUrl: null };
 
   const user = await getCurrentUserRecord();

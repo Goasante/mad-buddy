@@ -88,7 +88,7 @@ describe("Conference V1 product boundaries", () => {
     expect(migration).toContain("'conference'");
     expect(migration).toContain("'off'");
     expect(layout).toContain("CONFERENCE_FLAG");
-    expect(launcher).toContain('action.id !== "conference"');
+    expect(launcher).toContain("const visibleActions = QUICK_ACTIONS");
   });
 
   it("includes Conference in account export and deletion", () => {

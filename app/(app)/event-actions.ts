@@ -1,5 +1,7 @@
 "use server";
 
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
+
 import { z } from "zod";
 import type { Database } from "@/lib/supabase/database.types";
 import { guardFeature } from "@/lib/admin/enforcement";
@@ -120,12 +122,16 @@ async function getAuthedUserId() {
 // EventView lives in lib/events/mobile so the /api/events route shares it.
 
 export async function getEventsAction(): Promise<EventView[]> {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   const userId = await getAuthedUserId();
   if (!userId) return [];
   return listEvents(userId);
 }
 
 export async function createEventAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return createEvent(userId, input);
@@ -142,6 +148,8 @@ export async function createEventAction(input: unknown): Promise<EventActionStat
  * setEventRsvp, not duplicated at this layer.
  */
 export async function setEventRsvpAction(eventId: string, status: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in before RSVPing." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
@@ -161,6 +169,8 @@ const checkInSchema = z.object({
 });
 
 export async function checkInToEventAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -279,6 +289,8 @@ export async function checkOutAction(checkInId: string): Promise<EventActionStat
 
 /** Toggles Event Glow for a live check-in without checking out (spec §44). */
 export async function setEventGlowAction(checkInId: string, enabled: boolean): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
   if (!uuidSchema.safeParse(checkInId).success) return { ok: false, message: "Check-in not found." };
@@ -299,6 +311,8 @@ export async function setEventGlowAction(checkInId: string, enabled: boolean): P
 
 /** Event Glow list for the current viewer (spec §39). Server-authorized. */
 export async function getEventGlowAction(eventId: string): Promise<EventGlowMuddyList> {
+  if (!(await optionalFeatureEnabled("events"))) return { count: 0, muddies: [] };
+
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return { count: 0, muddies: [] };
   if (!uuidSchema.safeParse(eventId).success) return { count: 0, muddies: [] };
@@ -340,6 +354,8 @@ export async function joinEventCircleAction(
   circleId: string,
   token?: string
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
   if (!uuidSchema.safeParse(circleId).success) return { ok: false, message: "Room not found." };
@@ -449,6 +465,8 @@ const announcementSchema = z.object({
 });
 
 export async function sendEventAnnouncementAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -566,6 +584,8 @@ export async function archiveEventCircleAction(circleId: string): Promise<EventA
  * Capacity is bounded by the host's tier (spec §62).
  */
 export async function createEventCircleAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -623,6 +643,8 @@ export async function createEventCircleAction(input: unknown): Promise<EventActi
 }
 
 export async function listEventUpdatesAction(eventId: string): Promise<EventUpdateView[]> {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   const userId = await getAuthedUserId();
   if (!userId) return [];
   return listEventUpdates(eventId, userId);
@@ -639,6 +661,8 @@ export async function canManageEventAction(eventId: string): Promise<boolean> {
 }
 
 export async function postEventUpdateAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return createEventUpdate(userId, input);
@@ -648,6 +672,8 @@ export async function editEventUpdateAction(
   updateId: string,
   body: string
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return editEventUpdate(userId, updateId, body);
@@ -657,12 +683,16 @@ export async function setEventUpdateReactionAction(
   updateId: string,
   reaction: string | null
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return setUpdateReaction(userId, updateId, reaction);
 }
 
 export async function listEventAdminsAction(eventId: string): Promise<EventAdminView[]> {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   const userId = await getAuthedUserId();
   if (!userId) return [];
   return listEventAdmins(eventId, userId);
@@ -672,6 +702,8 @@ export async function addEventAdminAction(
   eventId: string,
   targetUserId: string
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return addEventAdmin(userId, eventId, targetUserId);
@@ -681,6 +713,8 @@ export async function removeEventAdminAction(
   eventId: string,
   targetUserId: string
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   return removeEventAdmin(userId, eventId, targetUserId);
@@ -694,6 +728,8 @@ export async function setEventLinkrConsentAction(
   eventId: string,
   enabled: boolean
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
@@ -713,6 +749,8 @@ export async function setEventLinkrConsentAction(
  * the same non-disclosure the rest of the surface maintains.
  */
 export async function getEventByIdAction(eventId: string): Promise<EventView | null> {
+  if (!(await optionalFeatureEnabled("events"))) return null;
+
   const userId = await getAuthedUserId();
   if (!userId) return null;
   if (!uuidSchema.safeParse(eventId).success) return null;
@@ -727,6 +765,8 @@ export async function getEventByIdAction(eventId: string): Promise<EventView | n
  * Ids only -- no distance crosses this boundary.
  */
 export async function nearbyEventIdsAction(eventIds: string[]): Promise<string[] | null> {
+  if (!(await optionalFeatureEnabled("events"))) return null;
+
   const userId = await getAuthedUserId();
   if (!userId) return null;
   const safeIds = eventIds.filter((id) => uuidSchema.safeParse(id).success).slice(0, 200);
@@ -738,6 +778,8 @@ export async function nearbyEventIdsAction(eventIds: string[]): Promise<string[]
 export async function getEventLinkrStateAction(
   eventId: string
 ): Promise<{ eligible: boolean; reason: string; consented: boolean; poolLabel: string | null }> {
+  if (!(await optionalFeatureEnabled("events"))) return { eligible: false, reason: "not_checked_in", consented: false, poolLabel: null };
+
   const userId = await getAuthedUserId();
   if (!userId) return { eligible: false, reason: "not_checked_in", consented: false, poolLabel: null };
   if (!uuidSchema.safeParse(eventId).success) {
@@ -770,6 +812,8 @@ export async function getEventLinkrStateAction(
  * editor. Returns null for anything that is not this host's own draft.
  */
 export async function getEventDraftAction(eventId: string): Promise<EventDraft | null> {
+  if (!(await optionalFeatureEnabled("events"))) return null;
+
   const userId = await getAuthedUserId();
   if (!userId) return null;
   if (!uuidSchema.safeParse(eventId).success) return null;
@@ -783,6 +827,8 @@ export async function getEventDraftAction(eventId: string): Promise<EventDraft |
  * again would insert a second row and strand the original in Drafts.
  */
 export async function updateEventDraftAction(eventId: string, input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
@@ -803,6 +849,8 @@ export async function updateEventAudienceSettingsAction(
   eventId: string,
   input: unknown
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
@@ -826,6 +874,8 @@ export async function shareEventToConversationAction(
   eventId: string,
   conversationId: string
 ): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const userId = await getAuthedUserId();
   if (!userId) return { ok: false, message: "Log in first." };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
@@ -863,6 +913,8 @@ export async function getAudienceOptionsAction(): Promise<{
   invitees: InviteeOption[];
   communities: CommunityOption[];
 }> {
+  if (!(await optionalFeatureEnabled("events"))) return { invitees: [], communities: [] };
+
   const userId = await getAuthedUserId();
   if (!userId) return { invitees: [], communities: [] };
   const [invitees, communities] = await Promise.all([
@@ -881,6 +933,8 @@ export async function getAudienceOptionsAction(): Promise<{
 // ---------------------------------------------------------------------------
 
 export async function listEventRoomsAction(eventId: string, includeUnlisted = false) {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   if (missingEnvState()) return [];
   if (!uuidSchema.safeParse(eventId).success) return [];
   const userId = await getAuthedUserId();
@@ -894,6 +948,8 @@ export async function listEventRoomsAction(eventId: string, includeUnlisted = fa
 }
 
 export async function getEventRoomAction(roomId: string) {
+  if (!(await optionalFeatureEnabled("events"))) return null;
+
   if (missingEnvState()) return null;
   if (!uuidSchema.safeParse(roomId).success) return null;
   const userId = await getAuthedUserId();
@@ -902,6 +958,8 @@ export async function getEventRoomAction(roomId: string) {
 }
 
 export async function listRoomMembersAction(roomId: string) {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   if (missingEnvState()) return [];
   if (!uuidSchema.safeParse(roomId).success) return [];
   const userId = await getAuthedUserId();
@@ -910,6 +968,8 @@ export async function listRoomMembersAction(roomId: string) {
 }
 
 export async function listRoomNoticesAction(roomId: string) {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   if (missingEnvState()) return [];
   if (!uuidSchema.safeParse(roomId).success) return [];
   const userId = await getAuthedUserId();
@@ -930,6 +990,8 @@ export async function listRoomNoticesAction(roomId: string) {
  * by anyone holding its QR or an invitation. Hiding is not revoking.
  */
 export async function updateEventRoomAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -1059,6 +1121,8 @@ export async function updateEventRoomAction(input: unknown): Promise<EventAction
 // ---------------------------------------------------------------------------
 
 export async function inviteToEventRoomAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -1128,6 +1192,8 @@ export async function inviteToEventRoomAction(input: unknown): Promise<EventActi
 // ---------------------------------------------------------------------------
 
 export async function setEventRoomMemberStatusAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -1171,6 +1237,8 @@ export async function setEventRoomMemberStatusAction(input: unknown): Promise<Ev
 }
 
 export async function setEventRoomRoleAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -1210,6 +1278,8 @@ export async function setEventRoomRoleAction(input: unknown): Promise<EventActio
 // ---------------------------------------------------------------------------
 
 export async function setRoomNoticeReactionAction(input: unknown): Promise<EventActionState> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+
   const missing = missingEnvState();
   if (missing) return missing;
 
@@ -1291,6 +1361,8 @@ const QR_TOKEN_TTL_MS = 5 * 60 * 1000;
 export async function createEventCheckInQrAction(
   eventId: string
 ): Promise<{ ok: boolean; message: string; token?: string; expiresAtMs?: number; eventName?: string }> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: "Log in first." };
+
   const missing = missingEnvState();
   if (missing) return { ok: false, message: missing.message };
   if (!uuidSchema.safeParse(eventId).success) return { ok: false, message: "Event not found." };
@@ -1330,6 +1402,8 @@ export async function createEventCheckInQrAction(
 export async function createRoomJoinQrAction(
   roomId: string
 ): Promise<{ ok: boolean; message: string; token?: string; expiresAtMs?: number; roomName?: string }> {
+  if (!(await optionalFeatureEnabled("events"))) return { ok: false, message: "Log in first." };
+
   const missing = missingEnvState();
   if (missing) return { ok: false, message: missing.message };
   if (!uuidSchema.safeParse(roomId).success) return { ok: false, message: "Room not found." };
@@ -1374,6 +1448,8 @@ export async function createRoomJoinQrAction(
 // ---------------------------------------------------------------------------
 
 export async function listEventGuestsAction(eventId: string) {
+  if (!(await optionalFeatureEnabled("events"))) return { going: 0, checkedIn: 0, interested: 0, guests: [] };
+
   if (missingEnvState()) return { going: 0, checkedIn: 0, interested: 0, guests: [] };
   if (!uuidSchema.safeParse(eventId).success) {
     return { going: 0, checkedIn: 0, interested: 0, guests: [] };
@@ -1536,6 +1612,8 @@ export async function deleteEventAction(eventId: string): Promise<EventActionSta
  * this list is a convenience, never the authorization.
  */
 export async function listRoomGroupOptionsAction() {
+  if (!(await optionalFeatureEnabled("events"))) return [];
+
   if (missingEnvState()) return [];
   const userId = await getAuthedUserId();
   if (!userId) return [];

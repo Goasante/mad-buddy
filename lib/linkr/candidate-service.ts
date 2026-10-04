@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import "server-only";
 
 import { eventModeCandidateIds } from "@/lib/linkr/event-mode-adapter";
@@ -448,6 +450,8 @@ export async function discoverLinkrCandidates(
  * small-pool rule. Linkr never renders this number directly.
  */
 export async function countEventPool(viewerId: string, eventId: string): Promise<number> {
+  if (!(await optionalFeatureEnabled("events")) || !(await optionalFeatureEnabled("linkr"))) return 0;
+
   if (!serverReady()) return 0;
   const admin = createSupabaseAdminClient();
   const ids = await eventModeCandidateIds(admin, viewerId, eventId);

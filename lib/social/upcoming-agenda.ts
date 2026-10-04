@@ -1,3 +1,5 @@
+
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import "server-only";
 
 import { eventPhase } from "@/lib/events/rules";
@@ -36,6 +38,11 @@ export async function loadUpcomingAgenda(
   userId: string,
   limit = MAX_AGENDA_ITEMS
 ): Promise<UpcomingAgendaResult> {
+  if (!(await optionalFeatureEnabled("events"))) {
+    const result = await loadUpcomingPlans(userId, limit);
+    return { items: result.plans.map(plan => ({ ...plan, kind: "plan" as const, startsAt: plan.startAt, endsAt: plan.endAt ?? null })), hasMore: result.hasMore };
+  }
+
   if (!hasServiceRoleEnv()) return { items: [], hasMore: false };
 
   const admin = createSupabaseAdminClient();

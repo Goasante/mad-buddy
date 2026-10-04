@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";

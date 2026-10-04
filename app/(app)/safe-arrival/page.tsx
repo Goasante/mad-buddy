@@ -1,3 +1,6 @@
+
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { SafeArrivalPage } from "@/components/safety/safe-arrival-page";
 import {
   loadSafeArrivalJourneyById,
@@ -50,6 +53,8 @@ export default async function SafeArrivalRoute({
       focusedJourney = await loadSafeArrivalJourneyById(admin, user.id, requested);
     }
   }
+
+  if (!(await optionalFeatureEnabled("safe_arrival")) && travelling.length === 0 && checkingOn.length === 0 && !focusedJourney) return <LockedFeaturePreview feature="safe_arrival" />;
 
   return (
     <SafeArrivalPage

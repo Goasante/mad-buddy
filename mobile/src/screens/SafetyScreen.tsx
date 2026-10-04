@@ -1,3 +1,5 @@
+import { useFeatureAvailability } from "@/components/features/feature-availability-context";
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
 import { useCallback, useEffect, useState } from "react";
 import { ShieldCheck, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,7 @@ type Data = { mySessions: Session[]; watching: Session[]; contacts: Contact[] };
 const graceOptions = [15, 30, 60];
 
 export function SafetyScreen() {
+  const availability = useFeatureAvailability();
   const [data, setData] = useState<Data>({ mySessions: [], watching: [], contacts: [] });
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -76,6 +79,7 @@ export function SafetyScreen() {
     if (result.ok) void load();
   }
 
+  if (!loading && availability && !availability.safe_arrival && !data.mySessions.length && !data.watching.length) return <LockedFeaturePreview feature="safe_arrival" />;
   return (
     <Screen title="Safe Arrival">
       {loading ? (
@@ -85,7 +89,7 @@ export function SafetyScreen() {
       ) : (
         <div className="space-y-6">
           {/* Start a journey */}
-          <section className="glass-panel rounded-2xl p-5">
+          {availability?.safe_arrival ? <section className="glass-panel rounded-2xl p-5">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
               <h2 className="text-lg font-semibold">Start a journey</h2>
@@ -153,7 +157,7 @@ export function SafetyScreen() {
                 {starting ? "Starting…" : "Start Safe Arrival"}
               </Button>
             </div>
-          </section>
+          </section> : null}
 
           {/* Active journeys */}
           {data.mySessions.length > 0 ? (

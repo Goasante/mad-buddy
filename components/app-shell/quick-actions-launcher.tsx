@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutGrid } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -90,7 +90,7 @@ function resolveLeft(edge: QuickActionsEdge) {
  * it opens the same four destinations as before, now in a bottom sheet
  * instead of a stack of pills growing out of the trigger.
  */
-export function QuickActionsLauncher({ conferenceEnabled = false }: { conferenceEnabled?: boolean }) {
+export function QuickActionsLauncher(_props: { conferenceEnabled?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -170,9 +170,7 @@ export function QuickActionsLauncher({ conferenceEnabled = false }: { conference
 
   if (!showsQuickActions(pathname)) return null;
 
-  const visibleActions = conferenceEnabled
-    ? QUICK_ACTIONS
-    : QUICK_ACTIONS.filter((action) => action.id !== "conference");
+  const visibleActions = QUICK_ACTIONS;
 
   function onPointerDown(event: React.PointerEvent<HTMLButtonElement>) {
     if (event.button !== undefined && event.button !== 0) return;

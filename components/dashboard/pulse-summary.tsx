@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import type { Route } from "next";
 import { BellRing, CalendarClock, Hand, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";

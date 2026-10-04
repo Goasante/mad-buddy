@@ -362,7 +362,7 @@ describe("Home applies the decision rather than re-deriving it", () => {
 
   it("gates the competing modules on it", () => {
     expect(home).toContain("composition.showNearby ?");
-    expect(home).toContain("composition.showTrending ?");
+    expect(home).toContain("composition.showTrending && (!availability || availability.events)");
   });
 
   it("keeps the activation-focused quick actions", () => {

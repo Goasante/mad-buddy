@@ -1,3 +1,6 @@
+
+import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
+import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { redirect } from "next/navigation";
 import { ConferenceTopicPage } from "@/components/conference/conference-topic-page";
 import { loadConferenceTopic } from "@/lib/conference/server";
@@ -12,6 +15,8 @@ export default async function ConferenceTopicRoute({
 }: {
   params: Promise<{ topicId: string }>;
 }) {
+  if (!(await optionalFeatureEnabled("conference"))) return <LockedFeaturePreview feature="conference" />;
+
   const [identity, route, enabled] = await Promise.all([
     getCurrentIdentity(),
     params,

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Check, Clock, MapPin, UserRound } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/lib/platform";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { acknowledgeSafeArrivalAction } from "@/app/(app)/safe-arrival-actions";
