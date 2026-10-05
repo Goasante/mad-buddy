@@ -172,12 +172,12 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
         data-smart-card-editorial="true"
         data-smart-card-id={card.id}
         className={cn(
-          "relative rounded-[1.25rem] border border-[#ebdfcf] bg-[#fffaf2] p-4 text-foreground dark:border-white/10 dark:bg-[#211e19] sm:p-5",
+          "relative rounded-[1.25rem] border border-[#ebdfcf] bg-[#fffaf2] p-5 text-foreground dark:border-white/10 dark:bg-[#211e19] sm:p-6",
           safety && "border-[#d8b896] dark:border-[#99724d]/50",
           quiet && "bg-background dark:bg-background"
         )}
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_clamp(5rem,27%,9rem)] items-center gap-3 sm:gap-5">
+        <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[minmax(0,1fr)_clamp(9rem,35%,16rem)] sm:gap-6">
           <div className="min-w-0">
             {card.eyebrow ? (
               <p className="mb-2 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-[#806449] dark:text-[#d7b28b]">{card.eyebrow}</p>
@@ -191,7 +191,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
             <h2 className="break-words text-balance text-xl font-semibold leading-tight tracking-[-0.025em] sm:text-2xl">{card.title}</h2>
             <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">{card.subtitle}</p>
           </div>
-          <div className="pointer-events-none aspect-[4/3] w-full self-center" aria-hidden="true">
+          <div className="pointer-events-none mx-auto aspect-[4/3] w-full max-w-[14rem] self-center p-2 sm:max-w-none" aria-hidden="true" data-smart-card-artwork-frame="true">
             <SmartCardArtwork card={card} />
           </div>
         </div>
@@ -215,7 +215,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
           </div>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
           {card.primaryIntent ? (
             <button type="button" onClick={runPrimaryIntent} disabled={intentPending} aria-busy={intentPending} className={primaryClassName}>
               {intentPending ? "Opening…" : card.cta}

@@ -63,30 +63,68 @@ export const SMART_CARD_SCENES = {
   upfor_fallback: 58,
 } as const satisfies Record<ApprovedSmartCardStateId, number>;
 
-/** One neutral illustration family per scenario. No decorative character is
- * presented as the viewer or a named Muddy. Shared artwork never affects rank. */
-export const SMART_CARD_ARTWORK_TILES = {
-  core_fallback: 0, safe_arrival_overdue: 1, safe_arrival_action: 2,
-  failed_action: 3, plan_rsvp: 4, plan_decision: 5, plan_changed: 6,
-  upfor_requests: 4, safe_arrival_watcher_request: 1, event_invitation: 4,
-  muddy_request: 4, notification_action_bundle: 7, plan_starting: 8,
-  upfor_active_muddy: 9, upfor_opportunity: 0, upfor_momentum: 0,
-  upfor_accepted: 4, upfor_plan_chat_ready: 7, owned_upfor_live: 9,
-  owned_upfor_starting: 8, nearby_muddy: 9, nearby_muddies: 9,
-  event_live: 10, event_linkr_ready: 11, plan_chat_decision: 5,
-  linkr_mutual_event: 11, linkr_mutual: 11, first_muddy: 0,
-  invited_friend_joined: 0, muddy_birthday: 12, birthday: 12,
-  event_friend_context: 10, event_commitment_starting: 8,
-  event_starting: 8, event_saved: 6, linkr_opportunity: 11,
-  plan_upcoming: 8, upfor_scheduled: 8, group_invitation: 4,
-  message_context: 7, returning_user: 0, weekend_plans: 6,
-  profile_blocking: 13, profile_completion: 13,
-  notification_permission: 7, location_permission: 9, journey: 14,
-  journey_complete: 14, buddy_progress: 14, achievement: 14,
-  invite_prompt: 4, contact_discovery: 0, walkthrough: 13,
-  feature_announcement: 0, offline_status: 15, access_status: 2,
-  suggestions: 0, upfor_fallback: 0,
-} as const satisfies Record<ApprovedSmartCardStateId, number>;
+/** Reviewed transparent scenes. Characters illustrate general social moments;
+ * role-specific cards use activities and objects instead of invented people. */
+export const SMART_CARD_ARTWORK_FILES = {
+  core_fallback: "01-core-fallback.webp",
+  safe_arrival_overdue: "02-safe-arrival-overdue.webp",
+  safe_arrival_action: "03-safe-arrival-action.webp",
+  failed_action: "04-failed-action.webp",
+  plan_rsvp: "05-plan-rsvp.webp",
+  plan_decision: "06-plan-decision.webp",
+  plan_changed: "07-plan-changed.webp",
+  upfor_requests: "08-upfor-requests.webp",
+  safe_arrival_watcher_request: "09-watcher-invitation.webp",
+  event_invitation: "10-event-invitation.webp",
+  muddy_request: "11-muddy-request.webp",
+  notification_action_bundle: "12-needs-attention.webp",
+  plan_starting: "13-plan-starting.webp",
+  upfor_active_muddy: "14-waiting-to-join.webp",
+  upfor_opportunity: "15-join-a-muddy.webp",
+  upfor_momentum: "16-gathering-interest.webp",
+  upfor_accepted: "17-request-accepted.webp",
+  upfor_plan_chat_ready: "18-plan-chat-ready.webp",
+  owned_upfor_live: "19-your-upfor-live.webp",
+  owned_upfor_starting: "20-your-upfor-starting.webp",
+  nearby_muddy: "21-muddy-nearby.webp",
+  nearby_muddies: "22-muddies-nearby.webp",
+  event_live: "23-event-live.webp",
+  event_linkr_ready: "24-meet-at-event.webp",
+  plan_chat_decision: "25-decide-in-chat.webp",
+  linkr_mutual_event: "26-event-connection.webp",
+  linkr_mutual: "27-mutual-connection.webp",
+  first_muddy: "28-first-muddy.webp",
+  invited_friend_joined: "29-friend-joined.webp",
+  muddy_birthday: "30-muddy-birthday.webp",
+  birthday: "31-your-birthday.webp",
+  event_friend_context: "32-go-with-muddies.webp",
+  event_commitment_starting: "33-your-event-starting.webp",
+  event_starting: "34-interested-event-starting.webp",
+  event_saved: "35-saved-event.webp",
+  linkr_opportunity: "36-shared-interest.webp",
+  plan_upcoming: "37-upcoming-plan.webp",
+  upfor_scheduled: "38-scheduled-upfor.webp",
+  group_invitation: "39-group-invitation.webp",
+  message_context: "40-message-context.webp",
+  returning_user: "41-welcome-back.webp",
+  weekend_plans: "42-weekend-plans.webp",
+  profile_blocking: "43-complete-to-continue.webp",
+  profile_completion: "44-your-profile.webp",
+  notification_permission: "45-notification-permission.webp",
+  location_permission: "46-turn-on-glow.webp",
+  journey: "47-journey-next-step.webp",
+  journey_complete: "48-journey-complete.webp",
+  buddy_progress: "49-buddy-progress.webp",
+  achievement: "50-achievement.webp",
+  invite_prompt: "51-invite-a-friend.webp",
+  contact_discovery: "52-find-your-circle.webp",
+  walkthrough: "53-helpful-guide.webp",
+  feature_announcement: "54-something-new.webp",
+  offline_status: "55-waiting-for-connection.webp",
+  access_status: "56-your-access.webp",
+  suggestions: "57-people-to-connect.webp",
+  upfor_fallback: "58-upfor-fallback.webp",
+} as const satisfies Record<ApprovedSmartCardStateId, string>;
 
 type ArtworkCard = { id: SmartCard["id"] | ApprovedSmartCardStateId; eyebrow?: string };
 
@@ -100,15 +138,6 @@ export function smartCardArtwork(card: ArtworkCard) {
   const state = card.id === "safe_arrival"
     ? (scene === 2 ? "safe_arrival_overdue" : "safe_arrival_action")
     : card.id as ApprovedSmartCardStateId;
-  const tile = SMART_CARD_ARTWORK_TILES[state] ?? SMART_CARD_ARTWORK_TILES.core_fallback;
-  // The candle extends above its grid cell; exclude it from the clock tile.
-  const viewBox = tile === 12 ? "0 724 256 300"
-    : tile === 8 ? "0 512 256 216"
-    : `${(tile % 4) * 256} ${Math.floor(tile / 4) * 256} 256 256`;
-  return {
-    scene,
-    tile,
-    src: "/illustrations/smart-card/neutral-scenarios-v1.webp",
-    viewBox,
-  };
+  const file = SMART_CARD_ARTWORK_FILES[state] ?? SMART_CARD_ARTWORK_FILES.core_fallback;
+  return { scene, src: `/illustrations/smart-card/scenes-v2/${file}` };
 }

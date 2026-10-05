@@ -1,10 +1,12 @@
 # Illustrated Now SmartCard
 
-The web Home SmartCard now uses a warm, compact surface with its headline and supporting text on the left, a scenario illustration on the right, and a clear primary action below. Metadata, social proof, secondary actions and progress remain readable beneath the headline. Dark mode has a matching neutral surface; safety states use a restrained treatment.
+The web Home SmartCard now uses a warm surface with a clear primary action below. On phones, full-width copy sits above a centered illustration; from 640px, the illustration sits beside the copy. The artwork has its own padded 4:3 space and uses object-contain to preserve the whole scene without cropping. Metadata, social proof, secondary actions and progress remain readable beneath the headline. Dark mode has a matching neutral surface; safety states use a restrained treatment.
 
 ## Artwork
 
-A reusable neutral illustration set replaces the human scenes after review found malformed hands and props, and characters that could be mistaken for a named person. All 58 approved scenarios map explicitly to one of 16 illustration families in `lib/smart-card/artwork.ts`. The compressed 1024px WebP atlas is approximately 60KB. Birthdays use a cupcake and gift; connections use links; nearby states use glowing circles; safety uses shields; commitments use calendars. No names, gender or photos determine decorative artwork.
+All 58 approved scenarios map to distinct transparent illustrations in `lib/smart-card/artwork.ts`. General social moments retain warm human editorial scenes. Cards about a watcher, requester, connection, birthday person, or other individual use relevant activities and objects, so a decorative character does not imply that person's gender or identity. Glow uses the approved scene of friends meeting. Names and inferred gender never choose artwork.
+
+The illustrations float directly on the card surface without ivory boxes. Production WebPs are at most 720px wide, preserve alpha, and total about 4.3MB across all 58 assets (about 74KB per scenario). Only the selected card image loads on Home. The original source PNGs are not shipped.
 
 Named Muddy birthday, single nearby Muddy, and mutual Linkr cards show a small identity avatar beside the display name. Missing or broken images use the existing initials fallback. Birthday avatar data is included only after the existing birthday-delivery, active-friendship, sharing, block, ghost and deletion checks pass. Existing Linkr and proximity photo projections supply their own viewer-authorized identities. Aggregate nearby cards do not show a single person's avatar as though it represents everyone.
 
@@ -14,6 +16,6 @@ SmartCard selection, ranking, history, cooldowns, feature availability, expiry r
 
 ## Review
 
-`/dev/smart-card-review` is available only in a Vercel preview deployment. It displays all 58 artwork viewports and sample cards covering narrow screens, long copy, metadata, secondary actions, safety states, birthdays and progress in light and dark mode. Its action capture prevents the visual samples from writing data. Production returns 404 for this route.
+`/dev/smart-card-review` is available in local development and Vercel preview deployments. It displays all 58 artwork viewports and sample cards covering narrow screens, long copy, metadata, secondary actions, safety states, birthdays and progress in light and dark mode. Its action capture prevents the visual samples from writing data. Production returns 404 for this route.
 
-Focused tests cover complete artwork mapping, valid viewport bounds and files, safety artwork, unchanged input data, existing action contracts and feature availability. Release validation also includes TypeScript, lint, CI builds and browser review.
+Focused tests cover complete and unique artwork mapping, existing production files, safety artwork, unchanged input data, existing action contracts and feature availability. Release validation also includes TypeScript, lint and CI builds. Browser review is attempted where the runtime allows access to the development server.
