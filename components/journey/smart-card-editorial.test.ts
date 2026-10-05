@@ -5,15 +5,16 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(new URL("./smart-card-v2.tsx", import.meta.url), "utf8");
 
 describe("Smart Card presentation", () => {
-  it("uses the compact illustrated panel instead of a scenic background", () => {
-    expect(source).toContain("<SmartCardArtwork card={card}");
+  it("restores the registered fixed background without scenario illustrations", () => {
+    expect(source).toContain("homeCardBBackground().path");
+    expect(source).toContain("src={HOME_CARD_B_BACKGROUND}");
+    expect(source).not.toContain("SmartCardArtwork");
     expect(source).toContain('aria-label="Now"');
-    expect(source).not.toContain("homeCardBBackground");
     expect(source).not.toContain("card.media!.url");
   });
 
   it("keeps urgent safety styling without festive or animated decoration", () => {
-    expect(source).toContain('card.id === "safe_arrival"');
+    expect(source).toContain('treatment === "safety"');
     expect(source).not.toMatch(/<video|autoPlay|PrismBackground|GlareHover/);
   });
 
@@ -25,6 +26,13 @@ describe("Smart Card presentation", () => {
     expect(source).toContain("openDirectConversationAction(intent.targetUserId)");
     expect(source).toContain("conversationHref(result.conversationId)");
     expect(source).toContain("card.primaryIntent");
+  });
+
+  it("preserves authorized identity, busy status and accessible progress", () => {
+    expect(source).toContain("card.person.avatarUrl");
+    expect(source).toContain("pending || intentPending || undefined");
+    expect(source).toContain('role="progressbar"');
+    expect(source).toContain("availableSmartCard(inputCard, availability)");
   });
 
   it("renders heartbeat metadata by meaning rather than giving every fact a calendar icon", () => {
