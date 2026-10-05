@@ -30,7 +30,7 @@ try {
       for (let index = 0; index < await cards.count(); index++) {
         const card = cards.nth(index);
         await card.scrollIntoViewIfNeeded();
-        await card.locator('img[data-smart-card-scene]').evaluate(image => image.decode());
+        await card.locator('img[data-smart-card-background]').evaluate(image => image.decode());
         await card.screenshot({ path: `artifacts/smart-card/${width}-${id}-${index === 0 ? 'light' : 'dark'}.png` });
       }
     }

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { stripComments } from "@/lib/content/strip-comments";
-import { homeCardABackground } from "@/lib/visuals/registry";
+import { homeCardABackground, homeCardBBackground } from "@/lib/visuals/registry";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 /* The mobile bottom bar moved to its own module so the Capacitor SPA can
@@ -29,19 +29,21 @@ describe("quick Home polish follow-up", () => {
   });
 });
 
-// Card A retains its activation treatment; Card B uses the illustrated Now panel.
+// Each Home card retains its own registered fixed background.
 describe("Home card presentation boundaries", () => {
-  it("keeps activation artwork separate from the illustrated SmartCard", () => {
+  it("keeps activation and SmartCard backgrounds separate", () => {
     expect(activation).toContain("homeCardABackground()");
     expect(activation).not.toContain("/home/open-your-plan-bg.webp");
     expect(homeCardABackground().path).toBe("/visuals/home-cards/card-a-background.png");
     expect(homeCardABackground.length).toBe(0);
-    expect(smartCard).toContain("<SmartCardArtwork card={card}");
+    expect(smartCard).toContain("homeCardBBackground().path");
+    expect(homeCardBBackground().path).toBe("/visuals/home-cards/card-b-background.png");
+    expect(homeCardBBackground.length).toBe(0);
+    expect(smartCard).not.toContain("SmartCardArtwork");
     expect(smartCard).not.toContain("homeCardABackground");
-    expect(smartCard).not.toContain("homeCardBBackground");
   });
 
-  it("keeps illustrations beside readable content without user photography or scene motion", () => {
+  it("keeps a legibility scrim without user photography or scene motion", () => {
     expect(smartCard).not.toContain("card.media!.url");
     expect(smartCard).not.toContain("backgroundPosition");
     expect(smartCard).not.toContain("EDITORIAL_ATLAS");
@@ -49,7 +51,19 @@ describe("Home card presentation boundaries", () => {
       expect(source).not.toMatch(/<video|autoPlay/);
     }
     expect(smartCard).not.toMatch(/animate-\[/);
-    expect(smartCard).toContain("bg-[#fffaf2]");
-    expect(smartCard).not.toContain("linear-gradient(");
+    expect(smartCard).toContain("bg-[#090908]");
+    expect(smartCard).toContain("linear-gradient(");
+  });
+
+  it("preserves current card availability, identity, actions and heartbeat", () => {
+    expect(smartCard).toContain("availableSmartCard(inputCard, availability)");
+    expect(smartCard).toContain("card.person.avatarUrl");
+    expect(smartCard).toContain("openDirectConversationAction(intent.targetUserId)");
+    expect(smartCard).toContain("conversationHref(result.conversationId)");
+    expect(smartCard).toContain("card.acknowledgementKey ?? card.id");
+    expect(smartCard).toContain("pending || intentPending || undefined");
+    expect(smartCard).toContain('role="progressbar"');
+    expect(smartCard).toContain("scheduleUntilBoundary");
+    expect(smartCard).toContain("HEARTBEAT_REFRESH_RETRIES");
   });
 });

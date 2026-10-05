@@ -1,21 +1,9 @@
-# Illustrated Now SmartCard
+# SmartCard fixed-background presentation
 
-The web Home SmartCard now uses a warm surface with a clear primary action below. The illustration stays to the right of the copy at every screen width. The reference layout groups the headline, supporting copy, metadata, progress and actions in the left column. The artwork occupies the right column beside that entire group, at 55% of the space between the columns at every width, matching the approved large-art mockup. Phone typography uses a bold 16px headline, 13px supporting text and a compact 44px minimum-height action to keep the text group in proportion to the artwork. Its frame stretches to the full content height and contains the whole transparent image without clipping. The artwork has its own padded 4:3 space and uses object-contain to preserve the whole scene without cropping. Metadata, social proof, secondary actions and progress remain readable beneath the headline. Dark mode has a matching neutral surface; safety states use a restrained treatment.
+Home Card B again uses the original registered `/visuals/home-cards/card-b-background.png` as its full-bleed background for every state. Dark contrast scrims, white editorial copy, and orange pill actions restore the previous presentation. Card A retains its separate activation background. Safety and deferred cards retain their restrained contrast treatments.
 
-## Artwork
+This is a presentation-only restoration. Providers, priorities, destinations, click-time conversation authorization, birthday identity, acknowledgement, expiry refresh, feature availability, and reduced-motion behavior are unchanged. Authorized person avatars remain separate from the decorative background; no name or inferred gender selects imagery.
 
-All 58 approved scenarios map to distinct transparent illustrations in `lib/smart-card/artwork.ts`. General social moments retain warm human editorial scenes. Cards about a watcher, requester, connection, birthday person, or other individual use relevant activities and objects, so a decorative character does not imply that person's gender or identity. Glow uses the approved scene of friends meeting. Names and inferred gender never choose artwork.
+The 58 illustration assets and their development review remain archived proposals, not the production Home card treatment. No assets or user data are deleted.
 
-The illustrations float directly on the card surface without ivory boxes. Production WebPs are at most 720px wide, preserve alpha, and total about 4.3MB across all 58 assets (about 74KB per scenario). Only the selected card image loads on Home. The original source PNGs are not shipped.
-
-Named Muddy birthday, single nearby Muddy, and mutual Linkr cards show a small identity avatar beside the display name. Missing or broken images use the existing initials fallback. Birthday avatar data is included only after the existing birthday-delivery, active-friendship, sharing, block, ghost and deletion checks pass. Existing Linkr and proximity photo projections supply their own viewer-authorized identities. Aggregate nearby cards do not show a single person's avatar as though it represents everyone.
-
-## Behavior boundaries
-
-SmartCard selection, ranking, history, cooldowns, feature availability, expiry refresh and acknowledgement remain unchanged. Existing navigation, message creation, pending states and action errors remain connected to their existing handlers. No database migration or feature toggle changes are required. The separate activation card and its arbitration remain unchanged. Existing UpFor imagery is not globally replaced by these SmartCard assets.
-
-## Review
-
-`/dev/smart-card-review` is available in local development and Vercel preview deployments. It displays all 58 artwork viewports and sample cards covering narrow screens, long copy, metadata, secondary actions, safety states, birthdays and progress in light and dark mode. Its action capture prevents the visual samples from writing data. Production returns 404 for this route.
-
-Focused tests cover complete and unique artwork mapping, existing production files, safety artwork, unchanged input data, existing action contracts and feature availability. Release validation also includes TypeScript, lint and CI builds. Browser review is attempted where the runtime allows access to the development server.
+The browser screenshot workflow checks the restored background at 320, 390, 430, and desktop widths, in both light and dark surroundings, including general, RSVP, and birthday cards.
