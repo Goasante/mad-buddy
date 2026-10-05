@@ -1,0 +1,415 @@
+{
+  "status": "Approved assets integrated into SmartCard presentation",
+  "generation": "built-in image generation",
+  "style": "Use case: illustration-story. Create ONE standalone production SmartCard illustration for Mad Buddy, transparent background with actual alpha. Warm hand-drawn flat editorial illustration: expressive clean shapes, restrained subtle grain, charcoal outlines, burnt orange, muted sage, warm cream used ONLY within objects, rich brown skin for human scenes. Youthful Ghanaian/African everyday social character. No glossy 3D, photorealism, emoji look, logos, lettering, numbers, captions, surrounding card, rectangular backdrop, white box, or full scene background. A compact attractive freestanding vignette centered on a 4:3 canvas, generous transparent perimeter. Keep objects chunky and legible at small size. People must have clean anatomy, simple believable hands, no fused fingers or limbs. General groups are atmosphere, never individual portraits or avatar circles. ",
+  "directory": "public/illustrations/smart-card/proposed-v2",
+  "assets": [
+    {
+      "number": 1,
+      "name": "core-fallback",
+      "subject": "Three young Black African friends casually talking on a simple park bench, a man and two women, relaxed friendly non-romantic social atmosphere, no phone portraits.",
+      "file": "01-core-fallback.png",
+      "productionFile": "01-core-fallback.webp"
+    },
+    {
+      "number": 2,
+      "name": "safe-arrival-overdue",
+      "subject": "A phone with a simple check-in tick outline and an adjacent clock with a small amber attention mark; communicate an overdue check-in without any person, maps or tracking.",
+      "file": "02-safe-arrival-overdue.png",
+      "productionFile": "02-safe-arrival-overdue.webp"
+    },
+    {
+      "number": 3,
+      "name": "safe-arrival-action",
+      "subject": "A phone showing a large arrival confirmation check, beside a small backpack and reassuring shield; no people, maps or coordinates.",
+      "file": "03-safe-arrival-action.png",
+      "productionFile": "03-safe-arrival-action.webp"
+    },
+    {
+      "number": 4,
+      "name": "failed-action",
+      "subject": "A phone with a interrupted circular retry arrow and small amber exclamation, a simple useful recovery scene; no people.",
+      "file": "04-failed-action.png",
+      "productionFile": "04-failed-action.webp"
+    },
+    {
+      "number": 5,
+      "name": "plan-rsvp",
+      "subject": "An open illustrated invitation envelope containing a small calendar card and two clear accept/decline marks; no people.",
+      "file": "05-plan-rsvp.png",
+      "productionFile": "05-plan-rsvp.webp"
+    },
+    {
+      "number": 6,
+      "name": "plan-decision",
+      "subject": "Three young Black African friends around a cafe table considering coffee, music and food shown as small floating illustrative symbols; equally weighted figures, naturally drawn hands.",
+      "file": "06-plan-decision.png",
+      "productionFile": "06-plan-decision.webp"
+    },
+    {
+      "number": 7,
+      "name": "plan-changed",
+      "subject": "A desk calendar with one highlighted square and a sweeping orange update arrow beside a small phone; no people.",
+      "file": "07-plan-changed.png",
+      "productionFile": "07-plan-changed.webp"
+    },
+    {
+      "number": 8,
+      "name": "upfor-requests",
+      "subject": "An illustrated invitation tray with three overlapping request cards, orange plus and response check marks, no portraits or people.",
+      "file": "08-upfor-requests.png",
+      "productionFile": "08-upfor-requests.webp"
+    },
+    {
+      "number": 9,
+      "name": "watcher-invitation",
+      "subject": "A phone, invitation envelope and sage protective shield connected by a warm orange curved accent; communicates invitation to help with a check-in; absolutely no people or fake portrait bubbles.",
+      "file": "09-watcher-invitation.png",
+      "productionFile": "09-watcher-invitation.webp"
+    },
+    {
+      "number": 10,
+      "name": "event-invitation",
+      "subject": "An open orange envelope with a pair of illustrated event admission tickets and a small calendar star; no people.",
+      "file": "10-event-invitation.png",
+      "productionFile": "10-event-invitation.webp"
+    },
+    {
+      "number": 11,
+      "name": "muddy-request",
+      "subject": "An illustrated incoming invitation envelope and two gently linked conversation shapes with a small accept tick; no people or portraits.",
+      "file": "11-muddy-request.png",
+      "productionFile": "11-muddy-request.webp"
+    },
+    {
+      "number": 12,
+      "name": "needs-attention",
+      "subject": "A phone beside a small bell and three overlapping action cards with clear dot/check symbols; no people.",
+      "file": "12-needs-attention.png",
+      "productionFile": "12-needs-attention.webp"
+    },
+    {
+      "number": 13,
+      "name": "plan-starting",
+      "subject": "A small standing calendar and analog clock with orange emphasis strokes; no people.",
+      "file": "13-plan-starting.png",
+      "productionFile": "13-plan-starting.webp"
+    },
+    {
+      "number": 14,
+      "name": "waiting-to-join",
+      "subject": "A phone with an outgoing request card, a small hourglass and conversation bubble; awaiting response, no people.",
+      "file": "14-waiting-to-join.png",
+      "productionFile": "14-waiting-to-join.webp"
+    },
+    {
+      "number": 15,
+      "name": "join-a-muddy",
+      "subject": "Two coffee cups on a little cafe tabletop, a warm orange invitation card and a small plus accent; invitation to an activity, no people.",
+      "file": "15-join-a-muddy.png",
+      "productionFile": "15-join-a-muddy.webp"
+    },
+    {
+      "number": 16,
+      "name": "gathering-interest",
+      "subject": "Four young Black African friends of mixed genders gathered casually around a table, smiling in a natural social scene, no portrait circles or central host.",
+      "file": "16-gathering-interest.png",
+      "productionFile": "16-gathering-interest.webp"
+    },
+    {
+      "number": 17,
+      "name": "request-accepted",
+      "subject": "An open envelope with a large sage acceptance check and two small conversation bubbles; no people.",
+      "file": "17-request-accepted.png",
+      "productionFile": "17-request-accepted.webp"
+    },
+    {
+      "number": 18,
+      "name": "plan-chat-ready",
+      "subject": "Three young Black African friends talking together around a cafe table, small orange and sage speech bubbles above, all figures equally weighted, no fake avatars.",
+      "file": "18-plan-chat-ready.png",
+      "productionFile": "18-plan-chat-ready.webp"
+    },
+    {
+      "number": 19,
+      "name": "your-upfor-live",
+      "subject": "An illustrated activity announcement card with a raised-hand symbol, small plus marks and coffee cup, no people or portraits.",
+      "file": "19-your-upfor-live.png",
+      "productionFile": "19-your-upfor-live.webp"
+    },
+    {
+      "number": 20,
+      "name": "your-upfor-starting",
+      "subject": "A standing calendar, small analog clock and raised-hand activity card, warm orange anticipation strokes, no people.",
+      "file": "20-your-upfor-starting.png",
+      "productionFile": "20-your-upfor-starting.webp"
+    },
+    {
+      "number": 21,
+      "name": "muddy-nearby",
+      "subject": "Two small abstract glowing circles connected gently by a curved orange accent, beside a phone with a simple sage glow symbol; no people, map pins, coordinates or radar grid.",
+      "file": "21-muddy-nearby.png",
+      "productionFile": "21-muddy-nearby.webp"
+    },
+    {
+      "number": 22,
+      "name": "muddies-nearby",
+      "subject": "A cluster of several warm glowing circles of equal size around a small phone displaying an abstract glow symbol; no people, portraits, maps, pins or distances.",
+      "file": "22-muddies-nearby.png",
+      "productionFile": "22-muddies-nearby.webp"
+    },
+    {
+      "number": 23,
+      "name": "event-live",
+      "subject": "A general lively gathering of five young Black African adults, mixed genders, chatting and enjoying a modest string-light social space. No singer, instrument, microphone, drinks held in complex hands, or specific event type. Freestanding transparent vignette.",
+      "file": "23-event-live.png",
+      "productionFile": "23-event-live.webp"
+    },
+    {
+      "number": 24,
+      "name": "meet-at-event",
+      "subject": "Four young Black African adults of mixed genders chatting in two small groups, simple plain event lanyards, relaxed social setting with no central paired couple, no text on badges.",
+      "file": "24-meet-at-event.png",
+      "productionFile": "24-meet-at-event.webp"
+    },
+    {
+      "number": 25,
+      "name": "decide-in-chat",
+      "subject": "Three young Black African adults casually discussing around a table with a phone resting flat and small food/music/coffee thought bubbles. Natural simple hand poses.",
+      "file": "25-decide-in-chat.png",
+      "productionFile": "25-decide-in-chat.webp"
+    },
+    {
+      "number": 26,
+      "name": "event-connection",
+      "subject": "Two illustrated plain event passes beside gently linked orange and sage conversation bubbles, a small celebratory star; no people, wristbands or lettering.",
+      "file": "26-event-connection.png",
+      "productionFile": "26-event-connection.webp"
+    },
+    {
+      "number": 27,
+      "name": "mutual-connection",
+      "subject": "Two warm orange and sage illustrated speech bubbles joining at the center with a small celebratory check accent; human warmth through illustrated shapes, no people or portraits.",
+      "file": "27-mutual-connection.png",
+      "productionFile": "27-mutual-connection.webp"
+    },
+    {
+      "number": 28,
+      "name": "first-muddy",
+      "subject": "Two illustrated chairs angled toward one another beside a little table with two coffee cups, warm friendly new-connection feeling, no people.",
+      "file": "28-first-muddy.png",
+      "productionFile": "28-first-muddy.webp"
+    },
+    {
+      "number": 29,
+      "name": "friend-joined",
+      "subject": "An open welcoming doorway with warm orange light accents and an invitation card bearing a sage acceptance check, no human figure or portrait.",
+      "file": "29-friend-joined.png",
+      "productionFile": "29-friend-joined.webp"
+    },
+    {
+      "number": 30,
+      "name": "muddy-birthday",
+      "subject": "A charming illustrated birthday cupcake with one candle, small wrapped gift and restrained confetti; no people or hands.",
+      "file": "30-muddy-birthday.png",
+      "productionFile": "30-muddy-birthday.webp"
+    },
+    {
+      "number": 31,
+      "name": "your-birthday",
+      "subject": "A lovely small illustrated birthday cake on a plate with three candles, a paper party hat and restrained confetti, no people or hands.",
+      "file": "31-your-birthday.png",
+      "productionFile": "31-your-birthday.webp"
+    },
+    {
+      "number": 32,
+      "name": "go-with-muddies",
+      "subject": "Four young Black African adults of mixed genders walking together toward a general social gathering suggested by a small decorative arch; no specific music venue, no romantic pairs, no tickets held in complex hands.",
+      "file": "32-go-with-muddies.png",
+      "productionFile": "32-go-with-muddies.webp"
+    },
+    {
+      "number": 33,
+      "name": "your-event-starting",
+      "subject": "Two illustrated event tickets leaning against an analog clock with warm orange anticipation strokes; no people.",
+      "file": "33-your-event-starting.png",
+      "productionFile": "33-your-event-starting.webp"
+    },
+    {
+      "number": 34,
+      "name": "interested-event-starting",
+      "subject": "An illustrated saved event card beside an analog clock and bookmark symbol; no people.",
+      "file": "34-interested-event-starting.png",
+      "productionFile": "34-interested-event-starting.webp"
+    },
+    {
+      "number": 35,
+      "name": "saved-event",
+      "subject": "A beautifully illustrated event ticket with a prominent sage bookmark ribbon and small orange star, no concert photo, no people, no text.",
+      "file": "35-saved-event.png",
+      "productionFile": "35-saved-event.webp"
+    },
+    {
+      "number": 36,
+      "name": "shared-interest",
+      "subject": "Four young Black African adults of mixed genders at a casual community table discussing varied interests suggested by small coffee, book and music accents; no central couple or single interest dominating.",
+      "file": "36-shared-interest.png",
+      "productionFile": "36-shared-interest.webp"
+    },
+    {
+      "number": 37,
+      "name": "upcoming-plan",
+      "subject": "A standing desk calendar beside an illustrated invitation card and two coffee cups; neutral plan context, no person or picnic assumption.",
+      "file": "37-upcoming-plan.png",
+      "productionFile": "37-upcoming-plan.webp"
+    },
+    {
+      "number": 38,
+      "name": "scheduled-upfor",
+      "subject": "A calendar with a highlighted square beside a raised-hand activity card and small clock; no person.",
+      "file": "38-scheduled-upfor.png",
+      "productionFile": "38-scheduled-upfor.webp"
+    },
+    {
+      "number": 39,
+      "name": "group-invitation",
+      "subject": "Five young Black African adults of mixed genders in a relaxed welcoming group circle, equally weighted, simple natural gestures, no identifiable newcomer or central protagonist.",
+      "file": "39-group-invitation.png",
+      "productionFile": "39-group-invitation.webp"
+    },
+    {
+      "number": 40,
+      "name": "message-context",
+      "subject": "Two orange and sage illustrated conversation bubbles beside a phone and small calendar card; no people or portraits.",
+      "file": "40-message-context.png",
+      "productionFile": "40-message-context.webp"
+    },
+    {
+      "number": 41,
+      "name": "welcome-back",
+      "subject": "A welcoming illustrated open doorway, a leafy plant and gently curved warm orange welcome accents, no people or hug.",
+      "file": "41-welcome-back.png",
+      "productionFile": "41-welcome-back.webp"
+    },
+    {
+      "number": 42,
+      "name": "weekend-plans",
+      "subject": "Three young Black African friends, mixed genders, sitting on a simple park bench talking comfortably, natural hands resting on laps, warm everyday friendship, no romantic framing.",
+      "file": "42-weekend-plans.png",
+      "productionFile": "42-weekend-plans.webp"
+    },
+    {
+      "number": 43,
+      "name": "complete-to-continue",
+      "subject": "An illustrated laptop beside a profile form containing a generic abstract silhouette and a pencil, one incomplete checkbox; no human character or invented face.",
+      "file": "43-complete-to-continue.png",
+      "productionFile": "43-complete-to-continue.webp"
+    },
+    {
+      "number": 44,
+      "name": "your-profile",
+      "subject": "An illustrated profile card with a generic abstract silhouette, pencil and two completed fields; no human character or realistic portrait.",
+      "file": "44-your-profile.png",
+      "productionFile": "44-your-profile.webp"
+    },
+    {
+      "number": 45,
+      "name": "notification-permission",
+      "subject": "A phone and small illustrated notification bell with gentle orange emphasis strokes and a sage check; no people.",
+      "file": "45-notification-permission.png",
+      "productionFile": "45-notification-permission.webp"
+    },
+    {
+      "number": 46,
+      "name": "turn-on-glow",
+      "subject": "Three young Black African adult friends standing and meeting, with orange and sage glow accents around their shoulders; transparent background.",
+      "file": "46-turn-on-glow.png",
+      "productionFile": "46-turn-on-glow.webp"
+    },
+    {
+      "number": 47,
+      "name": "journey-next-step",
+      "subject": "A small ascending set of warm orange and sage stepping blocks leading to a tiny flag, a dotted curved progress accent; no person.",
+      "file": "47-journey-next-step.png",
+      "productionFile": "47-journey-next-step.webp"
+    },
+    {
+      "number": 48,
+      "name": "journey-complete",
+      "subject": "A beautiful illustrated finished path of small stepping blocks ending in a flag and sage check, restrained confetti; no person.",
+      "file": "48-journey-complete.png",
+      "productionFile": "48-journey-complete.webp"
+    },
+    {
+      "number": 49,
+      "name": "buddy-progress",
+      "subject": "Three ascending illustrated orange and sage progress bars with a curved dotted path and a small star; no person.",
+      "file": "49-buddy-progress.png",
+      "productionFile": "49-buddy-progress.webp"
+    },
+    {
+      "number": 50,
+      "name": "achievement",
+      "subject": "A warm illustrated orange star badge with a sage ribbon and a few celebratory confetti accents; no person.",
+      "file": "50-achievement.png",
+      "productionFile": "50-achievement.webp"
+    },
+    {
+      "number": 51,
+      "name": "invite-a-friend",
+      "subject": "Four young Black African friends of mixed genders talking comfortably around a cafe table, a simple invitation envelope resting on the table, no central sender/recipient pair or fake portraits.",
+      "file": "51-invite-a-friend.png",
+      "productionFile": "51-invite-a-friend.webp"
+    },
+    {
+      "number": 52,
+      "name": "find-your-circle",
+      "subject": "A small set of illustrated contact cards showing only simple abstract silhouettes, arranged around a friendly orange invitation envelope; no human character or realistic portraits.",
+      "file": "52-find-your-circle.png",
+      "productionFile": "52-find-your-circle.webp"
+    },
+    {
+      "number": 53,
+      "name": "helpful-guide",
+      "subject": "Three young Black African friends of mixed genders looking at a phone resting on a cafe table together, equally weighted, general scene of learning a feature, no central viewer or instructor, natural hands.",
+      "file": "53-helpful-guide.png",
+      "productionFile": "53-helpful-guide.webp"
+    },
+    {
+      "number": 54,
+      "name": "something-new",
+      "subject": "A small general group of three young Black African friends of mixed genders looking with interest toward a floating illustrated orange lightbulb and feature card, equally weighted, no single presenter.",
+      "file": "54-something-new.png",
+      "productionFile": "54-something-new.webp"
+    },
+    {
+      "number": 55,
+      "name": "waiting-for-connection",
+      "subject": "A phone with a muted sage interrupted wireless symbol and a small pending message card with clock; no people.",
+      "file": "55-waiting-for-connection.png",
+      "productionFile": "55-waiting-for-connection.webp"
+    },
+    {
+      "number": 56,
+      "name": "your-access",
+      "subject": "An illustrated membership/profile card with only an abstract silhouette beside a sage lock and small key; no people or portraits.",
+      "file": "56-your-access.png",
+      "productionFile": "56-your-access.webp"
+    },
+    {
+      "number": 57,
+      "name": "people-to-connect",
+      "subject": "Several illustrated contact cards with simple abstract silhouette symbols and a small orange discovery accent, no realistic faces or human characters.",
+      "file": "57-people-to-connect.png",
+      "productionFile": "57-people-to-connect.webp"
+    },
+    {
+      "number": 58,
+      "name": "upfor-fallback",
+      "subject": "Four young Black African friends of mixed genders casually chatting at a cafe table with coffee cups and a basketball resting safely on the ground nearby, equally weighted, general open-ended social activity.",
+      "file": "58-upfor-fallback.png",
+      "productionFile": "58-upfor-fallback.webp"
+    }
+  ],
+  "productionDirectory": "public/illustrations/smart-card/scenes-v2"
+}

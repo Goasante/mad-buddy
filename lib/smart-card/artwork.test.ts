@@ -2,41 +2,23 @@ import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SMART_CARD_APPROVED_STATES } from "./catalog";
 import { SMART_CARD_IDS } from "./smart-card";
-import { SMART_CARD_ARTWORK_TILES, SMART_CARD_SCENES, smartCardArtwork } from "./artwork";
+import { SMART_CARD_ARTWORK_FILES, SMART_CARD_SCENES, smartCardArtwork } from "./artwork";
 
 describe("reviewed SmartCard artwork", () => {
   it("covers every catalog scenario exactly once", () => {
     expect(Object.keys(SMART_CARD_SCENES).sort()).toEqual(SMART_CARD_APPROVED_STATES.map(s => s.id).sort());
     expect(new Set(Object.values(SMART_CARD_SCENES)).size).toBe(58);
   });
-  it("uses neutral art for every approved scenario including personal states", () => {
-    expect(Object.keys(SMART_CARD_ARTWORK_TILES).sort()).toEqual(SMART_CARD_APPROVED_STATES.map(s => s.id).sort());
+  it("assigns a distinct reviewed image to all 58 approved states", () => {
+    expect(Object.keys(SMART_CARD_ARTWORK_FILES).sort()).toEqual(SMART_CARD_APPROVED_STATES.map(s => s.id).sort());
+    expect(new Set(Object.values(SMART_CARD_ARTWORK_FILES)).size).toBe(58);
     for (const state of SMART_CARD_APPROVED_STATES) {
-      const art = smartCardArtwork({ id: state.id });
-      expect(art.src).toBe("/illustrations/smart-card/neutral-scenarios-v1.webp");
-      expect(art.tile).toBeGreaterThanOrEqual(0);
-      expect(art.tile).toBeLessThan(16);
+      expect(smartCardArtwork({ id: state.id }).src).toBe(`/illustrations/smart-card/scenes-v2/${SMART_CARD_ARTWORK_FILES[state.id]}`);
     }
-    expect(smartCardArtwork({ id: "birthday" }).tile).toBe(12);
-    expect(smartCardArtwork({ id: "muddy_birthday" }).tile).toBe(12);
-    expect(smartCardArtwork({ id: "event_live" }).tile).toBe(10);
-    expect(smartCardArtwork({ id: "linkr_mutual_event" }).tile).toBe(11);
   });
-  it("frames the entire birthday candle without leaking it into commitments", () => {
-    expect(smartCardArtwork({ id: "birthday" }).viewBox).toBe("0 724 256 300");
-    expect(smartCardArtwork({ id: "plan_starting" }).viewBox).toBe("0 512 256 216");
-  });
-  it("resolves every live provider to an existing asset and valid viewport", () => {
+  it("resolves every live provider to an existing production asset", () => {
     for (const id of SMART_CARD_IDS) {
-      const art = smartCardArtwork({ id });
-      expect(existsSync(`public${art.src}`), id).toBe(true);
-      const [x, y, width, height] = art.viewBox.split(" ").map(Number);
-      expect(x).toBeGreaterThanOrEqual(0);
-      expect(y).toBeGreaterThanOrEqual(0);
-      expect(width).toBeGreaterThan(0);
-      expect(height).toBeGreaterThan(0);
-      expect(x + width).toBeLessThanOrEqual(1024);
-      expect(y + height).toBeLessThanOrEqual(1024);
+      expect(existsSync(`public${smartCardArtwork({ id }).src}`), id).toBe(true);
     }
   });
   it("distinguishes an unconfirmed check-in from a normal journey", () => {
