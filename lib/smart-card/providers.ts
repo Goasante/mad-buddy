@@ -450,6 +450,7 @@ function nearbyMuddiesProvider(input: SmartCardInput): SmartCard | null {
     illustration: "people",
     eyebrow: many ? "MUDDIES AROUND" : label.toUpperCase(),
     title: many ? `${fresh.length} Muddies are around` : `${first.display_name} is ${label}`,
+    person: many ? undefined : { displayName: first.display_name, avatarUrl: first.avatar_url },
     subtitle: many ? "See who's around and decide if you want to say hi." : "They're nearby. Proximity never means they're automatically available.",
     meta: many ? `${first.display_name} is ${label}` : label,
     cta: many ? "See Muddies" : "Open Profile",
@@ -1040,6 +1041,7 @@ function linkrMutualProvider(input: SmartCardInput): SmartCard | null {
     illustration: "people",
     eyebrow: "YOU BOTH CONNECTED",
     title: "You and " + first.displayName + " connected",
+    person: { displayName: first.displayName, avatarUrl: first.photo },
     subtitle: "You both chose to connect. Say hi when you're ready.",
     socialProof:
       unspoken.length > 1 ? unspoken.length + " recent Linkr connections" : undefined,
@@ -1075,6 +1077,7 @@ function linkrMutualEventProvider(input: SmartCardInput): SmartCard | null {
     illustration: "people",
     eyebrow: "YOU BOTH CONNECTED",
     title: "You connected at " + first.eventName,
+    person: { displayName: first.displayName, avatarUrl: first.photo },
     subtitle: "You and " + first.displayName + " both chose to connect.",
     cta: "Say hi",
     destination: linkrPairDestination(first.connectionId),
@@ -1146,6 +1149,7 @@ function muddyBirthdayProvider(input: SmartCardInput): SmartCard | null {
     illustration: "birthday",
     eyebrow: "TODAY",
     title: "It's " + first.displayName + "'s birthday 🎉",
+    person: { displayName: first.displayName, avatarUrl: first.avatarUrl },
     subtitle:
       birthdays.length > 1
         ? birthdays.length + " of your Muddies are celebrating today."

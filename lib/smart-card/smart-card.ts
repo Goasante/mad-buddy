@@ -194,6 +194,8 @@ export type SmartCard = {
   subtitle: string;
   cta: string;
   destination: string;
+  /** Identity already authorized for this viewer; never inferred from artwork. */
+  person?: { displayName: string; avatarUrl?: string | null };
   secondaryAction?: SmartCardAction;
   /**
    * When present, the PRIMARY action runs this instead of navigating to

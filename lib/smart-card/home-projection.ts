@@ -157,7 +157,7 @@ export async function loadMuddyBirthdays(
     await Promise.all([
       admin
         .from("profiles")
-        .select("user_id, full_name, username, visibility_status, deleted_at")
+        .select("user_id, full_name, username, avatar_url, visibility_status, deleted_at")
         .in("user_id", ownerIds),
       /* Birthday field privacy, as the birthday service requires it: the owner
          must still be sharing with approved Muddies. */
@@ -204,7 +204,8 @@ export async function loadMuddyBirthdays(
     if (!announcing.has(ownerId)) continue;
     birthdays.push({
       userId: ownerId,
-      displayName: profile.full_name?.trim() || profile.username || "A Muddy"
+      displayName: profile.full_name?.trim() || profile.username || "A Muddy",
+      avatarUrl: profile.avatar_url ?? null
     });
   }
   return birthdays;
