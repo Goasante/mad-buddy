@@ -157,7 +157,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
   }
 
   const primaryClassName = cn(
-    "focus-ring inline-flex min-h-11 items-center min-w-0 max-w-full justify-center gap-2 rounded-xl bg-[#ed8924] px-4 py-2.5 text-sm font-semibold text-[#291507] transition-colors hover:bg-[#f09a3c] disabled:opacity-60"
+    "focus-ring inline-flex min-h-11 items-center min-w-0 max-w-full justify-center gap-1.5 rounded-xl bg-[#ed8924] px-3 py-2.5 text-xs font-semibold sm:gap-2 sm:px-4 sm:text-sm text-[#291507] transition-colors hover:bg-[#f09a3c] disabled:opacity-60"
   );
   const secondaryClassName = "focus-ring inline-flex min-h-11 min-w-0 max-w-full items-center rounded-xl px-2 py-2 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline";
   const displayedPercent = reducedMotion ? percent : animatedPercent;
@@ -177,7 +177,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
           quiet && "bg-background dark:bg-background"
         )}
       >
-        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,44%)] sm:gap-6">
+        <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-center gap-3 sm:gap-6">
           <div className="min-w-0">
             {card.eyebrow ? (
               <p className="mb-2 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-[#806449] dark:text-[#d7b28b]">{card.eyebrow}</p>
@@ -188,8 +188,8 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
                 <span className="break-words text-sm font-semibold">{card.person.displayName}</span>
               </div>
             ) : null}
-            <h2 className="break-words text-balance text-xl font-semibold leading-tight tracking-[-0.025em] sm:text-2xl">{card.title}</h2>
-            <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">{card.subtitle}</p>
+            <h2 className="break-words text-balance text-base font-bold leading-tight tracking-[-0.025em] sm:text-2xl">{card.title}</h2>
+            <p className="mt-2 break-words text-[0.8125rem] leading-relaxed text-muted-foreground sm:text-sm">{card.subtitle}</p>
 
             {card.meta || card.socialProof ? (
               <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 text-xs font-medium text-muted-foreground">
@@ -225,7 +225,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
             </div>
             {intentError ? <p role="status" className="mt-2.5 text-xs font-medium text-foreground">{intentError}</p> : null}
           </div>
-          <div className="pointer-events-none relative min-h-[11rem] w-full self-stretch [&>img]:absolute [&>img]:inset-0" aria-hidden="true" data-smart-card-artwork-frame="true">
+          <div className="pointer-events-none relative min-h-[10rem] w-full self-stretch [&>img]:absolute [&>img]:inset-0" aria-hidden="true" data-smart-card-artwork-frame="true">
             <SmartCardArtwork card={card} />
           </div>
         </div>

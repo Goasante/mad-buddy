@@ -16,14 +16,14 @@ const samples: SmartCard[] = [
 ];
 
 export function SmartCardReview() {
-  const [width, setWidth] = useState(360);
+  const [width, setWidth] = useState(390);
   return <FeatureAvailabilityContext.Provider value={{ upfor: true, linkr: true, events: true, conference: true, safe_arrival: true }}>
     <main className="mx-auto max-w-6xl space-y-6 p-4">
       <h1 className="text-xl font-semibold">SmartCard presentation review</h1>
       <p>Sample content only. Actions are disabled and this route is unavailable in production.</p>
-      <nav className="flex gap-2" aria-label="Review width">{[320, 360, 480, 720].map(value => <button key={value} onClick={() => setWidth(value)} aria-pressed={width === value} className="rounded-lg border px-3 py-2">{value}px</button>)}</nav>
+      <nav className="flex gap-2" aria-label="Review width">{[320, 390, 430, 720].map(value => <button key={value} onClick={() => setWidth(value)} aria-pressed={width === value} className="rounded-lg border px-3 py-2">{value}px</button>)}</nav>
       <div className="grid items-start gap-6 lg:grid-cols-2" onClickCapture={event => { if ((event.target as Element).closest("article a, article button")) { event.preventDefault(); event.stopPropagation(); } }}>
-        {[false, true].map(dark => <div key={String(dark)} className={dark ? "dark rounded-2xl bg-[#151517] p-3" : "rounded-2xl bg-[#fdfaf5] p-3"}>
+        {[false, true].map(dark => <div key={String(dark)} className={dark ? "dark rounded-2xl bg-[#151517] sm:p-3" : "rounded-2xl bg-[#fdfaf5] sm:p-3"}>
           <div className="mx-auto max-w-full space-y-4" style={{ width }}>{samples.map(card => <SmartCardHeroV2 key={card.id} card={card} />)}</div>
         </div>)}
       </div>
