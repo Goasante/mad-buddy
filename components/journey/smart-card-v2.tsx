@@ -177,7 +177,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
           quiet && "bg-background dark:bg-background"
         )}
       >
-        <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[minmax(0,1fr)_clamp(9rem,35%,16rem)] sm:gap-6">
+        <div className="grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,38%,9rem)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_clamp(9rem,35%,16rem)] sm:gap-6">
           <div className="min-w-0">
             {card.eyebrow ? (
               <p className="mb-2 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-[#806449] dark:text-[#d7b28b]">{card.eyebrow}</p>
@@ -191,7 +191,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
             <h2 className="break-words text-balance text-xl font-semibold leading-tight tracking-[-0.025em] sm:text-2xl">{card.title}</h2>
             <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">{card.subtitle}</p>
           </div>
-          <div className="pointer-events-none mx-auto aspect-[4/3] w-full max-w-[14rem] self-center p-2 sm:max-w-none" aria-hidden="true" data-smart-card-artwork-frame="true">
+          <div className="pointer-events-none aspect-[4/3] w-full self-center p-1 sm:p-2" aria-hidden="true" data-smart-card-artwork-frame="true">
             <SmartCardArtwork card={card} />
           </div>
         </div>
