@@ -22,6 +22,10 @@ describe("reviewed SmartCard artwork", () => {
     expect(smartCardArtwork({ id: "event_live" }).tile).toBe(10);
     expect(smartCardArtwork({ id: "linkr_mutual_event" }).tile).toBe(11);
   });
+  it("frames the entire birthday candle without leaking it into commitments", () => {
+    expect(smartCardArtwork({ id: "birthday" }).viewBox).toBe("0 724 256 300");
+    expect(smartCardArtwork({ id: "plan_starting" }).viewBox).toBe("0 512 256 216");
+  });
   it("resolves every live provider to an existing asset and valid viewport", () => {
     for (const id of SMART_CARD_IDS) {
       const art = smartCardArtwork({ id });
@@ -32,7 +36,7 @@ describe("reviewed SmartCard artwork", () => {
       expect(width).toBeGreaterThan(0);
       expect(height).toBeGreaterThan(0);
       expect(x + width).toBeLessThanOrEqual(1024);
-      expect(y + height).toBeLessThanOrEqual(1536);
+      expect(y + height).toBeLessThanOrEqual(1024);
     }
   });
   it("distinguishes an unconfirmed check-in from a normal journey", () => {

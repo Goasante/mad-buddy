@@ -101,10 +101,14 @@ export function smartCardArtwork(card: ArtworkCard) {
     ? (scene === 2 ? "safe_arrival_overdue" : "safe_arrival_action")
     : card.id as ApprovedSmartCardStateId;
   const tile = SMART_CARD_ARTWORK_TILES[state] ?? SMART_CARD_ARTWORK_TILES.core_fallback;
+  // The candle extends above its grid cell; exclude it from the clock tile.
+  const viewBox = tile === 12 ? "0 724 256 300"
+    : tile === 8 ? "0 512 256 216"
+    : `${(tile % 4) * 256} ${Math.floor(tile / 4) * 256} 256 256`;
   return {
     scene,
     tile,
     src: "/illustrations/smart-card/neutral-scenarios-v1.webp",
-    viewBox: `${(tile % 4) * 256} ${Math.floor(tile / 4) * 256} 256 256`,
+    viewBox,
   };
 }
