@@ -287,7 +287,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
         <div className={cn("mt-4", !quiet ? "max-w-[72%]" : "max-w-[80%]")}>
           {card.person ? (
             <div className="mb-2 flex min-w-0 items-center gap-2">
-              <UserAvatar src={card.person.avatarUrl} name={card.person.displayName} size="sm" decorative />
+              <UserAvatar src={card.person.avatarUrl} name={card.person.displayName} size="sm" className="bg-[#fffaf2] text-[#291507]" decorative />
               <span className="break-words text-sm font-semibold text-white">{card.person.displayName}</span>
             </div>
           ) : null}
