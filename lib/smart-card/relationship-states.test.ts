@@ -160,3 +160,20 @@ describe("Card A keeps the states it owns", () => {
     expect(card?.subtitle).toBe("They are waiting to hear back from you.");
   });
 });
+
+
+describe("named SmartCard identity thumbnails", () => {
+  it("pairs the authorized birthday name with its avatar and preserves the wish flow", () => {
+    const card = pick({ muddyBirthdays: [{ userId: "u1", displayName: "Ama", avatarUrl: "/avatars/ama.webp" }] });
+    expect(card?.id).toBe("muddy_birthday");
+    expect(card?.person).toEqual({ displayName: "Ama", avatarUrl: "/avatars/ama.webp" });
+    expect(card?.destination).toBe("/notifications");
+    expect(card?.cta).toBe("Open birthday wishes");
+  });
+  it("keeps a named identity when no birthday image is available", () => {
+    expect(pick({ muddyBirthdays: [{ userId: "u1", displayName: "Kojo" }] })?.person).toEqual({ displayName: "Kojo", avatarUrl: undefined });
+  });
+  it("uses the mutual connection's existing viewer-authorized photo", () => {
+    expect(pick({ linkrMutuals: [mutual({ photo: "/avatars/ama.webp" })] })?.person).toEqual({ displayName: "Ama", avatarUrl: "/avatars/ama.webp" });
+  });
+});

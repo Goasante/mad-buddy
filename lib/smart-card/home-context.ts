@@ -38,6 +38,7 @@ export type EventLinkrOfferForCard = {
 export type MuddyBirthdayForCard = {
   userId: string;
   displayName: string;
+  avatarUrl?: string | null;
 };
 
 /**
