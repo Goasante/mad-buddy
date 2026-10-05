@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { SmartCardHeroV2 } from "./smart-card-v2";
 import { SmartCardArtwork } from "./smart-card-artwork";
 import { SMART_CARD_APPROVED_STATES } from "@/lib/smart-card/catalog";
@@ -22,8 +22,8 @@ export function SmartCardReview() {
       <h1 className="text-xl font-semibold">SmartCard presentation review</h1>
       <p>Sample content only. Actions are disabled and this route is unavailable in production.</p>
       <nav className="flex gap-2" aria-label="Review width">{[320, 390, 430, 720].map(value => <button key={value} onClick={() => setWidth(value)} aria-pressed={width === value} className="rounded-lg border px-3 py-2">{value}px</button>)}</nav>
-      <div className="grid items-start gap-6 lg:grid-cols-2" onClickCapture={event => { if ((event.target as Element).closest("article a, article button")) { event.preventDefault(); event.stopPropagation(); } }}>
-        {[false, true].map(dark => <div key={String(dark)} className={dark ? "dark rounded-2xl bg-[#151517] sm:p-3" : "rounded-2xl bg-[#fdfaf5] sm:p-3"}>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2" onClickCapture={event => { if ((event.target as Element).closest("article a, article button")) { event.preventDefault(); event.stopPropagation(); } }}>
+        {[false, true].map(dark => <div key={String(dark)} style={{ "--foreground": dark ? "38 30% 96%" : "3 25% 12%", "--muted-foreground": dark ? "26 10% 68%" : "20 12% 42%", "--background": dark ? "8 18% 8%" : "41 71% 98%" } as CSSProperties} className={dark ? "dark rounded-2xl bg-[#151517] sm:p-3" : "rounded-2xl bg-[#fdfaf5] sm:p-3"}>
           <div className="mx-auto max-w-full space-y-4" style={{ width }}>{samples.map(card => <SmartCardHeroV2 key={card.id} card={card} />)}</div>
         </div>)}
       </div>

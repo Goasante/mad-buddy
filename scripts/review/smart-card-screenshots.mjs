@@ -23,6 +23,8 @@ try {
     const page = await browser.newPage({ viewport: { width, height: 1100 }, deviceScaleFactor: 2 });
     await page.goto('http://127.0.0.1:3000/dev/smart-card-review');
     await page.locator('[data-smart-card-id="core_fallback"]').first().waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    if (width >= 640) await page.getByRole('button', { name: '720px', exact: true }).click();
     for (const id of ['core_fallback', 'plan_rsvp', 'muddy_birthday']) {
       const cards = page.locator(`[data-smart-card-id="${id}"]`);
       for (let index = 0; index < await cards.count(); index++) {
