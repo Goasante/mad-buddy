@@ -10,7 +10,7 @@ export function SmartCardArtwork({ card }: { card: Pick<SmartCard, "id" | "eyebr
       alt=""
       width={720}
       height={540}
-      sizes="(min-width: 640px) 256px, 224px"
+      sizes="(min-width: 640px) 256px, 144px"
       unoptimized
       aria-hidden="true"
       data-smart-card-scene={artwork.scene}

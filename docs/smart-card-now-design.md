@@ -1,6 +1,6 @@
 # Illustrated Now SmartCard
 
-The web Home SmartCard now uses a warm surface with a clear primary action below. On phones, full-width copy sits above a centered illustration; from 640px, the illustration sits beside the copy. The artwork has its own padded 4:3 space and uses object-contain to preserve the whole scene without cropping. Metadata, social proof, secondary actions and progress remain readable beneath the headline. Dark mode has a matching neutral surface; safety states use a restrained treatment.
+The web Home SmartCard now uses a warm surface with a clear primary action below. The illustration stays to the right of the copy at every screen width. On phones, its column uses 38% of the available content width, bounded between 5.5rem and 9rem, with a separate gap from the text; wider screens give it more space. The artwork has its own padded 4:3 space and uses object-contain to preserve the whole scene without cropping. Metadata, social proof, secondary actions and progress remain readable beneath the headline. Dark mode has a matching neutral surface; safety states use a restrained treatment.
 
 ## Artwork
 
