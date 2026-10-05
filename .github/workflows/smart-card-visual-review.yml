@@ -1,0 +1,28 @@
+name: SmartCard visual review
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'components/journey/smart-card*.tsx'
+      - 'scripts/review/smart-card-screenshots.mjs'
+      - '.github/workflows/smart-card-visual-review.yml'
+  workflow_dispatch:
+jobs:
+  screenshots:
+    name: Phone and desktop screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/review/smart-card-screenshots.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smart-card-screenshots
+          path: artifacts/smart-card/
+          retention-days: 7
