@@ -177,7 +177,7 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
           quiet && "bg-background dark:bg-background"
         )}
       >
-        <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] items-center gap-x-3 gap-y-3 sm:grid-cols-[minmax(0,1fr)_clamp(11rem,42%,18rem)] sm:gap-x-6">
+        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,44%)] sm:gap-6">
           <div className="min-w-0">
             {card.eyebrow ? (
               <p className="mb-2 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-[#806449] dark:text-[#d7b28b]">{card.eyebrow}</p>
@@ -189,46 +189,46 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
               </div>
             ) : null}
             <h2 className="break-words text-balance text-xl font-semibold leading-tight tracking-[-0.025em] sm:text-2xl">{card.title}</h2>
+            <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">{card.subtitle}</p>
+
+            {card.meta || card.socialProof ? (
+              <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 text-xs font-medium text-muted-foreground">
+                {card.meta ? <span className="inline-flex min-w-0 items-center gap-1.5"><MetadataIcon card={card} /><span className="break-words">{card.meta}</span></span> : null}
+                {card.socialProof ? <span className="inline-flex min-w-0 items-center gap-1.5"><UsersRound className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="break-words">{card.socialProof}</span></span> : null}
+              </div>
+            ) : null}
+
+            {card.progress ? (
+              <div className="mt-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="font-semibold tabular-nums text-foreground">{card.progress.percent}%</span>
+                  <span>{card.progress.label}</span>
+                </div>
+                <div role="progressbar" aria-label={card.progress.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={card.progress.percent} className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e9dfd1] dark:bg-white/10">
+                  <div className="h-full origin-left rounded-full bg-[#ed8924] transition-transform duration-[700ms] ease-out motion-reduce:duration-0" style={{ transform: `scaleX(${displayedPercent / 100})` }} />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+              {card.primaryIntent ? (
+                <button type="button" onClick={runPrimaryIntent} disabled={intentPending} aria-busy={intentPending} className={primaryClassName}>
+                  {intentPending ? "Opening…" : card.cta}
+                  <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </button>
+              ) : (
+                <Link href={card.destination as Route} onClick={acknowledgeIfNeeded} className={primaryClassName}>
+                  <span className="break-words">{card.cta}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </Link>
+              )}
+              {card.secondaryAction ? <Link href={card.secondaryAction.destination as Route} className={secondaryClassName}>{card.secondaryAction.label}</Link> : null}
+            </div>
+            {intentError ? <p role="status" className="mt-2.5 text-xs font-medium text-foreground">{intentError}</p> : null}
           </div>
-          <div className="pointer-events-none col-start-2 row-start-1 aspect-[4/3] w-full self-center p-0.5 sm:row-span-2 sm:p-1" aria-hidden="true" data-smart-card-artwork-frame="true">
+          <div className="pointer-events-none relative min-h-[11rem] w-full self-stretch [&>img]:absolute [&>img]:inset-0" aria-hidden="true" data-smart-card-artwork-frame="true">
             <SmartCardArtwork card={card} />
           </div>
-          <p className="col-span-2 break-words text-sm leading-relaxed text-muted-foreground sm:col-span-1 sm:col-start-1 sm:row-start-2">{card.subtitle}</p>
         </div>
-
-        {card.meta || card.socialProof ? (
-          <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 text-xs font-medium text-muted-foreground">
-            {card.meta ? <span className="inline-flex min-w-0 items-center gap-1.5"><MetadataIcon card={card} /><span className="break-words">{card.meta}</span></span> : null}
-            {card.socialProof ? <span className="inline-flex min-w-0 items-center gap-1.5"><UsersRound className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="break-words">{card.socialProof}</span></span> : null}
-          </div>
-        ) : null}
-
-        {card.progress ? (
-          <div className="mt-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-foreground">
-              <span className="font-semibold tabular-nums text-foreground">{card.progress.percent}%</span>
-              <span>{card.progress.label}</span>
-            </div>
-            <div role="progressbar" aria-label={card.progress.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={card.progress.percent} className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e9dfd1] dark:bg-white/10">
-              <div className="h-full origin-left rounded-full bg-[#ed8924] transition-transform duration-[700ms] ease-out motion-reduce:duration-0" style={{ transform: `scaleX(${displayedPercent / 100})` }} />
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          {card.primaryIntent ? (
-            <button type="button" onClick={runPrimaryIntent} disabled={intentPending} aria-busy={intentPending} className={primaryClassName}>
-              {intentPending ? "Opening…" : card.cta}
-              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </button>
-          ) : (
-            <Link href={card.destination as Route} onClick={acknowledgeIfNeeded} className={primaryClassName}>
-              <span className="break-words">{card.cta}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </Link>
-          )}
-          {card.secondaryAction ? <Link href={card.secondaryAction.destination as Route} className={secondaryClassName}>{card.secondaryAction.label}</Link> : null}
-        </div>
-        {intentError ? <p role="status" className="mt-2.5 text-xs font-medium text-foreground">{intentError}</p> : null}
       </article>
     </section>
   );
