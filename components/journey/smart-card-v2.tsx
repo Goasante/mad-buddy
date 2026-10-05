@@ -172,12 +172,12 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
         data-smart-card-editorial="true"
         data-smart-card-id={card.id}
         className={cn(
-          "relative rounded-[1.25rem] border border-[#ebdfcf] bg-[#fffaf2] p-5 text-foreground dark:border-white/10 dark:bg-[#211e19] sm:p-6",
+          "relative rounded-[1.25rem] border border-[#ebdfcf] bg-[#fffaf2] p-4 text-foreground dark:border-white/10 dark:bg-[#211e19] sm:p-6",
           safety && "border-[#d8b896] dark:border-[#99724d]/50",
           quiet && "bg-background dark:bg-background"
         )}
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,38%,9rem)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_clamp(9rem,35%,16rem)] sm:gap-6">
+        <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] items-center gap-x-3 gap-y-3 sm:grid-cols-[minmax(0,1fr)_clamp(11rem,42%,18rem)] sm:gap-x-6">
           <div className="min-w-0">
             {card.eyebrow ? (
               <p className="mb-2 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-[#806449] dark:text-[#d7b28b]">{card.eyebrow}</p>
@@ -189,11 +189,11 @@ export function SmartCardHeroV2({ card: inputCard, deferred = false }: { card: S
               </div>
             ) : null}
             <h2 className="break-words text-balance text-xl font-semibold leading-tight tracking-[-0.025em] sm:text-2xl">{card.title}</h2>
-            <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">{card.subtitle}</p>
           </div>
-          <div className="pointer-events-none aspect-[4/3] w-full self-center p-1 sm:p-2" aria-hidden="true" data-smart-card-artwork-frame="true">
+          <div className="pointer-events-none col-start-2 row-start-1 aspect-[4/3] w-full self-center p-0.5 sm:row-span-2 sm:p-1" aria-hidden="true" data-smart-card-artwork-frame="true">
             <SmartCardArtwork card={card} />
           </div>
+          <p className="col-span-2 break-words text-sm leading-relaxed text-muted-foreground sm:col-span-1 sm:col-start-1 sm:row-start-2">{card.subtitle}</p>
         </div>
 
         {card.meta || card.socialProof ? (
