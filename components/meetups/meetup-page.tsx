@@ -63,7 +63,7 @@ function modeDescription(mode: MeetupMode) {
 
 function responseLabel(response: "invited" | "accepted" | "declined") {
   if (response === "accepted") return "Accepted";
-  if (response === "declined") return "Can't make it";
+  if (response === "declined") return "Can&apos;t make it";
   return "Invited";
 }
 
