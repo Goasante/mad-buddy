@@ -1,6 +1,6 @@
 "use client";
 
-import { Link, useRevalidate } from "@/lib/platform";
+import { Link, PLATFORM_KIND, useRevalidate } from "@/lib/platform";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowLeft,
@@ -38,7 +38,7 @@ import { useCountdownResume } from "@/hooks/use-countdown-clock";
 export type MeetupSaveAction = (input: unknown, create?: boolean) => Promise<{ ok: boolean; message: string }>;
 
 const inputClass =
-  "w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+  "box-border w-full min-w-0 max-w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
 const panelClass =
   "rounded-[26px] border border-border/80 bg-card shadow-[0_10px_34px_hsl(var(--shadow)/0.08)]";
 
@@ -51,13 +51,18 @@ function timeLabel(iso: string, timezone: string) {
 }
 
 function compactTimeLabel(iso: string, timezone: string) {
-  return new Intl.DateTimeFormat("en", {
+  const value = new Date(iso);
+  const date = new Intl.DateTimeFormat("en", {
     timeZone: timezone,
     month: "short",
-    day: "numeric",
+    day: "numeric"
+  }).format(value);
+  const time = new Intl.DateTimeFormat("en", {
+    timeZone: timezone,
     hour: "numeric",
     minute: "2-digit"
-  }).format(new Date(iso));
+  }).format(value);
+  return `${date} · ${time}`;
 }
 
 function initials(name: string) {
@@ -95,7 +100,7 @@ function meetupStatus(meetup: Meetup, viewerId: string) {
 
   if (meetup.creatorId === viewerId && waiting > 0) {
     return {
-      label: `Waiting for ${waiting} ${waiting === 1 ? "response" : "responses"}`,
+      label: `${waiting} ${waiting === 1 ? "response" : "responses"} pending`,
       tone: "waiting" as const
     };
   }
@@ -113,7 +118,7 @@ function StatusPill({ label, tone }: { label: string; tone: "success" | "waiting
         ? "bg-amber-500/12 text-amber-700 dark:text-amber-300"
         : "bg-secondary text-muted-foreground";
 
-  return <span className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${className}`}>{label}</span>;
+  return <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${className}`}>{label}</span>;
 }
 
 export function MeetupPage({
@@ -122,7 +127,8 @@ export function MeetupPage({
   muddies,
   focusedId,
   saveAction,
-  reloadAction
+  reloadAction,
+  initialNowMs
 }: {
   viewerId: string;
   meetups: Meetup[];
@@ -130,13 +136,21 @@ export function MeetupPage({
   focusedId?: string;
   saveAction: MeetupSaveAction;
   reloadAction?: () => Promise<void>;
+  initialNowMs: number;
 }) {
   const revalidate = useRevalidate();
   const focusedMeetup = focusedId ? meetups.find((meetup) => meetup.id === focusedId) : undefined;
   const [creating, setCreating] = useState(false);
-  const [tab, setTab] = useState<"active" | "mine">(
-    focusedMeetup && focusedMeetup.status !== "active" ? "mine" : "active"
-  );
+  const [clockNow, setClockNow] = useState(initialNowMs);
+  const [tab, setTab] = useState<"active" | "mine">(() => {
+    if (!focusedMeetup || focusedMeetup.status !== "active") return focusedMeetup ? "mine" : "active";
+    const mine = focusedMeetup.members.find((person) => person.userId === viewerId);
+    return meetupPhase(focusedMeetup, initialNowMs) !== "upcoming" && mine?.response !== "declined"
+      ? "active"
+      : "mine";
+  });
+
+  useCountdownResume(setClockNow, 30_000);
 
   const refresh = useCallback(async () => {
     if (reloadAction) await reloadAction();
@@ -145,167 +159,230 @@ export function MeetupPage({
 
   useFeedRefresh(refresh);
 
-  const active = meetups.filter((meetup) => meetup.status === "active");
+  // "Active" is intentionally a LIVE state, not a synonym for every row whose
+  // database lifecycle is still open. A future meetup belongs in Your Meetups
+  // until its two-hour arrival window begins. That keeps the two tabs distinct.
+  const active = meetups.filter((meetup) => {
+    if (meetup.status !== "active") return false;
+    const mine = meetup.members.find((person) => person.userId === viewerId);
+    return mine?.response !== "declined" && meetupPhase(meetup, clockNow) !== "upcoming";
+  });
+  const activeIds = new Set(active.map((meetup) => meetup.id));
+  const upcoming = meetups.filter((meetup) => meetup.status === "active" && !activeIds.has(meetup.id));
   const history = meetups.filter((meetup) => meetup.status !== "active");
+  const yourMeetupsCount = upcoming.length + history.length;
 
-  return (
-    <main className="mx-auto min-h-screen max-w-xl px-3 pb-40 pt-4 sm:px-4">
-      <header className="mb-5 space-y-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Home
-        </Link>
-
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Meet Up</h1>
+  const controls = (
+    <div className="mx-auto w-full max-w-xl px-3 pb-3 pt-2 sm:px-4">
+      {PLATFORM_KIND === "mobile" ? (
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold tracking-tight">Meet Up</h1>
           <p className="mt-1 text-sm text-muted-foreground">Make it happen, together.</p>
         </div>
-
-        <Button
-          className="h-14 w-full rounded-2xl text-base shadow-[0_12px_30px_hsl(var(--primary)/0.2)]"
-          onClick={() => setCreating((value) => !value)}
-        >
-          {creating ? <ArrowLeft className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-          {creating ? "Back to meetups" : "Arrange a Meet Up"}
-        </Button>
-
-        {!creating && (
-          <div className="grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
-            <button
-              type="button"
-              onClick={() => setTab("active")}
-              className={[
-                "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
-                tab === "active" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"
-              ].join(" ")}
-            >
-              Active ({active.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("mine")}
-              className={[
-                "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
-                tab === "mine" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-              ].join(" ")}
-            >
-              Your Meetups
-            </button>
-          </div>
-        )}
-      </header>
-
-      {creating ? (
-        <CreateMeetup
-          muddies={muddies}
-          saveAction={saveAction}
-          onCreated={() => {
-            setCreating(false);
-            setTab("active");
-            void refresh();
-          }}
-        />
       ) : (
         <>
-          {focusedId && !meetups.some((meetup) => meetup.id === focusedId) && (
-            <p role="status" className={panelClass + " mb-4 p-5 text-sm"}>
-              This meetup is no longer available to you.
-            </p>
-          )}
-
-          {tab === "active" && (
-            <section className="space-y-4">
-              {!active.length ? (
-                <EmptyMeetups onArrange={() => setCreating(true)} />
-              ) : (
-                active.map((meetup, index) => (
-                  <MeetupCard
-                    key={meetup.id}
-                    meetup={meetup}
-                    viewerId={viewerId}
-                    focused={meetup.id === focusedId}
-                    initialExpanded={meetup.id === focusedId || index === 0}
-                    saveAction={saveAction}
-                    refreshAction={refresh}
-                  />
-                ))
-              )}
-            </section>
-          )}
-
-          {tab === "mine" && (
-            <section className="space-y-6">
-              {!meetups.length ? (
-                <EmptyMeetups onArrange={() => setCreating(true)} />
-              ) : (
-                <>
-                  {!!active.length && (
-                    <div>
-                      <div className="mb-3 flex items-center justify-between px-1">
-                        <h2 className="text-sm font-bold">Current</h2>
-                        <span className="text-xs text-muted-foreground">{active.length}</span>
-                      </div>
-                      <div className="space-y-3">
-                        {active.map((meetup) => (
-                          <MeetupCard
-                            key={meetup.id}
-                            meetup={meetup}
-                            viewerId={viewerId}
-                            focused={meetup.id === focusedId}
-                            initialExpanded={meetup.id === focusedId}
-                            saveAction={saveAction}
-                            refreshAction={refresh}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {!!history.length && (
-                    <div>
-                      <div className="mb-3 flex items-center justify-between px-1">
-                        <h2 className="text-sm font-bold">Past & cancelled</h2>
-                        <span className="text-xs text-muted-foreground">{history.length}</span>
-                      </div>
-                      <div className="space-y-3">
-                        {history.map((meetup) => (
-                          <MeetupCard
-                            key={meetup.id}
-                            meetup={meetup}
-                            viewerId={viewerId}
-                            focused={meetup.id === focusedId}
-                            initialExpanded={meetup.id === focusedId}
-                            saveAction={saveAction}
-                            refreshAction={refresh}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </section>
-          )}
+          <div className="mb-3 hidden md:block">
+            <h1 className="text-3xl font-bold tracking-tight">Meet Up</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Make it happen, together.</p>
+          </div>
+          <p className="mb-3 text-sm text-muted-foreground md:hidden">Make it happen, together.</p>
         </>
       )}
+
+      <Button
+        className="h-12 w-full rounded-2xl text-base shadow-[0_10px_24px_hsl(var(--primary)/0.18)]"
+        onClick={() => setCreating((value) => !value)}
+      >
+        {creating ? <ArrowLeft className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+        {creating ? "Back to meetups" : "Arrange a Meet Up"}
+      </Button>
+
+      {!creating && (
+        <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
+          <button
+            type="button"
+            onClick={() => setTab("active")}
+            className={[
+              "rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+              tab === "active" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"
+            ].join(" ")}
+          >
+            Active ({active.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("mine")}
+            className={[
+              "rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+              tab === "mine" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+            ].join(" ")}
+          >
+            Your Meetups{yourMeetupsCount ? ` (${yourMeetupsCount})` : ""}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <main className="mx-auto min-h-screen max-w-xl pb-40">
+      {PLATFORM_KIND === "web" && (
+        <header className="fixed inset-x-0 top-0 z-40 grid grid-cols-[44px_1fr_44px] items-center gap-2 bg-background px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] md:hidden">
+          <Link
+            href="/dashboard"
+            aria-label="Back"
+            className="focus-ring grid h-[44px] w-[44px] place-items-center rounded-full text-foreground transition active:scale-95"
+          >
+            <ArrowLeft className="h-[22px] w-[22px]" />
+          </Link>
+          <h1 className="truncate text-center text-[1.125rem] font-semibold tracking-tight">Meet Up</h1>
+          <span className="h-[44px] w-[44px]" aria-hidden="true" />
+        </header>
+      )}
+
+      <div
+        className={
+          PLATFORM_KIND === "web"
+            ? "fixed inset-x-0 top-[var(--mobile-header-height)] z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl md:static md:border-0 md:bg-transparent md:backdrop-blur-none"
+            : "sticky top-0 z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl"
+        }
+      >
+        {controls}
+      </div>
+
+      <div
+        className={[
+          "px-3 sm:px-4 md:pt-4",
+          PLATFORM_KIND === "web"
+            ? creating
+              ? "pt-[6.75rem]"
+              : "pt-[10.75rem]"
+            : "pt-4"
+        ].join(" ")}
+      >
+        {creating ? (
+          <CreateMeetup
+            muddies={muddies}
+            saveAction={saveAction}
+            onCreated={(createdWhen) => {
+              setCreating(false);
+              setTab(createdWhen === "now" ? "active" : "mine");
+              void refresh();
+            }}
+          />
+        ) : (
+          <>
+            {focusedId && !meetups.some((meetup) => meetup.id === focusedId) && (
+              <p role="status" className={panelClass + " mb-4 p-5 text-sm"}>
+                This meetup is no longer available to you.
+              </p>
+            )}
+
+            {tab === "active" && (
+              <section className="space-y-3">
+                {!active.length ? (
+                  <EmptyMeetups
+                    onArrange={() => setCreating(true)}
+                    title="Nothing active right now"
+                    body="Active is for meetups in the arrival or check-in window. Upcoming meetups are under Your Meetups."
+                  />
+                ) : (
+                  active.map((meetup, index) => (
+                    <MeetupCard
+                      key={meetup.id}
+                      meetup={meetup}
+                      viewerId={viewerId}
+                      focused={meetup.id === focusedId}
+                      initialExpanded={meetup.id === focusedId || index === 0}
+                      saveAction={saveAction}
+                      refreshAction={refresh}
+                    />
+                  ))
+                )}
+              </section>
+            )}
+
+            {tab === "mine" && (
+              <section className="space-y-6">
+                {!upcoming.length && !history.length ? (
+                  <EmptyMeetups
+                    onArrange={() => setCreating(true)}
+                    title="No upcoming or past meetups"
+                    body="Anything happening now stays under Active. Future and finished meetups live here."
+                  />
+                ) : (
+                  <>
+                    {!!upcoming.length && (
+                      <div>
+                        <div className="mb-3 flex items-center justify-between px-1">
+                          <h2 className="text-sm font-bold">Upcoming</h2>
+                          <span className="text-xs text-muted-foreground">{upcoming.length}</span>
+                        </div>
+                        <div className="space-y-3">
+                          {upcoming.map((meetup) => (
+                            <MeetupCard
+                              key={meetup.id}
+                              meetup={meetup}
+                              viewerId={viewerId}
+                              focused={meetup.id === focusedId}
+                              initialExpanded={meetup.id === focusedId}
+                              saveAction={saveAction}
+                              refreshAction={refresh}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!!history.length && (
+                      <div>
+                        <div className="mb-3 flex items-center justify-between px-1">
+                          <h2 className="text-sm font-bold">Past & cancelled</h2>
+                          <span className="text-xs text-muted-foreground">{history.length}</span>
+                        </div>
+                        <div className="space-y-3">
+                          {history.map((meetup) => (
+                            <MeetupCard
+                              key={meetup.id}
+                              meetup={meetup}
+                              viewerId={viewerId}
+                              focused={meetup.id === focusedId}
+                              initialExpanded={meetup.id === focusedId}
+                              saveAction={saveAction}
+                              refreshAction={refresh}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
+          </>
+        )}
+      </div>
     </main>
   );
 }
 
-function EmptyMeetups({ onArrange }: { onArrange: () => void }) {
+function EmptyMeetups({
+  onArrange,
+  title = "No meetups here yet",
+  body = "Invite a Muddy over, go to their place, or agree somewhere to meet."
+}: {
+  onArrange: () => void;
+  title?: string;
+  body?: string;
+}) {
   return (
     <section className={panelClass + " overflow-hidden"}>
       <div className="flex min-h-44 flex-col items-center justify-center bg-gradient-to-br from-primary/10 via-transparent to-transparent px-6 py-8 text-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
           <Users className="h-7 w-7" />
         </div>
-        <h2 className="text-lg font-bold">No meetups here yet</h2>
-        <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-          Invite a Muddy over, go to their place, or agree somewhere to meet.
-        </p>
+        <h2 className="text-lg font-bold">{title}</h2>
+        <p className="mt-2 max-w-xs text-sm text-muted-foreground">{body}</p>
         <Button className="mt-5 rounded-2xl" onClick={onArrange}>
           <Plus className="h-4 w-4" />
           Arrange a meetup
@@ -321,7 +398,7 @@ function CreateMeetup({
   saveAction
 }: {
   muddies: { id: string; name: string }[];
-  onCreated: () => void;
+  onCreated: (when: "now" | "later") => void;
   saveAction: MeetupSaveAction;
 }) {
   const [step, setStep] = useState(1);
@@ -405,7 +482,7 @@ function CreateMeetup({
       try {
         const result = await saveAction(input, true);
         setMessage(result.message);
-        if (result.ok) onCreated();
+        if (result.ok) onCreated(when);
       } catch {
         setMessage("Could not save. Try again; your invitation will not be duplicated.");
       }
