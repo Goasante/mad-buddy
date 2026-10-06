@@ -623,7 +623,7 @@ function CreateMeetup({
                     onClick={() => toggleParticipant(muddy.id)}
                     className={[
                       "flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition",
-                      selected ? "border-primary/50 bg-primary/8" : "border-border bg-background"
+                      selected ? "border-primary/50 bg-primary/10" : "border-border bg-background"
                     ].join(" ")}
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold">
@@ -691,12 +691,12 @@ function CreateMeetup({
 
         <div className="flex gap-2">
           {step < 4 ? (
-            <Button className="h-13 w-full rounded-2xl" onClick={nextStep} disabled={step === 3 && !muddies.length}>
+            <Button className="h-12 w-full rounded-2xl" onClick={nextStep} disabled={step === 3 && !muddies.length}>
               Next
               <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button className="h-13 w-full rounded-2xl" onClick={submit} disabled={pending}>
+            <Button className="h-12 w-full rounded-2xl" onClick={submit} disabled={pending}>
               {pending ? "Sending…" : "Send invitation"}
             </Button>
           )}
@@ -852,7 +852,7 @@ function MeetupCard({
             {!!m.note && <p className="rounded-2xl bg-secondary/50 px-4 py-3 text-sm">{m.note}</p>}
 
             {!creator && open && mine?.response === "invited" && (
-              <section className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
+              <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
                 <p className="text-sm font-bold">{"You're invited"}</p>
                 <p className="mt-1 text-xs text-muted-foreground">Accept to join the meetup and receive updates.</p>
                 <fieldset disabled={pending} className="mt-4 grid grid-cols-2 gap-2">
@@ -877,7 +877,7 @@ function MeetupCard({
                 {confirmed > 0 && <span className="text-[11px] text-muted-foreground">{confirmed} confirmed</span>}
               </div>
 
-              <ul className="divide-y divide-border/60 rounded-2xl bg-secondary/35 px-3">
+              <ul className="divide-y divide-border/60 rounded-2xl bg-secondary/40 px-3">
                 {m.members.map((person) => {
                   const nearby =
                     person.nearby &&
