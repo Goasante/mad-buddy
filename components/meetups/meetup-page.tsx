@@ -148,12 +148,6 @@ export function MeetupPage({
   const active = meetups.filter((meetup) => meetup.status === "active");
   const history = meetups.filter((meetup) => meetup.status !== "active");
 
-  useEffect(() => {
-    if (!focusedMeetup) return;
-    setCreating(false);
-    setTab(focusedMeetup.status === "active" ? "active" : "mine");
-  }, [focusedMeetup]);
-
   return (
     <main className="mx-auto min-h-screen max-w-xl px-3 pb-40 pt-4 sm:px-4">
       <header className="mb-5 space-y-4">
@@ -739,9 +733,7 @@ function MeetupCard({
   }, []);
 
   useEffect(() => {
-    if (!focused) return;
-    setExpanded(true);
-    card.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (focused) card.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focused]);
 
   const mine = m.members.find((person) => person.userId === viewerId);
