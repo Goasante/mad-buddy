@@ -527,7 +527,7 @@ function MeetupCard({
 
         {!creator && open && mine?.response === "invited" && (
           <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
-            <p className="text-sm font-bold">You're invited</p>
+            <p className="text-sm font-bold">You&apos;re invited</p>
             <p className="mt-1 text-xs text-muted-foreground">Accept to join the meet up and receive arrival updates.</p>
             <fieldset disabled={pending} className="mt-4 grid grid-cols-2 gap-2">
               <Button className="rounded-2xl" onClick={() => update({ action: "respond", response: "accepted" })}>
@@ -636,7 +636,7 @@ function MeetupCard({
                     </span>
                     <span className="flex-1">
                       <span className="block text-sm font-bold">On my way</span>
-                      <span className="block text-xs text-muted-foreground">I'm heading there now</span>
+                      <span className="block text-xs text-muted-foreground">I&apos;m heading there now</span>
                     </span>
                   </button>
 
@@ -649,8 +649,8 @@ function MeetupCard({
                       <MapPin className="h-5 w-5" />
                     </span>
                     <span className="flex-1">
-                      <span className="block text-sm font-bold">I'm here</span>
-                      <span className="block text-xs text-muted-foreground">I've arrived at the agreed place</span>
+                      <span className="block text-sm font-bold">I&apos;m here</span>
+                      <span className="block text-xs text-muted-foreground">I&apos;ve arrived at the agreed place</span>
                     </span>
                   </button>
 
@@ -661,7 +661,7 @@ function MeetupCard({
                       </span>
                       <span>
                         <span className="block text-sm font-bold">Running late</span>
-                        <span className="block text-xs text-muted-foreground">Tell everyone how late you'll be</span>
+                        <span className="block text-xs text-muted-foreground">Tell everyone how late you&apos;ll be</span>
                       </span>
                     </div>
                     <div className="mt-3 flex items-center gap-2">
@@ -694,7 +694,7 @@ function MeetupCard({
                     </span>
                     <span className="flex-1">
                       <span className="block text-sm font-bold">I left</span>
-                      <span className="block text-xs text-muted-foreground">I'm leaving now</span>
+                      <span className="block text-xs text-muted-foreground">I&apos;m leaving now</span>
                     </span>
                   </button>
 
@@ -725,7 +725,7 @@ function MeetupCard({
 
             {now !== null && meetupPhase(m, now) === "unconfirmed" && !mine?.metAt && (
               <p className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm">
-                Did you meet? Confirm if you did, or choose another time. An unconfirmed meetup doesn't mean it failed.
+                Did you meet? Confirm if you did, or choose another time. An unconfirmed meetup doesn&apos;t mean it failed.
               </p>
             )}
 
