@@ -612,7 +612,7 @@ function MeetupCard({
                 className="w-full rounded-2xl"
                 onClick={() => update({ action: "respond", response: "declined" })}
               >
-                Can't make it
+                {"Can't make it"}
               </Button>
             )}
 
