@@ -1,5 +1,33 @@
 # God Mode hardening — continuation report
 
+## UpFor and Meet Up release — 6 October 2026
+
+- PR #138 merged as `31ab9bd453ca2643f9b74b6ca50e2cdd2b9e7e1e`.
+  Candidate `2271bd1c7715201813c6b21655dd9ad57f7d6427` passed all three
+  CI jobs after patching Capacitor, sharp, and source-map-js dependencies.
+  Runtime dependency audit reports zero vulnerabilities.
+- Both reviewed migrations are applied to Production `cabkhxxnrybzhkbtoiiz`
+  with canonical versions `20261006160837` and `20261006161651`.
+  Verified history: 177 entries, head `20261006161651`. Staging has both too.
+  New tables have RLS; anon/authenticated have no direct table or RPC access.
+  All six RPCs use security invoker and an empty search path.
+- Vercel deployment `dpl_BafLTzjBHgmENj2Lw3Yx4PHSwQXr` is READY in
+  Production. `mad-buddy.com/api/version` serves the merge SHA above.
+  Health, readiness and login return 200. Protected pages redirect to login;
+  unauthenticated Meet Up reads and writes return 401.
+- `upfor` and `safe_arrival` release flags are ON. The latter now exposes
+  Meet Up. Existing Plans and Home Plans/Events cards are preserved; existing
+  Safe Arrival journeys can still finish. Production cron tick remains active
+  every five minutes. Preview deployments are disabled at the Vercel project.
+- Real-account meeting flows and real-device notification delivery remain
+  unverified. Local Supabase integration tests require unavailable local
+  credentials/stack; the isolated database proof passed 34 checks. No native
+  store binary was published in this web release.
+- Code rollback baseline: `ebd220de4d3d3fb7b1b7c258bc7ab7c96f49f99d`,
+  deployment `dpl_CDjd6nJvmVncz5u2SNjVS3P1iDAn`. Turn the two release flags
+  off before reverting code; retain the additive tables and all journey data.
+  See `docs/operations/MEETUP-RELEASE-2026-10-06.md` for verification details.
+
 ## Current audit release — 3 October 2026
 
 - Durable push follow-up is prepared on `fix/durable-push-delivery`: transactional
