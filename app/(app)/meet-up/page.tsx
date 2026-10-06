@@ -10,6 +10,10 @@ import { addMeetupProximity } from "@/lib/meetups/proximity";
 import { saveMeetupAction } from "@/app/(app)/meetup-actions";
 
 export const dynamic = "force-dynamic";
+
+function currentServerTimeMs() {
+  return Date.now();
+}
 export default async function MeetupRoute({ searchParams }: { searchParams: Promise<{ meetup?: string }> }) {
   const user = await getCurrentUserRecord();
   if (!user) redirect("/login");
@@ -19,5 +23,5 @@ export default async function MeetupRoute({ searchParams }: { searchParams: Prom
   if (!guard.allowed) return <p role="alert">{guard.message}</p>;
   const [meetups, muddies, params] = await Promise.all([loadMeetups(admin, user.id), loadMeetupMuddies(admin, user.id), searchParams]);
   const withProximity = await addMeetupProximity(admin, user.id, meetups);
-  return <MeetupPage viewerId={user.id} meetups={withProximity} muddies={muddies} focusedId={params.meetup} saveAction={saveMeetupAction} />;
+  return <MeetupPage viewerId={user.id} meetups={withProximity} muddies={muddies} focusedId={params.meetup} saveAction={saveMeetupAction} initialNowMs={currentServerTimeMs()} />;
 }

@@ -14,3 +14,6 @@ export { Link, type LinkProps } from "./link.mobile";
 export { Image, type ImageProps } from "./image.mobile";
 export { useRouter, usePathname, useSearchParams, useRevalidate } from "./router.mobile";
 export { toMobilePath, isBuiltForMobile, MOBILE_ROUTES_NOT_BUILT } from "./routes.mobile";
+
+/** Compile-time platform marker matching the web adapter surface. */
+export const PLATFORM_KIND: "web" | "mobile" = "mobile";

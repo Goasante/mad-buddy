@@ -23,3 +23,6 @@ export { Link, type LinkProps } from "./link";
 export { Image, type ImageProps } from "./image";
 export { useRouter, usePathname, useSearchParams } from "./router";
 export { useRevalidate } from "./revalidate";
+
+/** Compile-time platform marker for shared UI that needs shell-specific chrome. */
+export const PLATFORM_KIND: "web" | "mobile" = "web";
