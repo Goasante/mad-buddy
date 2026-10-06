@@ -35,6 +35,6 @@ export function MeetupScreen() {
   return <>
     {error && <p role="alert" className="p-4 text-sm">{error}<button className="ml-2 underline" onClick={() => void load()}>Retry</button></p>}
     {!data && !error && <div className="flex justify-center p-10"><Spinner /></div>}
-    {data && <MeetupPage viewerId={user.id} meetups={data.meetups} muddies={data.muddies} focusedId={params.get("meetup") ?? undefined} saveAction={saveAction} reloadAction={load} />}
+    {data && <MeetupPage viewerId={user.id} meetups={data.meetups} muddies={data.muddies} focusedId={params.get("meetup") ?? undefined} saveAction={saveAction} reloadAction={load} initialNowMs={Date.now()} />}
   </>;
 }
