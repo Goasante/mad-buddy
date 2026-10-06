@@ -293,7 +293,7 @@ function CreateMeetup({
                   onClick={() => chooseMode(value)}
                   className={[
                     "flex w-full items-center gap-3 rounded-2xl border p-3.5 text-left transition",
-                    selected ? "border-primary bg-primary/8 ring-1 ring-primary/20" : "border-border bg-background hover:bg-secondary/50"
+                    selected ? "border-primary bg-primary/10 ring-1 ring-primary/20" : "border-border bg-background hover:bg-secondary/50"
                   ].join(" ")}
                 >
                   <span className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", selected ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"].join(" ")}>
@@ -488,7 +488,7 @@ function MeetupCard({
         focused ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
       ].join(" ")}
     >
-      <div className="flex items-start gap-4 bg-gradient-to-br from-primary/18 via-primary/7 to-transparent p-5">
+      <div className="flex items-start gap-4 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-5">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-card text-primary shadow-sm">
           <MeetupModeIcon mode={m.mode} className="h-7 w-7" />
         </div>
@@ -526,7 +526,7 @@ function MeetupCard({
         )}
 
         {!creator && open && mine?.response === "invited" && (
-          <section className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
+          <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
             <p className="text-sm font-bold">You're invited</p>
             <p className="mt-1 text-xs text-muted-foreground">Accept to join the meet up and receive arrival updates.</p>
             <fieldset disabled={pending} className="mt-4 grid grid-cols-2 gap-2">
@@ -559,7 +559,7 @@ function MeetupCard({
                     : ARRIVAL_LABELS[person.arrival];
 
               return (
-                <li key={person.key} className="flex items-center gap-3 rounded-2xl bg-secondary/45 p-3">
+                <li key={person.key} className="flex items-center gap-3 rounded-2xl bg-secondary/50 p-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card text-xs font-bold shadow-sm">
                     {initials(person.userId === viewerId ? "You" : person.name)}
                   </span>
@@ -570,7 +570,7 @@ function MeetupCard({
                     </span>
                     {nearby && <span className="block text-xs font-medium text-primary">Nearby · not arrival confirmation</span>}
                   </span>
-                  <span className={["max-w-[42%] rounded-full px-2.5 py-1 text-right text-[11px] font-semibold", person.metAt ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-card text-muted-foreground"].join(" ")}>
+                  <span className={["max-w-[42%] rounded-full px-2.5 py-1 text-right text-[11px] font-semibold", person.metAt ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-card text-muted-foreground"].join(" ")}>
                     {status}
                   </span>
                 </li>
@@ -583,7 +583,7 @@ function MeetupCard({
           <fieldset disabled={pending} className="space-y-4">
             {mine?.response === "accepted" && (
               <section className="flex items-center gap-3 rounded-2xl border border-border bg-background p-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
                   <Navigation className="h-5 w-5" />
                 </span>
                 <button
@@ -592,7 +592,7 @@ function MeetupCard({
                   className="min-w-0 flex-1 text-left"
                 >
                   <span className="block text-sm font-bold">Allow nearby hint</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">No exact location or distance is shared.</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">No exact location or distance is shared. Ghost Mode and Privacy Zones still apply.</span>
                 </button>
                 <button
                   type="button"
@@ -629,9 +629,9 @@ function MeetupCard({
                   <button
                     type="button"
                     onClick={() => update({ action: "arrival", arrival: "on_my_way" })}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-blue-500/15 bg-blue-500/10 p-4 text-left transition active:scale-[0.99]"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-left transition active:scale-[0.99]"
                   >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-300">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-600 dark:text-blue-300">
                       <CarFront className="h-5 w-5" />
                     </span>
                     <span className="flex-1">
@@ -643,9 +643,9 @@ function MeetupCard({
                   <button
                     type="button"
                     onClick={() => update({ action: "arrival", arrival: "here" })}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-emerald-500/15 bg-emerald-500/10 p-4 text-left transition active:scale-[0.99]"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-left transition active:scale-[0.99]"
                   >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
                       <MapPin className="h-5 w-5" />
                     </span>
                     <span className="flex-1">
@@ -654,9 +654,9 @@ function MeetupCard({
                     </span>
                   </button>
 
-                  <div className="rounded-2xl border border-amber-500/15 bg-amber-500/10 p-4">
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-300">
                         <Clock3 className="h-5 w-5" />
                       </span>
                       <span>
@@ -687,9 +687,9 @@ function MeetupCard({
                   <button
                     type="button"
                     onClick={() => update({ action: "arrival", arrival: "left" })}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-red-500/15 bg-red-500/10 p-4 text-left transition active:scale-[0.99]"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-left transition active:scale-[0.99]"
                   >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/15 text-red-600 dark:text-red-300">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/20 text-red-600 dark:text-red-300">
                       <LogOut className="h-5 w-5" />
                     </span>
                     <span className="flex-1">
@@ -724,7 +724,7 @@ function MeetupCard({
             )}
 
             {now !== null && meetupPhase(m, now) === "unconfirmed" && !mine?.metAt && (
-              <p className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-3 text-sm">
+              <p className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm">
                 Did you meet? Confirm if you did, or choose another time. An unconfirmed meetup doesn't mean it failed.
               </p>
             )}
