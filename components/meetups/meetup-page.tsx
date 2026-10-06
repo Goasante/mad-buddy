@@ -872,46 +872,50 @@ function MeetupCard({
           className="w-full p-4 text-left sm:p-5"
           aria-expanded={expanded}
         >
-          <div className="flex items-start gap-3">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
-              <MeetupModeIcon mode={m.mode} className="h-7 w-7" />
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
+              <MeetupModeIcon mode={m.mode} className="h-6 w-6" />
             </span>
 
             <span className="min-w-0 flex-1">
-              <span className="flex items-start justify-between gap-2">
-                <span className="min-w-0">
-                  <span className="block truncate text-lg font-bold">{MEETUP_TITLES[m.mode]}</span>
-                  <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                    <CalendarClock className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    {compactTimeLabel(m.startsAt, m.timezone)}
-                  </span>
-                  <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    <span className="truncate">{m.placeLabel}</span>
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <StatusPill label={status.label} tone={status.tone} />
-                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition ${expanded ? "rotate-180" : ""}`} />
-                </span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-lg font-bold">{MEETUP_TITLES[m.mode]}</span>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-muted-foreground transition ${expanded ? "rotate-180" : ""}`}
+                />
               </span>
 
-              {!expanded && (
-                <span className="mt-3 flex items-center">
-                  {visibleMembers.map((person, index) => (
-                    <span
-                      key={person.key}
-                      className="-ml-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-secondary text-[9px] font-bold first:ml-0"
-                      style={{ zIndex: visibleMembers.length - index }}
-                    >
-                      {initials(person.userId === viewerId ? "You" : person.name)}
-                    </span>
-                  ))}
-                  {m.members.length > 4 && (
-                    <span className="ml-2 text-[11px] text-muted-foreground">+{m.members.length - 4}</span>
-                  )}
-                </span>
-              )}
+              <span className="mt-1.5 flex min-w-0 items-center gap-2 whitespace-nowrap text-sm text-muted-foreground">
+                <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
+                <span className="truncate">{compactTimeLabel(m.startsAt, m.timezone)}</span>
+              </span>
+
+              <span className="mt-1 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                <span className="truncate">{m.placeLabel}</span>
+              </span>
+
+              <span className="mt-3 flex min-w-0 items-center justify-between gap-2">
+                {!expanded ? (
+                  <span className="flex min-w-0 items-center">
+                    {visibleMembers.map((person, index) => (
+                      <span
+                        key={person.key}
+                        className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-card bg-secondary text-[9px] font-bold first:ml-0"
+                        style={{ zIndex: visibleMembers.length - index }}
+                      >
+                        {initials(person.userId === viewerId ? "You" : person.name)}
+                      </span>
+                    ))}
+                    {m.members.length > 4 && (
+                      <span className="ml-2 text-[11px] text-muted-foreground">+{m.members.length - 4}</span>
+                    )}
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <StatusPill label={status.label} tone={status.tone} />
+              </span>
             </span>
           </div>
         </button>
