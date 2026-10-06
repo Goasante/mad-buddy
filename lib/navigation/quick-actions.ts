@@ -62,8 +62,8 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
   { id: "events", label: "Events", href: "/events" as Route, featureIcon: "events", toneClass: "qa-tone-events" },
   {
     id: "safe_arrival",
-    label: "Safe Arrival",
-    href: "/safe-arrival" as Route,
+    label: "Meet Up",
+    href: "/meet-up" as Route,
     featureIcon: "safeArrival",
     toneClass: "qa-tone-safe-arrival"
   },
@@ -116,7 +116,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  * shell already knows it is immersive -- the message composer owns the
  * lower-right corner there.
  */
-const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/linkr", "/settings", "/conference"];
+const EXCLUDED_SURFACES: readonly string[] = ["/scan", "/safe-arrival", "/meet-up", "/linkr", "/settings", "/conference"];
 
 /**
  * Detail routes that keep their own corner.
@@ -132,6 +132,7 @@ const EXCLUDED_PREFIXES: readonly string[] = [
   "/events/",
   "/scan/",
   "/safe-arrival/",
+  "/meet-up/",
   "/conference/",
   // Every settings sub-page is the same focused configuration surface as its
   // parent -- /settings/glow-visibility is exactly where this matters most.

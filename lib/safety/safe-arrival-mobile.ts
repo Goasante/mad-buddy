@@ -1,6 +1,7 @@
 
 import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import "server-only";
+import { acceptsNewSafeArrivalJourneys, SAFE_ARRIVAL_REPLACED_MESSAGE } from "@/lib/safety/legacy-arrival";
 
 import { z } from "zod";
 import { recordProductEvent } from "@/lib/analytics/track";
@@ -142,6 +143,7 @@ export async function loadSafeArrival(userId: string): Promise<SafeArrivalData> 
 
 
 export async function createSafeArrival(userId: string, input: unknown): Promise<SafeArrivalResult> {
+  if (!acceptsNewSafeArrivalJourneys()) return { ok: false, message: SAFE_ARRIVAL_REPLACED_MESSAGE };
   if (!(await optionalFeatureEnabled("safe_arrival"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
 
   const envMessage = serviceRoleEnvMessage();

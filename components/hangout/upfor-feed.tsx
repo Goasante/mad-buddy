@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
 import { Users } from "lucide-react";
 import { UpForActivityIcon } from "@/components/hangout/upfor-activity-icon";
-import { filterForMode, rankForYou, type UpForMode } from "@/lib/social/upfor-feed";
+import { filterForMode, rankPopular, type UpForMode } from "@/lib/social/upfor-feed";
 import { UPFOR_QUICK_IDEAS, upForGoingLabel, upForTitle } from "@/lib/social/upfor";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
 import { UpForCard, type UpForCardModel } from "@/components/hangout/upfor-card";
@@ -103,7 +103,7 @@ export function UpForFeed({
    * freshness, so this rail reflects social momentum without inventing a
    * favourite count or another opaque score.
    */
-  const popular = useMemo(() => rankForYou(visible, nowMs).slice(0, 6), [visible, nowMs]);
+  const popular = useMemo(() => rankPopular(visible, nowMs).slice(0, 6), [visible, nowMs]);
 
   const run = useCallback(
     (id: string, action: (id: string) => Promise<void> | void) => {
@@ -219,7 +219,7 @@ export function UpForFeed({
             <section className={styles.popular} aria-labelledby="upfor-popular-heading">
               <div className={styles.sectionHeading}>
                 <h3 id="upfor-popular-heading" className={styles.sectionTitle}>
-                  Popular right now
+                  Popular
                 </h3>
               </div>
 
@@ -234,7 +234,7 @@ export function UpForFeed({
                       className={`${styles.popularCard} ${imageStyles.imageCard}`}
                       onClick={() => onOpen?.(item.id)}
                       disabled={!onOpen}
-                      aria-label={`View ${upForTitle(item.activityType)} from ${item.ownerName}`}
+                      aria-label={`View ${upForTitle(item.activityType, Date.parse(item.startsAt) > nowMs)} from ${item.ownerName}`}
                     >
                       {artwork ? (
                         <Image
@@ -253,7 +253,7 @@ export function UpForFeed({
                       )}
                       <span className={styles.popularScrim} aria-hidden="true" />
                       <span className={styles.popularContent}>
-                        <span className={styles.popularTitle}>{upForTitle(item.activityType)}</span>
+                        <span className={styles.popularTitle}>{upForTitle(item.activityType, Date.parse(item.startsAt) > nowMs)}</span>
                         <span className={styles.popularProof}>
                           <Users aria-hidden="true" />
                           {going ?? "New UpFor"}

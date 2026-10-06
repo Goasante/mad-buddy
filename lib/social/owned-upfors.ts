@@ -74,6 +74,10 @@ export function ownedUpForTimeLabel(row: OwnedUpFor, nowMs: number, locale?: str
     const clock = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(
       new Date(startsMs)
     );
+    if (startsMs - nowMs >= 24 * 60 * 60_000) {
+      const day = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(new Date(startsMs));
+      return `Starts ${day} · ${clock}`;
+    }
     const gap = humanGap(startsMs - nowMs);
     return gap ? `Starts ${clock} · in ${gap}` : `Starts ${clock}`;
   }

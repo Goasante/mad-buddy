@@ -35,6 +35,7 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   plan: "/plans" as Route,
   hangout: "/hangout-mode" as Route,
   safe_arrival: "/safe-arrival" as Route,
+  meetup: "/meet-up" as Route,
   event: "/events" as Route,
   // An Event Room notification lands on its Event, and with both ids on the
   // Room itself. Never on generic Events Home.
@@ -120,6 +121,8 @@ export function resolveNotificationDestination(type: string): NotificationDestin
         return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
       case "safe_arrival":
         return { type: "internal", href: withQuery("/safe-arrival", "session", entityId) };
+      case "meetup":
+        return { type: "internal", href: withQuery("/meet-up", "meetup", entityId) };
       case "linkr_connection":
         // Deliberately NOT a frozen destination. `/linkr?connection=<id>`
         // re-resolves at open time: blocks and eligibility are re-checked, and

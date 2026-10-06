@@ -29,6 +29,9 @@ export function upForCountdownLabel(row: UpForTiming, nowMs: number): string | n
     // On the boundary the sentence collapses to the single word rather than
     // "Starts in Now", which reads like a bug.
     if (untilStart < 60_000) return "Now";
+    if (untilStart >= 24 * 60 * 60_000) {
+      return new Date(row.startsAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+    }
     return `Starts in ${humanGap(untilStart)}`;
   }
 

@@ -230,6 +230,7 @@ export type RankableUpFor = {
   startsAt: string;
   endsAt: string;
   goingCount: number;
+  interestCount?: number;
   /** Whether the viewer and the creator are approved Muddies. */
   isMuddy: boolean;
   /** Whether this reached the viewer through a Group they are in. */
@@ -295,6 +296,13 @@ export function rankForYou<T extends RankableUpFor>(items: readonly T[], nowMs: 
   });
 }
 
+/** Popular includes pending and Maybe interest, without treating it as attendance. */
+export function rankPopular<T extends RankableUpFor>(items: readonly T[], nowMs: number): T[] {
+  return [...items].filter((item) => Date.parse(item.endsAt) > nowMs).sort((a, b) =>
+    (b.interestCount ?? b.goingCount) - (a.interestCount ?? a.goingCount) || Date.parse(a.startsAt) - Date.parse(b.startsAt) || a.id.localeCompare(b.id)
+  );
+}
+
 /**
  * Narrow an eligible list to one mode.
  *
@@ -343,7 +351,7 @@ export function upForEmptyCopy(mode: UpForMode): { title: string; body: string }
       };
     case "around":
       return {
-        title: "Nothing live around you right now",
+        title: "No UpFors nearby yet",
         body: "This only shows UpFors you can join. Start one and see who is in."
       };
     case "groups":

@@ -266,17 +266,20 @@ export async function resolveFeatureDeniedIds(
   viewerId: string,
   ownerIds: string[],
   featureType: VisibilityFeatureType,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  strict = false
 ): Promise<Set<string>> {
   const denied = new Set<string>();
   if (ownerIds.length === 0) return denied;
 
-  const { data: sessions } = await admin
+  const { data: sessions, error: sessionError } = await admin
     .from("visibility_sessions")
     .select("id, user_id, visibility_mode, ends_at")
     .in("user_id", ownerIds)
     .eq("feature_type", featureType)
     .eq("status", "active");
+
+  if (strict && sessionError) throw sessionError;
 
   const activeSessions = sessions ?? [];
   if (activeSessions.length === 0) return denied;
@@ -284,7 +287,7 @@ export async function resolveFeatureDeniedIds(
   const sessionIds = activeSessions.map((session) => session.id);
   const ownersWithSession = activeSessions.map((session) => session.user_id);
 
-  const [{ data: targets }, { data: closeFriends }, { data: ownedCircles }] = await Promise.all([
+  const [{ data: targets, error: targetError }, { data: closeFriends, error: closeError }, { data: ownedCircles, error: circleError }] = await Promise.all([
     admin
       .from("visibility_targets")
       .select("session_id, target_type, target_id, access_type")
@@ -301,17 +304,20 @@ export async function resolveFeatureDeniedIds(
       .is("archived_at", null)
   ]);
 
+  if (strict && (targetError || closeError || circleError)) throw targetError || closeError || circleError;
+
   const closeFriendOwners = new Set((closeFriends ?? []).map((row) => row.owner_id));
 
   // Which of each owner's circles does the viewer belong to?
   const circleOwnerById = new Map((ownedCircles ?? []).map((circle) => [circle.id, circle.user_id]));
   const viewerCirclesByOwner = new Map<string, Set<string>>();
   if (circleOwnerById.size > 0) {
-    const { data: memberships } = await admin
+    const { data: memberships, error: membershipError } = await admin
       .from("circle_members")
       .select("circle_id")
       .eq("friend_id", viewerId)
       .in("circle_id", [...circleOwnerById.keys()]);
+    if (strict && membershipError) throw membershipError;
     for (const membership of memberships ?? []) {
       const owner = circleOwnerById.get(membership.circle_id);
       if (!owner) continue;

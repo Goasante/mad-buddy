@@ -28,6 +28,8 @@ export type RateLimitAction =
   | "pings.create.daily"
   | "status.update"
   | "plans.create"
+  | "meetups.create"
+  | "meetups.update"
   | "plans.invite"
   | "hangouts.start"
   | "hangouts.request"
@@ -105,6 +107,8 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "status.update": { limit: 30, windowSeconds: 60 * 60 },
   // Plans / Hangout anti-spam (feature spec §55, §10).
   "plans.create": { limit: 20, windowSeconds: 60 * 60 },
+  "meetups.create": { limit: 20, windowSeconds: 60 * 60 },
+  "meetups.update": { limit: 120, windowSeconds: 60 * 60 },
   "plans.invite": { limit: 100, windowSeconds: 60 * 60 },
   "hangouts.start": { limit: 10, windowSeconds: 60 * 60 },
   "hangouts.request": { limit: 40, windowSeconds: 60 * 60 },

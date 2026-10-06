@@ -86,14 +86,13 @@ export function upForPhase(row: UpForTiming, nowMs: number): UpForPhase {
 /**
  * Whether this UpFor may appear on a DISCOVERY surface.
  *
- * Discovery is publication: the nearby feed, a Muddy's list of what people are
- * up to. A scheduled UpFor must NOT appear here before it starts, or creating
- * one at 14:00 for 18:00 broadcasts it four hours early -- which the owner did
- * not ask for. Enforced in RLS as well; this keeps application reads agreeing
- * with the database rather than relying on it alone.
+ * Publishing an UpFor makes it discoverable immediately, including a future
+ * activity. Audience, blocks and nearby eligibility are separate server gates.
+ * Timestamps distinguish scheduled from happening now; they do not hide interest.
  */
 export function isDiscoverableUpFor(row: UpForTiming, nowMs: number): boolean {
-  return upForPhase(row, nowMs) === "live" && row.status === "active";
+  const phase = upForPhase(row, nowMs);
+  return (phase === "live" || phase === "scheduled") && row.status === "active";
 }
 
 /**

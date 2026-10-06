@@ -10,6 +10,7 @@ const PRIVATE_COPY: Record<string, string> = {
   message: "You have a new Mad Buddy message.",
   group_message: "You have a new Mad Buddy group message.",
   safe_arrival: "There is an update to a Safe Arrival session.",
+  meetup: "There is an update to a meetup.",
   hangout: "You have a new UpFor update.",
   meeting_ping: "You have a new Meet Ping.",
   meetup_request: "A Muddy wants to connect.",

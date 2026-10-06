@@ -4,6 +4,7 @@ import { isUpcomingPlan } from "@/lib/social/plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import type { PlanCategory, PlanStatus } from "@/lib/supabase/database.types";
+import { shouldShowConvertedUpForOnHome } from "@/lib/social/upfor-home-plan";
 
 /**
  * The Home "Upcoming plans" read model. Mirrors the Plans page's membership
@@ -91,7 +92,7 @@ export async function loadUpcomingPlans(userId: string, limit = 8): Promise<Upco
   // it from Home the moment it began.
   const { data: planRows } = await admin
     .from("plans")
-    .select("id, creator_id, title, start_at, end_at, status, custom_place_text, category, cover_image_url")
+    .select("id, creator_id, title, start_at, end_at, status, custom_place_text, category, cover_image_url, source_hangout_id")
     .in("id", planIds)
     .in("status", [...ACTIVE_STATUSES])
     // Undated plans never reach Home. They live under "Waiting on a time" on
@@ -101,11 +102,21 @@ export async function loadUpcomingPlans(userId: string, limit = 8): Promise<Upco
     // helper decides which of those actually still count.
     .or(`start_at.gte.${nowIso},end_at.gte.${nowIso}`)
     .order("start_at", { ascending: true })
-    .limit(limit + 1);
+    // Bounded overfetch: excluded Now conversions must not crowd out future cards.
+    .limit(Math.max(limit + 1, 50));
 
-  const rows = (planRows ?? []).filter((plan) =>
-    isUpcomingPlan({ status: plan.status as PlanStatus, startAt: plan.start_at, endAt: plan.end_at }, nowMs)
-  );
+  // A Now UpFor keeps its Plan chat, but is not an upcoming homepage card.
+  // Read original intent, not whether its start happens to be past at this read.
+  const sourceIds = [...new Set((planRows ?? []).flatMap((plan) => plan.source_hangout_id ? [plan.source_hangout_id] : []))];
+  const { data: sourceRows } = sourceIds.length
+    ? await admin.from("hangout_sessions").select("id, starts_at, created_at").in("id", sourceIds)
+    : { data: [] };
+  const sourceById = new Map((sourceRows ?? []).map((row) => [row.id, row]));
+  const rows = (planRows ?? []).filter((plan) => {
+    if (!isUpcomingPlan({ status: plan.status as PlanStatus, startAt: plan.start_at, endAt: plan.end_at }, nowMs)) return false;
+    if (!plan.source_hangout_id) return true;
+    return shouldShowConvertedUpForOnHome(sourceById.get(plan.source_hangout_id) ?? null);
+  });
   const shown = rows.slice(0, limit);
   if (shown.length === 0) return { plans: [], hasMore: false };
 

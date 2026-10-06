@@ -54,6 +54,7 @@ import {
   TravellerJourneyHomeCard
 } from "@/components/safety/safe-arrival-home-cards";
 import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
+import { MEETUP_TITLES, type MeetupHomeItem } from "@/lib/meetups/rules";
 import { StatusComposer } from "@/components/social/status-composer";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
@@ -152,6 +153,7 @@ type DashboardPageContentProps = {
     checkingOn: SafeArrivalJourney[];
     invitations: SafeArrivalJourney[];
   } | null;
+  meetupItems?: MeetupHomeItem[];
   hiddenQuickActionHrefs?: string[];
   /**
    * The one card Home renders, already selected server-side by the Smart Card
@@ -306,6 +308,7 @@ export function DashboardPageContent({
   glowColorByFriendId = {},
   profileReminder = null,
   safeArrival = null,
+  meetupItems = [],
   hiddenQuickActionHrefs = [],
   smartCard = null,
   activationState = null,
@@ -1257,6 +1260,15 @@ export function DashboardPageContent({
           <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
         ) : null}
 
+        {meetupItems.length > 0 ? <section aria-labelledby="home-meetup-heading" className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3"><h2 id="home-meetup-heading" className="text-sm font-semibold">Meet Up</h2><Link href="/meet-up" prefetch={false} className="text-xs font-medium text-primary">Open</Link></div>
+          {meetupItems.map((item) => <Link key={item.id} href={`/meet-up?meetup=${item.id}` as Route} prefetch={false} className="block rounded-2xl border border-border bg-card p-3 space-y-1">
+            <p className="text-sm font-semibold">{MEETUP_TITLES[item.mode]} · {item.placeLabel}</p>
+            <p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { timeZone: item.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(item.startsAt))} · {item.timezone}</p>
+            <p className="text-xs text-primary">{item.response === "invited" ? "Invitation · respond" : "You accepted · view updates"}</p>
+          </Link>)}
+        </section> : null}
+
         {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
             invitation still awaiting my answer. Absent entirely when there is
             nothing live, so Home never carries an empty placeholder. */}
@@ -1915,7 +1927,7 @@ const quickActions: QuickAction[] = [
   { href: "/plans?create=1", label: "Complete a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarDays, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/discover", label: "Linkr", description: "Find people who are open to connecting.", suggestion: "Meet people open to connecting.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
-  { href: "/safe-arrival", label: "Safe Arrival", description: "Let trusted Muddies know when you arrive safely.", suggestion: "Let your circle know you got there.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
+  { href: "/meet-up", label: "Meet Up", description: "Invite Muddies, agree a time, and meet.", suggestion: "Make it happen, together.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", suggestion: "Stay on top of what’s next.", tone: "orange", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
   { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", suggestion: "Quieten things down for a while.", tone: "blush", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
 ];

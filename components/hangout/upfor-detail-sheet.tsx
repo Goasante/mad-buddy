@@ -71,7 +71,7 @@ export function UpForDetailSheet({
       open={open}
       onOpenChange={onOpenChange}
       variant="sheet"
-      title={upFor ? upForTitle(upFor.activityType) : "UpFor"}
+      title={upFor ? upForTitle(upFor.activityType, Date.parse(upFor.startsAt) > nowMs) : "UpFor"}
       description={upFor ? `Hosted by ${upFor.ownerName}` : undefined}
     >
       {upFor ? <DetailBody

@@ -128,7 +128,7 @@ export const UpForCard = memo(function UpForCard({
         <div className="upfor-card__content">
           <h3 className="upfor-card__activity">
             <UpForActivityIcon activity={upfor.activityType} className="upfor-card__activity-icon" />
-            <span>{upForTitle(upfor.activityType)}</span>
+            <span>{upForTitle(upfor.activityType, Date.parse(upfor.startsAt) > nowMs)}</span>
           </h3>
           <p className="upfor-card__owner">{isOwner ? "your UpFor" : `with ${upfor.ownerName}`}</p>
           <div className="upfor-card__meta">
@@ -190,7 +190,7 @@ export const UpForCard = memo(function UpForCard({
               className={cn("upfor-card__view", joined && "upfor-card__view--next")}
               onClick={() => onOpen?.(upfor.id)}
               disabled={!onOpen}
-              aria-label={`View ${upForTitle(upfor.activityType)} from ${upfor.ownerName}`}
+              aria-label={`View ${upForTitle(upfor.activityType, Date.parse(upfor.startsAt) > nowMs)} from ${upfor.ownerName}`}
             >
               View
             </button>
@@ -227,7 +227,7 @@ export const UpForCard = memo(function UpForCard({
             <p className="upfor-card__momentum-body">
               {planConversionSummary({
                 joinerCount: upfor.participants.length,
-                activityLabel: upForTitle(upfor.activityType)
+                activityLabel: upForTitle(upfor.activityType, Date.parse(upfor.startsAt) > nowMs)
               })}
             </p>
           </div>

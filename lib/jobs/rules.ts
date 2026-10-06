@@ -22,6 +22,7 @@ export type JobType =
   // The six that batches 5-13 left un-run.
   | "safe_arrival.unconfirmed_alert"
   | "safe_arrival.deadline"
+  | "meetups.notifications"
   | "safe_arrival.lifecycle_notification"
   | "upfor.announce_started"
   | "media.strip_exif"
@@ -186,6 +187,7 @@ export type ScheduleSpec = {
  * a missed/failed deadline job without changing the safety contract.
  */
 export const SCHEDULE: readonly ScheduleSpec[] = [
+  { jobType: "meetups.notifications", everyMinutes: 5, priority: 3 },
   { jobType: "safe_arrival.unconfirmed_alert", everyMinutes: 5, priority: 1 },
   /* A scheduled UpFor announces itself when it starts, not when it was
      created. Five minutes matches the safe-arrival cadence: the alternative

@@ -34,7 +34,7 @@ import {
 } from "@/lib/social/plans";
 import { announceUpForToAudience } from "@/lib/social/upfor-announce";
 import { resolveHangoutAudience } from "@/lib/social/upfor-audience";
-import { validateLaterToday } from "@/lib/time/timezone";
+import { validateScheduledStart } from "@/lib/time/timezone";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
@@ -201,16 +201,12 @@ const startHangoutSchema = z.object({
   endsAt: z.string().datetime({ offset: true }),
   /**
    * When the UpFor begins. "now" keeps the original behaviour exactly; "later"
-   * requires `startsAt` and is constrained to the creator's current local day.
-   *
-   * There is deliberately no future-DATE input anywhere in this contract: the
-   * only thing a client can move is a clock time, and the server checks it
-   * lands on today in the supplied zone.
+   * requires a future `startsAt`. Both later today and future dates are valid.
    */
   when: z.enum(["now", "later"]).default("now"),
   startsAt: z.string().datetime({ offset: true }).optional(),
   /**
-   * The creator's IANA zone, used ONLY to decide what "today" means.
+   * The creator's validated IANA zone, retained when creating the Plan chat.
    *
    * It has to come from the client because the account has no timezone of its
    * own, but it is never trusted raw: it is validated as a real zone, and it
@@ -259,10 +255,10 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
 
   if (parsed.data.when === "later") {
     if (!Number.isFinite(requestedStartMs)) {
-      return { ok: false, message: "Choose a time later today." };
+      return { ok: false, message: "Choose a future date and time." };
     }
     const zone = parsed.data.timezone ?? DEFAULT_UPFOR_TIMEZONE;
-    const verdict = validateLaterToday(new Date(requestedStartMs), new Date(nowMs), zone);
+    const verdict = validateScheduledStart(new Date(requestedStartMs), new Date(nowMs), zone);
     if (!verdict.ok) {
       // Human-readable, and never the database's or the RPC's own error text.
       return {
@@ -270,9 +266,7 @@ export async function startHangoutAction(input: unknown): Promise<HangoutActionS
         message:
           verdict.reason === "not_in_future"
             ? "That time has already passed."
-            : verdict.reason === "not_today"
-              ? "Choose a time later today."
-              : verdict.reason === "invalid_timezone"
+            : verdict.reason === "invalid_timezone"
                 ? "That time isn't available in your timezone."
                 : "Check the UpFor details and try again."
       };
@@ -678,6 +672,7 @@ export type VisibleHangout = {
    * three people who asked.
    */
   goingCount: number;
+  interestCount?: number;
   /**
    * Whether the viewer and the creator are approved Muddies.
    *
@@ -868,10 +863,7 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
           .select(HANGOUT_DISCOVERY_COLUMNS)
           .in("owner_id", friendIds)
           .eq("status", "active")
-          // A scheduled UpFor is stored as `active` with a future starts_at, so
-          // discovery must also require that it has actually begun -- otherwise
-          // an 18:00 session is published to the audience from 14:00.
-          .lte("starts_at", nowIso)
+          // Future activities are discoverable before they start; audience checks still apply.
           .gt("ends_at", nowIso)
           .order("ends_at", { ascending: true })
           .limit(50)
@@ -885,10 +877,7 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
       .select(HANGOUT_DISCOVERY_COLUMNS)
       .eq("discovery_scope", "nearby")
       .eq("status", "active")
-      // A scheduled UpFor is stored as `active` with a future starts_at, so
-      // discovery must also require that it has actually begun -- otherwise
-      // an 18:00 session is published to the audience from 14:00.
-      .lte("starts_at", nowIso)
+      // Nearby eligibility is rechecked below, including for future activities.
       .gt("ends_at", nowIso)
       .neq("owner_id", userId)
       .order("ends_at", { ascending: true })
@@ -950,19 +939,21 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
   const profileById = new Map((owners ?? []).map((row) => [row.user_id, row]));
   const requestBySession = new Map((myRequests ?? []).map((row) => [row.hangout_session_id, row.status]));
 
-  // Accepted joiners per session. One grouped read rather than a query per
-  // card, and accepted-only so the count never overstates who is coming.
+  // Popular reflects interest; the going count and avatars remain accepted-only.
   const { data: acceptedRows } = await admin
     .from("hangout_requests")
-    .select("hangout_session_id, requester_id")
-    .eq("status", "accepted")
+    .select("hangout_session_id, requester_id, status")
+    .in("status", ["accepted", "pending", "maybe"])
     .in(
       "hangout_session_id",
       visible.map((session) => session.id)
     );
   const acceptedBySession = new Map<string, number>();
+  const interestBySession = new Map<string, number>();
   const participantIdsBySession = new Map<string, string[]>();
   for (const row of acceptedRows ?? []) {
+    interestBySession.set(row.hangout_session_id, (interestBySession.get(row.hangout_session_id) ?? 0) + 1);
+    if (row.status !== "accepted") continue;
     acceptedBySession.set(row.hangout_session_id, (acceptedBySession.get(row.hangout_session_id) ?? 0) + 1);
     const ids = participantIdsBySession.get(row.hangout_session_id) ?? [];
     ids.push(row.requester_id);
@@ -971,7 +962,7 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
 
   // ONE profile read for every participant across every session. A query per
   // card — or worse, per person — is the N+1 this deliberately avoids.
-  const participantIds = [...new Set((acceptedRows ?? []).map((row) => row.requester_id))];
+  const participantIds = [...new Set((acceptedRows ?? []).filter((row) => row.status === "accepted").map((row) => row.requester_id))];
   const { data: participantProfiles } = participantIds.length
     ? await admin
         .from("profiles")
@@ -1066,7 +1057,8 @@ export async function getVisibleHangoutsAction(): Promise<VisibleHangout[]> {
       .filter((participant): participant is HangoutParticipant => participant !== null),
     maxParticipants: session.max_participants,
     // +1 for the owner, who is by definition going to their own hangout.
-    goingCount: (acceptedBySession.get(session.id) ?? 0) + 1
+    goingCount: (acceptedBySession.get(session.id) ?? 0) + 1,
+    interestCount: (interestBySession.get(session.id) ?? 0) + 1
   }));
 }
 
