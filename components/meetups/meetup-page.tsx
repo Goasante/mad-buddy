@@ -9,14 +9,17 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Clock3,
   House,
+  Info,
   LogOut,
   MapPin,
   Navigation,
   Plus,
   TimerReset,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,11 +37,27 @@ import { useCountdownResume } from "@/hooks/use-countdown-clock";
 
 export type MeetupSaveAction = (input: unknown, create?: boolean) => Promise<{ ok: boolean; message: string }>;
 
-const inputClass = "w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
-const panelClass = "rounded-[28px] border border-border/70 bg-card shadow-[0_12px_40px_hsl(var(--shadow)/0.08)]";
+const inputClass =
+  "w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+const panelClass =
+  "rounded-[26px] border border-border/80 bg-card shadow-[0_10px_34px_hsl(var(--shadow)/0.08)]";
 
 function timeLabel(iso: string, timezone: string) {
-  return new Intl.DateTimeFormat("en", { timeZone: timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
+  return new Intl.DateTimeFormat("en", {
+    timeZone: timezone,
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(iso));
+}
+
+function compactTimeLabel(iso: string, timezone: string) {
+  return new Intl.DateTimeFormat("en", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(iso));
 }
 
 function initials(name: string) {
@@ -63,8 +82,38 @@ function modeDescription(mode: MeetupMode) {
 
 function responseLabel(response: "invited" | "accepted" | "declined") {
   if (response === "accepted") return "Accepted";
-  if (response === "declined") return "Can&apos;t make it";
-  return "Invited";
+  if (response === "declined") return "Cannot make it";
+  return "Waiting";
+}
+
+function meetupStatus(meetup: Meetup, viewerId: string) {
+  if (meetup.status === "cancelled") return { label: "Cancelled", tone: "muted" as const };
+  if (meetup.status === "ended") return { label: "Completed", tone: "success" as const };
+
+  const mine = meetup.members.find((person) => person.userId === viewerId);
+  const waiting = meetup.members.filter((person) => person.response === "invited").length;
+
+  if (meetup.creatorId === viewerId && waiting > 0) {
+    return {
+      label: `Waiting for ${waiting} ${waiting === 1 ? "response" : "responses"}`,
+      tone: "waiting" as const
+    };
+  }
+
+  if (mine?.response === "declined") return { label: "Cannot make it", tone: "muted" as const };
+  if (mine?.response === "invited") return { label: "Invitation", tone: "waiting" as const };
+  return { label: "Accepted", tone: "success" as const };
+}
+
+function StatusPill({ label, tone }: { label: string; tone: "success" | "waiting" | "muted" }) {
+  const className =
+    tone === "success"
+      ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
+      : tone === "waiting"
+        ? "bg-amber-500/12 text-amber-700 dark:text-amber-300"
+        : "bg-secondary text-muted-foreground";
+
+  return <span className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${className}`}>{label}</span>;
 }
 
 export function MeetupPage({
@@ -83,7 +132,12 @@ export function MeetupPage({
   reloadAction?: () => Promise<void>;
 }) {
   const revalidate = useRevalidate();
+  const focusedMeetup = focusedId ? meetups.find((meetup) => meetup.id === focusedId) : undefined;
   const [creating, setCreating] = useState(false);
+  const [tab, setTab] = useState<"active" | "mine">(
+    focusedMeetup && focusedMeetup.status !== "active" ? "mine" : "active"
+  );
+
   const refresh = useCallback(async () => {
     if (reloadAction) await reloadAction();
     else revalidate();
@@ -91,14 +145,16 @@ export function MeetupPage({
 
   useFeedRefresh(refresh);
 
-  const active = meetups.filter((m) => m.status === "active");
-  const past = meetups.filter((m) => m.status !== "active");
-  const focusedPast = past.find((m) => m.id === focusedId);
+  const active = meetups.filter((meetup) => meetup.status === "active");
+  const history = meetups.filter((meetup) => meetup.status !== "active");
 
   return (
-    <main className="mx-auto min-h-screen max-w-xl px-3 pb-28 pt-4 sm:px-4">
+    <main className="mx-auto min-h-screen max-w-xl px-3 pb-40 pt-4 sm:px-4">
       <header className="mb-5 space-y-4">
-        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" />
           Home
         </Link>
@@ -109,108 +165,153 @@ export function MeetupPage({
         </div>
 
         <Button
-          className="h-14 w-full rounded-2xl text-base shadow-[0_14px_34px_hsl(var(--primary)/0.24)]"
+          className="h-14 w-full rounded-2xl text-base shadow-[0_12px_30px_hsl(var(--primary)/0.2)]"
           onClick={() => setCreating((value) => !value)}
         >
           {creating ? <ArrowLeft className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-          {creating ? "Back to meet ups" : "Arrange"}
+          {creating ? "Back to meetups" : "Arrange a Meet Up"}
         </Button>
 
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-secondary/70 p-1.5">
-          <div className="rounded-xl bg-primary px-4 py-2.5 text-center text-sm font-semibold text-primary-foreground">
-            Active ({active.length})
+        {!creating && (
+          <div className="grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
+            <button
+              type="button"
+              onClick={() => setTab("active")}
+              className={[
+                "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+                tab === "active" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"
+              ].join(" ")}
+            >
+              Active ({active.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("mine")}
+              className={[
+                "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+                tab === "mine" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              ].join(" ")}
+            >
+              Your Meetups
+            </button>
           </div>
-          <Link
-            href="/plans"
-            className="rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-muted-foreground transition hover:bg-card hover:text-foreground"
-          >
-            Your Plans
-          </Link>
-        </div>
+        )}
       </header>
 
-      {creating && (
-        <div className="mb-5">
-          <CreateMeetup
-            muddies={muddies}
-            saveAction={saveAction}
-            onCreated={() => {
-              setCreating(false);
-              void refresh();
-            }}
-          />
-        </div>
-      )}
-
-      {focusedId && !meetups.some((m) => m.id === focusedId) && (
-        <p role="status" className={panelClass + " mb-4 p-5 text-sm"}>
-          This meetup is no longer available to you.
-        </p>
-      )}
-
-      {!creating && !active.length && (
-        <section className={panelClass + " mb-5 overflow-hidden"}>
-          <div className="flex min-h-44 flex-col items-center justify-center bg-gradient-to-br from-primary/20 via-primary/5 to-transparent px-6 py-8 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/20 text-primary">
-              <Users className="h-8 w-8" />
-            </div>
-            <h2 className="text-lg font-bold">No active meet ups</h2>
-            <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-              Invite a Muddy over, go to their place, or agree somewhere to meet.
+      {creating ? (
+        <CreateMeetup
+          muddies={muddies}
+          saveAction={saveAction}
+          onCreated={() => {
+            setCreating(false);
+            setTab("active");
+            void refresh();
+          }}
+        />
+      ) : (
+        <>
+          {focusedId && !meetups.some((meetup) => meetup.id === focusedId) && (
+            <p role="status" className={panelClass + " mb-4 p-5 text-sm"}>
+              This meetup is no longer available to you.
             </p>
-            <Button className="mt-5 rounded-2xl" onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" />
-              Arrange a meet up
-            </Button>
-          </div>
-        </section>
-      )}
+          )}
 
-      <div className="space-y-4">
-        {active.map((m) => (
-          <MeetupCard
-            key={m.id}
-            meetup={m}
-            viewerId={viewerId}
-            focused={m.id === focusedId}
-            saveAction={saveAction}
-            refreshAction={refresh}
-          />
-        ))}
-        {focusedPast && (
-          <MeetupCard
-            meetup={focusedPast}
-            viewerId={viewerId}
-            focused
-            saveAction={saveAction}
-            refreshAction={refresh}
-          />
-        )}
-      </div>
+          {tab === "active" && (
+            <section className="space-y-4">
+              {!active.length ? (
+                <EmptyMeetups onArrange={() => setCreating(true)} />
+              ) : (
+                active.map((meetup, index) => (
+                  <MeetupCard
+                    key={meetup.id}
+                    meetup={meetup}
+                    viewerId={viewerId}
+                    focused={meetup.id === focusedId}
+                    initialExpanded={meetup.id === focusedId || index === 0}
+                    saveAction={saveAction}
+                    refreshAction={refresh}
+                  />
+                ))
+              )}
+            </section>
+          )}
 
-      {past.some((m) => m.id !== focusedId) && (
-        <details className={panelClass + " mt-5 overflow-hidden"}>
-          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold">
-            <span>Past & cancelled ({past.length - (focusedPast ? 1 : 0)})</span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </summary>
-          <div className="space-y-3 border-t border-border/70 p-3">
-            {past
-              .filter((m) => m.id !== focusedId)
-              .map((m) => (
-                <MeetupCard
-                  key={m.id}
-                  meetup={m}
-                  viewerId={viewerId}
-                  focused={false}
-                  saveAction={saveAction}
-                  refreshAction={refresh}
-                />
-              ))}
-          </div>
-        </details>
+          {tab === "mine" && (
+            <section className="space-y-6">
+              {!meetups.length ? (
+                <EmptyMeetups onArrange={() => setCreating(true)} />
+              ) : (
+                <>
+                  {!!active.length && (
+                    <div>
+                      <div className="mb-3 flex items-center justify-between px-1">
+                        <h2 className="text-sm font-bold">Current</h2>
+                        <span className="text-xs text-muted-foreground">{active.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {active.map((meetup) => (
+                          <MeetupCard
+                            key={meetup.id}
+                            meetup={meetup}
+                            viewerId={viewerId}
+                            focused={meetup.id === focusedId}
+                            initialExpanded={meetup.id === focusedId}
+                            saveAction={saveAction}
+                            refreshAction={refresh}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!!history.length && (
+                    <div>
+                      <div className="mb-3 flex items-center justify-between px-1">
+                        <h2 className="text-sm font-bold">Past & cancelled</h2>
+                        <span className="text-xs text-muted-foreground">{history.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {history.map((meetup) => (
+                          <MeetupCard
+                            key={meetup.id}
+                            meetup={meetup}
+                            viewerId={viewerId}
+                            focused={meetup.id === focusedId}
+                            initialExpanded={meetup.id === focusedId}
+                            saveAction={saveAction}
+                            refreshAction={refresh}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+        </>
       )}
     </main>
+  );
+}
+
+function EmptyMeetups({ onArrange }: { onArrange: () => void }) {
+  return (
+    <section className={panelClass + " overflow-hidden"}>
+      <div className="flex min-h-44 flex-col items-center justify-center bg-gradient-to-br from-primary/10 via-transparent to-transparent px-6 py-8 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+          <Users className="h-7 w-7" />
+        </div>
+        <h2 className="text-lg font-bold">No meetups here yet</h2>
+        <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+          Invite a Muddy over, go to their place, or agree somewhere to meet.
+        </p>
+        <Button className="mt-5 rounded-2xl" onClick={onArrange}>
+          <Plus className="h-4 w-4" />
+          Arrange a meetup
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -223,187 +324,379 @@ function CreateMeetup({
   onCreated: () => void;
   saveAction: MeetupSaveAction;
 }) {
+  const [step, setStep] = useState(1);
   const [mode, setMode] = useState<MeetupMode>("come_over");
-  const [when, setWhen] = useState("now");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [place, setPlace] = useState("");
+  const [when, setWhen] = useState<"now" | "later">("now");
+  const [startsAt, setStartsAt] = useState("");
+  const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const requestKey = useRef<string | null>(null);
 
-  const chooseMode = (nextMode: MeetupMode) => {
+  const selectedMuddies = muddies.filter((muddy) => selectedIds.includes(muddy.id));
+
+  function resetRequestKey() {
     requestKey.current = null;
+    setMessage("");
+  }
+
+  function chooseMode(nextMode: MeetupMode) {
+    resetRequestKey();
     setMode(nextMode);
-  };
+    setSelectedIds((current) => (nextMode === "coming_to" ? current.slice(0, 1) : current));
+  }
+
+  function toggleParticipant(id: string) {
+    resetRequestKey();
+    setSelectedIds((current) => {
+      if (mode === "coming_to") return [id];
+      return current.includes(id) ? current.filter((value) => value !== id) : [...current, id];
+    });
+  }
+
+  function nextStep() {
+    setMessage("");
+
+    if (step === 1) {
+      setStep(2);
+      return;
+    }
+
+    if (step === 2) {
+      if (!place.trim()) {
+        setMessage("Add the agreed place.");
+        return;
+      }
+      if (when === "later" && (!startsAt || !Number.isFinite(new Date(startsAt).getTime()))) {
+        setMessage("Choose a date and time.");
+        return;
+      }
+      setStep(3);
+      return;
+    }
+
+    if (step === 3) {
+      if (!selectedIds.length) {
+        setMessage(mode === "coming_to" ? "Choose one Muddy." : "Choose at least one Muddy.");
+        return;
+      }
+      setStep(4);
+    }
+  }
+
+  function submit() {
+    if (!selectedIds.length || !place.trim()) return;
+    requestKey.current ??= crypto.randomUUID();
+
+    const input = {
+      mode,
+      participantIds: selectedIds,
+      placeLabel: place,
+      note,
+      when,
+      ...(when === "later" ? { startsAt: new Date(startsAt).toISOString() } : {}),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      requestKey: requestKey.current
+    };
+
+    startTransition(async () => {
+      try {
+        const result = await saveAction(input, true);
+        setMessage(result.message);
+        if (result.ok) onCreated();
+      } catch {
+        setMessage("Could not save. Try again; your invitation will not be duplicated.");
+      }
+    });
+  }
 
   return (
-    <form
-      method="post"
-      className={panelClass + " overflow-hidden"}
-      onChange={() => {
-        requestKey.current = null;
-      }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const localTime = String(data.get("startsAt") ?? "");
-
-        if (when === "later" && (!localTime || !Number.isFinite(new Date(localTime).getTime()))) {
-          setMessage("Choose a date and time.");
-          return;
-        }
-
-        requestKey.current ??= crypto.randomUUID();
-
-        const input = {
-          mode,
-          participantIds: data.getAll("participants"),
-          placeLabel: data.get("place"),
-          note: data.get("note"),
-          when,
-          ...(when === "later" ? { startsAt: new Date(localTime).toISOString() } : {}),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          requestKey: requestKey.current
-        };
-
-        startTransition(async () => {
-          try {
-            const result = await saveAction(input, true);
-            setMessage(result.message);
-            if (result.ok) onCreated();
-          } catch {
-            setMessage("Could not save. Try again; your invitation won't be duplicated.");
-          }
-        });
-      }}
-    >
+    <section className={panelClass + " overflow-hidden"}>
       <div className="border-b border-border/70 px-5 py-5">
-        <h2 className="text-xl font-bold">Arrange a Meet Up</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Invite your Muddies and agree the details.</p>
-      </div>
+        <div className="flex items-center gap-3">
+          {step > 1 && (
+            <button
+              type="button"
+              aria-label="Previous step"
+              onClick={() => {
+                setMessage("");
+                setStep((value) => Math.max(1, value - 1));
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
+          <div>
+            <h2 className="text-xl font-bold">Arrange a Meet Up</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Simple details, then send the invitation.</p>
+          </div>
+        </div>
 
-      <fieldset disabled={pending} className="space-y-6 p-5">
-        <section>
-          <h3 className="mb-3 text-sm font-bold">1. What kind of meet up?</h3>
-          <div className="space-y-2.5">
-            {(["come_over", "coming_to", "meet_somewhere"] as const).map((value) => {
-              const selected = mode === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => chooseMode(value)}
+        <div className="mt-5 grid grid-cols-4 gap-2">
+          {["Type", "Details", "Invite", "Review"].map((label, index) => {
+            const number = index + 1;
+            const activeStep = step === number;
+            const complete = step > number;
+            return (
+              <div key={label} className="space-y-1.5 text-center">
+                <div
                   className={[
-                    "flex w-full items-center gap-3 rounded-2xl border p-3.5 text-left transition",
-                    selected ? "border-primary bg-primary/10 ring-1 ring-primary/20" : "border-border bg-background hover:bg-secondary/50"
+                    "mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-bold",
+                    activeStep
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : complete
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground"
                   ].join(" ")}
                 >
-                  <span className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", selected ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"].join(" ")}>
-                    <MeetupModeIcon mode={value} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold">{MEETUP_TITLES[value]}</span>
-                    <span className="block text-xs text-muted-foreground">{modeDescription(value)}</span>
-                  </span>
-                  <span className={["flex h-5 w-5 items-center justify-center rounded-full border", selected ? "border-primary bg-primary text-primary-foreground" : "border-border"].join(" ")}>
-                    {selected && <Check className="h-3.5 w-3.5" />}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section>
-          <h3 className="mb-3 text-sm font-bold">2. Who are you inviting?</h3>
-          {!muddies.length && <p className="text-sm text-muted-foreground">Add a Muddy before arranging a meetup.</p>}
-          <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-            {muddies.map((muddy) => (
-              <label
-                key={mode + "-" + muddy.id}
-                className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-background p-3 transition hover:bg-secondary/50"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold">
-                  {initials(muddy.name)}
+                  {complete ? <Check className="h-3.5 w-3.5" /> : number}
+                </div>
+                <span className={`text-[10px] ${activeStep ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+                  {label}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{muddy.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-5 p-5">
+        {step === 1 && (
+          <section>
+            <h3 className="mb-3 text-sm font-bold">What kind of meet up?</h3>
+            <div className="space-y-2.5">
+              {(["come_over", "coming_to", "meet_somewhere"] as const).map((value) => {
+                const selected = mode === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => chooseMode(value)}
+                    className={[
+                      "flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition",
+                      selected
+                        ? "border-primary bg-primary/10 ring-1 ring-primary/20"
+                        : "border-border bg-background hover:bg-secondary/50"
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
+                        selected ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"
+                      ].join(" ")}
+                    >
+                      <MeetupModeIcon mode={value} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold">{MEETUP_TITLES[value]}</span>
+                      <span className="block text-xs text-muted-foreground">{modeDescription(value)}</span>
+                    </span>
+                    {selected ? (
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {step === 2 && (
+          <section className="space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-bold">Agreed place</label>
+              <div className="relative">
+                <MapPin className="pointer-events-none absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
                 <input
-                  name="participants"
-                  type={mode === "coming_to" ? "radio" : "checkbox"}
-                  value={muddy.id}
-                  className="h-5 w-5 accent-[hsl(var(--primary))]"
+                  value={place}
+                  onChange={(event) => {
+                    resetRequestKey();
+                    setPlace(event.target.value);
+                  }}
+                  maxLength={120}
+                  placeholder={mode === "meet_somewhere" ? "e.g. Kozo Spot, A&C Mall" : "e.g. My place"}
+                  className={inputClass + " pl-10"}
                 />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Only invited participants see this. An exact address is optional.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-bold">When?</label>
+              <div className="grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetRequestKey();
+                    setWhen("now");
+                  }}
+                  className={[
+                    "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+                    when === "now" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                  ].join(" ")}
+                >
+                  Now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetRequestKey();
+                    setWhen("later");
+                  }}
+                  className={[
+                    "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+                    when === "later" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                  ].join(" ")}
+                >
+                  Later
+                </button>
+              </div>
+
+              {when === "later" && (
+                <input
+                  type="datetime-local"
+                  value={startsAt}
+                  onChange={(event) => {
+                    resetRequestKey();
+                    setStartsAt(event.target.value);
+                  }}
+                  className={inputClass + " mt-3"}
+                />
+              )}
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-bold">
+                Add a note <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
-            ))}
-          </div>
-        </section>
+              <textarea
+                value={note}
+                onChange={(event) => {
+                  resetRequestKey();
+                  setNote(event.target.value);
+                }}
+                maxLength={200}
+                rows={4}
+                placeholder="Good vibes, snacks, games..."
+                className={inputClass + " resize-none"}
+              />
+            </div>
+          </section>
+        )}
 
-        <section>
-          <h3 className="mb-3 text-sm font-bold">3. Place</h3>
-          <div className="relative">
-            <MapPin className="pointer-events-none absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-            <input
-              name="place"
-              required
-              maxLength={120}
-              placeholder={mode === "meet_somewhere" ? "e.g. Kozo Spot, A&C Mall" : "e.g. My place · ring the doorbell"}
-              className={inputClass + " pl-10"}
-            />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Only invited participants see this. An exact address is optional.
-          </p>
-        </section>
+        {step === 3 && (
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold">{mode === "coming_to" ? "Choose one Muddy" : "Invite Muddies"}</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {mode === "coming_to" ? "Choose whose place you are going to." : "Choose who should receive the invite."}
+                </p>
+              </div>
+              {!!selectedIds.length && <span className="text-xs font-semibold text-primary">{selectedIds.length} selected</span>}
+            </div>
 
-        <section>
-          <h3 className="mb-3 text-sm font-bold">4. Date & time</h3>
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-secondary/70 p-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                requestKey.current = null;
-                setWhen("now");
-              }}
-              className={["rounded-xl px-4 py-2.5 text-sm font-semibold transition", when === "now" ? "bg-primary text-primary-foreground" : "text-muted-foreground"].join(" ")}
-            >
-              Now
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                requestKey.current = null;
-                setWhen("later");
-              }}
-              className={["rounded-xl px-4 py-2.5 text-sm font-semibold transition", when === "later" ? "bg-primary text-primary-foreground" : "text-muted-foreground"].join(" ")}
-            >
-              Later
-            </button>
-          </div>
+            {!muddies.length && <p className="text-sm text-muted-foreground">Add a Muddy before arranging a meetup.</p>}
 
-          {when === "later" && (
-            <label className="mt-3 block space-y-2 text-sm">
-              <span className="font-medium">Choose date & time</span>
-              <input name="startsAt" type="datetime-local" required className={inputClass} />
-            </label>
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+              {muddies.map((muddy) => {
+                const selected = selectedIds.includes(muddy.id);
+                return (
+                  <button
+                    key={muddy.id}
+                    type="button"
+                    onClick={() => toggleParticipant(muddy.id)}
+                    className={[
+                      "flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition",
+                      selected ? "border-primary/50 bg-primary/10" : "border-border bg-background"
+                    ].join(" ")}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold">
+                      {initials(muddy.name)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{muddy.name}</span>
+                    <span
+                      className={[
+                        "flex h-5 w-5 items-center justify-center rounded-full border",
+                        selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                      ].join(" ")}
+                    >
+                      {selected && <Check className="h-3.5 w-3.5" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {step === 4 && (
+          <section className="space-y-4">
+            <div className="rounded-2xl bg-secondary/50 p-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <MeetupModeIcon mode={mode} />
+                </span>
+                <div>
+                  <h3 className="font-bold">{MEETUP_TITLES[mode]}</h3>
+                  <p className="text-xs text-muted-foreground">{modeDescription(mode)}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-2 border-t border-border/70 pt-4 text-sm">
+                <p className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  {place}
+                </p>
+                <p className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-primary" />
+                  {when === "now" ? "Now" : startsAt ? new Date(startsAt).toLocaleString() : "Later"}
+                </p>
+                {!!note && <p className="rounded-xl bg-background px-3 py-2 text-muted-foreground">{note}</p>}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-bold">Invited ({selectedMuddies.length})</h3>
+              <div className="flex flex-wrap gap-2">
+                {selectedMuddies.map((muddy) => (
+                  <span key={muddy.id} className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-2 text-xs font-semibold">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-background text-[9px]">
+                      {initials(muddy.name)}
+                    </span>
+                    {muddy.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {!!message && <p role="status" className="rounded-xl bg-secondary/60 px-3 py-2 text-sm">{message}</p>}
+
+        <div className="flex gap-2">
+          {step < 4 ? (
+            <Button className="h-12 w-full rounded-2xl" onClick={nextStep} disabled={step === 3 && !muddies.length}>
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button className="h-12 w-full rounded-2xl" onClick={submit} disabled={pending}>
+              {pending ? "Sending…" : "Send invitation"}
+            </Button>
           )}
-        </section>
-
-        <section>
-          <h3 className="mb-3 text-sm font-bold">5. Add a note <span className="font-normal text-muted-foreground">(optional)</span></h3>
-          <textarea
-            name="note"
-            maxLength={200}
-            rows={4}
-            placeholder="Good vibes, snacks, games..."
-            className={inputClass + " resize-none"}
-          />
-        </section>
-
-        <Button type="submit" disabled={!muddies.length} className="h-14 w-full rounded-2xl text-base">
-          {pending ? "Sending…" : "Send invitation"}
-        </Button>
-
-        {!!message && <p role="status" className="text-center text-sm">{message}</p>}
-      </fieldset>
-    </form>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -411,17 +704,21 @@ function MeetupCard({
   meetup: m,
   viewerId,
   focused,
+  initialExpanded,
   saveAction,
   refreshAction
 }: {
   meetup: Meetup;
   viewerId: string;
   focused: boolean;
+  initialExpanded: boolean;
   saveAction: MeetupSaveAction;
   refreshAction: () => Promise<void>;
 }) {
   const card = useRef<HTMLElement>(null);
   const retry = useRef<{ signature: string; key: string } | null>(null);
+  const [expanded, setExpanded] = useState(initialExpanded);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const [date, setDate] = useState("");
@@ -439,11 +736,12 @@ function MeetupCard({
     if (focused) card.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focused]);
 
-  const mine = m.members.find((p) => p.userId === viewerId);
+  const mine = m.members.find((person) => person.userId === viewerId);
   const creator = m.creatorId === viewerId;
   const open = m.status === "active";
   const ready = now !== null && canUpdateArrival(m, viewerId, now);
-  const confirmed = m.members.filter((p) => p.metAt).length;
+  const confirmed = m.members.filter((person) => person.metAt).length;
+  const status = meetupStatus(m, viewerId);
 
   function update(command: Record<string, unknown>) {
     const signature = JSON.stringify({ ...command, revision: m.revision });
@@ -479,337 +777,418 @@ function MeetupCard({
     update({ action, startsAt: time.toISOString() });
   }
 
+  const visibleMembers = expanded ? m.members : m.members.slice(0, 4);
+
   return (
-    <article
-      ref={card}
-      className={[
-        panelClass,
-        "overflow-hidden",
-        focused ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-      ].join(" ")}
-    >
-      <div className="flex items-start gap-4 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-5">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-card text-primary shadow-sm">
-          <MeetupModeIcon mode={m.mode} className="h-7 w-7" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold">{MEETUP_TITLES[m.mode]}</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {creator ? "You arranged this meet up" : "Meet Up invitation"}
-              </p>
-            </div>
-            <span className="rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold capitalize shadow-sm">
-              {open ? responseLabel(mine?.response ?? "invited") : m.status}
+    <>
+      <article
+        ref={card}
+        className={[
+          panelClass,
+          "overflow-hidden transition",
+          focused ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+        ].join(" ")}
+      >
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="w-full p-4 text-left sm:p-5"
+          aria-expanded={expanded}
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
+              <MeetupModeIcon mode={m.mode} className="h-7 w-7" />
+            </span>
+
+            <span className="min-w-0 flex-1">
+              <span className="flex items-start justify-between gap-2">
+                <span className="min-w-0">
+                  <span className="block truncate text-lg font-bold">{MEETUP_TITLES[m.mode]}</span>
+                  <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <CalendarClock className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    {compactTimeLabel(m.startsAt, m.timezone)}
+                  </span>
+                  <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span className="truncate">{m.placeLabel}</span>
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <StatusPill label={status.label} tone={status.tone} />
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition ${expanded ? "rotate-180" : ""}`} />
+                </span>
+              </span>
+
+              {!expanded && (
+                <span className="mt-3 flex items-center">
+                  {visibleMembers.map((person, index) => (
+                    <span
+                      key={person.key}
+                      className="-ml-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-secondary text-[9px] font-bold first:ml-0"
+                      style={{ zIndex: visibleMembers.length - index }}
+                    >
+                      {initials(person.userId === viewerId ? "You" : person.name)}
+                    </span>
+                  ))}
+                  {m.members.length > 4 && (
+                    <span className="ml-2 text-[11px] text-muted-foreground">+{m.members.length - 4}</span>
+                  )}
+                </span>
+              )}
             </span>
           </div>
+        </button>
 
-          <div className="mt-4 space-y-2 text-sm">
-            <p className="flex items-center gap-2">
-              <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
-              <span>{timeLabel(m.startsAt, m.timezone)}</span>
-            </p>
-            <p className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 shrink-0 text-primary" />
-              <span>{m.placeLabel}</span>
-            </p>
-          </div>
-        </div>
-      </div>
+        {expanded && (
+          <div className="space-y-4 border-t border-border/70 px-4 pb-5 pt-4 sm:px-5">
+            {!!m.note && <p className="rounded-2xl bg-secondary/50 px-4 py-3 text-sm">{m.note}</p>}
 
-      <div className="space-y-5 p-5">
-        {m.note && (
-          <div className="rounded-2xl bg-secondary/60 px-4 py-3 text-sm">
-            {m.note}
-          </div>
-        )}
-
-        {!creator && open && mine?.response === "invited" && (
-          <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
-            <p className="text-sm font-bold">You&apos;re invited</p>
-            <p className="mt-1 text-xs text-muted-foreground">Accept to join the meet up and receive arrival updates.</p>
-            <fieldset disabled={pending} className="mt-4 grid grid-cols-2 gap-2">
-              <Button className="rounded-2xl" onClick={() => update({ action: "respond", response: "accepted" })}>
-                <Check className="h-4 w-4" />
-                Accept
-              </Button>
-              <Button variant="outline" className="rounded-2xl" onClick={() => update({ action: "respond", response: "declined" })}>
-                Decline
-              </Button>
-            </fieldset>
-          </section>
-        )}
-
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold">People ({m.members.length})</h3>
-            {confirmed > 0 && <span className="text-xs font-medium text-muted-foreground">{confirmed} confirmed meeting</span>}
-          </div>
-
-          <ul className="space-y-2">
-            {m.members.map((person) => {
-              const nearby = person.nearby && person.observedAt && now !== null && isMeetupHintFresh(person.observedAt, now);
-              const status = person.metAt
-                ? "Confirmed"
-                : person.response !== "accepted"
-                  ? responseLabel(person.response)
-                  : person.delayMinutes
-                    ? ARRIVAL_LABELS[person.arrival] + " · " + person.delayMinutes + " min"
-                    : ARRIVAL_LABELS[person.arrival];
-
-              return (
-                <li key={person.key} className="flex items-center gap-3 rounded-2xl bg-secondary/50 p-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card text-xs font-bold shadow-sm">
-                    {initials(person.userId === viewerId ? "You" : person.name)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">
-                      {person.userId === viewerId ? "You" : person.name}
-                      {person.userId === m.hostId ? " · Host" : ""}
-                    </span>
-                    {nearby && <span className="block text-xs font-medium text-primary">Nearby · not arrival confirmation</span>}
-                  </span>
-                  <span className={["max-w-[42%] rounded-full px-2.5 py-1 text-right text-[11px] font-semibold", person.metAt ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-card text-muted-foreground"].join(" ")}>
-                    {status}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-
-        {open && (
-          <fieldset disabled={pending} className="space-y-4">
-            {mine?.response === "accepted" && (
-              <section className="flex items-center gap-3 rounded-2xl border border-border bg-background p-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-                  <Navigation className="h-5 w-5" />
-                </span>
-                <button
-                  type="button"
-                  onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <span className="block text-sm font-bold">Allow nearby hint</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">No exact location or distance is shared. Ghost Mode and Privacy Zones still apply.</span>
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={mine.proximityEnabled}
-                  aria-label="Allow nearby hint for this meetup"
-                  onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
-                  className={["relative h-7 w-12 shrink-0 rounded-full transition", mine.proximityEnabled ? "bg-primary" : "bg-secondary"].join(" ")}
-                >
-                  <span className={["absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition", mine.proximityEnabled ? "left-6" : "left-1"].join(" ")} />
-                </button>
+            {!creator && open && mine?.response === "invited" && (
+              <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
+                <p className="text-sm font-bold">{"You're invited"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Accept to join the meetup and receive updates.</p>
+                <fieldset disabled={pending} className="mt-4 grid grid-cols-2 gap-2">
+                  <Button className="rounded-2xl" onClick={() => update({ action: "respond", response: "accepted" })}>
+                    <Check className="h-4 w-4" />
+                    Accept
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => update({ action: "respond", response: "declined" })}
+                  >
+                    Decline
+                  </Button>
+                </fieldset>
               </section>
             )}
 
-            {!creator && mine?.response === "accepted" && (
-              <Button
-                variant="outline"
-                className="w-full rounded-2xl"
-                onClick={() => update({ action: "respond", response: "declined" })}
-              >
-                {"Can't make it"}
-              </Button>
-            )}
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-bold">People ({m.members.length})</h3>
+                {confirmed > 0 && <span className="text-[11px] text-muted-foreground">{confirmed} confirmed</span>}
+              </div>
 
-            {!creator && mine?.response === "declined" && (
-              <Button className="w-full rounded-2xl" onClick={() => update({ action: "respond", response: "accepted" })}>
-                Accept invitation
-              </Button>
-            )}
+              <ul className="divide-y divide-border/60 rounded-2xl bg-secondary/40 px-3">
+                {m.members.map((person) => {
+                  const nearby =
+                    person.nearby &&
+                    person.observedAt &&
+                    now !== null &&
+                    isMeetupHintFresh(person.observedAt, now);
 
-            {ready && (
-              <section>
-                <h3 className="mb-3 text-sm font-bold">Update my status</h3>
-                <div className="space-y-2.5">
-                  <button
-                    type="button"
-                    onClick={() => update({ action: "arrival", arrival: "on_my_way" })}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-left transition active:scale-[0.99]"
-                  >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-600 dark:text-blue-300">
-                      <CarFront className="h-5 w-5" />
-                    </span>
-                    <span className="flex-1">
-                      <span className="block text-sm font-bold">On my way</span>
-                      <span className="block text-xs text-muted-foreground">I&apos;m heading there now</span>
-                    </span>
-                  </button>
+                  const personStatus = person.metAt
+                    ? "Confirmed"
+                    : person.response !== "accepted"
+                      ? responseLabel(person.response)
+                      : person.arrival === "not_started"
+                        ? "Going"
+                        : person.delayMinutes
+                          ? ARRIVAL_LABELS[person.arrival] + " · " + person.delayMinutes + " min"
+                          : ARRIVAL_LABELS[person.arrival];
 
-                  <button
-                    type="button"
-                    onClick={() => update({ action: "arrival", arrival: "here" })}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-left transition active:scale-[0.99]"
-                  >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
-                      <MapPin className="h-5 w-5" />
-                    </span>
-                    <span className="flex-1">
-                      <span className="block text-sm font-bold">I&apos;m here</span>
-                      <span className="block text-xs text-muted-foreground">I&apos;ve arrived at the agreed place</span>
-                    </span>
-                  </button>
-
-                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-300">
-                        <Clock3 className="h-5 w-5" />
+                  return (
+                    <li key={person.key} className="flex items-center gap-3 py-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-xs font-bold">
+                        {initials(person.userId === viewerId ? "You" : person.name)}
                       </span>
-                      <span>
-                        <span className="block text-sm font-bold">Running late</span>
-                        <span className="block text-xs text-muted-foreground">Tell everyone how late you&apos;ll be</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">
+                          {person.userId === viewerId ? "You" : person.name}
+                          {person.userId === m.hostId ? " · Host" : ""}
+                        </span>
+                        {nearby && <span className="block text-[11px] font-medium text-primary">Nearby now</span>}
                       </span>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={120}
-                        value={delay}
-                        onChange={(e) => setDelay(Number(e.target.value))}
-                        className="h-11 w-24 rounded-xl border border-border bg-background px-3 text-sm"
-                      />
-                      <span className="text-xs text-muted-foreground">minutes</span>
-                      <Button
-                        variant="outline"
-                        className="ml-auto rounded-xl"
-                        onClick={() => update({ action: "arrival", arrival: "late", delayMinutes: delay })}
-                      >
-                        Send
-                      </Button>
-                    </div>
-                  </div>
+                      <span className="text-[11px] font-semibold text-muted-foreground">{personStatus}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
 
-                  <button
-                    type="button"
-                    onClick={() => update({ action: "arrival", arrival: "left" })}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-left transition active:scale-[0.99]"
-                  >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/20 text-red-600 dark:text-red-300">
-                      <LogOut className="h-5 w-5" />
+            {open && (
+              <fieldset disabled={pending} className="space-y-3">
+                {mine?.response === "accepted" && (
+                  <section className="flex items-center gap-3 rounded-2xl border border-border bg-background px-3 py-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+                      <Navigation className="h-5 w-5" />
                     </span>
-                    <span className="flex-1">
-                      <span className="block text-sm font-bold">I left</span>
-                      <span className="block text-xs text-muted-foreground">I&apos;m leaving now</span>
-                    </span>
-                  </button>
-
-                  {!mine?.metAt && (
                     <button
                       type="button"
-                      onClick={() => update({ action: "met" })}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-left transition active:scale-[0.99]"
+                      onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
+                      className="min-w-0 flex-1 text-left"
                     >
-                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/20 text-primary">
-                        <CheckCircle2 className="h-5 w-5" />
-                      </span>
-                      <span className="flex-1">
-                        <span className="block text-sm font-bold">We met — confirm for me</span>
-                        <span className="block text-xs text-muted-foreground">Everyone confirms for themselves.</span>
-                      </span>
+                      <span className="block text-sm font-bold">Allow nearby hint</span>
+                      <span className="block text-xs text-muted-foreground">No exact location shared.</span>
                     </button>
-                  )}
-                </div>
-              </section>
-            )}
-
-            {!ready && mine?.response === "accepted" && (
-              <p className="rounded-2xl bg-secondary/60 p-3 text-xs text-muted-foreground">
-                Arrival updates open two hours before the time, once you and another participant have accepted, including the host.
-              </p>
-            )}
-
-            {now !== null && meetupPhase(m, now) === "unconfirmed" && !mine?.metAt && (
-              <p className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm">
-                Did you meet? Confirm if you did, or choose another time. An unconfirmed meetup doesn&apos;t mean it failed.
-              </p>
-            )}
-
-            <details className="rounded-2xl border border-border bg-background">
-              <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3.5 text-sm font-semibold">
-                <span className="flex items-center gap-2">
-                  <TimerReset className="h-4 w-4 text-muted-foreground" />
-                  {creator ? "Reschedule or end" : "Suggest another time"}
-                </span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              </summary>
-
-              <div className="space-y-3 border-t border-border p-4">
-                <label className="block space-y-2 text-sm">
-                  <span className="font-medium">New date & time</span>
-                  <input
-                    type="datetime-local"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className={inputClass}
-                  />
-                </label>
-
-                <Button
-                  variant="outline"
-                  className="w-full rounded-2xl"
-                  onClick={() => changeTime(creator ? "reschedule" : "suggest")}
-                >
-                  {creator ? "Reschedule & ask everyone again" : "Suggest another time"}
-                </Button>
-
-                {creator &&
-                  m.members
-                    .filter((person) => person.suggestedStartAt)
-                    .map((person) => (
-                      <div key={person.key} className="rounded-2xl bg-secondary/50 p-3 text-sm">
-                        <p>{person.name} suggests {timeLabel(person.suggestedStartAt!, m.timezone)}</p>
-                        <Button
-                          variant="outline"
-                          className="mt-2 w-full rounded-xl"
-                          onClick={() => changeTime("reschedule", person.suggestedStartAt!)}
-                        >
-                          Use this time & ask again
-                        </Button>
-                      </div>
-                    ))}
-
-                {(creator || m.hostId === viewerId) && (
-                  <Button
-                    variant="danger"
-                    className="w-full rounded-2xl"
-                    onClick={() => {
-                      if (window.confirm("Cancel this meetup for everyone?")) update({ action: "cancel" });
-                    }}
-                  >
-                    Cancel meetup
-                  </Button>
+                    <span title="Ghost Mode and Privacy Zones still apply.">
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                    </span>
+                    <button
+                      type="button"
+                      aria-pressed={mine.proximityEnabled}
+                      aria-label="Allow nearby hint for this meetup"
+                      onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
+                      className={[
+                        "relative h-7 w-12 shrink-0 rounded-full transition",
+                        mine.proximityEnabled ? "bg-primary" : "bg-secondary"
+                      ].join(" ")}
+                    >
+                      <span
+                        className={[
+                          "absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition",
+                          mine.proximityEnabled ? "left-6" : "left-1"
+                        ].join(" ")}
+                      />
+                    </button>
+                  </section>
                 )}
 
-                {creator && (
+                {!creator && mine?.response === "accepted" && (
                   <Button
                     variant="outline"
                     className="w-full rounded-2xl"
-                    onClick={() => {
-                      if (window.confirm("End this meetup? This won't confirm anyone's arrival.")) update({ action: "end" });
-                    }}
+                    onClick={() => update({ action: "respond", response: "declined" })}
                   >
-                    End meetup
+                    {"Can't make it"}
                   </Button>
                 )}
-              </div>
-            </details>
-          </fieldset>
-        )}
 
-        {!open && confirmed > 0 && (
-          <div className="flex items-center gap-3 rounded-2xl bg-emerald-500/10 p-4 text-sm">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
-            <span>{confirmed} {confirmed === 1 ? "person has" : "people have"} confirmed meeting.</span>
+                {!creator && mine?.response === "declined" && (
+                  <Button className="w-full rounded-2xl" onClick={() => update({ action: "respond", response: "accepted" })}>
+                    Accept invitation
+                  </Button>
+                )}
+
+                {ready && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="rounded-2xl" onClick={() => setStatusOpen(true)}>
+                      <Navigation className="h-4 w-4" />
+                      Update status
+                    </Button>
+                    {!mine?.metAt && (
+                      <Button className="rounded-2xl" onClick={() => update({ action: "met" })}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        We met
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {!ready && mine?.response === "accepted" && (
+                  <p className="rounded-2xl bg-secondary/50 px-3 py-2.5 text-xs text-muted-foreground">
+                    Arrival updates open two hours before the meetup once you and another participant have accepted.
+                  </p>
+                )}
+
+                {now !== null && meetupPhase(m, now) === "unconfirmed" && !mine?.metAt && (
+                  <p className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-sm">
+                    {"Did you meet? Confirm if you did, or choose another time. An unconfirmed meetup does not mean it failed."}
+                  </p>
+                )}
+
+                <details className="rounded-2xl border border-border bg-background">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3.5 text-sm font-semibold">
+                    <span className="flex items-center gap-2">
+                      <TimerReset className="h-4 w-4 text-muted-foreground" />
+                      {creator ? "Reschedule or end" : "Suggest another time"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </summary>
+
+                  <div className="space-y-3 border-t border-border p-4">
+                    <label className="block space-y-2 text-sm">
+                      <span className="font-medium">New date & time</span>
+                      <input
+                        type="datetime-local"
+                        value={date}
+                        onChange={(event) => setDate(event.target.value)}
+                        className={inputClass}
+                      />
+                    </label>
+
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-2xl"
+                      onClick={() => changeTime(creator ? "reschedule" : "suggest")}
+                    >
+                      {creator ? "Reschedule & ask everyone again" : "Suggest another time"}
+                    </Button>
+
+                    {creator &&
+                      m.members
+                        .filter((person) => person.suggestedStartAt)
+                        .map((person) => (
+                          <div key={person.key} className="rounded-2xl bg-secondary/50 p-3 text-sm">
+                            <p>
+                              {person.name} suggests {timeLabel(person.suggestedStartAt!, m.timezone)}
+                            </p>
+                            <Button
+                              variant="outline"
+                              className="mt-2 w-full rounded-xl"
+                              onClick={() => changeTime("reschedule", person.suggestedStartAt!)}
+                            >
+                              Use this time
+                            </Button>
+                          </div>
+                        ))}
+
+                    {(creator || m.hostId === viewerId) && (
+                      <Button
+                        variant="danger"
+                        className="w-full rounded-2xl"
+                        onClick={() => {
+                          if (window.confirm("Cancel this meetup for everyone?")) update({ action: "cancel" });
+                        }}
+                      >
+                        Cancel meetup
+                      </Button>
+                    )}
+
+                    {creator && (
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-2xl"
+                        onClick={() => {
+                          if (window.confirm("End this meetup? This will not confirm anyone's arrival.")) {
+                            update({ action: "end" });
+                          }
+                        }}
+                      >
+                        End meetup
+                      </Button>
+                    )}
+                  </div>
+                </details>
+              </fieldset>
+            )}
+
+            {!open && confirmed > 0 && (
+              <div className="flex items-center gap-3 rounded-2xl bg-emerald-500/10 p-3 text-sm">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
+                <span>
+                  {confirmed} {confirmed === 1 ? "person has" : "people have"} confirmed meeting.
+                </span>
+              </div>
+            )}
+
+            {!!message && <p role="status" className="text-sm">{message}</p>}
           </div>
         )}
+      </article>
 
-        {!!message && <p role="status" className="text-sm">{message}</p>}
-      </div>
-    </article>
+      {statusOpen && ready && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 px-2"
+          onClick={() => setStatusOpen(false)}
+        >
+          <section
+            className="w-full max-w-xl rounded-t-[28px] border border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold">Update my status</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Let your Muddies know where you are.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close status actions"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+                onClick={() => setStatusOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusOpen(false);
+                  update({ action: "arrival", arrival: "on_my_way" });
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-300">
+                  <CarFront className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold">On my way</span>
+                  <span className="block text-xs text-muted-foreground">{"I'm heading there now"}</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusOpen(false);
+                  update({ action: "arrival", arrival: "here" });
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                  <MapPin className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold">{"I'm here"}</span>
+                  <span className="block text-xs text-muted-foreground">{"I've arrived at the agreed place"}</span>
+                </span>
+              </button>
+
+              <div className="rounded-2xl bg-secondary/55 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
+                    <Clock3 className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold">Running late</span>
+                    <span className="block text-xs text-muted-foreground">Tell everyone how late you will be</span>
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={delay}
+                    onChange={(event) => setDelay(Number(event.target.value))}
+                    className="h-11 w-24 rounded-xl border border-border bg-background px-3 text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground">minutes</span>
+                  <Button
+                    variant="outline"
+                    className="ml-auto rounded-xl"
+                    onClick={() => {
+                      setStatusOpen(false);
+                      update({ action: "arrival", arrival: "late", delayMinutes: delay });
+                    }}
+                  >
+                    Send
+                  </Button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusOpen(false);
+                  update({ action: "arrival", arrival: "left" });
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/15 text-red-600 dark:text-red-300">
+                  <LogOut className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold">I left</span>
+                  <span className="block text-xs text-muted-foreground">{"I'm leaving now"}</span>
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
