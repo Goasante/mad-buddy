@@ -19,5 +19,5 @@ export default async function MeetupRoute({ searchParams }: { searchParams: Prom
   if (!guard.allowed) return <p role="alert">{guard.message}</p>;
   const [meetups, muddies, params] = await Promise.all([loadMeetups(admin, user.id), loadMeetupMuddies(admin, user.id), searchParams]);
   const withProximity = await addMeetupProximity(admin, user.id, meetups);
-  return <MeetupPage viewerId={user.id} meetups={withProximity} muddies={muddies} focusedId={params.meetup} saveAction={saveMeetupAction} />;
+  return <MeetupPage viewerId={user.id} meetups={withProximity} muddies={muddies} focusedId={params.meetup} saveAction={saveMeetupAction} initialNowMs={Date.now()} />;
 }
