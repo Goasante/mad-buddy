@@ -1322,6 +1322,10 @@ export const JOB_HANDLERS: Partial<Record<JobType, JobHandler>> = {
     const { scanAndEnqueueReminders } = await import("@/lib/reminders/service");
     return scanAndEnqueueReminders(admin);
   },
+  "meetups.notifications": async (admin) => {
+    const { processMeetupNotifications } = await import("@/lib/meetups/notifications");
+    return processMeetupNotifications(admin);
+  },
   "reminders.deliver": async (admin, payload) => {
     const { deliverReminder } = await import("@/lib/reminders/service");
     const parsed = parseReminderPayload(payload);

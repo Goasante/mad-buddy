@@ -24,6 +24,7 @@ import { EventsScreen } from "./screens/EventsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
 import { UnavailableScreen } from "./screens/UnavailableScreen";
 import { SafetyScreen } from "./screens/SafetyScreen";
+import { MeetupScreen } from "./screens/MeetupScreen";
 import { SubscriptionScreen } from "./screens/SubscriptionScreen";
 import { BuddyScoreScreen } from "./screens/BuddyScoreScreen";
 import { useAndroidBack } from "./hooks/useAndroidBack";
@@ -107,6 +108,7 @@ export default function App() {
         <Route path="/events" element={<MobileFeatureBoundary feature="events"><EventsScreen /></MobileFeatureBoundary>} />
         <Route path="/groups" element={<Navigate to="/messages?filter=groups" replace />} />
         <Route path="/safety" element={<SafetyScreen />} />
+        <Route path="/meet-up" element={<MobileFeatureBoundary feature="safe_arrival"><MeetupScreen /></MobileFeatureBoundary>} />
         <Route path="/subscription" element={<SubscriptionScreen />} />
         <Route path="/buddy-score" element={<BuddyScoreScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />

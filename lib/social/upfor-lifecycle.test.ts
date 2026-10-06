@@ -80,11 +80,9 @@ describe("what consumes one of the three concurrent slots", () => {
   });
 });
 
-describe("discovery must not publish a scheduled UpFor early", () => {
-  it("hides an UpFor that has not started", () => {
-    // Created at 14:00 for 18:00: broadcasting it now would tell everyone four
-    // hours before the owner meant to be visible.
-    expect(isDiscoverableUpFor(row("active", "2026-07-17T18:00:00Z", "2026-07-17T20:00:00Z"), NOW)).toBe(false);
+describe("discovery includes published future activities", () => {
+  it("shows a future UpFor so eligible users can express interest", () => {
+    expect(isDiscoverableUpFor(row("active", "2026-07-17T18:00:00Z", "2026-07-17T20:00:00Z"), NOW)).toBe(true);
   });
 
   it("shows it once it starts", () => {

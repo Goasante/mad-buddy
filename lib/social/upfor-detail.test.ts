@@ -228,7 +228,7 @@ describe("opening and closing", () => {
   });
 
   it("gives the dialog an accessible title and description", () => {
-    expect(sheet).toContain("title={upFor ? upForTitle(upFor.activityType)");
+    expect(sheet).toContain("title={upFor ? upForTitle(upFor.activityType,");
     expect(sheet).toContain("description={upFor ?");
   });
 

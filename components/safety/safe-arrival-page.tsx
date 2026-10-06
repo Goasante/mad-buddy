@@ -250,7 +250,7 @@ export function SafeArrivalPage({
           }
         />
       ) : (
-        availability && !availability.safe_arrival ? <LockedFeaturePreview feature="safe_arrival" /> : <SafeArrivalHome onStart={() => setSetupOpen(true)} />
+        availability && !availability.safe_arrival ? <LockedFeaturePreview feature="safe_arrival" /> : <SafeArrivalHome onStart={() => router.push("/meet-up")} />
       )}
 
       {otherWatching.length > 0 ? (
@@ -391,7 +391,7 @@ function SafeArrivalHome({ onStart }: { onStart: () => void }) {
           onClick={onStart}
           data-tour-id={TOUR_TARGET_IDS.SAFE_ARRIVAL_START}
         >
-          Set up Safe Arrival
+          Arrange a Meet Up
         </Button>
         <button
           type="button"

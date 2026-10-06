@@ -103,6 +103,7 @@ const SOURCE_LABELS: Record<string, string> = {
   plan: "Plans",
   hangout: "UpFor",
   safe_arrival: "Safe Arrival",
+  meetup: "Meet Up",
   event: "Events",
   event_room: "Event Rooms",
   moment: "Stories",

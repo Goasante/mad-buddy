@@ -1,6 +1,4 @@
 
-import { LockedFeaturePreview } from "@/components/features/locked-feature-preview";
-import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 import { SafeArrivalPage } from "@/components/safety/safe-arrival-page";
 import {
   loadSafeArrivalJourneyById,
@@ -12,6 +10,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerEnv } from "@/lib/supabase/env";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +53,7 @@ export default async function SafeArrivalRoute({
     }
   }
 
-  if (!(await optionalFeatureEnabled("safe_arrival")) && travelling.length === 0 && checkingOn.length === 0 && !focusedJourney) return <LockedFeaturePreview feature="safe_arrival" />;
+  if (travelling.length === 0 && checkingOn.length === 0 && !focusedJourney) redirect("/meet-up");
 
   return (
     <SafeArrivalPage

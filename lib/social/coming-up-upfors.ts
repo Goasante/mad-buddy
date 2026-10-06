@@ -45,7 +45,7 @@ export async function loadComingUpUpFors(
   return data
     .map((row) => ({
       id: row.id,
-      title: upForTitle(row.activity_type as HangoutActivityType),
+      title: upForTitle(row.activity_type as HangoutActivityType, true),
       status: row.status,
       startsAt: row.starts_at,
       endsAt: row.ends_at

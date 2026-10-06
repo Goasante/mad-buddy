@@ -71,6 +71,17 @@ export type LaterTodayRejection =
   | "not_in_future"
   | "not_today";
 
+/** UpFor Later accepts future dates, not only the remainder of today. */
+export function validateScheduledStart(startsAt: Date, now: Date, timeZone: string):
+  { ok: true } | { ok: false; reason: Exclude<LaterTodayRejection, "not_today"> } {
+  if (!isValidTimeZone(timeZone)) return { ok: false, reason: "invalid_timezone" };
+  if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(now.getTime())) {
+    return { ok: false, reason: "invalid_timestamp" };
+  }
+  if (startsAt.getTime() <= now.getTime()) return { ok: false, reason: "not_in_future" };
+  return { ok: true };
+}
+
 /**
  * The server-side "Later today" rule, in one place.
  *

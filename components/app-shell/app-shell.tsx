@@ -174,6 +174,7 @@ const PAGES_WITH_OWN_HEADER = [
   "/drops",
   "/scan",
   "/safe-arrival",
+  "/meet-up",
   // Migrated to the canonical header in the Stage 2 header pass. Each of these
   // renders <PageHeader> itself, so the global AppHeader must stand down or
   // the screen would show two bars.

@@ -70,9 +70,9 @@ export function upForGoingLabel(goingCount: number): string | null {
  * from a plan. Built from the canonical activity label, never a second
  * vocabulary.
  */
-export function upForTitle(activity: HangoutActivityType): string {
+export function upForTitle(activity: HangoutActivityType, scheduled = false): string {
   const label = HANGOUT_ACTIVITY_LABELS[activity] ?? "Anything";
-  return activity === "anything" ? "Up for anything" : `${label} now`;
+  return activity === "anything" ? "Up for anything" : scheduled ? label : `${label} now`;
 }
 
 /**

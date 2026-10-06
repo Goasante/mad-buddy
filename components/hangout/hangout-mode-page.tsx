@@ -42,7 +42,8 @@ import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { OwnedUpForsSection } from "@/components/hangout/owned-upfors-section";
 import { ownedUpForTimeLabel, type OwnedUpFor } from "@/lib/social/owned-upfors";
-import { resolveViewerTimeZone, upForTimeSlots } from "@/lib/social/upfor-schedule-options";
+import { resolveViewerTimeZone } from "@/lib/social/upfor-schedule-options";
+import { validateScheduledStart } from "@/lib/time/timezone";
 import { cn } from "@/lib/utils";
 import { countActiveRequests } from "@/lib/social/hangout-requests";
 import { HANGOUT_ACTIVITY_LABELS } from "@/lib/social/plans";
@@ -57,6 +58,13 @@ import type {
   HangoutAudienceType,
   HangoutRequestStatus
 } from "@/lib/supabase/database.types";
+
+function localDateTimeValue(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export type ActiveHangout = {
   id: string;
@@ -249,9 +257,7 @@ export function HangoutModePage({
   const [activity, setActivity] = useState<HangoutActivityType | null>(null);
   const [audience, setAudience] = useState<HangoutAudienceType>("all_muddies");
   const [duration, setDuration] = useState<Duration>("1h");
-  /* Scheduling is one extra choice on the existing form, not a sub-product:
-     "Now" behaves exactly as it always has, and "Later today" reveals a time
-     list for the rest of today only. There is deliberately no date input. */
+  // Keep the existing creation flow; Later now accepts a calendar date too.
   const [when, setWhen] = useState<"now" | "later">("now");
   const [startAtIso, setStartAtIso] = useState<string>("");
   const viewerTimeZone = useMemo(() => resolveViewerTimeZone(), []);
@@ -307,12 +313,6 @@ export function HangoutModePage({
   }, [viewerId]);
   /* Placed after the clock it reads. */
   const managedTimeLabel = managedUpFor ? ownedUpForTimeLabel(managedUpFor, nowMs) : "";
-  /* Recomputed as the clock ticks, so a form left open past a slot stops
-     offering it -- rather than letting the server reject it on submit. */
-  const timeSlots = useMemo(
-    () => upForTimeSlots(new Date(nowMs), viewerTimeZone),
-    [nowMs, viewerTimeZone]
-  );
 
   /**
    * Filter state, held here rather than in the sheet.
@@ -624,8 +624,8 @@ export function HangoutModePage({
     setAttempted(true);
     setSetupError("");
     if (!activity) return;
-    if (when === "later" && !startAtIso) {
-      setSetupError("Choose a time later today.");
+    if (when === "later" && !validateScheduledStart(new Date(startAtIso), new Date(nowMs), viewerTimeZone).ok) {
+      setSetupError("Choose a future date and time.");
       return;
     }
 
@@ -1405,9 +1405,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                   type="button"
                   onClick={() => {
                     setWhen(option);
-                    /* Preselect the first still-valid slot, so choosing
-                       "Later today" is one tap rather than two. */
-                    if (option === "later" && !startAtIso) setStartAtIso(timeSlots[0]?.iso ?? "");
+                    if (option === "later" && !startAtIso) setStartAtIso(new Date(nowMs + 60 * 60_000).toISOString());
                     if (option === "now") setStartAtIso("");
                     setSetupError("");
                   }}
@@ -1419,7 +1417,7 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                       : "border-border text-muted-foreground hover:bg-secondary"
                   )}
                 >
-                  {option === "now" ? "Now" : "Later today"}
+                  {option === "now" ? "Now" : "Later"}
                 </button>
               ))}
             </div>
@@ -1431,31 +1429,21 @@ UpFors are temporary and disappear when they end. Jump in while you can!
                 htmlFor="upfor-start-time"
                 className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                Time
+                Date and time
               </label>
-              {timeSlots.length === 0 ? (
-                /* Late enough that nothing is left today. Said plainly rather
-                   than offering a time the server would refuse. */
-                <p className="text-sm text-muted-foreground">
-                  There is no time left today. Choose Now instead.
-                </p>
-              ) : (
-                <select
+                <input
                   id="upfor-start-time"
-                  value={startAtIso}
+                  type="datetime-local"
+                  value={startAtIso ? localDateTimeValue(startAtIso) : ""}
+                  min={localDateTimeValue(new Date(nowMs + 60_000).toISOString())}
                   onChange={(event) => {
-                    setStartAtIso(event.target.value);
+                    const date = new Date(event.target.value);
+                    setStartAtIso(Number.isFinite(date.getTime()) ? date.toISOString() : "");
                     setSetupError("");
                   }}
                   className="focus-ring min-h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm"
-                >
-                  {timeSlots.map((slot) => (
-                    <option key={slot.iso} value={slot.iso}>
-                      {slot.label}
-                    </option>
-                  ))}
-                </select>
-              )}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">{viewerTimeZone}. People can discover this UpFor and join before it starts.</p>
             </div>
           ) : null}
 

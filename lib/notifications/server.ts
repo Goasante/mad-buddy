@@ -43,6 +43,7 @@ export type CreateNotificationInput = {
     | `plan:${string}`
     | `hangout:${string}`
     | `safe_arrival:${string}`
+    | `meetup:${string}`
     | `event:${string}`
     | `event_room:${string}`
     | `moment:${string}`

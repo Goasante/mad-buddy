@@ -39,6 +39,7 @@ export type UpForFilterable = {
   /** Coarse band, or null when unknown. Null never counts as near. */
   areaTier: SocializeAreaTier | null;
   endsAt: string;
+  startsAt?: string;
   goingCount: number;
   maxParticipants: number;
   myRequestStatus: string | null;
@@ -61,9 +62,10 @@ export type UpForFilterDefinition = {
  * so an UpFor is live from creation until `ends_at`. Reading a column that
  * carries no signal would imply a precision the data does not have.
  */
-export function isHappeningNow(item: Pick<UpForFilterable, "endsAt">, nowMs: number): boolean {
+export function isHappeningNow(item: Pick<UpForFilterable, "endsAt" | "startsAt">, nowMs: number): boolean {
   const endsAt = Date.parse(item.endsAt);
-  return Number.isFinite(endsAt) && endsAt > nowMs;
+  const startsAt = item.startsAt ? Date.parse(item.startsAt) : Number.NEGATIVE_INFINITY;
+  return startsAt <= nowMs && Number.isFinite(endsAt) && endsAt > nowMs;
 }
 
 /**

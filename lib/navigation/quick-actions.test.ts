@@ -125,7 +125,7 @@ describe("every action opens its canonical route", () => {
     const routes = Object.fromEntries(QUICK_ACTIONS.map((action) => [action.id, action.href]));
     expect(routes.plans).toBe("/plans");
     expect(routes.events).toBe("/events");
-    expect(routes.safe_arrival).toBe("/safe-arrival");
+    expect(routes.safe_arrival).toBe("/meet-up");
     expect(routes.conference).toBe("/conference");
     expect(routes.focus).toBeUndefined();
   });

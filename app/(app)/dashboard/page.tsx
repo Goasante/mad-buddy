@@ -1,5 +1,6 @@
 
 import { loadFeatureAvailability } from "@/lib/features/availability-server";
+import { loadMeetupHome } from "@/lib/meetups/arrangements";
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
@@ -35,7 +36,7 @@ export default async function DashboardPage() {
   const acknowledgedIdsPromise = user
     ? loadAcknowledgedSmartCardIds(admin, user.id)
     : Promise.resolve(new Set<string>());
-  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, journey, incomingRequestCount, birthDetailsResult, buddyScore, topEvents, activation, upForContext, linkrMutuals] = user
+  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, journey, incomingRequestCount, birthDetailsResult, buddyScore, topEvents, activation, upForContext, linkrMutuals, meetupItems] = user
     ? await Promise.all([
         ensureProfileForUser(user),
         supabase
@@ -58,9 +59,10 @@ export default async function DashboardPage() {
         availability.events ? getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }) : Promise.resolve([]),
         loadActivationProjection(user.id),
         availability.upfor ? loadHomeUpForContext(admin, user.id) : Promise.resolve(null),
-        availability.linkr ? loadClickedPeople(user.id) : Promise.resolve([])
+        availability.linkr ? loadClickedPeople(user.id) : Promise.resolve([]),
+        availability.safe_arrival ? loadMeetupHome(admin, user.id) : Promise.resolve([])
       ])
-    : [null, null, { items: [], hasMore: false }, null, null, {}, null, 0, null, null, [], null, null, []];
+    : [null, null, { items: [], hasMore: false }, null, null, {}, null, 0, null, null, [], null, null, [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -206,6 +208,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardPageContent
+      meetupItems={meetupItems}
       watchUpForChanges={upForContext?.joined.some((session) => session.myStatus === "pending" || session.myStatus === "accepted") ?? false}
       activationState={activationUnavailable ? null : activation?.state ?? null}
       firstMuddy={activation?.acknowledgeFirstMuddy ? activation.firstMuddy : null}
