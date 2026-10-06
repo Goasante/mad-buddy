@@ -16,4 +16,4 @@ export { useRouter, usePathname, useSearchParams, useRevalidate } from "./router
 export { toMobilePath, isBuiltForMobile, MOBILE_ROUTES_NOT_BUILT } from "./routes.mobile";
 
 /** Compile-time platform marker matching the web adapter surface. */
-export const PLATFORM_KIND = "mobile" as const;
+export const PLATFORM_KIND: "web" | "mobile" = "mobile";
