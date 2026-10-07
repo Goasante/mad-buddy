@@ -6150,6 +6150,7 @@ export type MilestoneName =
   | "first_wave_sent"
   | "first_glow_enabled"
   | "first_plan_created"
+  | "first_meetup_created"
   /**
    * One successful user-authored DIRECT message.
    *
