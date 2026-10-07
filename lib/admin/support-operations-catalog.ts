@@ -140,49 +140,49 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
   },
   {
     id: "plan-chat",
-    label: "Plan Chat",
-    description: "Canonical Plan conversation creation and membership reconciliation.",
+    label: "Meetups · legacy chat",
+    description: "Legacy coordination-chat creation and membership reconciliation retained for historical records.",
     diagnostic: "live",
     repair: "live",
     verification: "live",
     issues: [
-      "Plan exists but Plan Chat is missing",
-      "Going/Maybe participant cannot enter Plan Chat",
-      "Removed participant still has chat access",
-      "Contextual UpFor participant is missing from Plan Chat"
+      "Legacy arrangement exists but its coordination chat is missing",
+      "Legacy participant cannot enter the coordination chat",
+      "Removed legacy participant still has chat access",
+      "Legacy accepted participant is missing from the coordination chat"
     ],
-    boundary: "Use the canonical Plan lifecycle; never grant arbitrary chat membership."
+    boundary: "Preserve the legacy coordination lifecycle; never grant arbitrary chat membership."
   },
   {
     id: "plans",
-    label: "Plans",
-    description: "RSVP, participant, status and UpFor-conversion lifecycle health.",
+    label: "Meetups · legacy arrangements",
+    description: "Historical arrangement, participant and conversion lifecycle health retained for compatibility.",
     diagnostic: "partial",
     repair: "planned",
     verification: "partial",
     issues: [
-      "RSVP state is wrong or stuck",
-      "Participant state and chat membership disagree",
-      "Plan remains in an impossible lifecycle state",
-      "Converted UpFor source/participant projection is wrong"
+      "Legacy response state is wrong or stuck",
+      "Legacy participant state and chat membership disagree",
+      "Legacy arrangement remains in an impossible lifecycle state",
+      "Legacy source/participant projection is wrong"
     ],
-    boundary: "Preserve create_plan_lifecycle and canonical RSVP authority."
+    boundary: "Preserve historical lifecycle authority; do not synthesize participation."
   },
   {
     id: "upfor",
-    label: "UpFor",
-    description: "Session expiry, requests, capacity, discovery and conversion state.",
+    label: "Meetups · legacy availability",
+    description: "Historical availability-session expiry, request and conversion state retained for compatibility.",
     diagnostic: "live",
     repair: "live",
     verification: "live",
     issues: [
-      "Expired UpFor is still active",
-      "Join request is stuck",
-      "Accepted participant is missing",
-      "Capacity/status disagree",
-      "Conversion or discovery projection is stale"
+      "Expired legacy availability session is still active",
+      "Legacy join request is stuck",
+      "Legacy accepted participant is missing",
+      "Legacy capacity and status disagree",
+      "Legacy conversion or discovery projection is stale"
     ],
-    boundary: "Never turn an Admin repair into stranger friendship or unrelated Plan access."
+    boundary: "Never turn an Admin repair into stranger friendship or unrelated Meetup access."
   },
   {
     id: "linkr",
@@ -261,16 +261,16 @@ export const SUPPORT_OPERATIONS_AREAS: readonly SupportOperationsArea[] = [
   },
   {
     id: "safe-arrival",
-    label: "Safe Arrival",
-    description: "Journey lifecycle, recipient state and notification reconciliation without location exposure.",
+    label: "Meetups · legacy journey safety",
+    description: "Historical journey lifecycle and notification reconciliation retained without location exposure.",
     diagnostic: "live",
     repair: "by_design",
     verification: "partial",
     issues: [
-      "Journey is stuck",
-      "Grace/expired state did not advance",
-      "Recipient state or notification is stale",
-      "Cancellation/expiry reconciliation is needed"
+      "Legacy journey is stuck",
+      "Legacy journey expiry did not advance",
+      "Legacy recipient state or notification is stale",
+      "Legacy cancellation or expiry reconciliation is needed"
     ],
     boundary: "Never expose exact location, route, coordinates or location history to Support."
   },
