@@ -128,7 +128,7 @@ export function SettingsPageContent({
           <SettingsLinkRow
             icon={ShieldCheck}
             title="Mad Buddy Access"
-            description="Linkr and UpFor. See your access and what stays free."
+            description="See your access and what stays free."
             href="/settings/access"
           />
           <SettingsLinkRow
@@ -171,12 +171,6 @@ export function SettingsPageContent({
             title="Account Privacy"
             description="Glow visibility, messaging privacy, contact discovery and blocked users."
             href="/settings/privacy"
-          />
-          <SettingsLinkRow
-            icon={ShieldCheck}
-            title="Safe Arrival"
-            description="Ask trusted Muddies to check you got there."
-            href="/safe-arrival"
           />
           <SettingsLinkRow
             icon={ShieldCheck}
