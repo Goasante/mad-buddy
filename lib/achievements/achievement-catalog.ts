@@ -59,8 +59,8 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   { id: "circle_builder", name: "Circle Builder", description: "You created 3 circles.", iconPath: `${BADGE_DIR}/Circle Builder.png`, category: "balance", criteria: { type: "count", threshold: 3 }, notification: unlocked("Circle Builder") },
   { id: "balanced_buddy", name: "Balanced Buddy", description: "You took part across 3 different circles in a month.", iconPath: `${BADGE_DIR}/Balanced Buddy.png`, category: "balance", criteria: { type: "distinct_count", threshold: 3 }, notification: unlocked("Balanced Buddy") },
 
-  { id: "good_check_in", name: "Good Check-In", description: "You checked in at a Meetup.", iconPath: `${BADGE_DIR}/Good Check-In.png`, category: "safety", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("Good Check-In") },
-  { id: "safe_traveller", name: "Safe Traveller", description: "You checked in at 5 Meetups.", iconPath: `${BADGE_DIR}/Safe Traveller.png`, category: "safety", criteria: { type: "count", threshold: 5 }, notification: unlocked("Safe Traveller") },
+  { id: "good_check_in", name: "Good Check-In", description: "You completed a Meetup safety check-in.", iconPath: `${BADGE_DIR}/Good Check-In.png`, category: "safety", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("Good Check-In") },
+  { id: "safe_traveller", name: "Safe Traveller", description: "You completed 5 Meetup safety check-ins.", iconPath: `${BADGE_DIR}/Safe Traveller.png`, category: "safety", criteria: { type: "count", threshold: 5 }, notification: unlocked("Safe Traveller") },
 
   // These belong to the retired standalone Safe Arrival workflow. Keep their
   // codes and neutral copy for existing earned rows / late lifecycle delivery,
