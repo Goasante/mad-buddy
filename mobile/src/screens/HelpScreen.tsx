@@ -6,7 +6,7 @@ import { Screen } from "../components/AppShell";
 const popularTopics = [
   { title: "Getting Started", description: "Learn the basics and set up your profile.", icon: Rocket },
   { title: "Glow & Visibility", description: "Understand how Glow and visibility work.", icon: Eye },
-  { title: "Meet & Plans", description: "How to create, join, and manage plans.", icon: LifeBuoy },
+  { title: "Meetups", description: "How to invite Muddies, meet new people, and coordinate a Meetup.", icon: LifeBuoy },
   { title: "Safety & Privacy", description: "Keep your account and data safe.", icon: Shield },
   { title: "Billing & Premium", description: "Manage payments, plans, and refunds.", icon: CreditCard },
   { title: "Account & Settings", description: "Update your profile and preferences.", icon: Settings }
