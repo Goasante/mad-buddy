@@ -1520,7 +1520,7 @@ function MeetupCard({
                   update({ action: "arrival", arrival: "left" });
                 }}
               >
-                I'm good
+                I’m good
               </Button>
               <Button
                 className="h-12 rounded-2xl"
