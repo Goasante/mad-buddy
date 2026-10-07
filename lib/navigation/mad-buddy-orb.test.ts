@@ -17,7 +17,7 @@ describe("bottom navigation order", () => {
   it("keeps Messages, Muddies, Home, Linkr, UpFor", () => {
     const tabs = navSource.slice(navSource.indexOf("export const MOBILE_TABS"), navSource.indexOf("export function MobileNav("));
     const order = [...tabs.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
-    expect(order).toEqual(["Messages", "Muddies", "Linkr", "UpFor"]);
+    expect(order).toEqual(["Messages", "Muddies", "Linkr", "Meetups"]);
     expect(mobileNav).toContain("MOBILE_TABS.slice(0, 2)");
     expect(mobileNav).toContain("MOBILE_TABS.slice(2)");
 
