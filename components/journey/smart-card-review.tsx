@@ -17,7 +17,7 @@ const samples: SmartCard[] = [
 
 export function SmartCardReview() {
   const [width, setWidth] = useState(390);
-  return <FeatureAvailabilityContext.Provider value={{ upfor: true, linkr: true, events: true, conference: true, safe_arrival: true }}>
+  return <FeatureAvailabilityContext.Provider value={{ upfor: true, linkr: true, events: true, conference: true, meet_up: true, safe_arrival: true }}>
     <main className="mx-auto max-w-6xl space-y-6 p-4">
       <h1 className="text-xl font-semibold">SmartCard presentation review</h1>
       <p>Sample content only. Actions are disabled and this route is unavailable in production.</p>
