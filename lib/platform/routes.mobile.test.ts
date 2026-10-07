@@ -25,10 +25,8 @@ describe("paths that differ between the two apps", () => {
     expect(toMobilePath("/settings/access")).toBe("/subscription");
   });
 
-  it("maps Safe Arrival, whose mobile screen is routed at /safety", () => {
-    // SafetyScreen.tsx is titled "Safe Arrival" and calls /api/safe-arrival --
-    // the same feature, a different path. That is what qualifies it.
-    expect(toMobilePath("/safe-arrival")).toBe("/safety");
+  it("routes retired Safe Arrival into Meetups", () => {
+    expect(toMobilePath("/safe-arrival")).toBe("/meet-up");
   });
 
   it("maps meeting pings", () => {
@@ -73,7 +71,7 @@ describe("features that do not exist on mobile are never substituted", () => {
 });
 
 describe("paths that are the same on both", () => {
-  it.each(["/messages", "/plans", "/events", "/groups", "/profile", "/settings", "/help"])(
+  it.each(["/messages", "/meet-up", "/events", "/groups", "/profile", "/settings", "/help"])(
     "passes %s through unchanged",
     (path) => {
       expect(toMobilePath(path)).toBe(path);
@@ -138,7 +136,7 @@ describe("isBuiltForMobile gates links during migration", () => {
     expect(isBuiltForMobile(path)).toBe(false);
   });
 
-  it.each(["/home", "/messages", "/plans", "/muddies", "/events", "/settings"])(
+  it.each(["/home", "/messages", "/meet-up", "/muddies", "/events", "/settings"])(
     "reports %s as built",
     (path) => {
       expect(isBuiltForMobile(path)).toBe(true);
