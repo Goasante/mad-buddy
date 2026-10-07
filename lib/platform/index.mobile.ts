@@ -15,6 +15,7 @@ export { Image, type ImageProps } from "./image.mobile";
 export { useRouter, usePathname, useSearchParams, useRevalidate } from "./router.mobile";
 export { toMobilePath, isBuiltForMobile, MOBILE_ROUTES_NOT_BUILT } from "./routes.mobile";
 export { syncCurrentLocation, type LocationSyncResult } from "./location.mobile";
+export { subscribeMeetupRealtime } from "./meetup-realtime.mobile";
 
 /** Compile-time platform marker matching the web adapter surface. */
 export const PLATFORM_KIND: "web" | "mobile" = "mobile";
