@@ -163,7 +163,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
             </p>
           ) : overview.milestones.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No milestones yet. Factual moments such as a first plan together or a Muddy anniversary will appear here.
+              No milestones yet. Factual moments such as a first Meetup together or a Muddy anniversary will appear here.
             </p>
           ) : (
             overview.milestones.map((milestone) => (
