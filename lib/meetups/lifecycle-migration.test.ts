@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "..", "..");
 const migration = readFileSync(
-  join(ROOT, "supabase/migrations/20261007103000_meet_up_beacon_lifecycle.sql"),
+  join(ROOT, "supabase/migrations/20261007132256_meet_up_beacon_lifecycle.sql"),
   "utf8"
 );
 
