@@ -785,6 +785,67 @@ function CreateMeetup({
   );
 }
 
+function SafeHomeCard({
+  meetup,
+  viewerId,
+  saveAction,
+  refreshAction
+}: {
+  meetup: Meetup;
+  viewerId: string;
+  saveAction: MeetupSaveAction;
+  refreshAction: () => Promise<void>;
+}) {
+  const retry = useRef<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState("");
+  const mine = meetup.members.find((person) => person.userId === viewerId);
+  if (!mine?.homeStartedAt || mine.homeArrivedAt) return null;
+
+  function confirmHome() {
+    retry.current ??= crypto.randomUUID();
+    const input: MeetupUpdate = {
+      action: "home_arrived",
+      id: meetup.id,
+      revision: meetup.revision,
+      requestKey: retry.current
+    };
+    startTransition(async () => {
+      try {
+        const result = await saveAction(input);
+        setMessage(result.message);
+        if (result.ok) {
+          retry.current = null;
+          await refreshAction();
+        }
+      } catch {
+        setMessage("Could not send your home check-in. Try again.");
+      }
+    });
+  }
+
+  return (
+    <section className={panelClass + " mb-3 border-emerald-500/20 bg-emerald-500/[0.06] p-4"}>
+      <div className="flex items-start gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-300">
+          <House className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">Heading home from {meetup.placeLabel}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Your meetup itself is finished. This small check-in stays only until you say you're home.
+          </p>
+        </div>
+      </div>
+      <Button className="mt-3 h-11 w-full rounded-2xl" disabled={pending} onClick={confirmHome}>
+        <CheckCircle2 className="h-4 w-4" />
+        {pending ? "Sending…" : "I'm home"}
+      </Button>
+      {message && <p role="status" className="mt-2 text-xs text-muted-foreground">{message}</p>}
+    </section>
+  );
+}
+
 function MeetupCard({
   meetup: m,
   viewerId,
@@ -1049,6 +1110,34 @@ function MeetupCard({
                 })}
               </ul>
             </section>
+
+            {!!m.activity.length && (
+              <section>
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <h3 className="text-sm font-bold">Recent activity</h3>
+                  <span className="text-[11px] text-muted-foreground">Shared with participants</span>
+                </div>
+                <ol className="space-y-2 rounded-2xl bg-secondary/35 p-3">
+                  {m.activity.slice(0, 6).map((item) => {
+                    const label = activityText(item, m);
+                    if (!label) return null;
+                    return (
+                      <li key={item.id} className="flex items-start gap-3 text-xs">
+                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary/70" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 leading-5">{label}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {new Intl.DateTimeFormat("en", {
+                            timeZone: m.timezone,
+                            hour: "numeric",
+                            minute: "2-digit"
+                          }).format(new Date(item.createdAt))}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            )}
 
             {open && (
               <fieldset disabled={pending} className="space-y-3">
