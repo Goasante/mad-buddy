@@ -178,7 +178,7 @@ export function ProfileVNextPage({
           <div className="relative mt-7 grid grid-cols-3 overflow-hidden rounded-2xl border border-border/60 bg-background/78 shadow-sm backdrop-blur">
             <HeroStat value={activity.muddyCount} label="Muddies" />
             <HeroStat value={activity.momentCount} label="Moments" bordered />
-            <HeroStat value={activity.completedPlanCount} label="Plans" bordered />
+            <HeroStat value={activity.completedMeetupCount} label="Meetups" bordered />
           </div>
         ) : null}
       </section>
