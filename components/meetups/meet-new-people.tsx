@@ -16,8 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { Link } from "@/lib/platform";
-import { conversationHref } from "@/lib/messaging/open-conversation";
+import { Link, syncCurrentLocation } from "@/lib/platform";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
 import {
   MEETUP_DISCOVERY_CATEGORY_OPTIONS,
@@ -162,6 +161,7 @@ export function MeetNewPeople({
   const [style, setStyle] = useState<"one_to_one" | "group">("one_to_one");
   const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 2 * 60 * 60_000)));
   const [duration, setDuration] = useState<30 | 60 | 120 | 240>(60);
+  const [minStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 60_000)));
 
   const canCreate = hub.activeSlots < hub.maxActiveSlots;
   const wordCount = title.trim() ? title.trim().split(/\s+/).length : 0;
@@ -182,6 +182,11 @@ export function MeetNewPeople({
     if (!title.trim() || wordCount > 5) return;
     const date = new Date(startsAt);
     startTransition(async () => {
+      const location = await syncCurrentLocation();
+      if (!location.ok) {
+        setMessage(location.message ?? "Turn on Glow so this listing can be shown nearby.");
+        return;
+      }
       const result = await action({
         title: title.trim(),
         category,
@@ -282,7 +287,7 @@ export function MeetNewPeople({
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {item.conversationId ? (
-                  <Link href={conversationHref(item.conversationId)} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
+                  <Link href={"/messages?conversation=" + item.conversationId} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
                     <MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat
                   </Link>
                 ) : null}
@@ -368,7 +373,7 @@ export function MeetNewPeople({
 
           <label className="block min-w-0 space-y-1.5 overflow-hidden">
             <span className="text-sm font-medium">When are you hoping to meet?</span>
-            <input className={inputClass} type="datetime-local" min={localDateTimeValue(new Date(Date.now() + 60_000))} value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+            <input className={inputClass} type="datetime-local" min={minStartsAt} value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
           </label>
 
           <div>
