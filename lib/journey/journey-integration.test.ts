@@ -7,7 +7,9 @@ describe("Journey integrations", () => {
     for (const source of ['from("profiles")','from("friendships")','from("activation_milestones")','from("waves")','from("messages")','from("meetups")']) {
       expect(service).toContain(source);
     }
-    expect(service).not.toContain('from("moments")');\n    expect(service).not.toContain('from("plans")');\n    expect(service).not.toContain('from("safe_arrival_sessions")');
+    expect(service).not.toContain('from("moments")');
+    expect(service).not.toContain('from("plans")');
+    expect(service).not.toContain('from("safe_arrival_sessions")');
     expect(service).not.toContain("loadBillingState");
     expect(service).not.toContain("effectivePlan(");
     expect(service).not.toContain("unlock_buddy_plus");
@@ -24,6 +26,10 @@ describe("Journey integrations", () => {
   it("uses Meetups and removes paused or retired product steps", () => {
     const journey = readFileSync("lib/journey/journey.ts", "utf8");
     expect(journey).not.toContain("share_first_moment");
-    expect(journey).not.toContain('destination: "/moments"');\n    expect(journey).toContain('id: "create_first_meetup"');\n    expect(journey).toContain('destination: "/meet-up?create=1"');\n    expect(journey).not.toContain("create_first_plan");\n    expect(journey).not.toContain("complete_first_safe_arrival");
+    expect(journey).not.toContain('destination: "/moments"');
+    expect(journey).toContain('id: "create_first_meetup"');
+    expect(journey).toContain('destination: "/meet-up?create=1"');
+    expect(journey).not.toContain("create_first_plan");
+    expect(journey).not.toContain("complete_first_safe_arrival");
   });
 });
