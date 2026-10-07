@@ -34,9 +34,9 @@ const faqItems = [
       "No. The proximity experience uses broad bands or coarsely rounded estimates. It does not show a live map, map pin, direction of travel, or precise position."
   },
   {
-    question: "What is Safe Arrival?",
+    question: "What are Meetups?",
     answer:
-      "Safe Arrival is a safety-focused check-in experience that helps chosen people know whether you arrived, without turning them into live location trackers."
+      "Meetups turn a social intention into a real arrangement. Invite Muddies directly or use Meet New People, agree a time and place, then stay coordinated without exposing exact live location."
   },
   {
     question: "Can I block or report someone?",
@@ -51,7 +51,7 @@ const faqItems = [
   {
     question: "Is Mad Buddy free?",
     answer:
-      "Mad Buddy Core is free. Mad Buddy Access is one optional subscription that expands Linkr and lets UpFor reach beyond your Muddies. Current prices and any eligible trial are shown on Pricing so the public explanation stays aligned with the product's billing authority."
+      "Mad Buddy Core is free. Mad Buddy Access is an optional ad-free subscription; core features such as Muddies, Linkr, Meetups, Messages and Events remain available without it. Current prices are shown on Pricing."
   }
 ] as const;
 
