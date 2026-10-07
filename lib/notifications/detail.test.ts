@@ -21,12 +21,11 @@ import {
 const UUID = "11111111-1111-4111-8111-111111111111";
 
 describe("actionable notifications navigate", () => {
-  it("sends a plan notification to that plan", () => {
+  it("routes a historical plan notification into Meetups", () => {
     const behaviour = resolveNotificationBehaviour({ type: `plan:${UUID}`, handledInline: false });
     expect(behaviour.kind).toBe("navigate");
     if (behaviour.kind !== "navigate") throw new Error("expected navigate");
-    expect(behaviour.destination.href).toContain("/plans");
-    expect(behaviour.destination.href).toContain(UUID);
+    expect(behaviour.destination.href).toBe("/meet-up");
   });
 
   it("sends a message notification to that conversation", () => {
@@ -143,7 +142,7 @@ describe("a stale or malformed target never produces a broken URL", () => {
      fire. hasStaleTarget asks the narrower, real question: did this
      notification name a specific item that the resolver could not use? */
   it("reports a stale target when a named item could not be resolved", () => {
-    expect(hasStaleTarget("plan:not-a-uuid")).toBe(true);
+    expect(hasStaleTarget("plan:not-a-uuid")).toBe(false);
     expect(hasStaleTarget("message:gone")).toBe(true);
     expect(hasStaleTarget("event_room:nope:also-nope")).toBe(true);
   });
@@ -197,7 +196,7 @@ describe("the detail sheet says when and where", () => {
   });
 
   it("names the surface a notification came from", () => {
-    expect(notificationSourceLabel(`plan:${UUID}`)).toBe("Plans");
+    expect(notificationSourceLabel(`plan:${UUID}`)).toBe("Meetups");
     expect(notificationSourceLabel("event_room:a:b")).toBe("Event Rooms");
     expect(notificationSourceLabel("friend_request_received")).toBe("Muddies");
     expect(notificationSourceLabel("system_alert")).toBe("Mad Buddy");
