@@ -82,9 +82,14 @@ export async function createMeetupDiscovery(userId: string, input: unknown) {
   });
   if (result.error) return { ok: false, message: commandError(result.error.message) };
   const data = result.data as { id?: unknown } | null;
-  return typeof data?.id === "string"
-    ? { ok: true, message: "Your nearby listing is live.", discoveryId: data.id }
-    : { ok: false, message: "The listing was created but could not be reopened." };
+  if (typeof data?.id !== "string") {
+    return { ok: false, message: "The listing was created but could not be reopened." };
+  }
+  after(async () => {
+    const { grantAchievement } = await import("@/lib/engagement/achievements");
+    await grantAchievement(client, userId, "open_to_meetups");
+  });
+  return { ok: true, message: "Your nearby listing is live.", discoveryId: data.id };
 }
 
 export async function updateMeetupDiscovery(userId: string, input: unknown) {
