@@ -16,7 +16,9 @@ export function useMeetupRealtime(input: {
   onChange: () => Promise<void> | void;
 }) {
   const onChangeRef = useRef(input.onChange);
-  onChangeRef.current = input.onChange;
+  useEffect(() => {
+    onChangeRef.current = input.onChange;
+  }, [input.onChange]);
   const key = [...new Set(input.meetupIds)].sort().join(",");
 
   useEffect(() => {
