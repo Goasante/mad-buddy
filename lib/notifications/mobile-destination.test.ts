@@ -21,8 +21,6 @@ describe("destinations Android does not have", () => {
     ["/linkr", "Linkr"],
     ["/linkr?connection=abc", "a Linkr connection"],
     ["/drops", "Drops"],
-    ["/hangout-mode", "Hangout Mode"],
-    ["/hangout-mode?hangout=abc", "a specific hangout"],
     ["/badges", "Badges"]
   ])("does not navigate to %s (%s)", (path) => {
     expect(adapt(href(path))).toBeNull();
@@ -71,11 +69,11 @@ describe("the one deep link Android can honour", () => {
 
 describe("destinations that exist but ignore their query", () => {
   it.each([
-    ["/plans?plan=abc", "/plans"],
+    ["/plans?plan=abc", "/meet-up"],
     ["/events?event=abc", "/events"],
     ["/events?event=abc&room=def", "/events"],
     ["/friends?tab=requests", "/muddies"],
-    ["/safe-arrival?session=abc", "/safety"]
+    ["/safe-arrival?session=abc", "/meet-up"]
   ])("%s degrades to %s", (input, expected) => {
     // A partial answer, not a wrong one: the right screen opens, just not the
     // exact item. The query is dropped so nothing implies a precision the
@@ -91,7 +89,7 @@ describe("destinations that map cleanly", () => {
     ["/meeting-pings", "/pings"],
     ["/settings/access", "/subscription"],
     ["/messages", "/messages"],
-    ["/plans", "/plans"],
+    ["/plans", "/meet-up"],
     ["/events", "/events"],
     ["/notifications", "/notifications"],
     ["/groups", "/groups"]
@@ -118,7 +116,7 @@ describe("against real resolver output", () => {
     ["friend_nearby", "/home"],
     ["wave", "/muddies"],
     [`message:${UUID}`, `/messages/${UUID}`],
-    [`plan:${UUID}`, "/plans"],
+    [`plan:${UUID}`, "/meet-up"],
     [`event:${UUID}`, "/events"],
     ["subscription_update", "/subscription"],
     [`moment:${UUID}`, "/profile"]
@@ -133,11 +131,15 @@ describe("against real resolver output", () => {
     expect(adapt(resolveNotificationDestination(type))).toEqual({ type: "internal", href: expected });
   });
 
-  it.each([
-    [`linkr_connection:${UUID}`, "Linkr"],
-    [`hangout:${UUID}`, "Hangout Mode"]
-  ])("%s does not navigate (%s is not on Android)", (type) => {
-    expect(adapt(resolveNotificationDestination(type))).toBeNull();
+  it("keeps Linkr non-navigating while it has no native surface", () => {
+    expect(adapt(resolveNotificationDestination(`linkr_connection:${UUID}`))).toBeNull();
+  });
+
+  it("routes historical Hangout notifications into Meetups", () => {
+    expect(adapt(resolveNotificationDestination(`hangout:${UUID}`))).toEqual({
+      type: "internal",
+      href: "/meet-up"
+    });
   });
 
   it("every destination the resolver can produce is either reachable or null", () => {
@@ -154,8 +156,8 @@ describe("against real resolver output", () => {
       `meetup_request:${UUID}`, `event_room:${UUID}:${UUID}`, `meetup:${UUID}`, `meetup_discovery:${UUID}`
     ];
     const reachable = new Set([
-      "/home", "/muddies", "/messages", "/plans", "/events",
-      "/notifications", "/groups", "/pings", "/safety", "/subscription",
+      "/home", "/muddies", "/messages", "/meet-up", "/events",
+      "/notifications", "/groups", "/pings", "/subscription",
       "/socialize", "/profile", "/settings", "/buddy-score", "/help", "/more", "/meet-up"
     ]);
     for (const type of types) {
