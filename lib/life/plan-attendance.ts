@@ -75,3 +75,42 @@ export function planAttendancePairs(
 
 /** Exposed so tests and callers agree on what a relationship id is here. */
 export { relationshipId };
+
+
+export type MeetupAttendee = { meetupId: string; userId: string };
+
+/**
+ * Every pair who explicitly confirmed meeting in one Meetup. Historical Plan
+ * attendance and current Meetup attendance feed the same friendship milestones.
+ */
+export function meetupAttendancePairs(
+  attendees: readonly MeetupAttendee[],
+  occurredAt: string,
+  maxAttendees = 6
+): LifeEventInput[] {
+  const byMeetup = new Map<string, string[]>();
+  for (const attendee of attendees) {
+    if (!byMeetup.has(attendee.meetupId)) byMeetup.set(attendee.meetupId, []);
+    const users = byMeetup.get(attendee.meetupId)!;
+    if (!users.includes(attendee.userId)) users.push(attendee.userId);
+  }
+
+  const inputs: LifeEventInput[] = [];
+  for (const [meetupId, users] of byMeetup) {
+    if (users.length < 2 || users.length > maxAttendees) continue;
+    const sorted = [...users].sort();
+    for (let i = 0; i < sorted.length; i += 1) {
+      for (let j = i + 1; j < sorted.length; j += 1) {
+        inputs.push({
+          eventType: "meetup.attended_together",
+          actorId: sorted[i]!,
+          subjectId: sorted[j]!,
+          naturalKey: meetupId,
+          payload: { meetupId },
+          occurredAt
+        });
+      }
+    }
+  }
+  return inputs;
+}
