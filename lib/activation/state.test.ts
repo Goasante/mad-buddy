@@ -118,7 +118,7 @@ describe("the action for one specific Muddy", () => {
   });
 
   it("opens something already arranged before suggesting anything", () => {
-    expect(actionForMuddy(ctx({ hasSharedUpcomingPlan: true, isNearby: true }))).toBe("view_plan");
+    expect(actionForMuddy(ctx({ hasSharedUpcomingPlan: true, isNearby: true }))).toBe("view_meetup");
   });
 
   it("says hi to somebody you have never messaged", () => {
@@ -143,7 +143,7 @@ describe("the action for one specific Muddy", () => {
     for (const nearby of [true, false]) {
       for (const talked of [true, false]) {
         expect(actionForMuddy(ctx({ isNearby: nearby, hasExistingConversation: talked }))).not.toBe(
-          "make_plan"
+          "make_meetup"
         );
       }
     }
@@ -216,7 +216,7 @@ describe("nobody around is an ordinary evening, not a failure", () => {
 
   it("is where a Plan genuinely is the right ask", () => {
     // Nobody to wave at, so arranging something for later is the useful move.
-    expect(primaryActionFor("no_one_nearby")).toBe("make_plan");
+    expect(primaryActionFor("no_one_nearby")).toBe("make_meetup");
   });
 });
 
@@ -288,7 +288,7 @@ describe("an upcoming Plan does not monopolise the activation card", () => {
   /* The state itself is retained -- it is still reachable through the explicit
      relationship-focus path -- and its action is unchanged. */
   it("points at the Plan rather than making another one", () => {
-    expect(primaryActionFor("upcoming_plan")).toBe("view_plan");
+    expect(primaryActionFor("upcoming_plan")).toBe("view_meetup");
   });
 });
 
