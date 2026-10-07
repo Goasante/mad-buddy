@@ -1,4 +1,5 @@
 import type { HangoutActivityType, PlanCategory } from "@/lib/supabase/database.types";
+import type { MeetupDiscoveryCategory } from "@/lib/meetups/discovery";
 import type { SmartCard, SmartCardMedia } from "@/lib/smart-card/smart-card";
 import { planActivityArt } from "@/lib/visuals/registry";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
@@ -47,6 +48,21 @@ export function upForActivitySmartCardMedia(
   label: string
 ): SmartCardMedia | undefined {
   const artwork = resolveUpForActivityArtwork(activity);
+  if (!artwork) return undefined;
+  return {
+    url: artwork.asset.path,
+    alt: `${label}: ${artwork.asset.depicts}`
+  };
+}
+
+
+/** Meetup Smart Cards reuse the exact category artwork used by Meetups.
+ * This keeps Home grounded in the arrangement the person actually made. */
+export function meetupActivitySmartCardMedia(
+  category: MeetupDiscoveryCategory,
+  label: string
+): SmartCardMedia | undefined {
+  const artwork = resolveUpForActivityArtwork(category);
   if (!artwork) return undefined;
   return {
     url: artwork.asset.path,
