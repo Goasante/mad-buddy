@@ -659,8 +659,8 @@ export function DashboardPageContent({
     say_hi: "Say hi",
     message: "Message",
     wave: "Wave",
-    make_plan: "Create Meetup",
-    view_plan: "Open Meetup",
+    make_meetup: "Create Meetup",
+    view_meetup: "Open Meetup",
     find_muddies: "Find Muddies",
     enable_location: "Turn on Glow",
     refresh_location: "Refresh Glow",
@@ -712,6 +712,11 @@ export function DashboardPageContent({
        * coordinates, no band, no proximity of any kind. Nearby is the social
        * context that led here, not a location payload. */
       router.push(`/meet-up?create=1&with=${encodeURIComponent(muddyId)}` as Route);
+      return;
+    }
+
+    if (action === "view_meetup") {
+      router.push("/meet-up" as Route);
       return;
     }
 
