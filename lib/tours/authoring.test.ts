@@ -71,7 +71,7 @@ describe("tour target registry is honest about the real UI", () => {
     expect(targetLabel("not-registered")).toBe("not-registered");
     expect(targetLabel(null)).toBeNull();
     expect(findTarget("socialize-feed")?.route).toBe("/discover");
-    expect(findRoute("/plans")?.label).toBe("Plans");
+    expect(findRoute("/meet-up")?.label).toBe("Meetups");
   });
 });
 
