@@ -3,7 +3,7 @@ import "server-only";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { meetupCreateSchema, meetupUpdateSchema } from "@/lib/meetups/rules";
+import { meetupCreateSchema, meetupUpdateSchema, type MeetupUpdate } from "@/lib/meetups/rules";
 import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import { guardAction } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
@@ -16,40 +16,40 @@ const ERRORS: Record<string, string> = {
   MEETUP_NOT_MUDDIES: "Choose current Muddies who can receive your invitation.",
   MEETUP_ACCESS: "This meetup is no longer available to you.",
   MEETUP_ACCEPT_FIRST: "Wait until you and another participant have accepted, including the host.",
-  MEETUP_TOO_EARLY: "Meetup updates open two hours before the scheduled time.",
+  MEETUP_TOO_EARLY: "Arrival updates open two hours before the meetup.",
   MEETUP_ENDED: "This meetup has ended.",
+  MEETUP_EXPIRED: "This meetup has expired.",
   MEETUP_LIMIT: "You have too many active meetups. End an old one first.",
-  MEETUP_TIME: "Choose a future date and time."
+  MEETUP_TIME: "Choose a future date and time.",
+  MEETUP_LOCATION_REQUIRED: "Mad Buddy needs a fresh location signal before you can confirm that you're there.",
+  MEETUP_BEACON_MISMATCH: "That does not look like the meetup spot yet. Move closer to the agreed spot and try again."
 };
 
-function successMessage(value: Record<string, unknown>, create: boolean): string {
-  if (create) return "Meetup invitation sent.";
+function successMessage(value: { action?: string; response?: string; arrival?: string; startsAt?: string }, create: boolean) {
+  if (create) return "Invitation sent.";
   switch (value.action) {
     case "respond":
       return value.response === "accepted"
-        ? "Invitation accepted. Meetup Proximity will turn on during the meetup window."
-        : "Invitation declined.";
+        ? "Invitation accepted. Meetup Proximity is now active for this meetup."
+        : "You declined the meetup.";
     case "arrival":
       if (value.arrival === "on_my_way") return "Everyone can now see that you're on the way.";
       if (value.arrival === "late") return "Your late update was shared with the meetup.";
-      if (value.arrival === "here") return "You're marked here. If needed, your arrival helps set the Meetup Glow point.";
+      if (value.arrival === "here") return "You're marked at the meetup spot.";
       if (value.arrival === "left") return "You've left the meetup.";
-      return "Meetup status updated.";
+      break;
+    case "suggest":
+      return "Your new time was suggested.";
+    case "reschedule":
+      return "Meetup time changed. Everyone has been asked to confirm again.";
     case "met":
       return "You confirmed that you met.";
-    case "suggest":
-      return "Your suggested time was sent.";
-    case "reschedule":
-      return "Meetup rescheduled. Everyone has been asked to confirm the new time.";
-    case "reset_beacon":
-      return "Meetup Glow point reset.";
     case "cancel":
       return "Meetup cancelled.";
     case "end":
       return "Meetup ended.";
-    default:
-      return "Meetup updated.";
   }
+  return "Meetup updated.";
 }
 
 /** actorId must come from a freshly authenticated server request, never its body. */
@@ -59,15 +59,18 @@ export async function saveMeetupCommand(
   create = false
 ): Promise<{ ok: boolean; message: string }> {
   const parsed = create ? meetupCreateSchema.safeParse(input) : meetupUpdateSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check the people, place, and scheduled time before continuing." };
-
+  if (!parsed.success) return { ok: false, message: "Check the people, place, and time before continuing." };
   const value = parsed.data;
+
   if ("timezone" in value && !isValidTimeZone(value.timezone)) {
     return { ok: false, message: "Choose a valid timezone." };
   }
+  if ("startsAt" in value && "mode" in value && Date.parse(value.startsAt) <= Date.now()) {
+    return { ok: false, message: ERRORS.MEETUP_TIME };
+  }
 
-  // Meet Up currently shares the former Safe Arrival launch toggle. Keep the
-  // gate until the admin feature-key migration is done separately.
+  // Meet Up currently sits behind the legacy Safe Arrival launch flag. Keep
+  // that compatibility boundary until the admin flag is renamed separately.
   if (!(await optionalFeatureEnabled("safe_arrival"))) {
     return { ok: false, message: FEATURE_LOCK_MESSAGE };
   }
@@ -110,5 +113,8 @@ export async function saveMeetupCommand(
     }
   });
 
-  return { ok: true, message: successMessage(value as Record<string, unknown>, create) };
+  return {
+    ok: true,
+    message: successMessage(value as MeetupUpdate & { mode?: string }, create)
+  };
 }
