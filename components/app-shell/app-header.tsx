@@ -60,11 +60,11 @@ export type CreateAction = {
  */
 export const CREATE_ACTIONS = [
   {
-    href: "/plans?create=1",
-    title: "New plan",
-    description: "Create a hangout and invite Muddies",
+    href: "/meet-up",
+    title: "New Meetup",
+    description: "Meet a Muddy or find new people nearby",
     icon: CalendarCheck2,
-    featureIcon: "plans"
+    featureIcon: "hangout"
   },
   {
     href: "/meeting-pings",
