@@ -14,7 +14,7 @@ export default async function BuddyScoreRoute({ searchParams }: { searchParams?:
     nextLevel: null,
     pointsToNext: 0,
     progressPercent: 100,
-    categories: [{ label: "Connections", points: 420 }, { label: "Plans", points: 320 }, { label: "Safety", points: 210 }, { label: "Account trust", points: 175 }]
+    categories: [{ label: "Connections", points: 420 }, { label: "Meetups", points: 320 }, { label: "Safety", points: 210 }, { label: "Account trust", points: 175 }]
   } : preview === "new" ? {
     ...loaded.score,
     total: 0,
