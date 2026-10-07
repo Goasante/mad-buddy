@@ -12,7 +12,10 @@ export const loadFeatureAvailability = cache(async (): Promise<FeatureAvailabili
   const enabled = await loadGlobalFeatureFlags(createSupabaseAdminClient(), Object.values(OPTIONAL_FEATURES).map(f => f.flag));
   return Object.fromEntries(Object.entries(OPTIONAL_FEATURES).map(([key, value]) => [key, enabled.has(value.flag)])) as FeatureAvailability;
 });
-export async function optionalFeatureEnabled(feature: OptionalFeature): Promise<boolean> {
+type RetiredFeature = "upfor" | "safe_arrival";
+
+export async function optionalFeatureEnabled(feature: OptionalFeature | RetiredFeature): Promise<boolean> {
+  if (feature === "upfor" || feature === "safe_arrival") return false;
   return (await loadFeatureAvailability())[feature];
 }
 export const FEATURE_LOCK_MESSAGE = "Coming soon. We're getting this feature ready for you.";
