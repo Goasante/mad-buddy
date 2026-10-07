@@ -937,10 +937,9 @@ export function ProfilePageContent({
           {identitySummary?.activity ? (
             <section aria-labelledby="profile-activity-heading">
               <h3 id="profile-activity-heading" className="mb-2 px-1 text-sm font-semibold">Activity</h3>
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
                 <ActivityStat icon={UsersRound} value={identitySummary.activity.muddyCount} label="Muddies" href="/friends" />
-                <ActivityStat icon={CalendarCheck2} value={identitySummary.activity.completedPlanCount} label="Plans completed" href="/plans" />
-                <ActivityStat icon={ShieldCheck} value={identitySummary.activity.completedSafeArrivalCount} label="Safe arrivals" href="/safe-arrival" />
+                <ActivityStat icon={CalendarCheck2} value={identitySummary.activity.completedMeetupCount} label="Meetups completed" href="/meet-up" />
               </div>
               <Link href="/buddy-score" className="focus-ring safe-motion mt-2.5 flex min-h-12 items-center gap-3 rounded-2xl border border-border/70 bg-card/50 px-4 text-sm font-medium hover:bg-secondary/35">
                 <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
