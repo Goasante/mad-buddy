@@ -1719,7 +1719,7 @@ function NearbyHero({
  * systems — only the recommendations differ.
  */
 const FIRST_TIME_ACTIONS: QuickAction[] = [
-  { href: "/meet-up", label: "Meetups", description: "Let your Muddies know you are free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/meet-up", label: "Meetups", description: "Invite Muddies or meet new people nearby.", suggestion: "Turn a connection into time together.", tone: "orange", icon: Hand, featureIcon: "meetups", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Invite people you already know.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" }
 ];
