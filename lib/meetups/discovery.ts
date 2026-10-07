@@ -47,7 +47,12 @@ export const meetupDiscoveryCreateSchema = z.object({
   requestKey: z.string().uuid()
 }).strict();
 
+export const meetupDiscoveryEditSchema = meetupDiscoveryCreateSchema.pick({
+  title: true, category: true, startsAt: true, timezone: true, requestKey: true
+}).extend({ action: z.literal("edit"), id: z.string().uuid() }).strict();
+
 export const meetupDiscoveryCommandSchema = z.discriminatedUnion("action", [
+  meetupDiscoveryEditSchema,
   z.object({ action: z.literal("interest"), id: z.string().uuid() }).strict(),
   z.object({ action: z.literal("withdraw"), id: z.string().uuid() }).strict(),
   z.object({

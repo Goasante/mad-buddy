@@ -7,6 +7,8 @@ import { guardAction } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { deliverNotification } from "@/lib/notifications/server";
 import { isValidTimeZone } from "@/lib/time/timezone";
+import { isFutureMeetupTime } from "@/lib/meetups/scheduling";
+import { processMeetupNotifications } from "@/lib/meetups/notifications";
 import {
   meetupDiscoveryCommandSchema,
   meetupDiscoveryCreateSchema,
@@ -33,7 +35,8 @@ const ERROR_COPY: Record<string, string> = {
   DISCOVERY_TITLE: "Keep the title short — five words or fewer.",
   DISCOVERY_CHANGED: "That response changed. Refresh and try again.",
   DISCOVERY_DECLINED: "The creator has already passed on your request for this listing.",
-  MEETUP_TIME: "Choose a future date and time."
+  DISCOVERY_ACCESS: "Only the creator can edit this listing.",
+  MEETUP_TIME: "Choose a time at least one minute from now. Later today is fine."
 };
 
 function commandError(message?: string) {
@@ -66,7 +69,7 @@ export async function createMeetupDiscovery(userId: string, input: unknown) {
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the listing details." };
   }
   if (!isValidTimeZone(parsed.data.timezone)) return { ok: false, message: "Choose a valid timezone." };
-  if (Date.parse(parsed.data.startsAt) <= Date.now() + 60_000) {
+  if (!isFutureMeetupTime(parsed.data.startsAt)) {
     return { ok: false, message: ERROR_COPY.MEETUP_TIME };
   }
 
@@ -96,6 +99,10 @@ export async function updateMeetupDiscovery(userId: string, input: unknown) {
   if (!(await optionalFeatureEnabled("meet_up"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
   const parsed = meetupDiscoveryCommandSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "That listing update could not be read." };
+  if (parsed.data.action === "edit") {
+    if (!isValidTimeZone(parsed.data.timezone)) return { ok: false, message: "Choose a valid timezone." };
+    if (!isFutureMeetupTime(parsed.data.startsAt)) return { ok: false, message: ERROR_COPY.MEETUP_TIME };
+  }
 
   const client = createSupabaseAdminClient();
   const guard = await guardAction(client, { userId, surface: "plans" });
@@ -103,12 +110,13 @@ export async function updateMeetupDiscovery(userId: string, input: unknown) {
   const rate = await consumeRateLimit({ action: "meetups.update", userId });
   if (!rate.allowed) return { ok: false, message: rateLimitMessage(rate.resetAt) };
 
-  const before = parsed.data.action === "interest" ? await loadMeetupDiscoveryHub(userId) : null;
+  const before = parsed.data.action === "interest" || parsed.data.action === "edit" ? await loadMeetupDiscoveryHub(userId) : null;
   const itemBefore = before?.nearby.find((item) => item.id === parsed.data.id) ?? null;
+  const ownItemBefore = before?.mine.find((item) => item.id === parsed.data.id) ?? null;
 
-  const result = await asLooseRpc(client).rpc("meetup_discovery_command_server", {
+  const result = await asLooseRpc(client).rpc(parsed.data.action === "edit" ? "edit_meetup_discovery_server" : "meetup_discovery_command_server", {
     p_actor_id: userId,
-    p_action: parsed.data.action,
+    ...(parsed.data.action === "edit" ? {} : { p_action: parsed.data.action }),
     p_input: parsed.data
   });
   if (result.error) return { ok: false, message: commandError(result.error.message) };
@@ -116,9 +124,29 @@ export async function updateMeetupDiscovery(userId: string, input: unknown) {
   const data = (result.data && typeof result.data === "object" ? result.data : {}) as {
     meetupId?: unknown;
     conversationId?: unknown;
+    changed?: unknown;
+    timeChanged?: unknown;
   };
   const meetupId = typeof data.meetupId === "string" ? data.meetupId : undefined;
   const conversationId = typeof data.conversationId === "string" ? data.conversationId : undefined;
+
+  if (parsed.data.action === "edit" && data.changed === true && ownItemBefore) {
+    const { requestKey, id } = parsed.data;
+    after(async () => {
+      for (const person of ownItemBefore.interestedPeople) {
+        if (person.status !== "pending" && person.status !== "accepted") continue;
+        // Accepted people get the canonical reschedule notification instead.
+        if (person.status === "accepted" && data.timeChanged === true) continue;
+        await deliverNotification(client, {
+          userId: person.userId, senderId: userId,
+          type: person.status === "accepted" && meetupId ? `meetup:${meetupId}` : `meetup_discovery:${id}`,
+          title: "Meetup listing updated", message: "The creator updated the listing. Open it to review the details.",
+          dedupeKey: `meetup-discovery-edited:${id}:${requestKey}:${person.userId}`
+        });
+      }
+      if (data.timeChanged === true) await processMeetupNotifications(client);
+    });
+  }
 
   if (parsed.data.action === "interest" && itemBefore) {
     after(async () => {
@@ -150,7 +178,8 @@ export async function updateMeetupDiscovery(userId: string, input: unknown) {
   }
 
   const message =
-    parsed.data.action === "interest" ? "Interested sent."
+    parsed.data.action === "edit" ? "Listing updated."
+      : parsed.data.action === "interest" ? "Interested sent."
       : parsed.data.action === "withdraw" ? "Your interest was withdrawn."
         : parsed.data.action === "refresh" ? "Listing refreshed."
           : parsed.data.action === "close" ? "Listing closed."

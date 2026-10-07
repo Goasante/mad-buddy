@@ -7,6 +7,20 @@ function read(name: string) {
 }
 
 describe("Meet New People database boundary", () => {
+  const edits = read("20261007211756_meetup_discovery_creator_edits.sql");
+  it("restricts edits to active listings owned by the authenticated creator", () => {
+    expect(edits).toContain("p_actor_id<>v_d.creator_id");
+    expect(edits).toContain("v_d.listing_expires_at<=now()");
+    expect(edits).toContain("security invoker set search_path=''");
+    expect(edits).toContain("from public,anon,authenticated");
+    expect(edits).toContain("to service_role");
+  });
+  it("preserves expiry and uses the canonical linked Meetup reschedule flow", () => {
+    expect(edits).toContain("public.meetup_command_server(p_actor_id,'reschedule'");
+    expect(edits).toContain("update public.group_settings g set name=v_title");
+    expect(edits).not.toContain("listing_expires_at=");
+    expect(edits).not.toContain("max_attendees=");
+  });
   const lifecycle = read("20261007141400_meet_new_people_discovery.sql");
   const projection = read("20261007142230_meet_new_people_projection_hardening.sql");
   const refreshProjection = read("20261007144246_meet_new_people_refresh_projection.sql");

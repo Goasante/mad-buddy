@@ -6,6 +6,7 @@ import {
   Check,
   Clock3,
   MessageCircle,
+  Pencil,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -19,6 +20,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { Link, PLATFORM_KIND, syncCurrentLocation } from "@/lib/platform";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
 import { conversationHref } from "@/lib/messaging/open-conversation";
+import { isFutureMeetupTime } from "@/lib/meetups/scheduling";
 import {
   MEETUP_DISCOVERY_CATEGORY_OPTIONS,
   discoveryCategoryLabel,
@@ -161,6 +163,7 @@ export function MeetNewPeople({
   onRefresh: () => Promise<void>;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<MeetupDiscoveryItem | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(focusedId ?? null);
   const [localUpdates, setLocalUpdates] = useState<Record<string, Partial<MeetupDiscoveryItem>>>({});
   const [previousHub, setPreviousHub] = useState(hub);
@@ -181,7 +184,6 @@ export function MeetNewPeople({
   const [style, setStyle] = useState<"one_to_one" | "group">("one_to_one");
   const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 2 * 60 * 60_000)));
   const [duration, setDuration] = useState<30 | 60 | 120 | 240>(60);
-  const [minStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 60_000)));
 
   const canCreate = hub.activeSlots < hub.maxActiveSlots;
   const wordCount = title.trim() ? title.trim().split(/\s+/).length : 0;
@@ -272,37 +274,42 @@ export function MeetNewPeople({
   }
 
   function create() {
-    if (inFlight.current || title.trim().length < 2 || wordCount > 5 || !canCreate) return;
+    if (inFlight.current || title.trim().length < 2 || wordCount > 5 || (!editing && !canCreate)) return;
     const date = new Date(startsAt);
-    if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now() + 60_000) {
-      setMessage("Choose a future date and time.");
+    if (!isFutureMeetupTime(startsAt)) {
+      setMessage("Choose a time at least one minute from now. Later today is fine.");
       return;
     }
     const details = {
       title: title.trim(), category, style, startsAt: date.toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", durationMinutes: duration
     };
-    const signature = JSON.stringify(details);
+    const signature = JSON.stringify({ ...details, editingId: editing?.id });
     if (request.current?.signature !== signature) request.current = { signature, key: crypto.randomUUID() };
     const requestKey = request.current.key;
     inFlight.current = true;
     startTransition(async () => {
       try {
-        const location = await syncCurrentLocation();
-        if (!location.ok) {
-          setMessage(location.message ?? "Turn on Glow so this listing can be shown nearby.");
-          return;
+        if (!editing) {
+          const location = await syncCurrentLocation();
+          if (!location.ok) {
+            setMessage(location.message ?? "Turn on Glow so this listing can be shown nearby.");
+            return;
+          }
         }
-        const result = await action({ ...details, requestKey }, true);
+        const result = editing
+          ? await action({ action: "edit", id: editing.id, title: details.title, category, startsAt: details.startsAt, timezone: details.timezone, requestKey }, false)
+          : await action({ ...details, requestKey }, true);
         setMessage(result.message);
         if (result.ok) {
           request.current = null;
           setCreateOpen(false);
+          setEditing(null);
           setTitle("");
           await refreshAfterSave(result.message);
         }
       } catch {
-        setMessage("Could not publish. Try again; your listing will not be duplicated.");
+        setMessage(editing ? "Could not save the changes. Try again." : "Could not publish. Try again; your listing will not be duplicated.");
       } finally {
         inFlight.current = false;
       }
@@ -334,7 +341,11 @@ export function MeetNewPeople({
             <UserRound className="h-6 w-6" aria-hidden="true" />
           </div>
         </div>
-        <Button className="mt-4 w-full" disabled={!canCreate || pending} onClick={() => { setMessage(""); setCreateOpen(true); }}>
+        <Button className="mt-4 w-full" disabled={!canCreate || pending} onClick={() => {
+          setMessage(""); setEditing(null); setTitle("");
+          setStartsAt(localDateTimeValue(new Date(Date.now() + 2 * 60 * 60_000)));
+          setCreateOpen(true);
+        }}>
           <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
           Start a listing
         </Button>
@@ -394,6 +405,14 @@ export function MeetNewPeople({
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" disabled={pending || Date.parse(item.listingExpiresAt) <= nowMs || Date.parse(item.startsAt) <= nowMs} onClick={() => {
+                  setEditing(item); setTitle(item.title); setCategory(item.category);
+                  setStyle(item.style); setDuration(item.listingDurationMinutes as 30 | 60 | 120 | 240);
+                  setStartsAt(localDateTimeValue(new Date(item.startsAt)));
+                  setMessage(""); setCreateOpen(true);
+                }}>
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Edit
+                </Button>
                 {item.conversationId ? (
                   <Link href={conversationHref(item.conversationId)} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
                     <MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat
@@ -444,11 +463,11 @@ export function MeetNewPeople({
 
       <Modal
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => { if (!pending) setCreateOpen(open); }}
         variant="sheet"
-        title="Start a listing"
-        description="Short, clear and easy to scan."
-        footer={<Button type="button" onClick={create} disabled={pending || title.trim().length < 2 || wordCount > 5 || !canCreate}>{pending ? "Publishing…" : "Publish nearby"}</Button>}
+        title={editing ? "Edit your listing" : "Start a listing"}
+        description={editing ? "Update the title, interest or meetup time. Changes also update the linked Meetup and chat." : "Short, clear and easy to scan."}
+        footer={<Button type="button" onClick={create} disabled={pending || title.trim().length < 2 || wordCount > 5 || (!editing && !canCreate)}>{pending ? "Saving…" : editing ? "Save changes" : "Publish nearby"}</Button>}
       >
         <div className="space-y-5">
           {message ? <p role="status" className="rounded-xl bg-secondary px-3 py-2 text-sm">{message}</p> : null}
@@ -458,7 +477,7 @@ export function MeetNewPeople({
             <span className={`text-xs ${wordCount > 5 ? "text-destructive" : "text-muted-foreground"}`}>{wordCount}/5 words</span>
           </label>
 
-          <div>
+          <fieldset disabled={Boolean(editing) || pending}>
             <p className="mb-2 text-sm font-medium">Who are you hoping to meet?</p>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => setStyle("one_to_one")} aria-pressed={style === "one_to_one"} className={`rounded-2xl border p-3 text-left text-sm ${style === "one_to_one" ? "border-primary bg-primary/8" : "border-border"}`}>
@@ -472,7 +491,8 @@ export function MeetNewPeople({
                 <span className="mt-1 block text-xs text-muted-foreground">Up to six people total</span>
               </button>
             </div>
-          </div>
+            {editing ? <p className="mt-2 text-xs text-muted-foreground">The group size stays the same after publishing.</p> : null}
+          </fieldset>
 
           <div>
             <p className="mb-2 text-sm font-medium">Interest</p>
@@ -487,10 +507,12 @@ export function MeetNewPeople({
 
           <label className="block min-w-0 space-y-1.5 overflow-hidden">
             <span className="text-sm font-medium">When are you hoping to meet?</span>
-            <input className={inputClass} type="datetime-local" min={minStartsAt} value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+            <input className={inputClass} type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+            <span className="block text-xs text-muted-foreground">Today is fine — choose a time at least one minute from now.</span>
+            {editing?.meetupId ? <span className="block text-xs text-muted-foreground">Changing the time asks accepted people to confirm again.</span> : null}
           </label>
 
-          <div>
+          <fieldset disabled={Boolean(editing) || pending}>
             <p className="mb-2 text-sm font-medium">Keep this listing open for</p>
             <div className="grid grid-cols-4 gap-2">
               {([30,60,120,240] as const).map((minutes) => (
@@ -499,7 +521,8 @@ export function MeetNewPeople({
                 </button>
               ))}
             </div>
-          </div>
+            {editing ? <p className="mt-2 text-xs text-muted-foreground">Editing does not extend the listing. Use Refresh to reopen it.</p> : null}
+          </fieldset>
 
           <div className="rounded-2xl bg-secondary/70 p-3 text-xs leading-5 text-muted-foreground">
             <Clock3 className="mr-1 inline h-4 w-4" aria-hidden="true" />
