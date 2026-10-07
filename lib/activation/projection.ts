@@ -25,7 +25,7 @@ import {
  * The facts Home needs to know what to say, gathered once.
  *
  * COMPOSES CANONICAL SOURCES, adds none. Muddy count, nearby people, upcoming
- * Plans and milestones each already have an owner; this asks them, it does not
+ * Meetups and milestones each already have an owner; this asks them, it does not
  * re-implement them. A second definition of "how many Muddies do I have" is
  * how two surfaces start disagreeing.
  *
@@ -84,7 +84,7 @@ export type ActivationProjection = {
    * is waiting; it does not display the number.
    */
   unreadConversationCount: number;
-  /** Plans this person is on, past or upcoming. Maturity evidence. */
+  /** Meetups this person has joined. Maturity evidence. */
   planParticipationCount: number;
   /** Whether the viewer's own fix can support a claim about who is nearby. */
   locationFreshForProximity: boolean;
@@ -159,7 +159,7 @@ async function loadRelationshipFocus(
   const keyById = new Map(ids.map((id) => [directConversationKey(userId, id), id]));
   const nowMs = Date.now();
 
-  const [{ data: friendships }, { data: conversations }, { data: waves }, { data: sharedPlans }] =
+  const [{ data: friendships }, { data: conversations }, { data: waves }, { data: meetupParticipants }] =
     await Promise.all([
       // When each friendship began: the deterministic newest-first tiebreak.
       admin
@@ -183,19 +183,13 @@ async function loadRelationshipFocus(
         .eq("sender_id", userId)
         .in("recipient_id", ids)
         .gte("sent_at", new Date(nowMs - WAVE_PAIR_COOLDOWN_MS).toISOString()),
-      /* UPCOMING and not cancelled, both enforced here.
-       *
-       * `plan_participants` carries no time, so filtering on membership alone
-       * would count a dinner from last month -- and "you already have a plan
-       * with them" is exactly the claim that must not be made about something
-       * finished or called off. */
+      /* Accepted Meetup membership is the relationship fact. The active/time
+       * filter is applied in one batched Meetup read immediately below. */
       admin
-        .from("plan_participants")
-        .select("plan_id, user_id, plans!inner(start_at, cancelled_at)")
+        .from("meetup_participants")
+        .select("meetup_id, user_id")
         .in("user_id", [userId, ...ids])
-        .in("rsvp_status", ["going", "maybe", "invited"])
-        .is("plans.cancelled_at", null)
-        .gte("plans.start_at", new Date(nowMs).toISOString())
+        .eq("response", "accepted")
     ]);
 
   const connectedAt = new Map<string, number>();
@@ -269,15 +263,22 @@ async function loadRelationshipFocus(
 
   const wavedRecently = new Set((waves ?? []).map((row) => row.recipient_id));
 
-  /* A plan is SHARED only when both people are on it. Counting a plan the
-   * viewer merely attends would recommend "open the plan" for somebody who
-   * has nothing to do with it. */
-  const viewerPlanIds = new Set(
-    (sharedPlans ?? []).filter((row) => row.user_id === userId).map((row) => row.plan_id)
+  /* A Meetup is shared only when both people accepted the SAME active future
+   * Meetup. That keeps "Open Meetup" grounded in something they are actually
+   * attending together. */
+  const meetupIds = [...new Set((meetupParticipants ?? []).map((row) => row.meetup_id))];
+  const { data: activeMeetups } = meetupIds.length
+    ? await admin.from("meetups").select("id").in("id", meetupIds).eq("status", "active").gte("starts_at", new Date(nowMs).toISOString())
+    : { data: [] };
+  const activeMeetupIds = new Set((activeMeetups ?? []).map((row) => row.id));
+  const viewerMeetupIds = new Set(
+    (meetupParticipants ?? [])
+      .filter((row) => row.user_id === userId && activeMeetupIds.has(row.meetup_id))
+      .map((row) => row.meetup_id)
   );
   const sharedWith = new Set(
-    (sharedPlans ?? [])
-      .filter((row) => row.user_id !== userId && viewerPlanIds.has(row.plan_id))
+    (meetupParticipants ?? [])
+      .filter((row) => row.user_id !== userId && viewerMeetupIds.has(row.meetup_id))
       .map((row) => row.user_id)
   );
 
@@ -332,7 +333,7 @@ async function loadMaturityEvidence(
    *
    * The return type keeps its shape so nothing downstream changes: 1 stands for
    * "at least one", which is the only distinction any caller draws. */
-  const [{ data: replyMilestone }, { count: planParticipationCount }] = await Promise.all([
+  const [{ data: replyMilestone }, { count: meetupParticipationCount }] = await Promise.all([
     admin
       .from("activation_milestones")
       .select("id")
@@ -340,15 +341,15 @@ async function loadMaturityEvidence(
       .eq("milestone", "first_reply_received")
       .limit(1),
     admin
-      .from("plan_participants")
-      .select("plan_id", { count: "exact", head: true })
+      .from("meetup_participants")
+      .select("meetup_id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .in("rsvp_status", ["going", "maybe", "invited"])
+      .eq("response", "accepted")
   ]);
 
   return {
     twoSidedConversationCount: (replyMilestone ?? []).length > 0 ? 1 : 0,
-    planParticipationCount: planParticipationCount ?? 0
+    planParticipationCount: meetupParticipationCount ?? 0
   };
 }
 
@@ -410,10 +411,10 @@ export async function loadActivationProjection(userId: string): Promise<Activati
       admin.from("user_locations").select("last_updated").eq("user_id", userId).maybeSingle(),
       nearbyPromise,
       admin
-        .from("plan_participants")
-        .select("plan_id", { count: "exact", head: true })
+        .from("meetup_participants")
+        .select("meetup_id", { count: "exact", head: true })
         .eq("user_id", userId)
-        .in("rsvp_status", ["going", "maybe", "invited"])
+        .in("response", ["accepted", "invited"])
     ]);
 
   /* THE BUG THIS BLOCK CLOSES.
@@ -429,9 +430,9 @@ export async function loadActivationProjection(userId: string): Promise<Activati
    * `Plans` depends on are load-bearing enough to flip `status` -- a failure
    * on, say, the pending-request count degrades one nudge, not the whole
    * screen, so it is left to its existing soft `?? 0` default. */
-  const projectionFailed = Boolean(muddyResult.error) || Boolean(planResult.error) || nearbyFailed;
+  const projectionFailed = Boolean(muddyResult.error) || Boolean(meetupResult.error) || nearbyFailed;
   const muddyCount = muddyResult.count;
-  const planCount = planResult.count;
+  const meetupCount = meetupResult.count;
 
   /* Location is judged by EVIDENCE, not by a stored intention.
    *
@@ -493,7 +494,7 @@ export async function loadActivationProjection(userId: string): Promise<Activati
    *
    * `(muddyCount ?? 0) > 0` alone re-creates the bug this file exists to fix:
    * a failed friendships query makes `muddyCount` null, `null ?? 0` is 0, and
-   * an established account with real Plans and replied conversations would
+   * an established account with real Meetups and replied conversations would
    * skip the one lookup that could still have proven it. Attempting maturity
    * evidence whenever the count is unusable costs one extra pair of cheap
    * reads on a failure that should already be rare, and it is the difference
@@ -531,7 +532,7 @@ export async function loadActivationProjection(userId: string): Promise<Activati
     locationFreshForProximity,
     visibility: (profile?.visibility_status ?? "visible") as ActivationInputs["visibility"],
     nearbyMuddyCount: nearby.length,
-    upcomingPlanCount: planCount ?? 0,
+    upcomingPlanCount: meetupCount ?? 0,
     milestones
   };
 
