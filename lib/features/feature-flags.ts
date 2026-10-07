@@ -62,7 +62,22 @@ export const LIFE_FLAGS = [
 ] as const;
 
 export const MANAGED_FEATURES = [
-  ...([ ["upfor", "UpFor"], ["events", "Events"], ["meet_up", "Meet Up"], ["safe_arrival", "Safe Arrival"] ] as const).map(([key, title]) => ({ key, title, category: "Launch controls", description: `Release ${title} when it is ready for members.`, enabledImpact: `${title} becomes available across the app and eligible SmartCard suggestions return.`, disabledImpact: `${title} shows a locked preview. New activity and recommendations stop. Existing Safe Arrival journeys can finish.` })),
+  {
+    key: "events",
+    title: "Events",
+    category: "Launch controls",
+    description: "Release Events when it is ready for members.",
+    enabledImpact: "Events becomes available across the app and eligible Smart Card suggestions return.",
+    disabledImpact: "Events shows a locked preview and new activity stops."
+  },
+  {
+    key: "meet_up",
+    title: "Meet Up",
+    category: "Launch controls",
+    description: "Meet Muddies or discover new people nearby and turn the connection into a scheduled Meetup.",
+    enabledImpact: "Meet Up appears across navigation, discovery and eligible Smart Cards.",
+    disabledImpact: "Meet Up is hidden behind the launch control and new Meetup activity stops."
+  },
   {
     key: ADS_ENABLED_FLAG,
     title: "Advertising",
@@ -188,13 +203,12 @@ const socializeFeature = MANAGED_FEATURES.find((feature) => feature.key === SOCI
 export const ANALYTICS_FEATURE_CATALOG = [
   { key: "socialize", title: socializeFeature.title, flagKey: SOCIALIZE_FLAG, eventNames: ["socialize_enabled", "socialize_connection"] },
   { key: "moments", title: "Moments", flagKey: null, eventNames: ["moment_created"] },
-  { key: "hangout", title: "UpFor", flagKey: null, eventNames: ["hangout_created", "hangout_joined"] },
-  { key: "plans", title: "Plans", flagKey: null, eventNames: ["plan_created"] },
+  { key: "meet_up", title: "Meet Up", flagKey: "meet_up", eventNames: ["hangout_created", "hangout_joined", "plan_created"] },
   { key: "events", title: "Events", flagKey: null, eventNames: ["event_created"] },
   { key: "groups", title: "Groups", flagKey: null, eventNames: ["group_created"] },
   { key: "wave", title: "Wave", flagKey: null, eventNames: ["wave_sent"] },
   { key: "ping", title: "Ping", flagKey: null, eventNames: ["ping_sent"] },
-  { key: "safe_arrival", title: "Meet Up", flagKey: null, eventNames: ["safe_arrival_started", "safe_arrival_completed"] },
+
   { key: "achievements", title: "Achievements", flagKey: null, eventNames: ["achievement_unlocked"] }
 ] as const;
 
