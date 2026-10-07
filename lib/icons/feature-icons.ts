@@ -34,7 +34,8 @@ import { HangoutIcon, LinkrIcon } from "@/components/brand/brand-icons";
 export type FeatureIconKey =
   | "moments"
   | "safeArrival"
-  | "meetups"\n  | "hangout"
+  | "meetups"
+  | "hangout"
   | "events"
   | "groups"
   | "socialize"
@@ -53,7 +54,8 @@ export type FeatureIconSource = { icon: LucideIcon | typeof LinkrIcon; label: st
  * Chosen for meaning, not resemblance to the old asset:
  *  - moments      Images        — a temporary shared picture
  *  - safeArrival  ShieldCheck   — arrived safely, confirmed
- *  - meetups      HangoutIcon   — the former UpFor mark, retained as the Meetups identity\n *  - hangout      HangoutIcon   — legacy alias for retired surfaces
+ *  - meetups      HangoutIcon   — the former UpFor mark, retained as the Meetups identity
+ *  - hangout      HangoutIcon   — legacy alias for retired surfaces
  *  - socialize    LinkrIcon     — the Linkr brand mark
  *  - events       CalendarCheck2 — something scheduled
  *  - groups       Users2        — more than one person
@@ -69,7 +71,8 @@ export type FeatureIconSource = { icon: LucideIcon | typeof LinkrIcon; label: st
 export const FEATURE_ICON_SOURCES: Record<FeatureIconKey, FeatureIconSource> = {
   moments: { icon: Images, label: "Moments" },
   safeArrival: { icon: ShieldCheck, label: "Safe Arrival" },
-  meetups: { icon: HangoutIcon, label: "Meetups" },\n  hangout: { icon: HangoutIcon, label: "Meetups" },
+  meetups: { icon: HangoutIcon, label: "Meetups" },
+  hangout: { icon: HangoutIcon, label: "Meetups" },
   events: { icon: CalendarCheck2, label: "Events" },
   groups: { icon: Users2, label: "Groups" },
   socialize: { icon: LinkrIcon, label: "Linkr" },
