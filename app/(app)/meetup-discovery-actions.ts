@@ -14,3 +14,7 @@ export async function updateMeetupDiscoveryAction(input: unknown) {
   if (!user) return { ok: false, message: "Sign in to update this listing." };
   return updateMeetupDiscovery(user.id, input);
 }
+
+export async function saveMeetupDiscoveryAction(input: unknown, create = false) {
+  return create ? createMeetupDiscoveryAction(input) : updateMeetupDiscoveryAction(input);
+}
