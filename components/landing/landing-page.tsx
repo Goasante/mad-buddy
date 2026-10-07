@@ -16,7 +16,7 @@ import {
   ShieldCheck,
   UsersRound
 } from "lucide-react";
-import { LandingNav } from "@/components/landing/landing-nav";
+import { LandingNav } from "@/components/landing/landing-nav";\nimport { HangoutIcon } from "@/components/brand/brand-icons";
 import { PublicFooter } from "@/components/front-door/public-shell";
 
 const trustPoints = [
@@ -83,7 +83,7 @@ const privacyNeverGet = [
 const momentumFlow = [
   { label: "Glow", icon: RadioTower },
   { label: "Wave", icon: Hand },
-  { label: "Meetup", icon: CalendarCheck2 }
+  { label: "Meetup", icon: HangoutIcon }
 ];
 
 const supportingFeatures = [
@@ -360,7 +360,7 @@ function MomentumSection() {
           <article className="rounded-[1.75rem] bg-[#4E0401] p-5 text-white shadow-[0_24px_70px_rgba(78,4,1,0.18)] sm:p-7 dark:bg-[#F2E3D7] dark:text-[#3A1610]">
             <div className="flex items-center justify-between gap-4">
               <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#F2B16F] dark:text-[#A45A18]">Meet New People · nearby</p><h3 className="mt-1 text-xl font-bold">Open to coffee nearby</h3></div>
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-[#F2B16F] dark:bg-[#4E0401]/10 dark:text-[#8E4B12]"><CalendarCheck2 className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-[#F2B16F] dark:bg-[#4E0401]/10 dark:text-[#8E4B12]"><HangoutIcon className="h-5 w-5" aria-hidden="true" /></span>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <MeetupDetail label="Style" value="One-to-one or group" />
