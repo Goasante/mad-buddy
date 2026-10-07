@@ -104,7 +104,7 @@ function NativeAccountActions({
       <div className="divide-y divide-border/70 overflow-hidden rounded-2xl border border-border bg-card/40">
         <div className="p-4">
           <p className="text-xs leading-5 text-muted-foreground">
-            Deleting removes your profile, Muddies, plans, messages and location history. This cannot
+            Deleting removes your profile, Muddies, Meetups, messages and location history. This cannot
             be undone.
           </p>
 
