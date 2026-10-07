@@ -68,10 +68,7 @@ describe("app freeze recovery safeguards", () => {
   it("shares authoritative auth verification across protected page renders", () => {
     for (const file of [
       "app/(app)/friends/page.tsx",
-      "app/(app)/notifications/page.tsx",
-      "app/(app)/hangout-mode/page.tsx",
-      "app/(app)/plans/page.tsx",
-      "app/(app)/safe-arrival/page.tsx"
+      "app/(app)/notifications/page.tsx"
     ]) {
       /* The point is that every page shares a request-cached helper rather
          than calling supabase.auth.getUser() itself -- which is what made a
@@ -80,6 +77,16 @@ describe("app freeze recovery safeguards", () => {
          lib/supabase/auth-split.local.test.ts. */
       expect(source(file)).toMatch(/getCurrentIdentity|getCurrentUserRecord/);
       expect(source(file)).not.toContain("supabase.auth.getUser()");
+    }
+  });
+
+  it("keeps retired coordination routes as simple redirects", () => {
+    for (const file of [
+      "app/(app)/hangout-mode/page.tsx",
+      "app/(app)/plans/page.tsx",
+      "app/(app)/safe-arrival/page.tsx"
+    ]) {
+      expect(source(file)).toContain('redirect("/meet-up")');
     }
   });
 
