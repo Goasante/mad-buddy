@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { fetchWithTimeout } from "@/lib/network/resilience";
+import { syncCurrentLocation } from "@/lib/platform";
 
 const REFRESH_MS = 60_000;
 
@@ -18,41 +18,11 @@ export function useMeetupLocationSync(enabled: boolean) {
 
   const refresh = useCallback(() => {
     if (!enabled || inFlight.current || document.visibilityState !== "visible") return;
-    if (!("geolocation" in navigator)) return;
-
     inFlight.current = true;
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          await fetchWithTimeout(
-            "/api/location/update",
-            {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy
-              })
-            },
-            15_000,
-            "update Meetup proximity"
-          );
-        } catch {
-          // The existing poll/focus refresh remains the fallback. Do not turn a
-          // temporary location failure into a blocking Meetup screen.
-        } finally {
-          inFlight.current = false;
-        }
-      },
-      () => {
-        inFlight.current = false;
-      },
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 12_000 }
-    );
+    void syncCurrentLocation().finally(() => {
+      inFlight.current = false;
+    });
   }, [enabled]);
-
   useEffect(() => {
     if (!enabled) return;
     const initial = window.setTimeout(refresh, 0);
