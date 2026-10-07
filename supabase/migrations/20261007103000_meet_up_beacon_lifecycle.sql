@@ -3,6 +3,10 @@
 -- receive coarse journey states and a beacon status.
 
 alter table public.meetups
+  drop column if exists beacon_status,
+  drop column if exists ended_at;
+
+alter table public.meetups
   add column if not exists expires_at timestamptz,
   add column if not exists beacon_latitude double precision,
   add column if not exists beacon_longitude double precision,
@@ -16,6 +20,9 @@ set expires_at = starts_at + interval '6 hours'
 where expires_at is null;
 
 alter table public.meetups alter column expires_at set not null;
+
+alter table public.meetup_participants
+  alter column proximity_enabled set default false;
 
 alter table public.meetup_participants
   add column if not exists journey_state text not null default 'waiting',
