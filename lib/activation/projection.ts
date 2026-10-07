@@ -379,7 +379,7 @@ export async function loadActivationProjection(userId: string): Promise<Activati
     { count: pendingOutgoingCount },
     { data: viewerLocation },
     nearby,
-    planResult
+    meetupResult
   ] = await Promise.all([
       /* Live friendships only, counted the way listMuddies counts them.
        *
