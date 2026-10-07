@@ -37,7 +37,7 @@ describe("Smart Card v2 product catalog", () => {
       "profile_blocking",
       "journey",
       "buddy_progress",
-      "upfor_fallback"
+      "meetup_fallback"
     ]) {
       expect(ids, `${id} must remain in the approved Smart Card catalog`).toContain(id);
     }
