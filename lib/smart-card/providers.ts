@@ -713,7 +713,8 @@ function meetupFallbackProvider(): SmartCard {
 }
 
 /** Neutral fallback used when Meetups is locked by Owner controls. */
-function coreFallbackProvider(): SmartCard {
+function coreFallbackProvider(input: SmartCardInput): SmartCard | null {
+  if (input.availability?.meet_up !== false) return null;
   return {
     id: "core_fallback",
     priority: 0,
@@ -1362,7 +1363,7 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "journey", build: () => journeyProvider(input) },
     { id: "buddy_progress", build: () => buddyProgressProvider(input) },
     { id: "meetup_fallback", build: () => meetupFallbackProvider() },
-    { id: "core_fallback", build: () => coreFallbackProvider() }
+    { id: "core_fallback", build: () => coreFallbackProvider(input) }
   ];
   if (!input.availability) return providers;
   return providers.map(provider => ({ ...provider, build: () => availableSmartCard(provider.build(), input.availability!) }));
