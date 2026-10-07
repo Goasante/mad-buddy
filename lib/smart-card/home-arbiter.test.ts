@@ -131,7 +131,7 @@ describe("exactly one card, and never nothing by accident", () => {
   });
 
   it("nearby Muddies never consume the card slot owned by NearbyHero", () => {
-    const result = arb({ activationState: "muddy_nearby", smartCardId: "upfor_fallback" });
+    const result = arb({ activationState: "muddy_nearby", smartCardId: "meetup_fallback" });
 
     expect(result.winner).toBe("card_b");
     expect(result.cardATier).toBeNull();
