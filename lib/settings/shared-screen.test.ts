@@ -58,7 +58,7 @@ describe("the shared root is safe for both runtimes", () => {
 describe("root destinations are deliberate", () => {
   it("keeps the simplified root compact", () => {
     const distinct = [...new Set(destinations)];
-    expect(distinct).toHaveLength(17);
+    expect(distinct).toHaveLength(16);
   });
 
   it("Android gates every row through isBuiltForMobile", () => {
@@ -77,7 +77,7 @@ describe("root destinations are deliberate", () => {
 
   it("every destination is either reachable on Android or explicitly unavailable", () => {
     const nativeRoutes = new Set([
-      "/home", "/muddies", "/messages", "/plans", "/events", "/moments",
+      "/home", "/muddies", "/messages", "/meet-up", "/events", "/moments",
       "/notifications", "/groups", "/pings", "/safety", "/subscription",
       "/socialize", "/profile", "/settings", "/settings/notifications",
       "/buddy-score", "/help", "/more", "/privacy", "/terms", "/onboarding"
