@@ -57,7 +57,7 @@ export async function acknowledgeSmartCard(userId: string, cardId: string): Prom
 
 /**
  * Record a low-stakes fallback impression. Unlike a permanent acknowledgement,
- * this timestamp is only honored for a short cooldown, so UpFor can return
+ * this timestamp is only honored for a short cooldown, so Meetups can return
  * later without occupying Home on every visit.
  */
 export async function recordSmartCardImpression(userId: string, cardId: "meetup_fallback"): Promise<void> {
