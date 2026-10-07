@@ -747,7 +747,6 @@ export const handleCompletePastPlans: JobHandler = async (admin) => {
   if (error) throw new JobError("DATABASE_TIMEOUT", error.message);
   if (!completed?.length) return 0;
 
-  const { grantAchievement, grantCountAchievement } = await import("@/lib/engagement/achievements");
   const { data: goers } = await admin
     .from("plan_participants")
     .select("plan_id, user_id")
@@ -770,18 +769,6 @@ export const handleCompletePastPlans: JobHandler = async (admin) => {
     )
   );
 
-  const userIds = [...new Set([...completed.map((plan) => plan.creator_id), ...(goers ?? []).map((row) => row.user_id)])];
-  for (const userId of userIds) {
-    await grantAchievement(admin, userId, "first_plan");
-    const { count } = await admin
-      .from("plan_participants")
-      .select("id, plans!inner(status)", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("rsvp_status", "going")
-      .eq("plans.status", "completed");
-    await grantCountAchievement(admin, userId, "plan_maker", count ?? 0);
-    await grantCountAchievement(admin, userId, "plan_regular", count ?? 0);
-  }
 
   return completed.length;
 };
