@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 function currentServerTimeMs() {
   return Date.now();
 }
-export default async function MeetupRoute({ searchParams }: { searchParams: Promise<{ meetup?: string; newPeople?: string }> }) {
+export default async function MeetupRoute({ searchParams }: { searchParams: Promise<{ meetup?: string; newPeople?: string; discovery?: string }> }) {
   const user = await getCurrentUserRecord();
   if (!user) redirect("/login");
   if (!(await optionalFeatureEnabled("safe_arrival"))) return <LockedFeaturePreview feature="safe_arrival" />;
@@ -35,6 +35,7 @@ export default async function MeetupRoute({ searchParams }: { searchParams: Prom
       muddies={muddies}
       focusedId={params.meetup}
       openNewPeople={params.newPeople === "1"}
+      focusedDiscoveryId={params.discovery}
       discoveryHub={discoveryHub}
       discoveryAction={async (input, create = false) => create ? createMeetupDiscoveryAction(input) : updateMeetupDiscoveryAction(input)}
       saveAction={saveMeetupAction}
