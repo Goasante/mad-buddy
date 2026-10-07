@@ -1007,7 +1007,7 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
 
   // Pull the month's activity once and aggregate in memory. Bounded reads,
   // at current scale these are small; revisit with keyset pagination later.
-  const [wavesRes, plansRes, participantsRes, friendshipsRes, hangoutsRes, sessionsRes] = await Promise.all([
+  const [wavesRes, meetupScoresRes, meetupLifeRes, friendshipsRes, sessionsRes] = await Promise.all([
     admin
       .from("waves")
       .select("sender_id, recipient_id, reply_to_wave_id")
@@ -1015,29 +1015,23 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
       .lt("sent_at", endIso)
       .limit(10000),
     admin
-      .from("plans")
-      .select("id, creator_id, status, plan_type")
+      .from("buddy_score_ledger")
+      .select("user_id, source_reference")
+      .eq("event_type", "meetup_completed")
       .gte("created_at", startIso)
       .lt("created_at", endIso)
       .limit(10000),
     admin
-      .from("plan_participants")
-      .select("plan_id, user_id")
-      .gte("created_at", startIso)
-      .lt("created_at", endIso)
+      .from("domain_events")
+      .select("resource_key")
+      .eq("resource_type", "relationship")
+      .eq("event_type", "meetup.attended_together")
+      .gte("occurred_at", startIso)
+      .lt("occurred_at", endIso)
       .limit(10000),
     admin
-      // LIFE-HISTORICAL: counts friendships FORMED in this window, so an
-      // ended_at filter would be wrong — a friendship that formed and then
-      // ended still happened during the period being recapped.
       .from("friendships")
       .select("user_one_id, user_two_id")
-      .gte("created_at", startIso)
-      .lt("created_at", endIso)
-      .limit(10000),
-    admin
-      .from("hangout_sessions")
-      .select("owner_id, activity_type")
       .gte("created_at", startIso)
       .lt("created_at", endIso)
       .limit(10000),
@@ -1048,15 +1042,15 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
       .lt("starts_at", endIso)
       .limit(10000)
   ]);
-  for (const res of [wavesRes, plansRes, participantsRes, friendshipsRes, hangoutsRes, sessionsRes]) {
+  for (const res of [wavesRes, meetupScoresRes, meetupLifeRes, friendshipsRes, sessionsRes]) {
     if (res.error) throw new JobError("DATABASE_TIMEOUT", res.error.message);
   }
 
-  const raw = new Map<string, Record<string, unknown> & { _interacted: Set<string>; _days: Set<string>; _activities: string[] }>();
+  const raw = new Map<string, Record<string, unknown> & { _interacted: Set<string>; _days: Set<string> }>();
   const forUser = (userId: string) => {
     let entry = raw.get(userId);
     if (!entry) {
-      entry = { _interacted: new Set(), _days: new Set(), _activities: [] };
+      entry = { _interacted: new Set(), _days: new Set() };
       raw.set(userId, entry);
     }
     return entry;
@@ -1073,27 +1067,22 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
     if (wave.reply_to_wave_id) bump(wave.recipient_id, "wavesReturned");
   }
 
-  const planCreators = new Map((plansRes.data ?? []).map((plan) => [plan.id, plan]));
-  for (const plan of plansRes.data ?? []) {
-    bump(plan.creator_id, "plansCreated");
-    if (plan.status === "completed") bump(plan.creator_id, "plansCompleted");
+  for (const score of meetupScoresRes.data ?? []) {
+    bump(score.user_id, "meetupsCompleted");
   }
-  for (const participant of participantsRes.data ?? []) {
-    const plan = planCreators.get(participant.plan_id);
-    if (!plan || participant.user_id === plan.creator_id) continue;
-    forUser(participant.user_id)._interacted.add(plan.creator_id);
-    forUser(plan.creator_id)._interacted.add(participant.user_id);
-    if (plan.status === "completed") bump(participant.user_id, "plansCompleted");
+
+  for (const event of meetupLifeRes.data ?? []) {
+    const pair = event.resource_key?.split(":") ?? [];
+    if (pair.length !== 2) continue;
+    const [one, two] = pair;
+    if (!one || !two) continue;
+    forUser(one)._interacted.add(two);
+    forUser(two)._interacted.add(one);
   }
 
   for (const friendship of friendshipsRes.data ?? []) {
     bump(friendship.user_one_id, "newMuddies");
     bump(friendship.user_two_id, "newMuddies");
-  }
-
-  for (const hangout of hangoutsRes.data ?? []) {
-    bump(hangout.owner_id, "hangoutSessions");
-    forUser(hangout.owner_id)._activities.push(hangout.activity_type);
   }
 
   for (const session of sessionsRes.data ?? []) {
@@ -1131,18 +1120,12 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
     const entitlements = await resolveUserEntitlements(admin, userId);
     if (!entitlements.friendship_recaps) continue;
 
-    const activityCounts = new Map<string, number>();
-    for (const activity of entry._activities) {
-      activityCounts.set(activity, (activityCounts.get(activity) ?? 0) + 1);
-    }
-    const mostCommonActivity =
-      [...activityCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
 
     const summary = sanitizeRecapSummary({
       ...entry,
       muddiesInteractedWith: entry._interacted.size,
-      daysVisible: entry._days.size,
-      mostCommonActivity
+      daysVisible: entry._days.size
     });
 
     const { error } = await admin.from("friendship_recaps").upsert(
