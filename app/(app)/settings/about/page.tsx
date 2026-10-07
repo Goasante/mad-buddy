@@ -9,8 +9,8 @@ export const metadata: Metadata = { title: "About Mad Buddy" };
 
 const features = [
   { icon: Users, title: "Stay close to your Muddies", description: "See broad proximity signals for mutually approved friends, always within each person's visibility choices." },
-  { icon: HeartHandshake, title: "Make plans together", description: "Discover people through Linkr when you opt in, share what you are UpFor, and turn conversations into plans and events." },
-  { icon: ShieldCheck, title: "Keep control", description: "Ghost Mode, privacy settings, blocking and Safe Arrival help you choose how you connect. Your exact location is not shown to other members." }
+  { icon: HeartHandshake, title: "Make Meetups happen", description: "Invite Muddies directly or use Meet New People when you are open to meeting someone nearby, then agree a time and place together." },
+  { icon: ShieldCheck, title: "Keep control", description: "Ghost Mode, privacy settings and blocking help you choose how you connect. Your exact location is not shown to other members." }
 ] as const;
 
 export default function AboutAppPage() {
