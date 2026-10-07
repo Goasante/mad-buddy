@@ -206,7 +206,7 @@ export function MuddyProfileVNext({
                   <Hand className="h-4 w-4" aria-hidden="true" /> {waveSent ? "Sent" : "Wave"}
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link href="/plans?create=1"><CalendarPlus className="h-4 w-4" aria-hidden="true" /> Plan</Link>
+                  <Link href="/meet-up?create=1"><CalendarPlus className="h-4 w-4" aria-hidden="true" /> Meetup</Link>
                 </Button>
               </>
             ) : (
@@ -221,7 +221,7 @@ export function MuddyProfileVNext({
           <div className="relative mt-7 grid grid-cols-3 overflow-hidden rounded-2xl border border-border/60 bg-background/78 shadow-sm backdrop-blur">
             <Stat value={activity.muddyCount} label="Muddies" />
             <Stat value={activity.momentCount} label="Moments" bordered />
-            <Stat value={activity.completedPlanCount} label="Plans" bordered />
+            <Stat value={activity.completedMeetupCount} label="Meetups" bordered />
           </div>
         ) : null}
       </section>
