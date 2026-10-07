@@ -11,6 +11,10 @@ import { isValidTimeZone } from "@/lib/time/timezone";
 import { processMeetupNotifications } from "@/lib/meetups/notifications";
 import { logBackendEvent } from "@/lib/observability/logger";
 import { grantMeetupCompletionAchievements, grantMeetupSafetyAchievements } from "@/lib/engagement/achievements";
+import { recordMeetupCompletionScore } from "@/lib/engagement/buddy-score-service";
+import { emitLifeEvents } from "@/lib/life/emit";
+import { meetupAttendancePairs } from "@/lib/life/plan-attendance";
+import { recordMilestone } from "@/lib/onboarding/service";
 
 type MeetupCategoryWriter = {
   from: (table: "meetups") => {
@@ -87,12 +91,33 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
     try { await processMeetupNotifications(admin); }
     catch { logBackendEvent("error", { action: "meetups.notification_delivery", errorType: "DeliveryFailed" }); }
 
-    if (!create && "action" in value && value.action === "home_arrived") {
-      await grantMeetupSafetyAchievements(admin, actorId);
-    }
+    try {
+      if (!create && "action" in value && value.action === "home_arrived") {
+        await grantMeetupSafetyAchievements(admin, actorId);
+      }
 
-    if (!create && "action" in value && value.action === "met") {
-      await grantMeetupCompletionAchievements(admin, value.id);
+      if (!create && "action" in value && value.action === "end") {
+        const meetupId = value.id;
+        const { data: participants } = await admin
+          .from("meetup_participants")
+          .select("user_id, met_at")
+          .eq("meetup_id", meetupId)
+          .eq("response", "accepted");
+
+        const accepted = participants ?? [];
+        const userIds = [...new Set(accepted.map((row) => row.user_id))];
+        await Promise.all(userIds.map((userId) => recordMeetupCompletionScore(admin, userId, meetupId)));
+        await grantMeetupCompletionAchievements(admin, meetupId);
+
+        const confirmedTogether = accepted
+          .filter((row) => Boolean(row.met_at))
+          .map((row) => ({ meetupId, userId: row.user_id }));
+        if (confirmedTogether.length > 1) {
+          await emitLifeEvents(admin, meetupAttendancePairs(confirmedTogether, new Date().toISOString()));
+        }
+      }
+    } catch (caught) {
+      logBackendEvent("warn", { action: "meetups.progress_side_effects", errorType: caught instanceof Error ? caught.name : "UnknownError" });
     }
   });
   const successMessage = create ? "Meetup scheduled and invitations sent." : (() => {
