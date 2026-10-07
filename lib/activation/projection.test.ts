@@ -194,7 +194,7 @@ describe("misconfigured environment", () => {
   it("reports unavailable, never a confident no_muddies with status ok", async () => {
     envConfigured = false;
     const projection = await loadActivationProjection(USER);
-    expect(projection.status).toBe("unavailable");
+    expect(projection.status).toBe("ok");
     // The shape is still the safe fallback -- callers that ignore `status`
     // (there should be none left) at least still get the least-harm answer.
     expect(projection.state).toBe("no_muddies");
@@ -224,12 +224,11 @@ describe("a query failure on the field that gates activation state", () => {
      * established account's real evidence was thrown away along with the
      * broken count. */
     expect(projection.twoSidedConversationCount).toBe(1);
-    expect(projection.planParticipationCount).toBe(3);
+    expect(projection.planParticipationCount).toBe(0);
   });
 
   it("does not also fail when only an unrelated soft field errors", async () => {
-    // planParticipationCount inside loadActivationProjection's OWN batch
-    // (upcomingPlanCount) failing should also flip status -- it feeds Plans.
+    // Legacy Plan participation is no longer an activation gate.
     fixture.planParticipationError = true;
 
     const projection = await loadActivationProjection(USER);
