@@ -183,9 +183,9 @@ describe("plans sit where an UpFor ends up", () => {
     expect(page).toContain('href="/plans"');
   });
 
-  it("loads plans alongside the feed rather than after it", () => {
+  it("retires the UpFor route into Meetups", () => {
     const route = read("app/(app)/hangout-mode/page.tsx");
-    expect(route).toContain("Promise.all([feedPromise, plansPromise])");
+    expect(route).toContain('redirect("/meet-up")');
   });
 
   it("offers exactly one create route per surface", () => {
