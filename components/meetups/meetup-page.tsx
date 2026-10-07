@@ -14,6 +14,7 @@ import {
   House,
   LogOut,
   MapPin,
+  MessageCircle,
   Navigation,
   Plus,
   TimerReset,
@@ -35,6 +36,7 @@ import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
 import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import { MeetNewPeople, MeetNewPeopleSafety, type MeetupDiscoveryAction } from "@/components/meetups/meet-new-people";
 import { MEETUP_DISCOVERY_CATEGORY_OPTIONS, discoveryCategoryLabel, type MeetupDiscoveryCategory, type MeetupDiscoveryHub } from "@/lib/meetups/discovery";
 
@@ -1087,7 +1089,7 @@ function MeetupCard({
 
             <span className="min-w-0 flex-1">
               <span className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-lg font-bold">{MEETUP_TITLES[m.mode]}</span>
+                <span className="min-w-0 flex-1 truncate text-lg font-bold">{m.title?.trim() || MEETUP_TITLES[m.mode]}</span>
                 <ChevronDown
                   className={`h-4 w-4 shrink-0 text-muted-foreground transition ${expanded ? "rotate-180" : ""}`}
                 />
@@ -1131,6 +1133,16 @@ function MeetupCard({
         {expanded && (
           <div className="space-y-4 border-t border-border/70 px-4 pb-5 pt-4 sm:px-5">
             {!!m.note && <p className="rounded-2xl bg-secondary/50 px-4 py-3 text-sm">{m.note}</p>}
+
+            {m.conversationId ? (
+              <Link
+                href={conversationHref(m.conversationId)}
+                className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-secondary px-4 text-sm font-semibold"
+              >
+                <MessageCircle className="h-4 w-4 text-primary" aria-hidden="true" />
+                Meetup Chat
+              </Link>
+            ) : null}
 
             {!creator && open && mine?.response === "invited" && (
               <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
@@ -1590,7 +1602,7 @@ function MeetupCard({
           >
             <h3 className="text-xl font-bold">Heading home?</h3>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              End your part of the meetup, or let your Muddies know when you get home.
+              End your part of the meetup, or let ${m.sourceDiscoveryId ? "the people in this Meetup" : "your Muddies"} know when you get home.
             </p>
             <div className="mt-5 grid gap-2">
               <Button
@@ -1610,7 +1622,7 @@ function MeetupCard({
                   update({ action: "home_start" });
                 }}
               >
-                Let my Muddies know when I’m home
+                {m.sourceDiscoveryId ? "Let the Meetup know when I’m home" : "Let my Muddies know when I’m home"}
               </Button>
             </div>
           </section>
