@@ -32,7 +32,6 @@ import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { useRouter } from "next/navigation";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
 import { PlanStack, type ComingUpMeetupItem } from "@/components/socialize/plan-stack";
-import { rsvpAction } from "@/app/(app)/plans-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
 import { usePullRefreshListener } from "@/components/ui/pull-to-refresh";
@@ -55,7 +54,6 @@ import type { FeatureIconKey } from "@/lib/icons/feature-icons";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { fetchWithTimeout } from "@/lib/network/resilience";
 import { formatMuddyStatusLabel } from "@/lib/social/rules";
-import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda";
 import { type FreshnessState } from "@/lib/proximity/freshness";
 import { proximityLabels, type ConfidenceLevel, type ProximityLevel } from "@/lib/proximity";
@@ -782,23 +780,6 @@ export function DashboardPageContent({
     }
   }
 
-  /**
-   * RSVP from the Home plan stack.
-   *
-   * The canonical action, unchanged — the card decides only what to OFFER,
-   * and the server still authorises. router.refresh() rather than local state
-   * so the count and the attendee faces come back from the projection rather
-   * than being guessed here.
-   */
-  function joinPlan(plan: HomeUpcomingPlan) {
-    if (isPending) return;
-    startTransition(async () => {
-      const result = await rsvpAction(plan.id, "going");
-      showPromptFeedback(result.message, !result.ok);
-      if (result.ok) router.refresh();
-    });
-  }
-
   // Quick actions are split once here so the launcher row, the More sheet and
   // the bottom gap-filler stay in agreement: whatever the filler promotes is
   // removed from More, and returns to More when the space is needed again.
@@ -1135,7 +1116,7 @@ export function DashboardPageContent({
             Sits AFTER the Smart Card and Near, not above them. The brief's
             target order put Events directly under the hero, but the audit
             found Near carries the viewer's own live state (who is around
-            them right now) and the Smart Card can be a live Safe Arrival
+            them right now) and the Smart Card can be a time-sensitive Meetup
             journey. Discovery is not allowed to push either of those below
             the fold, so Events takes the next slot instead -- still high,
             still above the fold on a phone once the hero is compact, and
@@ -1167,7 +1148,7 @@ export function DashboardPageContent({
               id="home-plans-heading"
               title="Coming Up"
             />
-            <PlanStack plans={comingUpItems} onJoin={joinPlan} pending={isPending} />
+            <PlanStack plans={comingUpItems} pending={isPending} />
           </section>
         ) : composition.showPlansEmpty ? (
           /* REAL PLANS ALWAYS SHOW; only the placeholder yields.
@@ -1843,14 +1824,12 @@ const SUGGESTION_TONE: Record<
  * filtered by the same Owner feature flags — no new recommendation logic.
  */
 const quickActions: QuickAction[] = [
-  { href: "/meet-up", label: "Meetups", description: "Invite Muddies or meet new people nearby.", suggestion: "Turn a connection into time together.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/discover", label: "Linkr", description: "Find people who are open to connecting.", suggestion: "Meet people open to connecting.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
-  { href: "/reminders", label: "Reminders", description: "Stay on top of what’s next.", suggestion: "Keep important social moments in view.", tone: "orange", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
   { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", suggestion: "Quieten things down for a while.", tone: "blush", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
-];
+]
 
 /**
  * The suggestions surfaced on the Home rail, in order. The rest stay
@@ -2084,7 +2063,7 @@ function QuickActionTile({ action }: { action: QuickAction }) {
       className="focus-ring safe-motion glass-panel flex min-h-[92px] w-full flex-col items-center justify-center gap-2 rounded-[1.25rem] px-1 py-3 text-center transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
     >
       <FeatureIcon feature={action.featureIcon} size={32} decorative className={action.accent} />
-      {/* Two-line label wraps ("Safe Arrival") rather than truncating; never
+      {/* Two-line labels wrap rather than truncate; never
           forces horizontal scroll because it only ever wraps within the cell. */}
       <span className="line-clamp-2 w-full text-xs font-medium leading-tight">{action.label}</span>
     </Link>
@@ -2106,7 +2085,7 @@ const FILLER_PER_ROW = 4;
 /**
  * Measures the space left between where it sits and the bottom navigation, and
  * fills it with as many extra quick actions as cleanly fit. When real content
- * (an upcoming plan, Safe Arrival, more nearby Muddies…) grows into that space,
+ * (an upcoming Meetup, more nearby Muddies…) grows into that space,
  * the count drops. Primary suggestions are excluded from this pool, so nothing
  * is ever listed twice.
  *
