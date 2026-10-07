@@ -13,18 +13,6 @@ export const meetupDiscoveryStyleSchema = z.enum(["one_to_one","group"]);
 export type MeetupDiscoveryCategory = z.infer<typeof meetupDiscoveryCategorySchema>;
 export type MeetupDiscoveryStyle = z.infer<typeof meetupDiscoveryStyleSchema>;
 
-export const MEETUP_DISCOVERY_CATEGORIES: ReadonlyArray<{
-  id: MeetupDiscoveryCategory;
-  label: string;
-  emoji: string;
-}> = [
-  { id: "coffee", label: "Coffee", emoji: "☕" },
-  { id: "food", label: "Food", emoji: "🍽️" },
-  { id: "sports", label: "Sports", emoji: "⚽" },
-  { id: "football", label: "Football", emoji: "🥅" },
-  { id: "music" as never, label: "Music", emoji: "🎵" }
-].filter((item) => item.id !== ("music" as never)) as never;
-
 export const MEETUP_DISCOVERY_CATEGORY_OPTIONS: ReadonlyArray<{
   id: MeetupDiscoveryCategory;
   label: string;
