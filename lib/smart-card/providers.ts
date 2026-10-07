@@ -280,128 +280,10 @@ function proximityLabel(band: SmartCardNearbyFriend["proximity_band"]): string |
 }
 
 /** Tier 0: a live Safe Arrival remains the absolute Home override. */
-function safeArrivalProvider(input: SmartCardInput): SmartCard | null {
-  const journey = input.safeArrival;
-  if (!journey?.travelling) return null;
-
-  const destination = journey.destinationLabel?.trim();
-  const expectedMs = journey.expectedArrivalAt ? Date.parse(journey.expectedArrivalAt) : Number.NaN;
-  const graceMinutes = journey.gracePeriodMinutes ?? 0;
-  const graceEnd =
-    Number.isFinite(expectedMs) && Number.isFinite(graceMinutes)
-      ? gracePeriodEndMs({ expectedArrivalMs: expectedMs, gracePeriodMinutes: Math.max(0, graceMinutes) })
-      : Number.NaN;
-
-  /*
-   * Match Safe Arrival's own journey presentation: unconfirmed is overdue
-   * immediately, and a job that has not yet stamped the status must not make
-   * Home keep saying "in transit" after the stored grace deadline.
-   */
-  const overdueByClock = Number.isFinite(graceEnd) && input.now.getTime() >= graceEnd;
-  const needsCheckIn = journey.status === "unconfirmed" || overdueByClock;
-  const starting = journey.status === "draft" || journey.status === "pending_acknowledgement";
-  const expected = relativeInLabel(journey.expectedArrivalAt, input.now);
-
-  const title = needsCheckIn
-    ? destination
-      ? `Confirm you arrived at ${destination}`
-      : "Confirm you arrived"
-    : starting
-      ? destination
-        ? `Safe Arrival to ${destination} is starting`
-        : "Safe Arrival is starting"
-      : destination
-        ? `You're heading to ${destination}`
-        : "You're on a journey";
-
-  return {
-    id: "safe_arrival",
-    priority: 0,
-    illustration: "people",
-    eyebrow: needsCheckIn ? "SAFE ARRIVAL · CHECK IN" : starting ? "SAFE ARRIVAL · STARTING" : "SAFE ARRIVAL",
-    title,
-    subtitle:
-      journey.watcherCount > 0
-        ? `${journey.watcherCount} ${journey.watcherCount === 1 ? "Muddy is" : "Muddies are"} checking on you. ${needsCheckIn ? "Let them know you arrived." : starting ? "They'll be there once it begins." : "Confirm when you arrive."}`
-        : needsCheckIn
-          ? "Your arrival check-in is due."
-          : starting
-            ? "Your safety check is getting ready."
-            : "Confirm your arrival when you get there.",
-    meta: needsCheckIn ? "Arrival check-in due" : expected ? `Expected ${expected}` : undefined,
-    metaKind: "time",
-    cta: "Open Safe Arrival",
-    destination: "/safe-arrival",
-    /*
-     * Refresh exactly when Safe Arrival's own grace window ends. If the
-     * background job has not stamped unconfirmed yet, the next provider pass
-     * derives the overdue truth from the clock and keeps the safety card alive.
-     */
-    expiresAt: !needsCheckIn && Number.isFinite(graceEnd) ? graceEnd : undefined
-  };
-}
 
 /** Tier 1: a Plan invitation is a real person waiting for an answer. */
-function planRsvpProvider(input: SmartCardInput): SmartCard | null {
-  const plan = input.agenda.find(
-    (item) => item.kind === "plan" && (item.myRsvp === "invited" || item.myRsvp === "viewed")
-  );
-  if (!plan || plan.kind !== "plan") return null;
-
-  const startLabel = startsInLabel(plan.startsAt, input.now);
-
-  return {
-    id: "plan_rsvp",
-    priority: 0,
-    illustration: "calendar",
-    eyebrow: "NEEDS YOUR RESPONSE",
-    title: `${plan.title} needs your answer`,
-    subtitle: `${plan.organiserName} invited you.`,
-    meta: startLabel ?? undefined,
-    metaKind: "time",
-    socialProof:
-      plan.goingCount > 0
-        ? `${plan.goingCount} going${plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}`
-        : undefined,
-    /* "Respond", not "RSVP". The tap OPENS the Plan, where the real RSVP
-       controls live; it does not answer on the viewer's behalf. A button
-       reading "RSVP" promises the answer is being given by pressing it, which
-       is a small lie the moment the next screen asks the question again. */
-    cta: "Respond",
-    destination: `/plans?plan=${plan.id}`,
-    /* Once the Plan has started this is no longer a pre-Plan invitation job.
-       The Plan may remain in Coming Up while it is in progress, but the
-       heartbeat must move on. */
-    expiresAt: expiresAt(plan.startsAt)
-  };
-}
 
 /** Tier 2: a Plan the viewer is already part of is close enough to matter now. */
-function planStartingProvider(input: SmartCardInput): SmartCard | null {
-  const plan = input.agenda.find((item) => {
-    if (item.kind !== "plan") return false;
-    if (!isPlanDecisionRsvpEligible(item.myRsvp)) return false;
-    const delta = Date.parse(item.startsAt) - input.now.getTime();
-    return Number.isFinite(delta) && delta >= 0 && delta <= THREE_HOURS_MS;
-  });
-  if (!plan || plan.kind !== "plan") return null;
-  const minutes = minutesUntil(plan.startsAt, input.now);
-
-  return {
-    id: "plan_starting",
-    priority: 0,
-    illustration: "calendar",
-    eyebrow: "STARTING SOON",
-    title: minutes === null ? plan.title : `${plan.title} ${soonLabel(minutes).toLowerCase()}`,
-    subtitle: "Open the Plan for the latest details.",
-    meta: plan.placeText ?? undefined,
-    metaKind: plan.placeText ? "location" : undefined,
-    socialProof: plan.goingCount > 0 ? `${plan.goingCount} going${plan.maybeCount > 0 ? ` · ${plan.maybeCount} maybe` : ""}` : undefined,
-    cta: "Open Plan",
-    destination: `/plans?plan=${plan.id}`,
-    expiresAt: expiresAt(plan.startsAt)
-  };
-}
 
 /** Tier 2: a relevant Event that is actually live, not merely discoverable. */
 function eventLiveProvider(input: SmartCardInput): SmartCard | null {
@@ -648,22 +530,6 @@ function birthdayProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
-function weekendPlansProvider(input: SmartCardInput): SmartCard | null {
-  if (!isWeekendPlanningWindow(input.now)) return null;
-  const count = input.weekendPlanCount;
-  return {
-    id: "weekend_plans",
-    priority: 0,
-    illustration: "calendar",
-    eyebrow: "THIS WEEKEND",
-    title: count > 0 ? "Your weekend is taking shape" : "Make weekend plans",
-    subtitle: count > 0 ? `You have ${count} ${count === 1 ? "Plan" : "Plans"} coming up.` : "Nothing on yet. Put something together with your Muddies.",
-    cta: count > 0 ? "View Plans" : "Create a Plan",
-    destination: count > 0 ? "/plans" : "/plans?create=1",
-    expiresAt: weekendWindowExpiry(input.now)
-  };
-}
-
 /** Tier 5: progression is useful, but never outranks real social life. */
 function journeyProvider(input: SmartCardInput): SmartCard | null {
   const journey = input.journey;
@@ -766,19 +632,6 @@ function suggestionsProvider(input: SmartCardInput): SmartCard | null {
  * Guaranteed fallback: UpFor is available to everyone.
  * The last provider always returns a card so Home never blanks.
  */
-function upForFallbackProvider(): SmartCard {
-  return {
-    id: "upfor_fallback",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "UPFOR",
-    title: "What are you UpFor today?",
-    subtitle: "Let your Muddies know what you feel like doing and see who wants in.",
-    cta: "Open UpFor",
-    destination: "/hangout-mode"
-  };
-}
-
 
 /* ---------------------------------------------------------------------------
  * UpFor.
@@ -790,31 +643,6 @@ function upForFallbackProvider(): SmartCard {
  * ------------------------------------------------------------------------ */
 
 /** Tier 1: people are waiting on the owner's answer. That is an obligation. */
-function upForRequestsProvider(input: SmartCardInput): SmartCard | null {
-  const owned = input.upFor?.ownedLive ?? [];
-  const waiting = owned.filter((session) => session.pendingRequestCount > 0);
-  if (waiting.length === 0) return null;
-
-  const total = waiting.reduce((sum, session) => sum + session.pendingRequestCount, 0);
-  const first = waiting[0];
-  const many = waiting.length > 1;
-
-  return {
-    id: "upfor_requests",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "NEEDS YOUR RESPONSE",
-    title:
-      total === 1
-        ? "Someone wants to join your " + first.activityLabel + " UpFor"
-        : total + " people want to join your " + (many ? "UpFors" : first.activityLabel + " UpFor"),
-    subtitle: "They are waiting on you before anything can happen.",
-    cta: "Review requests",
-    destination: "/hangout-mode",
-    media: many ? undefined : upForActivitySmartCardMedia(first.activityType, first.activityLabel),
-    expiresAt: earliestExpiry(waiting.map((session) => session.endsAt))
-  };
-}
 
 /**
  * Tier 2: a Muddy is UpFor something the viewer has NOT acted on yet.
@@ -833,236 +661,16 @@ function upForRequestsProvider(input: SmartCardInput): SmartCard | null {
  * It ranks BELOW the states about UpFors the viewer is already in, because
  * something you have committed to outranks something you might join.
  */
-function upForOpportunityProvider(input: SmartCardInput): SmartCard | null {
-  const opportunities = input.upFor?.opportunities ?? [];
-  if (opportunities.length === 0) return null;
-  const first = opportunities[0];
-
-  return {
-    id: "upfor_opportunity",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "HAPPENING NOW",
-    title: first.ownerName + " is UpFor " + first.activityLabel.toLowerCase(),
-    subtitle: "You can ask to join while it's live.",
-    socialProof:
-      opportunities.length > 1
-        ? opportunities.length + " of your Muddies are UpFor something right now."
-        : undefined,
-    cta: "See UpFor",
-    destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
-    expiresAt: expiresAt(first.endsAt)
-  };
-}
 
 /** Tier 2: the viewer asked to join a Muddy's live UpFor and is waiting. */
-function upForActiveMuddyProvider(input: SmartCardInput): SmartCard | null {
-  const joined = input.upFor?.joined ?? [];
-  /* Only sessions the viewer has NOT been answered on belong here; an accepted
-     request is a different, happier state below. */
-  const pending = joined.filter((session) => session.myStatus === "pending");
-  if (pending.length === 0) return null;
-  const first = pending[0];
-
-  return {
-    id: "upfor_active_muddy",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "HAPPENING NOW",
-    title: first.ownerName + " is UpFor " + first.activityLabel.toLowerCase(),
-    subtitle: "You asked to join. They will see it and decide.",
-    meta: "Waiting on them",
-    metaKind: "status",
-    cta: "Details",
-    destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
-    expiresAt: expiresAt(first.endsAt)
-  };
-}
 
 /** Tier 2: the owner's UpFor is gathering real interest. */
-function upForMomentumProvider(input: SmartCardInput): SmartCard | null {
-  const owned = input.upFor?.ownedLive ?? [];
-  /* Momentum means people said yes, not that requests exist -- pending requests
-     are the tier-1 obligation above and must not be counted twice. */
-  const gathering = owned.filter(
-    (session) => session.acceptedCount > 0 && session.pendingRequestCount === 0
-  );
-  if (gathering.length === 0) return null;
-  const first = gathering[0];
-
-  return {
-    id: "upfor_momentum",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "GATHERING",
-    title: "Your " + first.activityLabel + " UpFor is happening",
-    subtitle: "You've got company.",
-    socialProof:
-      first.acceptedCount === 1 ? "1 Muddy is in" : first.acceptedCount + " Muddies are in",
-    cta: "Manage UpFor",
-    destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
-    expiresAt: expiresAt(first.endsAt)
-  };
-}
-
-function ownedUpForLiveProvider(input: SmartCardInput): SmartCard | null {
-  const first = input.upFor?.ownedLive[0];
-  if (!first) return null;
-  const count = input.upFor?.ownedSlotCount ?? (input.upFor!.ownedLive.length + input.upFor!.ownedScheduled.length);
-  const remaining = Math.max(0, MAX_ACTIVE_UPFORS - count);
-  return {
-    id: "owned_upfor_live",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "YOUR UPFOR IS LIVE",
-    title: `Your ${first.activityLabel} UpFor is live`,
-    subtitle: remaining === 0
-      ? `You're using all ${MAX_ACTIVE_UPFORS} UpFor slots. Manage one when you're ready.`
-      : `You can start ${remaining} more ${remaining === 1 ? "UpFor" : "UpFors"}.`,
-    cta: "Manage UpFor",
-    destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
-    expiresAt: expiresAt(first.endsAt)
-  };
-}
-
-function upForPlanChatReadyProvider(input: SmartCardInput): SmartCard | null {
-  const first = input.upFor?.readyPlanChats?.[0];
-  if (!first) return null;
-  return {
-    id: "upfor_plan_chat_ready",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "PLAN CHAT READY",
-    title: `Your ${first.activityLabel} Plan Chat is ready`,
-    subtitle: "The UpFor has become a plan. Coordinate with everyone who joined.",
-    cta: "Open Plan Chat",
-    destination: conversationHref(first.conversationId),
-    expiresAt: expiresAt(first.endsAt)
-  };
-}
 
 /** Tier 2: somebody said yes to the viewer. */
-function upForAcceptedProvider(input: SmartCardInput): SmartCard | null {
-  /* THE JOB, NOT THE STATE.
-   *
-   * `myStatus === "accepted"` stays true for the whole life of the UpFor, so
-   * selecting on it alone made Home repeat "Message Kofi" forever -- including
-   * to somebody who had just messaged Kofi. A real phone found that.
-   *
-   * The recommendation this state creates is "coordinate about THIS
-   * acceptance", and that job is finished once the viewer has actually written
-   * to the owner since they said yes. Sessions carrying that evidence drop out
-   * here, which frees Home to show the next genuinely useful thing. */
-  const accepted = (input.upFor?.joined ?? []).filter(
-    (session) => session.myStatus === "accepted" && !session.coordinatedSinceAccepted
-  );
-  if (accepted.length === 0) return null;
-  const first = accepted[0];
-
-  /* MESSAGE THE OWNER, NOT "OPEN UPFOR".
-   *
-   * The discovery loop has already SUCCEEDED here: they asked, the owner said
-   * yes, they are in. Sending them back into UpFor returns them to a screen
-   * whose question has been answered. The next real job is to coordinate with
-   * the person they are now going with.
-   *
-   * The offer is withheld when the session's audience cannot vouch for
-   * mutuality (`selected_groups` is the one audience that admits a stranger),
-   * because direct messaging requires approved-Muddy or an active Linkr
-   * connection and a primary action that is knowingly going to be refused is
-   * worse than a modest one. In that case the card keeps the truthful UpFor
-   * route as its primary. */
-  const canOfferMessage = first.ownerIsCertainMuddy;
-  const upForHref = upForSessionDestination(first.id);
-
-  return {
-    id: "upfor_accepted",
-    priority: 0,
-    illustration: "celebration",
-    eyebrow: "YOU'RE IN",
-    title: first.ownerName + " said yes",
-    subtitle: canOfferMessage
-      ? acceptedTogetherLine(first.activityLabel)
-      : `You're in. You and ${first.ownerName} aren't Muddies yet, so you can't message each other directly.`,
-    cta: canOfferMessage ? "Message " + first.ownerName : "View UpFor",
-    /* `destination` stays a real surface even when an intent is present: it is
-       the honest fallback if the conversation cannot be opened. */
-    destination: upForHref,
-    primaryIntent: canOfferMessage
-      ? { kind: "open_direct_conversation", targetUserId: first.ownerId }
-      : undefined,
-    secondaryAction: canOfferMessage ? { label: "View UpFor", destination: upForHref } : undefined,
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
-    expiresAt: expiresAt(first.endsAt)
-  };
-}
 
 /** Tier 2: the owner's own scheduled UpFor is about to begin. */
-function ownedUpForStartingProvider(input: SmartCardInput): SmartCard | null {
-  const scheduled = input.upFor?.ownedScheduled ?? [];
-  const soon = scheduled.find((session) => {
-    if (!session.startsAt) return false;
-    const delta = Date.parse(session.startsAt) - input.now.getTime();
-    return Number.isFinite(delta) && delta > 0 && delta <= THREE_HOURS_MS;
-  });
-  if (!soon || !soon.startsAt) return null;
-  const minutes = minutesUntil(soon.startsAt, input.now);
-
-  return {
-    id: "owned_upfor_starting",
-    priority: 0,
-    illustration: "calendar",
-    eyebrow: "STARTING SOON",
-    title:
-      "Your " +
-      soon.activityLabel +
-      " UpFor " +
-      (minutes === null ? "is coming up" : soonLabel(minutes).toLowerCase()),
-    subtitle:
-      soon.acceptedCount > 0
-        ? "Your UpFor is ready to go."
-        : "It goes live automatically. Muddies can join from there.",
-    socialProof:
-      soon.acceptedCount > 0
-        ? soon.acceptedCount + (soon.acceptedCount === 1 ? " Muddy is in" : " Muddies are in")
-        : undefined,
-    cta: "Manage UpFor",
-    destination: upForSessionDestination(soon.id),
-    media: upForActivitySmartCardMedia(soon.activityType, soon.activityLabel),
-    expiresAt: expiresAt(soon.startsAt)
-  };
-}
 
 /** Tier 4: something the viewer scheduled, further out. */
-function upForScheduledProvider(input: SmartCardInput): SmartCard | null {
-  const scheduled = input.upFor?.ownedScheduled ?? [];
-  if (scheduled.length === 0) return null;
-  const first = scheduled[0];
-  const minutes = first.startsAt ? minutesUntil(first.startsAt, input.now) : null;
-
-  return {
-    id: "upfor_scheduled",
-    priority: 0,
-    illustration: "calendar",
-    eyebrow: "COMING UP",
-    title: "Your " + first.activityLabel + " UpFor is set",
-    subtitle:
-      scheduled.length > 1
-        ? scheduled.length + " UpFors scheduled."
-        : "Nobody sees it until it starts.",
-    meta: minutes === null ? undefined : soonLabel(minutes),
-    metaKind: minutes === null ? undefined : "time",
-    cta: "Manage UpFor",
-    destination: upForSessionDestination(first.id),
-    media: upForActivitySmartCardMedia(first.activityType, first.activityLabel),
-    expiresAt: expiresAt(first.startsAt)
-  };
-}
-
 
 /* ---------------------------------------------------------------------------
  * Relationships.
@@ -1257,38 +865,6 @@ function muddyBirthdayProvider(input: SmartCardInput): SmartCard | null {
  * The card OPENS the canonical poll UI rather than voting from Home, so its
  * label says what it does.
  */
-function planDecisionProvider(input: SmartCardInput): SmartCard | null {
-  const decisions = input.planDecisions ?? [];
-  if (decisions.length === 0) return null;
-  const first = decisions[0];
-
-  return {
-    id: "plan_decision",
-    priority: 0,
-    illustration: "calendar",
-    eyebrow: "NEEDS YOUR ANSWER",
-    title: first.planTitle + " needs a decision",
-    subtitle: first.voterCount > 0 ? "Your vote is still missing." : "Yours would be the first vote.",
-    /* The poll's own question, so the card says what is being decided rather
-       than making the person open it to find out. */
-    meta: first.question,
-    metaKind: "decision",
-    socialProof:
-      first.voterCount > 0
-        ? `${first.voterCount} ${first.voterCount === 1 ? "person has" : "people have"} voted`
-        : undefined,
-    cta: "Vote now",
-    /* THE PLAN THAT HOLDS THE POLL, not the Plans list. `?plan=<id>` is the
-       canonical deep link Home already uses for a Plan invitation, and it
-       opens that Plan's detail sheet where the poll lives. Landing on the
-       index would make the person find again the thing the card just named. */
-    destination: `/plans?plan=${first.planId}`,
-    /* An explicit poll close wins when it is sooner; otherwise the Plan's own
-       end is the absolute boundary after which this decision cannot still be
-       current on Home. */
-    expiresAt: earliestExpiry([first.closesAt, first.planEndsAt])
-  };
-}
 
 /**
  * Tier 2: a Plan Chat holding an open poll the viewer has not answered.
@@ -1303,30 +879,6 @@ function planDecisionProvider(input: SmartCardInput): SmartCard | null {
  * viewer cannot access never reaches this provider, so no poll question can
  * escape a chat the viewer is not in.
  */
-function planChatDecisionProvider(input: SmartCardInput): SmartCard | null {
-  const decisions = input.planChatDecisions ?? [];
-  if (decisions.length === 0) return null;
-  const first = decisions[0];
-
-  return {
-    id: "plan_chat_decision",
-    priority: 0,
-    illustration: "people",
-    eyebrow: "BEING DECIDED",
-    title: first.planTitle ? first.planTitle + " is deciding" : "A Plan is deciding",
-    subtitle: first.question,
-    cta: "Open chat",
-    /* THE THREAD ITSELF, through the canonical helper. `conversationHref` exists
-       because three surfaces once navigated to a bare `/messages` and left the
-       person hunting the inbox for the conversation they had just been shown;
-       this card must not become the fourth. */
-    destination: conversationHref(first.conversationId),
-    /* Chat polls have no scheduled close of their own. The current Plan's end
-       is the hard boundary that stops a still-open poll from lingering while
-       Home remains open. */
-    expiresAt: expiresAt(first.planEndsAt)
-  };
-}
 
 /* --------------------------------------------------------------------------
  * Growth and recovery.
