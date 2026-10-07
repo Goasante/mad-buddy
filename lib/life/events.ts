@@ -44,7 +44,8 @@ export const LIFE_EVENT_TYPES = [
   "relationship.reactivated",
   "relationship.close_friend_added",
   "relationship.close_friend_removed",
-  "plan.attended_together",\n  "meetup.attended_together",
+  "plan.attended_together",
+  "meetup.attended_together",
   "friendship.milestone_reached",
   "reconnect.completed",
   "birthday.reminder_created",
@@ -100,7 +101,8 @@ export const LIFE_EVENT_CLASSIFICATION: Record<LifeEventType, LifeEventClassific
   "relationship.close_friend_added": { visibility: "private", retention: "durable", aiEligible: false },
   "relationship.close_friend_removed": { visibility: "private", retention: "durable", aiEligible: false },
   // Both attended; both may remember it.
-  "plan.attended_together": { visibility: "shared", retention: "durable", aiEligible: false },\n  "meetup.attended_together": { visibility: "shared", retention: "durable", aiEligible: false },
+  "plan.attended_together": { visibility: "shared", retention: "durable", aiEligible: false },
+  "meetup.attended_together": { visibility: "shared", retention: "durable", aiEligible: false },
   "friendship.milestone_reached": { visibility: "shared", retention: "durable", aiEligible: false },
   "reconnect.completed": { visibility: "private", retention: "durable", aiEligible: false },
   // A reminder the owner scheduled for themselves.
