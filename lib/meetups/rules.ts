@@ -1,11 +1,11 @@
 import { z } from "zod";
 
+export const MEETUP_ARRIVAL_WINDOW_BEFORE_MS = 2 * 60 * 60_000;
+export const MEETUP_EXPIRES_AFTER_MS = 4 * 60 * 60_000;
+
 export const meetupModeSchema = z.enum(["come_over", "coming_to", "meet_somewhere"]);
 export const arrivalSchema = z.enum(["not_started", "on_my_way", "late", "here", "left"]);
-export const meetupProximityStageSchema = z.enum(["getting_closer", "nearby", "at_spot"]);
-
-export const MEETUP_ACTIVE_BEFORE_MS = 2 * 60 * 60_000;
-export const MEETUP_EXPIRES_AFTER_MS = 4 * 60 * 60_000;
+export const meetupProximityStateSchema = z.enum(["approaching", "nearby", "at_spot"]);
 
 export const meetupCreateSchema = z.object({
   mode: meetupModeSchema,
@@ -16,7 +16,7 @@ export const meetupCreateSchema = z.object({
   timezone: z.string().min(1).max(60),
   requestKey: z.string().uuid()
 }).strict().refine((v) => v.mode !== "coming_to" || v.participantIds.length === 1, {
-  message: "Choose one Muddy to visit."
+  message: "Choose one Muddy whose place you are going to."
 });
 
 const commandFields = {
@@ -35,7 +35,7 @@ export const meetupUpdateSchema = z.discriminatedUnion("action", [
   }).strict(),
   z.object({ ...commandFields, action: z.literal("suggest"), startsAt: z.string().datetime({ offset: true }) }).strict(),
   z.object({ ...commandFields, action: z.literal("reschedule"), startsAt: z.string().datetime({ offset: true }) }).strict(),
-  z.object({ ...commandFields, action: z.enum(["met", "cancel", "end", "reset_beacon"]) }).strict()
+  z.object({ ...commandFields, action: z.enum(["met", "cancel", "end"]) }).strict()
 ]);
 
 export const meetupSchema = z.object({
@@ -49,8 +49,7 @@ export const meetupSchema = z.object({
   timezone: z.string(),
   status: z.enum(["active", "cancelled", "ended"]),
   revision: z.number().int(),
-  beaconState: z.enum(["unset", "provisional", "locked"]).default("unset"),
-  beaconSetAt: z.string().nullable().optional(),
+  beaconStatus: z.enum(["provisional", "locked"]).nullable().default(null),
   members: z.array(z.object({
     key: z.string(),
     userId: z.string().uuid().nullable(),
@@ -60,10 +59,8 @@ export const meetupSchema = z.object({
     delayMinutes: z.number().nullable(),
     metAt: z.string().nullable(),
     suggestedStartAt: z.string().nullable(),
-    // Retained in the transport while the database column is phased into
-    // "accepted = Meetup Proximity on". The UI no longer asks for a second opt-in.
     proximityEnabled: z.boolean(),
-    proximityStage: meetupProximityStageSchema.optional(),
+    proximityState: meetupProximityStateSchema.optional(),
     observedAt: z.string().optional()
   }))
 });
@@ -72,7 +69,7 @@ export type Meetup = z.infer<typeof meetupSchema>;
 export type MeetupMode = z.infer<typeof meetupModeSchema>;
 export type MeetupCreate = z.infer<typeof meetupCreateSchema>;
 export type MeetupUpdate = z.infer<typeof meetupUpdateSchema>;
-export type MeetupProximityStage = z.infer<typeof meetupProximityStageSchema>;
+export type MeetupProximityState = z.infer<typeof meetupProximityStateSchema>;
 export type MeetupHomeItem = Pick<Meetup, "id" | "mode" | "startsAt" | "timezone" | "placeLabel"> & {
   response: "invited" | "accepted";
 };
@@ -84,18 +81,24 @@ export const MEETUP_TITLES: Record<MeetupMode, string> = {
 };
 
 export const ARRIVAL_LABELS: Record<z.infer<typeof arrivalSchema>, string> = {
-  not_started: "No arrival update",
-  on_my_way: "On my way",
+  not_started: "Going",
+  on_my_way: "On the way",
   late: "Running late",
   here: "Here",
   left: "Left"
 };
 
+export const PROXIMITY_LABELS: Record<MeetupProximityState, string> = {
+  approaching: "Getting closer",
+  nearby: "Nearby",
+  at_spot: "At the meetup spot"
+};
+
 export function meetupPhase(meetup: Meetup, nowMs: number): "upcoming" | "active" | "unconfirmed" | "past" {
   if (meetup.status !== "active") return "past";
   const start = Date.parse(meetup.startsAt);
-  if (!Number.isFinite(start) || nowMs >= start + MEETUP_EXPIRES_AFTER_MS) return "past";
-  if (nowMs < start - MEETUP_ACTIVE_BEFORE_MS) return "upcoming";
+  if (!Number.isFinite(start) || nowMs > start + MEETUP_EXPIRES_AFTER_MS) return "past";
+  if (nowMs < start - MEETUP_ARRIVAL_WINDOW_BEFORE_MS) return "upcoming";
   if (nowMs > start + 30 * 60_000 && meetup.members.filter((m) => m.metAt).length < 2) return "unconfirmed";
   return "active";
 }
@@ -106,16 +109,16 @@ export function canUpdateArrival(meetup: Meetup, viewerId: string, nowMs: number
   const start = Date.parse(meetup.startsAt);
   return meetup.status === "active"
     && Number.isFinite(start)
-    && nowMs >= start - MEETUP_ACTIVE_BEFORE_MS
-    && nowMs < start + MEETUP_EXPIRES_AFTER_MS
     && mine?.response === "accepted"
     && (!meetup.hostId || host?.response === "accepted")
-    && meetup.members.some((m) => m.userId !== viewerId && m.response === "accepted");
+    && meetup.members.some((m) => m.userId !== viewerId && m.response === "accepted")
+    && nowMs >= start - MEETUP_ARRIVAL_WINDOW_BEFORE_MS
+    && nowMs <= start + MEETUP_EXPIRES_AFTER_MS;
 }
 
 export function isMeetupHintFresh(observedAt: string | undefined, nowMs: number): boolean {
   const age = nowMs - Date.parse(observedAt ?? "");
-  return Number.isFinite(age) && age >= -15_000 && age < 75_000;
+  return Number.isFinite(age) && age >= -15_000 && age < 90_000;
 }
 
 export const MEETUP_NOTIFICATION_COPY: Record<string, string> = {
@@ -126,13 +129,12 @@ export const MEETUP_NOTIFICATION_COPY: Record<string, string> = {
   rescheduled: "The meetup time changed. Please accept the new arrangement.",
   cancelled: "This meetup was cancelled.",
   ended: "This meetup has ended.",
-  beacon_reset: "The meetup point was reset. Open Meet Up for the latest status.",
-  on_my_way: "A Muddy is on their way.",
+  on_my_way: "A Muddy is on the way.",
   late: "A Muddy is running late. Open the meetup for their update.",
-  here: "A Muddy says they have arrived.",
-  left: "A Muddy has left.",
-  met: "A Muddy confirmed meeting. Did you meet too?",
+  here: "A Muddy says they are at the meetup spot.",
+  left: "A Muddy has left the meetup.",
+  met: "A Muddy confirmed that you met.",
   reminder_30: "Your meetup is coming up in about 30 minutes.",
   reminder_5: "Your meetup starts soon. Are you on your way?",
-  check_outcome: "Did you meet? Confirm, reschedule, or end the arrangement."
+  check_outcome: "Did you meet? Confirm it, reschedule, or let the meetup expire."
 };
