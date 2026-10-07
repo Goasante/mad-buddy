@@ -1,6 +1,6 @@
 "use client";
 
-import { Link, PLATFORM_KIND, useRevalidate } from "@/lib/platform";
+import { Link, PLATFORM_KIND, syncCurrentLocation, useRevalidate } from "@/lib/platform";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowLeft,
@@ -945,10 +945,21 @@ function MeetupCard({
 
     startTransition(async () => {
       try {
+        if (command.action === "beacon") {
+          const location = await syncCurrentLocation();
+          if (!location.ok) {
+            setMessage(location.message ?? "Mad Buddy needs your current location to set the Meetup Glow point.");
+            return;
+          }
+        }
+
         const result = await saveAction(input);
         setMessage(result.message);
         if (result.ok) {
           retry.current = null;
+          if (command.action === "respond" && command.response === "accepted") {
+            void syncCurrentLocation();
+          }
           await refreshAction();
         }
       } catch {
