@@ -14,6 +14,8 @@ import { focalObjectPosition } from "@/lib/events/cover";
 import { planDateParts, planTimeLabel } from "@/lib/plans/discovery";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
+import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
+import { MEETUP_TITLES, type MeetupHomeItem } from "@/lib/meetups/rules";
 
 /**
  * Upcoming plans, as a stack rather than a horizontal rail.
@@ -55,7 +57,12 @@ export type ComingUpUpForItem = {
   href: Route;
 };
 
-type ComingUpRenderItem = HomeUpcomingPlan | EventAgendaItem | ComingUpUpForItem;
+export type ComingUpMeetupItem = MeetupHomeItem & {
+  kind: "meetup";
+  href: Route;
+};
+
+type ComingUpRenderItem = HomeUpcomingPlan | EventAgendaItem | ComingUpUpForItem | ComingUpMeetupItem;
 
 export function PlanStack({
   plans,
@@ -122,7 +129,7 @@ export function PlanStack({
             const isTop = depth === 0;
             return (
               <motion.div
-                key={`${isEventAgendaItem(item) ? "event" : "plan"}:${item.id}`}
+                key={`${isEventAgendaItem(item) ? "event" : isMeetupAgendaItem(item) ? "meetup" : "kind" in item && item.kind === "upfor" ? "upfor" : "plan"}:${item.id}`}
                 className={cn("plan-stack-card", isTop && "plan-stack-card-live")}
                 style={isTop ? { x, rotate, zIndex: VISIBLE } : { zIndex: VISIBLE - depth }}
                 animate={{
@@ -185,6 +192,10 @@ function isEventAgendaItem(item: ComingUpRenderItem): item is EventAgendaItem {
   return "kind" in item && item.kind === "event";
 }
 
+function isMeetupAgendaItem(item: ComingUpRenderItem): item is ComingUpMeetupItem {
+  return "kind" in item && item.kind === "meetup";
+}
+
 function AgendaCard({
   nowMs,
   item,
@@ -197,8 +208,74 @@ function AgendaCard({
   pending: boolean;
 }) {
   if ("kind" in item && item.kind === "upfor") return <UpForAgendaCard upfor={item} nowMs={nowMs} />;
+  if (isMeetupAgendaItem(item)) return <MeetupAgendaCard meetup={item} />;
   if (isEventAgendaItem(item)) return <EventAgendaCard event={item} />;
   return <SocializePlanCard plan={item} onJoin={onJoin} pending={pending} />;
+}
+
+function MeetupAgendaCard({ meetup }: { meetup: ComingUpMeetupItem }) {
+  const date = planDateParts(meetup.startsAt);
+  const time = planTimeLabel(meetup.startsAt);
+  const artwork = resolveUpForActivityArtwork(meetup.category);
+  const title = meetup.title?.trim() || `${MEETUP_TITLES[meetup.mode]} · ${meetup.placeLabel}`;
+
+  return (
+    <article
+      className="linkr-plan home-agenda-event"
+      style={
+        {
+          "--linkr-plan-from": "#3b335e",
+          "--linkr-plan-to": "#17152a"
+        } as CSSProperties
+      }
+      aria-label={`Meet Up: ${title}${time ? ` at ${time}` : ""}`}
+    >
+      {artwork ? (
+        // eslint-disable-next-line @next/next/no-img-element -- approved static activity artwork
+        <img
+          src={artwork.asset.path}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="linkr-plan-image"
+          style={{ objectPosition: artwork.objectPosition }}
+        />
+      ) : null}
+      {artwork ? <span aria-hidden="true" className="linkr-plan-scrim" /> : null}
+
+      <div className="linkr-plan-body">
+        {date ? (
+          <span className="linkr-plan-date" aria-hidden="true">
+            <span className="linkr-plan-date-weekday">{date.weekday}</span>
+            <span className="linkr-plan-date-day">{date.day}</span>
+            <span className="linkr-plan-date-month">{date.month}</span>
+          </span>
+        ) : null}
+
+        <div className="linkr-plan-detail">
+          <span className="home-agenda-type">{meetup.sourceDiscoveryId ? "Meet New People" : "Meet Up"}</span>
+          <Link href={meetup.href} className="focus-ring linkr-plan-title min-w-0">
+            {title}
+          </Link>
+          <div className="linkr-plan-meta">
+            {time ? (
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                {time}
+              </span>
+            ) : null}
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{meetup.placeLabel}</span>
+            </span>
+          </div>
+          <p className="linkr-plan-host">
+            {meetup.response === "invited" ? "Invitation · respond" : "Meetup confirmed"}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 /** Event presentation using the Plan card's exact shell and spacing. */
