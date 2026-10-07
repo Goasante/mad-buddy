@@ -60,7 +60,6 @@ const EXACT_MAP: Readonly<Record<string, string>> = {
 export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
   "/linkr",
   "/discover",
-  "/hangout-mode",
   "/safety-center",
   "/drops",
   "/moments/new",
