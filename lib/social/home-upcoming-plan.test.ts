@@ -67,7 +67,7 @@ describe("Coming Up header", () => {
   });
 
   it("does not send a mixed Plans/Events/Meetups stack to a Plans-only See all link", () => {
-    const section = home.slice(home.indexOf('aria-labelledby="home-plans-heading"'), home.indexOf("<UpcomingPlanEmpty />"));
+    const section = home.slice(home.indexOf('aria-labelledby="home-plans-heading"'));
     expect(section).not.toContain('href="/plans"');
     expect(section).not.toContain('actionAriaLabel="See all plans"');
   });
@@ -79,14 +79,9 @@ describe("one plan presentation, shared with Linkr", () => {
     expect(home).not.toContain("function UpcomingPlanRow");
   });
 
-  it("routes RSVP through the canonical action", () => {
-    // Home decides what to OFFER; the server still authorises.
-    expect(home).toContain("rsvpAction(plan.id");
-  });
-
-  it("refreshes from the projection rather than guessing the new count", () => {
-    const join = home.slice(home.indexOf("function joinPlan"));
-    expect(join.slice(0, 600)).toContain("router.refresh()");
+  it("does not expose legacy Plan RSVP actions on Home", () => {
+    expect(home).not.toContain("rsvpAction(plan.id");
+    expect(home).not.toContain('href="/plans"');
   });
 
   it("keeps the shared stack headerless so Home can name the mixed Coming Up section", () => {
