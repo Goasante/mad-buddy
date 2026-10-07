@@ -78,8 +78,8 @@ describe("navigation options are accepted and safely ignored", () => {
 
   it("accepts { scroll: false } on push and still navigates", () => {
     const navigate = vi.fn();
-    makeRouter(navigate).push("/plans", { scroll: false });
-    expect(navigate).toHaveBeenCalledWith("/plans");
+    makeRouter(navigate).push("/meet-up", { scroll: false });
+    expect(navigate).toHaveBeenCalledWith("/meet-up");
   });
 
   it("does not forward scroll to react-router", () => {
@@ -87,7 +87,7 @@ describe("navigation options are accepted and safely ignored", () => {
     // restore-scroll-on-navigate, which the SPA does not do anyway, so the
     // observable result is what the caller asked for.
     const navigate = vi.fn();
-    makeRouter(navigate).push("/plans", { scroll: false });
+    makeRouter(navigate).push("/meet-up", { scroll: false });
     const [, options] = navigate.mock.calls[0]!;
     expect(options).toBeUndefined();
   });
