@@ -29,7 +29,8 @@ describe("friendship milestones are a real end-to-end feature", () => {
 
   it("reconciles factual source events and honors blocks and reminder preferences", () => {
     expect(service).toContain('eventType: "friendship.milestone_reached"');
-    expect(service).toContain('"plan.attended_together"');\n    expect(service).toContain('"meetup.attended_together"');
+    expect(service).toContain('"plan.attended_together"');
+    expect(service).toContain('"meetup.attended_together"');
     expect(service).toContain('"reconnect.completed"');
     expect(service).toContain('from("blocked_users")');
     expect(service).toContain("streak_notifications_enabled");
