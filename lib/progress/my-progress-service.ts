@@ -2,6 +2,7 @@ import "server-only";
 
 import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
 import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
+import { grantMeetupAchievements } from "@/lib/engagement/achievements";
 import { profileCompletion } from "@/lib/profile/identity";
 import { loadJourney } from "@/lib/journey/journey-service";
 import {
@@ -18,6 +19,9 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
 /** Owner-only projection for the existing My Progress route. */
 export async function loadMyProgress(admin: Admin, userId: string, now = new Date()): Promise<MyProgressData> {
+  // Automatic Meetup expiry can finish a Meetup without a foreground user action.
+  // Reconcile those badges here before reading the canonical Progress snapshot.
+  await grantMeetupAchievements(admin, userId);
   const [score, profileResult, achievementResult, milestoneResult] = await Promise.all([
     loadBuddyScore(admin, userId),
     admin.from("profiles").select("avatar_url,bio,mood_status").eq("user_id", userId).maybeSingle(),
