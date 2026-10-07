@@ -191,7 +191,6 @@ export const SMART_CARD_STATE_OWNERSHIP: Record<string, SmartCardClassification>
     ownership: "CARD_A_OWNED",
     reason: "Excluded at engine selection: ActivationCard owns cold-start people discovery."
   },
-  upfor_fallback: { ownership: "PRODUCT_PAUSED", reason: "Retired with UpFor; retained only as a historical compatibility id and never registered by Home." }
 };
 
 /** Counts by ownership, for the closeout report. */
