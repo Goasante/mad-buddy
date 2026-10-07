@@ -172,6 +172,7 @@ export function streakSummaryLabel(weeks: number, friendName: string): string {
  * enforced rather than remembered.
  */
 export type RecapSummary = {
+  meetupsCreated: number;
   meetupsCompleted: number;
   muddiesInteractedWith: number;
   newMuddies: number;
@@ -183,6 +184,7 @@ export type RecapSummary = {
 };
 
 export const RECAP_ALLOWED_FIELDS: ReadonlyArray<keyof RecapSummary> = [
+  "meetupsCreated",
   "meetupsCompleted",
   "muddiesInteractedWith",
   "newMuddies",
