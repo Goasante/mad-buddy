@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { Link, syncCurrentLocation } from "@/lib/platform";
+import { Link, PLATFORM_KIND, syncCurrentLocation } from "@/lib/platform";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import {
@@ -87,15 +87,16 @@ function ListingCard({
   onOpen: () => void;
 }) {
   const remaining = Math.max(0, item.interestLimit - item.interestCount);
+  const expired = item.status !== "active" || Date.parse(item.listingExpiresAt) <= nowMs;
   return (
     <article className="overflow-hidden rounded-[26px] border border-border/80 bg-card shadow-[0_10px_30px_hsl(var(--shadow)/0.08)]">
-      <button type="button" onClick={onOpen} className="block w-full text-left">
+      <button type="button" onClick={onOpen} aria-label={`View ${item.title}`} className="focus-ring block w-full text-left">
         <div className="relative h-32 overflow-hidden">
           <DiscoveryArtwork category={item.category} />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
           <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3 text-white">
             <div className="min-w-0">
-              <p className="truncate text-lg font-semibold">{item.title}</p>
+              <p className="break-words text-lg font-semibold leading-snug">{item.title}</p>
               <p className="text-xs text-white/85">{discoveryCategoryLabel(item.category)} · Nearby</p>
             </div>
             <span className="shrink-0 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm">
@@ -118,7 +119,7 @@ function ListingCard({
               }).format(new Date(item.startsAt))}
             </p>
           </div>
-          <span className="text-xs font-medium text-primary">{discoveryTimeLeft(item.listingExpiresAt, nowMs)}</span>
+          <span className="shrink-0 text-xs font-medium text-primary">{discoveryTimeLeft(item.listingExpiresAt, nowMs)}</span>
         </div>
 
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -135,8 +136,8 @@ function ListingCard({
             Withdraw interest
           </Button>
         ) : (
-          <Button type="button" className="w-full" disabled={pending || remaining === 0} onClick={onInterest}>
-            Interested
+          <Button type="button" className="w-full" disabled={pending || expired || remaining === 0} onClick={onInterest}>
+            {expired ? "Listing ended" : remaining === 0 ? "Responses full" : "Interested"}
           </Button>
         )}
       </div>
@@ -160,9 +161,20 @@ export function MeetNewPeople({
   onRefresh: () => Promise<void>;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
-  const [selected, setSelected] = useState<MeetupDiscoveryItem | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(focusedId ?? null);
+  const [localUpdates, setLocalUpdates] = useState<Record<string, Partial<MeetupDiscoveryItem>>>({});
+  const [previousHub, setPreviousHub] = useState(hub);
+  // Optimistic confirmations last only until the server sends a fresh hub.
+  if (previousHub !== hub) {
+    setPreviousHub(hub);
+    setLocalUpdates({});
+  }
+  const nearby = hub.nearby.map((item) => ({ ...item, ...localUpdates[item.id] }));
+  const selected = nearby.find((item) => item.id === selectedId) ?? null;
   const [message, setMessage] = useState("");
   const locationSynced = useRef(false);
+  const inFlight = useRef(false);
+  const request = useRef<{ signature: string; key: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<MeetupDiscoveryCategory>("coffee");
@@ -177,14 +189,21 @@ export function MeetNewPeople({
   useEffect(() => {
     if (locationSynced.current) return;
     locationSynced.current = true;
+    let cancelled = false;
     void (async () => {
-      const location = await syncCurrentLocation();
-      if (!location.ok) {
-        setMessage(location.message ?? "Turn on location to see people nearby.");
-        return;
+      try {
+        const location = await syncCurrentLocation();
+        if (cancelled) return;
+        if (!location.ok) {
+          setMessage(location.message ?? "Turn on location to see people nearby.");
+          return;
+        }
+        await onRefresh();
+      } catch {
+        if (!cancelled) setMessage("Could not refresh nearby listings. Try again.");
       }
-      await onRefresh();
     })();
+    return () => { cancelled = true; };
   }, [onRefresh]);
   const myActive = useMemo(
     () => hub.mine
@@ -193,102 +212,134 @@ export function MeetNewPeople({
     [hub.mine, focusedId]
   );
 
+  async function refreshAfterSave(successMessage: string) {
+    try {
+      await onRefresh();
+    } catch {
+      setMessage(`${successMessage} The list could not refresh; reopen it to see the latest.`);
+    }
+  }
+
   function run(input: unknown) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     startTransition(async () => {
-      const result = await action(input, false);
-      setMessage(result.message);
-      if (result.ok) {
-        const command =
-          input && typeof input === "object" && "action" in input && typeof input.action === "string"
-            ? input.action
-            : null;
-        if (selected) {
-          setSelected((current) => {
-            if (!current) return current;
-            if (command === "interest") {
-              return {
+      try {
+        const result = await action(input, false);
+        setMessage(result.message);
+        if (result.ok) {
+          if (input && typeof input === "object" && "action" in input && "id" in input && typeof input.id === "string") {
+            const item = nearby.find((value) => value.id === input.id);
+            if (item && (input.action === "interest" || input.action === "withdraw")) {
+              const interested = input.action === "interest";
+              setLocalUpdates((current) => ({
                 ...current,
-                myInterestStatus: "pending",
-                interestCount: Math.min(current.interestLimit, current.interestCount + 1)
-              };
+                [item.id]: {
+                  myInterestStatus: interested ? "pending" : "withdrawn",
+                  interestCount: Math.max(0, Math.min(item.interestLimit, item.interestCount + (interested ? 1 : -1)))
+                }
+              }));
             }
-            if (command === "withdraw") {
-              return {
-                ...current,
-                myInterestStatus: null,
-                interestCount: Math.max(0, current.interestCount - 1)
-              };
-            }
-            return {
-              ...current,
-              conversationId: result.conversationId ?? current.conversationId,
-              meetupId: result.meetupId ?? current.meetupId
-            };
-          });
+          }
+          await refreshAfterSave(result.message);
+        }
+      } catch {
+        setMessage("Could not update this listing. Try again.");
+      } finally {
+        inFlight.current = false;
+      }
+    });
+  }
+
+  function refreshNearby() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    startTransition(async () => {
+      try {
+        const location = await syncCurrentLocation();
+        if (!location.ok) {
+          setMessage(location.message ?? "Turn on location to see people nearby.");
+          return;
         }
         await onRefresh();
+        setMessage("");
+      } catch {
+        setMessage("Could not refresh nearby listings. Try again.");
+      } finally {
+        inFlight.current = false;
       }
     });
   }
 
   function create() {
-    if (!title.trim() || wordCount > 5) return;
+    if (inFlight.current || title.trim().length < 2 || wordCount > 5 || !canCreate) return;
     const date = new Date(startsAt);
+    if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now() + 60_000) {
+      setMessage("Choose a future date and time.");
+      return;
+    }
+    const details = {
+      title: title.trim(), category, style, startsAt: date.toISOString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", durationMinutes: duration
+    };
+    const signature = JSON.stringify(details);
+    if (request.current?.signature !== signature) request.current = { signature, key: crypto.randomUUID() };
+    const requestKey = request.current.key;
+    inFlight.current = true;
     startTransition(async () => {
-      const location = await syncCurrentLocation();
-      if (!location.ok) {
-        setMessage(location.message ?? "Turn on Glow so this listing can be shown nearby.");
-        return;
-      }
-      const result = await action({
-        title: title.trim(),
-        category,
-        style,
-        startsAt: date.toISOString(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-        durationMinutes: duration,
-        requestKey: crypto.randomUUID()
-      }, true);
-      setMessage(result.message);
-      if (result.ok) {
-        setCreateOpen(false);
-        setTitle("");
-        await onRefresh();
+      try {
+        const location = await syncCurrentLocation();
+        if (!location.ok) {
+          setMessage(location.message ?? "Turn on Glow so this listing can be shown nearby.");
+          return;
+        }
+        const result = await action({ ...details, requestKey }, true);
+        setMessage(result.message);
+        if (result.ok) {
+          request.current = null;
+          setCreateOpen(false);
+          setTitle("");
+          await refreshAfterSave(result.message);
+        }
+      } catch {
+        setMessage("Could not publish. Try again; your listing will not be duplicated.");
+      } finally {
+        inFlight.current = false;
       }
     });
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl px-3 pb-24 pt-2 sm:px-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <button type="button" onClick={onBack} className="focus-ring -ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-medium">
+    <div className="mx-auto w-full min-w-0 max-w-xl px-3 pb-24 pt-2 sm:px-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <button type="button" onClick={onBack} className={`focus-ring -ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-medium ${PLATFORM_KIND === "web" ? "hidden md:inline-flex" : ""}`}>
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          Meet Up
+          Meetups
         </button>
-        <span className="rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold">
+        <span className="ml-auto rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold">
           {hub.activeSlots} of {hub.maxActiveSlots} active
         </span>
       </div>
 
-      <div className="mb-5 rounded-[28px] border border-border/80 bg-card p-5">
+      <div className="mb-5 rounded-2xl border border-border/80 bg-card p-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Nearby discovery</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight">Meet New People</h1>
-            <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-              Find people nearby who are open to the same thing. Exact locations stay private until you all agree to meet.
+            <h1 className={`mt-1 text-2xl font-bold tracking-tight ${PLATFORM_KIND === "web" ? "hidden md:block" : ""}`}>Meet New People</h1>
+            <p className="mt-2 max-w-md text-sm leading-5 text-muted-foreground">
+              Find people nearby who share your interests. Agree on a place after you match; live locations stay private.
             </p>
           </div>
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
             <UserRound className="h-6 w-6" aria-hidden="true" />
           </div>
         </div>
-        <Button className="mt-4 w-full" disabled={!canCreate} onClick={() => setCreateOpen(true)}>
+        <Button className="mt-4 w-full" disabled={!canCreate || pending} onClick={() => { setMessage(""); setCreateOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-          Start a nearby listing
+          Start a listing
         </Button>
         {!canCreate ? (
-          <p className="mt-2 text-xs text-muted-foreground">You have used all three active Meetup slots.</p>
+          <p className="mt-2 text-xs text-muted-foreground">You have used all {hub.maxActiveSlots} active Meetup slots.</p>
         ) : null}
       </div>
 
@@ -365,21 +416,26 @@ export function MeetNewPeople({
       <section className="space-y-3" aria-labelledby="nearby-discovery-heading">
         <div className="flex items-center justify-between">
           <h2 id="nearby-discovery-heading" className="text-sm font-semibold">Nearby</h2>
-          <span className="text-xs text-muted-foreground">{hub.nearby.length} open</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{nearby.length} open</span>
+            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={refreshNearby} aria-label="Refresh nearby listings">
+              <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
+            </Button>
+          </div>
         </div>
-        {hub.nearby.length === 0 ? (
+        {nearby.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-border p-6 text-center">
             <Users className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
             <p className="mt-2 text-sm font-medium">Nothing nearby right now</p>
             <p className="mt-1 text-xs text-muted-foreground">Start something and give nearby people a reason to join.</p>
           </div>
-        ) : hub.nearby.map((item) => (
+        ) : nearby.map((item) => (
           <ListingCard
             key={item.id}
             item={item}
             nowMs={nowMs}
             pending={pending}
-            onOpen={() => setSelected(item)}
+            onOpen={() => setSelectedId(item.id)}
             onInterest={() => run({ action: "interest", id: item.id })}
             onWithdraw={() => run({ action: "withdraw", id: item.id })}
           />
@@ -390,11 +446,12 @@ export function MeetNewPeople({
         open={createOpen}
         onOpenChange={setCreateOpen}
         variant="sheet"
-        title="Start a nearby listing"
+        title="Start a listing"
         description="Short, clear and easy to scan."
-        footer={<Button type="button" onClick={create} disabled={pending || !title.trim() || wordCount > 5}>Publish nearby</Button>}
+        footer={<Button type="button" onClick={create} disabled={pending || title.trim().length < 2 || wordCount > 5 || !canCreate}>{pending ? "Publishing…" : "Publish nearby"}</Button>}
       >
         <div className="space-y-5">
+          {message ? <p role="status" className="rounded-xl bg-secondary px-3 py-2 text-sm">{message}</p> : null}
           <label className="block space-y-1.5">
             <span className="text-sm font-medium">Short title</span>
             <input className={inputClass} value={title} maxLength={40} onChange={(event) => setTitle(event.target.value)} placeholder="Coffee and conversation" />
@@ -404,12 +461,12 @@ export function MeetNewPeople({
           <div>
             <p className="mb-2 text-sm font-medium">Who are you hoping to meet?</p>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setStyle("one_to_one")} className={`rounded-2xl border p-3 text-left text-sm ${style === "one_to_one" ? "border-primary bg-primary/8" : "border-border"}`}>
+              <button type="button" onClick={() => setStyle("one_to_one")} aria-pressed={style === "one_to_one"} className={`rounded-2xl border p-3 text-left text-sm ${style === "one_to_one" ? "border-primary bg-primary/8" : "border-border"}`}>
                 <UserRound className="mb-2 h-5 w-5" aria-hidden="true" />
                 <span className="font-semibold">One person</span>
                 <span className="mt-1 block text-xs text-muted-foreground">A simple 1-to-1 meetup</span>
               </button>
-              <button type="button" onClick={() => setStyle("group")} className={`rounded-2xl border p-3 text-left text-sm ${style === "group" ? "border-primary bg-primary/8" : "border-border"}`}>
+              <button type="button" onClick={() => setStyle("group")} aria-pressed={style === "group"} className={`rounded-2xl border p-3 text-left text-sm ${style === "group" ? "border-primary bg-primary/8" : "border-border"}`}>
                 <Users className="mb-2 h-5 w-5" aria-hidden="true" />
                 <span className="font-semibold">Small group</span>
                 <span className="mt-1 block text-xs text-muted-foreground">Up to six people total</span>
@@ -421,7 +478,7 @@ export function MeetNewPeople({
             <p className="mb-2 text-sm font-medium">Interest</p>
             <div className="flex flex-wrap gap-2">
               {MEETUP_DISCOVERY_CATEGORY_OPTIONS.map((option) => (
-                <button key={option.id} type="button" onClick={() => setCategory(option.id)} className={`rounded-full border px-3 py-2 text-xs font-medium ${category === option.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}>
+                <button key={option.id} type="button" onClick={() => setCategory(option.id)} aria-pressed={category === option.id} className={`rounded-full border px-3 py-2 text-xs font-medium ${category === option.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}>
                   {option.emoji} {option.label}
                 </button>
               ))}
@@ -437,7 +494,7 @@ export function MeetNewPeople({
             <p className="mb-2 text-sm font-medium">Keep this listing open for</p>
             <div className="grid grid-cols-4 gap-2">
               {([30,60,120,240] as const).map((minutes) => (
-                <button key={minutes} type="button" onClick={() => setDuration(minutes)} className={`rounded-xl border px-2 py-2 text-xs font-semibold ${duration === minutes ? "border-primary bg-primary/8 text-primary" : "border-border"}`}>
+                <button key={minutes} type="button" onClick={() => setDuration(minutes)} aria-pressed={duration === minutes} className={`rounded-xl border px-2 py-2 text-xs font-semibold ${duration === minutes ? "border-primary bg-primary/8 text-primary" : "border-border"}`}>
                   {minutes < 60 ? "30m" : `${minutes / 60}h`}
                 </button>
               ))}
@@ -453,13 +510,14 @@ export function MeetNewPeople({
 
       <Modal
         open={selected !== null}
-        onOpenChange={(open) => { if (!open) setSelected(null); }}
+        onOpenChange={(open) => { if (!open) setSelectedId(null); }}
         variant="sheet"
         title={selected?.title ?? "Meetup"}
         description={selected ? `${discoveryCategoryLabel(selected.category)} · Nearby` : undefined}
       >
         {selected ? (
           <div className="space-y-4">
+            {message ? <p role="status" className="rounded-xl bg-secondary px-3 py-2 text-sm">{message}</p> : null}
             <div className="h-44 overflow-hidden rounded-2xl"><DiscoveryArtwork category={selected.category} /></div>
             <div className="flex items-center gap-3">
               <UserAvatar src={selected.creatorAvatarUrl} name={selected.creatorName} size="sm" decorative />
@@ -479,7 +537,7 @@ export function MeetNewPeople({
             ) : selected.myInterestStatus === "pending" ? (
               <Button variant="outline" className="w-full" disabled={pending} onClick={() => run({ action: "withdraw", id: selected.id })}>Withdraw interest</Button>
             ) : (
-              <Button className="w-full" disabled={pending || selected.interestCount >= selected.interestLimit} onClick={() => run({ action: "interest", id: selected.id })}>Interested</Button>
+              <Button className="w-full" disabled={pending || selected.status !== "active" || Date.parse(selected.listingExpiresAt) <= nowMs || selected.interestCount >= selected.interestLimit} onClick={() => run({ action: "interest", id: selected.id })}>Interested</Button>
             )}
           </div>
         ) : null}
