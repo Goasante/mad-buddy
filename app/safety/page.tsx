@@ -5,11 +5,11 @@ import { PublicPageShell } from "@/components/front-door/public-shell";
 
 export const metadata: Metadata = {
   title: "Safety",
-  description: "How Mad Buddy approaches proximity, discovery, blocking, reporting, and Safe Arrival without exposing exact location.",
+  description: "How Mad Buddy approaches proximity, discovery, blocking, reporting, and Meetups without exposing exact location.",
   alternates: { canonical: "/safety" },
   openGraph: {
     title: "Safety | Mad Buddy",
-    description: "How Mad Buddy approaches proximity, discovery, blocking, reporting, and Safe Arrival without exposing exact location.",
+    description: "How Mad Buddy approaches proximity, discovery, blocking, reporting, and Meetups without exposing exact location.",
     url: "/safety"
   }
 };
@@ -76,9 +76,9 @@ export default function SafetyPage() {
           </div>
           <div>
             <ShieldCheck className="h-6 w-6 text-[#A45A18]" aria-hidden="true" />
-            <h2 className="mt-4 text-xl font-semibold text-[#4E0401] dark:text-[#FFF8F1]">Safe Arrival</h2>
+            <h2 className="mt-4 text-xl font-semibold text-[#4E0401] dark:text-[#FFF8F1]">Meetups</h2>
             <p className="mt-3 text-sm leading-7 text-[#4E0401]/62 dark:text-[#FFF8F1]/62">
-              Safe Arrival is a safety-focused check-in experience. Its purpose is to help chosen people know whether you arrived, not to provide them with a live tracking screen or exact route history.
+              Meetups help people agree when and where to meet and stay coordinated as the time approaches. Proximity remains privacy-safe: the experience does not expose a live map, exact route history, or another person&apos;s precise position.
             </p>
           </div>
         </section>
