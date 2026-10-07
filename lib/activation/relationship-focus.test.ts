@@ -38,7 +38,7 @@ describe("a brand-new relationship", () => {
   });
 
   it("keeps a Plan available, but second", () => {
-    expect(focus?.plan.secondary).toBe("make_plan");
+    expect(focus?.plan.secondary).toBe("make_meetup");
   });
 
   it("explains itself", () => {
@@ -68,8 +68,8 @@ describe("something already arranged outranks a suggestion", () => {
   });
 
   it("opens the Plan rather than proposing a second one", () => {
-    expect(focus?.plan.primary).toBe("view_plan");
-    expect(focus?.plan.secondary).not.toBe("make_plan");
+    expect(focus?.plan.primary).toBe("view_meetup");
+    expect(focus?.plan.secondary).not.toBe("make_meetup");
     expect(focus?.plan.reason).toBe("shared_plan");
   });
 });
@@ -99,12 +99,12 @@ describe("choosing between several Muddies", () => {
       muddy("live", { conversationState: "established", lastConversationActivityMs: ago(HOUR) })
     ]);
     expect(focus?.muddy.id).toBe("live");
-    /* An ESTABLISHED, not-nearby relationship gets make_plan/message -- the
+    /* An ESTABLISHED, not-nearby relationship gets make_meetup/message -- the
      * engine's "established" branch. My first expectation here was message
      * primary, which confused §10's rule about what Message DOES with where
      * it ranks. Somebody you already talk to and cannot wave at is exactly
      * who a plan is worth proposing to. */
-    expect(focus?.plan.primary).toBe("make_plan");
+    expect(focus?.plan.primary).toBe("make_meetup");
     expect(focus?.plan.secondary).toBe("message");
     expect(focus?.plan.reason).toBe("established");
   });
