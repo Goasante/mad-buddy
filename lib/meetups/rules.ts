@@ -147,6 +147,17 @@ export function canUpdateArrival(meetup: Meetup, viewerId: string, nowMs: number
     && nowMs < expires;
 }
 
+export function meetupReadyForHome(meetup: Meetup, viewerId: string, nowMs: number): boolean {
+  const mine = meetup.members.find((member) => member.userId === viewerId);
+  const accepted = meetup.members.filter((member) => member.response === "accepted").length;
+  const unresolved = meetup.members.some((member) => member.response === "invited");
+  return meetup.status === "active"
+    && mine?.response === "accepted"
+    && accepted >= 2
+    && !unresolved
+    && Date.parse(meetup.startsAt) > nowMs - 2 * 60 * 60_000;
+}
+
 export function isMeetupHintFresh(observedAt: string | null | undefined, nowMs: number): boolean {
   const age = nowMs - Date.parse(observedAt ?? "");
   return Number.isFinite(age) && age >= -15_000 && age < 2 * 60_000;
