@@ -9,7 +9,7 @@ import { articleImageUrl } from "@/lib/blog/image-model";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Journal — Friendship, privacy & real-life connection",
-  description: "Practical guides to making friends in Accra, staying close without sharing exact locations, and turning conversations into real plans.",
+  description: "Practical guides to making friends in Accra, staying close without sharing exact locations, and turning conversations into real Meetups.",
   alternates: { canonical: "/blog" },
   openGraph: { title: "The Mad Buddy Journal", description: "Less scrolling. More showing up.", url: "/blog" }
 };
