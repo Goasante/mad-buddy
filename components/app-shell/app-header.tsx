@@ -62,8 +62,8 @@ export const CREATE_ACTIONS = [
     href: "/meet-up?create=1",
     title: "New Meetup",
     description: "Invite Muddies or arrange a Meetup",
-    icon: CalendarCheck2,
-    featureIcon: "hangout"
+    icon: Hand,
+    featureIcon: "meetups"
   },
   {
     href: "/meeting-pings",
