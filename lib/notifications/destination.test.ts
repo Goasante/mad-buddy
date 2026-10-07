@@ -6,12 +6,12 @@ const ID = "3f8c1e2a-0000-4000-8000-000000000000";
 describe("record-specific notification destinations", () => {
   it.each([
     [`message:${ID}`, `/messages?conversation=${ID}`],
-    [`hangout:${ID}`, `/hangout-mode?hangout=${ID}`],
-    [`plan:${ID}`, `/plans?plan=${ID}`],
+    [`hangout:${ID}`, "/meet-up"],
+    [`plan:${ID}`, "/meet-up"],
     [`event:${ID}`, `/events?event=${ID}`],
     [`group_message:${ID}`, `/messages?conversation=${ID}`],
     [`group:${ID}`, `/messages?conversation=${ID}`],
-    [`safe_arrival:${ID}`, `/safe-arrival?session=${ID}`],
+    [`safe_arrival:${ID}`, "/meet-up"],
     [`meetup:${ID}`, `/meet-up?meetup=${ID}`],
     [`meetup_discovery:${ID}`, `/meet-up?newPeople=1&discovery=${ID}`]
   ])("resolves %s", (type, href) => {
@@ -42,7 +42,7 @@ describe("record-specific notification destinations", () => {
 
   it("falls back safely for legacy and malformed suffixes", () => {
     expect(resolveNotificationDestination("message:new")).toEqual({ type: "internal", href: "/messages" });
-    expect(resolveNotificationDestination("plan:https://evil.example")).toEqual({ type: "internal", href: "/plans" });
+    expect(resolveNotificationDestination("plan:https://evil.example")).toEqual({ type: "internal", href: "/meet-up" });
     expect(resolveNotificationDestination("group:not-a-uuid")).toEqual({ type: "internal", href: "/messages?filter=groups" });
     expect(resolveNotificationDestination("unknown:anything")).toBeNull();
   });
