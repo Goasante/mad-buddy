@@ -25,6 +25,7 @@ import { conversationHref } from "@/lib/messaging/open-conversation";
 import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
 import { MAX_ACTIVE_UPFORS } from "@/lib/social/upfor-limits";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
+import type { MeetupHomeItem } from "@/lib/meetups/rules";
 import type { JourneyData } from "@/lib/journey/journey";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
 import {
@@ -66,8 +67,10 @@ export type SmartCardInput = {
       }
     | null;
   birthday: { birthdayToday: boolean; birthdayTomorrow: boolean } | null;
-  /** Canonical Home agenda — Plans + Events, already permission-filtered. */
+  /** Canonical Home agenda, already permission-filtered. */
   agenda: readonly UpcomingAgendaItem[];
+  /** Confirmed Meetups already approved for Home presentation. */
+  meetups?: readonly MeetupHomeItem[];
   /**
    * UpFor facts from the one batched Home read (lib/social/home-upfor-context).
    * Optional so every existing caller and test keeps compiling; absent means
@@ -1290,41 +1293,58 @@ function profileBlockingProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
+function meetupProvider(input: SmartCardInput): SmartCard | null {
+  const nowMs = input.now.getTime();
+  const meetup = [...(input.meetups ?? [])]
+    .filter((item) => item.response === "accepted" && Number.isFinite(Date.parse(item.startsAt)))
+    .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0];
+  if (!meetup) return null;
+
+  const startMs = Date.parse(meetup.startsAt);
+  const deltaMs = startMs - nowMs;
+  if (deltaMs < -2 * 60 * 60_000) return null;
+
+  const startingSoon = deltaMs <= 2 * 60 * 60_000;
+  const title = meetup.title?.trim() || (meetup.sourceDiscoveryId ? "Your new Meetup is set" : "Your Meetup is set");
+  const when = startsInLabel(meetup.startsAt, input.now);
+
+  return {
+    id: startingSoon ? "meetup_starting" : "meetup_upcoming",
+    priority: 0,
+    illustration: "calendar",
+    eyebrow: startingSoon ? "MEETUP SOON" : meetup.sourceDiscoveryId ? "MEET NEW PEOPLE" : "UPCOMING MEETUP",
+    title,
+    subtitle: meetup.placeLabel
+      ? `Meet at ${meetup.placeLabel}. Open the Meetup to stay coordinated.`
+      : "Open the Meetup to stay coordinated.",
+    cta: "Open Meetup",
+    destination: `/meet-up?meetup=${encodeURIComponent(meetup.id)}`,
+    meta: when ?? undefined,
+    metaKind: when ? "time" : undefined,
+    expiresAt: startMs + 2 * 60 * 60_000
+  };
+}
+
 export function smartCardProviders(input: SmartCardInput): readonly SmartCardProvider[] {
   const providers: SmartCardProvider[] = [
-    { id: "safe_arrival", build: () => safeArrivalProvider(input) },
-    { id: "plan_rsvp", build: () => planRsvpProvider(input) },
-    { id: "plan_decision", build: () => planDecisionProvider(input) },
-    { id: "upfor_requests", build: () => upForRequestsProvider(input) },
+    { id: "meetup_starting", build: () => meetupProvider(input)?.id === "meetup_starting" ? meetupProvider(input) : null },
     { id: "muddy_request", build: () => muddyRequestProvider(input) },
-    { id: "plan_starting", build: () => planStartingProvider(input) },
+    { id: "event_linkr_ready", build: () => eventLinkrReadyProvider(input) },
     { id: "event_live", build: () => eventLiveProvider(input) },
     { id: "event_commitment_starting", build: () => eventCommitmentStartingProvider(input) },
-    { id: "plan_chat_decision", build: () => planChatDecisionProvider(input) },
-    { id: "event_linkr_ready", build: () => eventLinkrReadyProvider(input) },
-    { id: "upfor_active_muddy", build: () => upForActiveMuddyProvider(input) },
-    { id: "upfor_opportunity", build: () => upForOpportunityProvider(input) },
-    { id: "upfor_momentum", build: () => upForMomentumProvider(input) },
-    { id: "upfor_accepted", build: () => upForAcceptedProvider(input) },
-    { id: "upfor_plan_chat_ready", build: () => upForPlanChatReadyProvider(input) },
-    { id: "owned_upfor_live", build: () => ownedUpForLiveProvider(input) },
-    { id: "owned_upfor_starting", build: () => ownedUpForStartingProvider(input) },
     { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
-    { id: "event_starting", build: () => eventStartingProvider(input) },
     { id: "linkr_mutual_event", build: () => linkrMutualEventProvider(input) },
     { id: "linkr_mutual", build: () => linkrMutualProvider(input) },
     { id: "muddy_birthday", build: () => muddyBirthdayProvider(input) },
     { id: "birthday", build: () => birthdayProvider(input) },
-    { id: "weekend_plans", build: () => weekendPlansProvider(input) },
-    { id: "upfor_scheduled", build: () => upForScheduledProvider(input) },
-    { id: "journey", build: () => journeyProvider(input) },
-    { id: "journey_complete", build: () => journeyCompleteProvider(input) },
-    { id: "buddy_progress", build: () => buddyProgressProvider(input) },
-    { id: "achievement", build: () => achievementProvider(input) },
+    { id: "event_starting", build: () => eventStartingProvider(input) },
+    { id: "meetup_upcoming", build: () => meetupProvider(input)?.id === "meetup_upcoming" ? meetupProvider(input) : null },
     { id: "suggestions", build: () => suggestionsProvider(input) },
     { id: "profile_blocking", build: () => profileBlockingProvider(input) },
-    { id: "upfor_fallback", build: () => upForFallbackProvider() },
-    ...(input.availability && !input.availability.upfor ? [{ id: "core_fallback" as const, build: (): SmartCard => ({ id: "core_fallback", priority: 0, illustration: "people", eyebrow: "YOUR MUDDIES", title: "Make room for a real connection", subtitle: "Say hello to a Muddy or make a Plan to catch up.", cta: "Open Muddies", destination: "/friends" }) }] : [])
+    { id: "journey_complete", build: () => journeyCompleteProvider(input) },
+    { id: "achievement", build: () => achievementProvider(input) },
+    { id: "journey", build: () => journeyProvider(input) },
+    { id: "buddy_progress", build: () => buddyProgressProvider(input) }
   ];
   if (!input.availability) return providers;
   return providers.map(provider => ({ ...provider, build: () => availableSmartCard(provider.build(), input.availability!) }));
