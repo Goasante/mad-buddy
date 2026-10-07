@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <AuthShell
       title="Welcome back"
-      description="Log in to return to your Muddies, plans, messages, and privacy settings."
+      description="Log in to return to your Muddies, Meetups, messages, and privacy settings."
       footer={
         <>
           New to Mad Buddy?{" "}
