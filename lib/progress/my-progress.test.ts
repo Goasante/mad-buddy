@@ -26,7 +26,8 @@ describe("My Progress projection", () => {
     expect(completedProgressMilestones([
       { milestone: "account_created", reached_at: "2026-07-01T00:00:00.000Z" },
       { milestone: "email_verified", reached_at: "2026-07-02T00:00:00.000Z" },
-      { milestone: "first_muddy_added", reached_at: "2026-07-03T00:00:00.000Z" },\n      { milestone: "first_plan_created", reached_at: "2026-07-04T00:00:00.000Z" }
+      { milestone: "first_muddy_added", reached_at: "2026-07-03T00:00:00.000Z" },
+      { milestone: "first_plan_created", reached_at: "2026-07-04T00:00:00.000Z" }
     ])).toEqual([
       { key: "email_verified", label: "Email verified", reachedAt: "2026-07-02T00:00:00.000Z" },
       { key: "first_muddy_added", label: "First Muddy added", reachedAt: "2026-07-03T00:00:00.000Z" }
