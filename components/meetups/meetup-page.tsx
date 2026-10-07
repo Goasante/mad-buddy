@@ -325,9 +325,9 @@ export function MeetupPage({
           <CreateMeetup
             muddies={muddies}
             saveAction={saveAction}
-            onCreated={(createdWhen) => {
+            onCreated={(createdStart) => {
               setCreating(false);
-              setTab(createdWhen === "now" ? "active" : "mine");
+              setTab(Date.parse(createdStart) - Date.now() <= 2 * 60 * 60_000 ? "active" : "mine");
               void refresh();
             }}
           />
@@ -433,15 +433,14 @@ function CreateMeetup({
   saveAction
 }: {
   muddies: { id: string; name: string }[];
-  onCreated: (when: "now" | "later") => void;
+  onCreated: (startsAtIso: string) => void;
   saveAction: MeetupSaveAction;
 }) {
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<MeetupMode>("come_over");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [place, setPlace] = useState("");
-  const [when, setWhen] = useState<"now" | "later">("now");
-  const [startsAt, setStartsAt] = useState("");
+  const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 30 * 60_000)));
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -481,8 +480,9 @@ function CreateMeetup({
         setMessage("Add the agreed place.");
         return;
       }
-      if (when === "later" && (!startsAt || !Number.isFinite(new Date(startsAt).getTime()))) {
-        setMessage("Choose a date and time.");
+      const scheduled = new Date(startsAt);
+      if (!startsAt || !Number.isFinite(scheduled.getTime()) || scheduled.getTime() <= Date.now() + 60_000) {
+        setMessage("Choose a future date and time.");
         return;
       }
       setStep(3);
@@ -507,8 +507,7 @@ function CreateMeetup({
       participantIds: selectedIds,
       placeLabel: place,
       note,
-      when,
-      ...(when === "later" ? { startsAt: new Date(startsAt).toISOString() } : {}),
+      startsAt: new Date(startsAt).toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       requestKey: requestKey.current
     };
@@ -517,7 +516,7 @@ function CreateMeetup({
       try {
         const result = await saveAction(input, true);
         setMessage(result.message);
-        if (result.ok) onCreated(when);
+        if (result.ok) onCreated(new Date(startsAt).toISOString());
       } catch {
         setMessage("Could not save. Try again; your invitation will not be duplicated.");
       }
@@ -643,47 +642,20 @@ function CreateMeetup({
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-bold">When?</label>
-              <div className="grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetRequestKey();
-                    setWhen("now");
-                  }}
-                  className={[
-                    "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
-                    when === "now" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                  ].join(" ")}
-                >
-                  Now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetRequestKey();
-                    setWhen("later");
-                  }}
-                  className={[
-                    "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
-                    when === "later" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-                  ].join(" ")}
-                >
-                  Later
-                </button>
-              </div>
-
-              {when === "later" && (
-                <input
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(event) => {
-                    resetRequestKey();
-                    setStartsAt(event.target.value);
-                  }}
-                  className={inputClass + " mt-3"}
-                />
-              )}
+              <label className="mb-2 block text-sm font-bold">Date & time</label>
+              <input
+                type="datetime-local"
+                value={startsAt}
+                min={localDateTimeValue(new Date(Date.now() + 60_000))}
+                onChange={(event) => {
+                  resetRequestKey();
+                  setStartsAt(event.target.value);
+                }}
+                className={inputClass}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Meetups are scheduled. The live arrival window opens two hours before this time.
+              </p>
             </div>
 
             <div>
@@ -771,7 +743,7 @@ function CreateMeetup({
                 </p>
                 <p className="flex items-center gap-2">
                   <CalendarClock className="h-4 w-4 text-primary" />
-                  {when === "now" ? "Now" : startsAt ? new Date(startsAt).toLocaleString() : "Later"}
+                  {startsAt ? new Date(startsAt).toLocaleString() : "Choose a date & time"}
                 </p>
                 {!!note && <p className="rounded-xl bg-background px-3 py-2 text-muted-foreground">{note}</p>}
               </div>
