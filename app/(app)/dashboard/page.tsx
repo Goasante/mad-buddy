@@ -197,7 +197,6 @@ export default async function DashboardPage() {
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
       agendaItems={visibleAgendaItems}
       glowColorByFriendId={glowColorByFriendId}
-      safeArrival={null}
       profileReminder={
         user && missingProfileItems.length > 0
           ? { userId: user.id, missingItems: missingProfileItems }
