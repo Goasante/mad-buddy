@@ -174,7 +174,7 @@ describe("the action hierarchy at the moment of proximity", () => {
   it("never offers a Wave the server would refuse", () => {
     const blocked = ctx({ waveAvailable: false });
     expect(blocked.secondary).not.toBe("wave");
-    expect(blocked.secondary).toBe("make_plan");
+    expect(blocked.secondary).toBe("make_meetup");
   });
 
   it("still refuses to wave at somebody who is not nearby", () => {
@@ -201,8 +201,8 @@ describe("the action hierarchy at the moment of proximity", () => {
 
   it("lets a shared Plan outrank the proximity moment", () => {
     const planned = ctx({ hasSharedUpcomingPlan: true, hasExistingConversation: true });
-    expect(planned.primary).toBe("view_plan");
-    expect(planned.secondary).not.toBe("make_plan");
+    expect(planned.primary).toBe("view_meetup");
+    expect(planned.secondary).not.toBe("make_meetup");
   });
 });
 
