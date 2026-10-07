@@ -172,6 +172,7 @@ export function MeetupPage({
   muddies,
   focusedId,
   openNewPeople = false,
+  focusedDiscoveryId,
   discoveryHub,
   discoveryAction,
   saveAction,
@@ -183,6 +184,7 @@ export function MeetupPage({
   muddies: { id: string; name: string }[];
   focusedId?: string;
   openNewPeople?: boolean;
+  focusedDiscoveryId?: string;
   discoveryHub: MeetupDiscoveryHub;
   discoveryAction: MeetupDiscoveryAction;
   saveAction: MeetupSaveAction;
@@ -192,8 +194,8 @@ export function MeetupPage({
   const revalidate = useRevalidate();
   const focusedMeetup = focusedId ? meetups.find((meetup) => meetup.id === focusedId) : undefined;
   const [creating, setCreating] = useState(false);
-  const [newPeopleOpen, setNewPeopleOpen] = useState(openNewPeople);
-  const [newPeopleSafetyOpen, setNewPeopleSafetyOpen] = useState(false);
+  const [newPeopleOpen, setNewPeopleOpen] = useState(false);
+  const [newPeopleSafetyOpen, setNewPeopleSafetyOpen] = useState(openNewPeople);
   const [clockNow, setClockNow] = useState(initialNowMs);
   const [tab, setTab] = useState<"active" | "mine">(() => {
     if (!focusedMeetup || focusedMeetup.status !== "active") return focusedMeetup ? "mine" : "active";
@@ -309,6 +311,7 @@ export function MeetupPage({
         <MeetNewPeople
           hub={discoveryHub}
           nowMs={clockNow}
+          focusedId={focusedDiscoveryId}
           onBack={() => setNewPeopleOpen(false)}
           action={discoveryAction}
           onRefresh={refresh}
