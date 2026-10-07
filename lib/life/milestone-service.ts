@@ -38,7 +38,7 @@ async function loadEvidence(admin: Admin, relationshipIds: readonly string[]) {
         .select("id, resource_key, event_type, occurred_at")
         .eq("resource_type", "relationship")
         .in("resource_key", ids)
-        .in("event_type", ["plan.attended_together", "reconnect.completed"])
+        .in("event_type", ["plan.attended_together", "meetup.attended_together", "reconnect.completed"])
         .order("id", { ascending: true })
         .range(from, from + EVENT_PAGE - 1);
       if (error) throw error;
@@ -48,7 +48,7 @@ async function loadEvidence(admin: Admin, relationshipIds: readonly string[]) {
         if (!evidence) continue;
         const at = Date.parse(row.occurred_at);
         if (!Number.isFinite(at)) continue;
-        if (row.event_type === "plan.attended_together") evidence.planTimes.push(at);
+        if (row.event_type === "plan.attended_together" || row.event_type === "meetup.attended_together") evidence.planTimes.push(at);
         if (row.event_type === "reconnect.completed") evidence.reconnectTimes.push(at);
       }
       if ((data?.length ?? 0) < EVENT_PAGE) break;
