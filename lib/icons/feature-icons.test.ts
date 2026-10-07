@@ -10,6 +10,7 @@ const REQUIRED_KEYS: FeatureIconKey[] = [
   "moments",
   "safeArrival",
   "hangout",
+  "meetups",
   "events",
   "groups",
   "socialize",
