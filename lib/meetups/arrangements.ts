@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { meetupSchema, type MeetupHomeItem } from "@/lib/meetups/rules";
+import { meetupReadyForHome, meetupSchema, type MeetupHomeItem } from "@/lib/meetups/rules";
 import { batchEligibleMuddyIds } from "@/lib/social/permissions";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -17,7 +17,7 @@ export async function loadMeetupHome(admin: Admin, actorId: string): Promise<Mee
   const meetups = await loadMeetups(admin, actorId);
   return meetups.flatMap((m) => {
     const response = m.members.find((p) => p.userId === actorId)?.response;
-    return m.status === "active" && Date.parse(m.startsAt) > Date.now() - 2 * 60 * 60_000 && response === "accepted"
+    return meetupReadyForHome(m, actorId, Date.now())
       ? [{
           id: m.id,
           mode: m.mode,
