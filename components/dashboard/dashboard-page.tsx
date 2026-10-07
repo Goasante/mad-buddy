@@ -588,11 +588,6 @@ export function DashboardPageContent({
 
   function toggleVisibility() {
     const nextGhostMode = !ghostMode;
-    if (action === "view_meetup") {
-      router.push("/meet-up" as Route);
-      return;
-    }
-
     startTransition(async () => {
       const result = await updateVisibilityStatusAction(nextGhostMode ? "ghost" : "visible");
       setStatusMessage(result.ok ? "" : result.message);
