@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { authenticateRealtime, createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { subscribeMeetupRealtime } from "@/lib/platform";
 
 /**
  * Private, payload-minimal Meet Up live invalidation.
  *
- * The database broadcasts only { meetupId } on participant/meetup changes.
- * No meetup row, beacon coordinate, route, distance, or raw location is sent
- * over Realtime. Each signal simply asks the screen to refetch its canonical
- * server projection. Poll/focus refresh remains the fallback.
+ * Realtime transports only a meetup id. Canonical state is always re-read from
+ * the server, so no coordinate, route, distance or raw participant row is
+ * trusted from the socket.
  */
 export function useMeetupRealtime(input: {
   meetupIds: string[];
@@ -23,14 +22,6 @@ export function useMeetupRealtime(input: {
   useEffect(() => {
     if (!input.enabled || !key) return;
 
-    let supabase: ReturnType<typeof createSupabaseBrowserClient> | null = null;
-    try {
-      supabase = createSupabaseBrowserClient();
-    } catch {
-      return;
-    }
-
-    let disposed = false;
     let timer: number | null = null;
     let queued = false;
     const refresh = () => {
@@ -38,25 +29,15 @@ export function useMeetupRealtime(input: {
       queued = true;
       timer = window.setTimeout(() => {
         queued = false;
-        if (!disposed) void onChangeRef.current();
+        void onChangeRef.current();
       }, 180);
     };
 
-    const channels = key.split(",").filter(Boolean).slice(0, 40).map((id) =>
-      supabase!
-        .channel(`meetup:${id}`, { config: { private: true } })
-        .on("broadcast", { event: "changed" }, refresh)
-    );
-
-    void authenticateRealtime(supabase).then(() => {
-      if (disposed) return;
-      for (const channel of channels) channel.subscribe();
-    });
+    const unsubscribe = subscribeMeetupRealtime(key.split(",").filter(Boolean), refresh);
 
     return () => {
-      disposed = true;
       if (timer !== null) window.clearTimeout(timer);
-      for (const channel of channels) void supabase?.removeChannel(channel);
+      unsubscribe();
     };
   }, [input.enabled, key]);
 }
