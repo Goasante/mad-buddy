@@ -36,7 +36,6 @@ import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
 import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
-import { conversationHref } from "@/lib/messaging/open-conversation";
 import { MeetNewPeople, MeetNewPeopleSafety, type MeetupDiscoveryAction } from "@/components/meetups/meet-new-people";
 import { MEETUP_DISCOVERY_CATEGORY_OPTIONS, discoveryCategoryLabel, type MeetupDiscoveryCategory, type MeetupDiscoveryHub } from "@/lib/meetups/discovery";
 
@@ -1139,7 +1138,7 @@ function MeetupCard({
 
             {m.conversationId ? (
               <Link
-                href={conversationHref(m.conversationId)}
+                href={"/messages?conversation=" + m.conversationId}
                 className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-secondary px-4 text-sm font-semibold"
               >
                 <MessageCircle className="h-4 w-4 text-primary" aria-hidden="true" />
