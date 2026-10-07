@@ -193,8 +193,35 @@ export function MeetNewPeople({
       const result = await action(input, false);
       setMessage(result.message);
       if (result.ok) {
+        const command =
+          input && typeof input === "object" && "action" in input && typeof input.action === "string"
+            ? input.action
+            : null;
+        if (selected) {
+          setSelected((current) => {
+            if (!current) return current;
+            if (command === "interest") {
+              return {
+                ...current,
+                myInterestStatus: "pending",
+                interestCount: Math.min(current.interestLimit, current.interestCount + 1)
+              };
+            }
+            if (command === "withdraw") {
+              return {
+                ...current,
+                myInterestStatus: null,
+                interestCount: Math.max(0, current.interestCount - 1)
+              };
+            }
+            return {
+              ...current,
+              conversationId: result.conversationId ?? current.conversationId,
+              meetupId: result.meetupId ?? current.meetupId
+            };
+          });
+        }
         await onRefresh();
-        if (selected) setSelected((current) => current ? { ...current, conversationId: result.conversationId ?? current.conversationId, meetupId: result.meetupId ?? current.meetupId } : null);
       }
     });
   }
