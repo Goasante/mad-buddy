@@ -12,8 +12,11 @@ export const BUDDY_SCORE_RULES = {
   profile_completed: { points: 50, category: "Account trust", label: "Completed profile" },
   account_quarter: { points: 25, category: "Account trust", label: "Account history" },
   friendship_accepted: { points: 20, category: "Connections", label: "Approved Muddy" },
-  plan_completed: { points: 40, category: "Plans", label: "Completed plan" },
-  safe_arrival_completed: { points: 30, category: "Safety", label: "Safe Arrival completed" },
+  // Historical ledger event names stay readable, but retired product names
+  // never surface in My Progress.
+  plan_completed: { points: 40, category: "Earlier activity", label: "Earlier social activity" },
+  safe_arrival_completed: { points: 30, category: "Earlier activity", label: "Earlier safety activity" },
+  meetup_completed: { points: 40, category: "Meetups", label: "Completed Meetup" },
   achievement_earned: { points: 25, category: "Achievements", label: "Achievement earned" }
 } as const;
 
