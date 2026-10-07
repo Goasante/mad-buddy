@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Clock3,
   House,
-  Info,
   LogOut,
   MapPin,
   Navigation,
@@ -24,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   ARRIVAL_LABELS,
+  JOURNEY_LABELS,
   MEETUP_TITLES,
   canUpdateArrival,
   isMeetupHintFresh,
@@ -34,6 +34,7 @@ import {
 } from "@/lib/meetups/rules";
 import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
+import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
 
 export type MeetupSaveAction = (input: unknown, create?: boolean) => Promise<{ ok: boolean; message: string }>;
 
@@ -63,6 +64,48 @@ function compactTimeLabel(iso: string, timezone: string) {
     minute: "2-digit"
   }).format(value);
   return `${date} · ${time}`;
+}
+
+function localDateTimeValue(date: Date) {
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
+
+function journeyGlowClass(state: Meetup["members"][number]["journeyState"], fresh: boolean) {
+  if (state === "here") return "ring-4 ring-emerald-500/45 shadow-[0_0_22px_hsl(var(--primary)/0.28)]";
+  if (state === "at_spot" && fresh) return "ring-4 ring-primary/45 shadow-[0_0_20px_hsl(var(--primary)/0.24)]";
+  if (state === "nearby" && fresh) return "ring-4 ring-primary/30";
+  if (state === "approaching" && fresh) return "ring-2 ring-primary/30";
+  if (state === "on_the_way") return "ring-2 ring-primary/15";
+  return "";
+}
+
+function activityText(item: Meetup["activity"][number], meetup: Meetup) {
+  const who = item.actorName;
+  if (item.event === "created") return `${who} arranged the meetup`;
+  if (item.event === "accepted") return `${who} accepted`;
+  if (item.event === "declined") return `${who} cannot make it`;
+  if (item.event === "on_my_way") return `${who} is on the way`;
+  if (item.event === "late") {
+    const minutes = typeof item.detail.delayMinutes === "number" ? item.detail.delayMinutes : null;
+    return minutes ? `${who} is running about ${minutes} min late` : `${who} is running late`;
+  }
+  if (item.event === "here") return `${who} is here`;
+  if (item.event === "left") return `${who} left`;
+  if (item.event === "met") return `${who} confirmed meeting`;
+  if (item.event === "beacon_set") return `${who} set the Meetup Glow point`;
+  if (item.event === "beacon_locked") return `${who} confirmed the Meetup Glow point`;
+  if (item.event === "beacon_reset") return `${who} reset the Meetup Glow point`;
+  if (item.event === "home_started") return `${who} is heading home`;
+  if (item.event === "home_arrived") return `${who} checked in at home`;
+  if (item.event === "cancelled") return "Meetup cancelled";
+  if (item.event === "ended") return "Meetup ended";
+  if (item.event === "suggested") return `${who} suggested another time`;
+  if (item.event === "rescheduled") {
+    const startsAt = typeof item.detail.startsAt === "string" ? item.detail.startsAt : null;
+    return startsAt ? `${who} moved the meetup to ${compactTimeLabel(startsAt, meetup.timezone)}` : `${who} changed the meetup time`;
+  }
+  return null;
 }
 
 function initials(name: string) {
@@ -159,18 +202,26 @@ export function MeetupPage({
 
   useFeedRefresh(refresh);
 
-  // "Active" is intentionally a LIVE state, not a synonym for every row whose
-  // database lifecycle is still open. A future meetup belongs in Your Meetups
-  // until its two-hour arrival window begins. That keeps the two tabs distinct.
-  const active = meetups.filter((meetup) => {
-    if (meetup.status !== "active") return false;
+  const safeHome = meetups.filter((meetup) => {
+    const mine = meetup.members.find((person) => person.userId === viewerId);
+    return mine?.homeStartedAt && !mine.homeArrivedAt;
+  });
+  const normalMeetups = meetups.filter((meetup) => meetup.status === "active");
+  // "Active" is the two-hour arrival/check-in window. Future arrangements stay
+  // under Your Meetups until that window opens; finished meetups disappear.
+  const active = normalMeetups.filter((meetup) => {
     const mine = meetup.members.find((person) => person.userId === viewerId);
     return mine?.response !== "declined" && meetupPhase(meetup, clockNow) !== "upcoming";
   });
   const activeIds = new Set(active.map((meetup) => meetup.id));
-  const upcoming = meetups.filter((meetup) => meetup.status === "active" && !activeIds.has(meetup.id));
-  const history = meetups.filter((meetup) => meetup.status !== "active");
-  const yourMeetupsCount = upcoming.length + history.length;
+  const upcoming = normalMeetups.filter((meetup) => !activeIds.has(meetup.id));
+  const yourMeetupsCount = upcoming.length;
+
+  useMeetupRealtime({
+    meetupIds: normalMeetups.map((meetup) => meetup.id),
+    enabled: normalMeetups.length > 0,
+    onChange: refresh
+  });
 
   const controls = (
     <div className="mx-auto w-full max-w-xl px-3 pb-3 pt-2 sm:px-4">
@@ -260,6 +311,16 @@ export function MeetupPage({
             : "pt-4"
         ].join(" ")}
       >
+        {!creating && safeHome.map((meetup) => (
+          <SafeHomeCard
+            key={`home-${meetup.id}`}
+            meetup={meetup}
+            viewerId={viewerId}
+            saveAction={saveAction}
+            refreshAction={refresh}
+          />
+        ))}
+
         {creating ? (
           <CreateMeetup
             muddies={muddies}
@@ -304,58 +365,32 @@ export function MeetupPage({
 
             {tab === "mine" && (
               <section className="space-y-6">
-                {!upcoming.length && !history.length ? (
+                {!upcoming.length ? (
                   <EmptyMeetups
                     onArrange={() => setCreating(true)}
-                    title="No upcoming or past meetups"
-                    body="Anything happening now stays under Active. Future and finished meetups live here."
+                    title="No upcoming meetups"
+                    body="Finished and expired meetups leave this screen automatically."
                   />
                 ) : (
-                  <>
-                    {!!upcoming.length && (
-                      <div>
-                        <div className="mb-3 flex items-center justify-between px-1">
-                          <h2 className="text-sm font-bold">Upcoming</h2>
-                          <span className="text-xs text-muted-foreground">{upcoming.length}</span>
-                        </div>
-                        <div className="space-y-3">
-                          {upcoming.map((meetup) => (
-                            <MeetupCard
-                              key={meetup.id}
-                              meetup={meetup}
-                              viewerId={viewerId}
-                              focused={meetup.id === focusedId}
-                              initialExpanded={meetup.id === focusedId}
-                              saveAction={saveAction}
-                              refreshAction={refresh}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {!!history.length && (
-                      <div>
-                        <div className="mb-3 flex items-center justify-between px-1">
-                          <h2 className="text-sm font-bold">Past & cancelled</h2>
-                          <span className="text-xs text-muted-foreground">{history.length}</span>
-                        </div>
-                        <div className="space-y-3">
-                          {history.map((meetup) => (
-                            <MeetupCard
-                              key={meetup.id}
-                              meetup={meetup}
-                              viewerId={viewerId}
-                              focused={meetup.id === focusedId}
-                              initialExpanded={meetup.id === focusedId}
-                              saveAction={saveAction}
-                              refreshAction={refresh}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  <div>
+                    <div className="mb-3 flex items-center justify-between px-1">
+                      <h2 className="text-sm font-bold">Upcoming</h2>
+                      <span className="text-xs text-muted-foreground">{upcoming.length}</span>
+                    </div>
+                    <div className="space-y-3">
+                      {upcoming.map((meetup) => (
+                        <MeetupCard
+                          key={meetup.id}
+                          meetup={meetup}
+                          viewerId={viewerId}
+                          focused={meetup.id === focusedId}
+                          initialExpanded={meetup.id === focusedId}
+                          saveAction={saveAction}
+                          refreshAction={refresh}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 )}
               </section>
             )}
