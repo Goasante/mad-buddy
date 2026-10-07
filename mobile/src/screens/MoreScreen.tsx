@@ -33,7 +33,7 @@ const sections: { title: string; items: Entry[] }[] = [
       { label: "Messages", description: "Chat with your Muddies", icon: MessageCircle, to: "/messages" },
       { label: "Events", description: "Plan bigger get-togethers", icon: CalendarHeart, to: "/events" },
       { label: "Socialize", description: "Discover people nearby", icon: Compass, to: "/socialize" },
-      { label: "Meet Up", description: "Invite Muddies and agree a time", icon: ShieldCheck, to: "/meet-up" }
+      { label: "Meetups", description: "Invite Muddies or meet new people nearby", icon: ShieldCheck, to: "/meet-up" }
     ]
   }
 ];
