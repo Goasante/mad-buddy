@@ -4,11 +4,12 @@ export const OPTIONAL_FEATURES = {
   linkr: { flag: "socialize", title: "Linkr", href: "/linkr", headline: "New connections are coming.", description: "Meet people open to connecting nearby." },
   events: { flag: "events", title: "Events", href: "/events", headline: "More ways to come together.", description: "Discover experiences worth sharing." },
   conference: { flag: "conference", title: "Conference", href: "/conference", headline: "Your neighbourhood has a voice.", description: "Join the conversations happening around you." },
-  safe_arrival: { flag: "safe_arrival", title: "Meet Up", href: "/meet-up", headline: "Make it happen, together.", description: "Invite Muddies, agree a time, and stay in touch as you meet." }
+  meet_up: { flag: "meet_up", title: "Meet Up", href: "/meet-up", headline: "Make it happen, together.", description: "Invite Muddies or meet new people nearby, agree a time, and stay in touch as you meet." },
+  safe_arrival: { flag: "safe_arrival", title: "Safe Arrival", href: "/safe-arrival", headline: "Travel reassurance is paused.", description: "Legacy Safe Arrival journeys remain separate from Meet Up." }
 } as const;
 export type OptionalFeature = keyof typeof OPTIONAL_FEATURES;
 export type FeatureAvailability = Record<OptionalFeature, boolean>;
-export const LOCKED_FEATURES: FeatureAvailability = { upfor: false, linkr: false, events: false, conference: false, safe_arrival: false };
+export const LOCKED_FEATURES: FeatureAvailability = { upfor: false, linkr: false, events: false, conference: false, meet_up: false, safe_arrival: false };
 
 export function featureForHref(href: string): OptionalFeature | null {
   if (!href.startsWith("/") || href.startsWith("//")) return null;
@@ -27,6 +28,6 @@ export function featureForNotification(type: string): OptionalFeature | null {
   if (/^(event|event_room):/.test(type)) return "events";
   if (/^(linkr|socialize)[_:]/.test(type)) return "linkr";
   if (/^conference[_:]/.test(type)) return "conference";
-  if (/^(meetup|meetup_discovery):/.test(type)) return "safe_arrival";
+  if (/^(meetup|meetup_discovery):/.test(type)) return "meet_up";
   return null;
 }
