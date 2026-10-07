@@ -95,7 +95,6 @@ export const SMART_CARD_IDS = [
   "achievement",
   "journey",
   "buddy_progress",
-  "upfor_fallback",
   "meetup_fallback",
   "core_fallback"
 ] as const;
