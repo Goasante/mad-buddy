@@ -245,13 +245,13 @@ describe("Moments waits for the relationship loop", () => {
   });
 });
 
-describe("UpFor is not taught before Glow", () => {
+describe("Meetups is not promoted before Glow", () => {
   it("is hidden while the first Glow step is outstanding", () => {
     /* "Let your Muddies know you are free right now" needs somebody able to
      * see you. Teaching it here explains a feature whose value depends on the
      * step still being asked for. */
     const early = at({ acknowledgingFirstMuddy: true, activationState: "visibility_off" });
-    expect(earlyActivationHiddenActionHrefs(early)).toContain("/hangout-mode");
+    expect(earlyActivationHiddenActionHrefs(early)).toContain("/meet-up");
   });
 
   it("keeps the actions that grow the circle", () => {
@@ -274,7 +274,7 @@ describe("UpFor is not taught before Glow", () => {
   it("points at the href the rail actually links to", () => {
     // A stale href would silently filter nothing.
     const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
-    expect(home).toContain('href: "/hangout-mode", label: "UpFor"');
+    expect(home).toContain('href: "/meet-up", label: "Meetups"');
   });
 });
 
