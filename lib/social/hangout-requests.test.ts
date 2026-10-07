@@ -52,11 +52,11 @@ describe("notification destination for a hangout request", () => {
     const destination = resolveNotificationDestination("hangout:3f8c1e2a-0000-4000-8000-000000000000");
     expect(destination).toEqual({
       type: "internal",
-      href: "/hangout-mode?hangout=3f8c1e2a-0000-4000-8000-000000000000"
+      href: "/meet-up"
     });
   });
 
   it("still resolves the legacy suffix", () => {
-    expect(resolveNotificationDestination("hangout:request")).toEqual({ type: "internal", href: "/hangout-mode" });
+    expect(resolveNotificationDestination("hangout:request")).toEqual({ type: "internal", href: "/meet-up" });
   });
 });
