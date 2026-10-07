@@ -43,6 +43,12 @@ create table if not exists public.meetup_activity (
   created_at timestamptz not null default now()
 );
 create index if not exists meetup_activity_meetup_idx on public.meetup_activity(meetup_id,created_at desc);
+create index if not exists meetup_activity_actor_idx on public.meetup_activity(actor_id) where actor_id is not null;
+create index if not exists meetups_host_idx on public.meetups(host_id) where host_id is not null;
+create index if not exists meetups_beacon_set_by_idx on public.meetups(beacon_set_by) where beacon_set_by is not null;
+create index if not exists meetup_outbox_meetup_idx on public.meetup_notification_outbox(meetup_id);
+create index if not exists meetup_outbox_recipient_idx on public.meetup_notification_outbox(recipient_id);
+create index if not exists meetup_outbox_sender_idx on public.meetup_notification_outbox(sender_id);
 alter table public.meetup_activity enable row level security;
 revoke all on public.meetup_activity from public,anon,authenticated;
 grant all on public.meetup_activity to service_role;
@@ -680,11 +686,17 @@ language sql stable security invoker set search_path = '' as $$
   )
 $$;
 
--- Private, payload-minimal Realtime invalidation. The browser never receives
--- meetup rows or raw beacon coordinates; it only gets a "changed" signal and
--- refetches the canonical server projection.
-create or replace function public.meetup_realtime_allowed(p_topic text) returns boolean
-language sql stable security definer set search_path = '' as $$
+-- Private, payload-minimal Realtime invalidation. The authorization helper
+-- lives outside the exposed public schema so it cannot become a REST RPC.
+create schema if not exists private;
+revoke all on schema private from public,anon;
+grant usage on schema private to authenticated;
+
+drop policy if exists "meetup participants can receive broadcasts" on realtime.messages;
+drop function if exists public.meetup_realtime_allowed(text);
+
+create or replace function private.meetup_realtime_allowed(p_topic text) returns boolean
+language sql stable security definer set search_path = '' as $
   select (select auth.uid()) is not null
     and split_part(p_topic,':',1)='meetup'
     and exists(
@@ -692,18 +704,17 @@ language sql stable security definer set search_path = '' as $$
       where p.user_id=(select auth.uid())
         and p.meetup_id::text=split_part(p_topic,':',2)
     )
-$$;
-revoke all on function public.meetup_realtime_allowed(text) from public,anon,authenticated;
-grant execute on function public.meetup_realtime_allowed(text) to authenticated;
+$;
+revoke all on function private.meetup_realtime_allowed(text) from public,anon,authenticated;
+grant execute on function private.meetup_realtime_allowed(text) to authenticated;
 
-drop policy if exists "meetup participants can receive broadcasts" on realtime.messages;
 create policy "meetup participants can receive broadcasts"
 on realtime.messages
 for select
 to authenticated
 using (
   realtime.messages.extension='broadcast'
-  and public.meetup_realtime_allowed((select realtime.topic()))
+  and private.meetup_realtime_allowed((select realtime.topic()))
 );
 
 create or replace function public.broadcast_meetup_row_change() returns trigger
