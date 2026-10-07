@@ -175,7 +175,6 @@ const GATED_SURFACES: { feature: string; file: string; via: "query" | "helper" }
   { feature: "messaging eligibility", file: "lib/messaging/service.ts", via: "helper" },
   { feature: "Socialize eligibility", file: "app/(app)/social-actions.ts", via: "query" },
   { feature: "friend lists", file: "app/(app)/friends/page.tsx", via: "query" },
-  { feature: "Plans invitee list", file: "app/(app)/plans/page.tsx", via: "query" },
   /* Moved with C2. The page itself no longer reads friendships: that query fed
      the legacy owner hero's "visible to N Muddies" line, and the hero is gone.
      The friendship gate for this surface lives in the discovery action, which
