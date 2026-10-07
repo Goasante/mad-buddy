@@ -21,7 +21,7 @@ set name = case code
       when 'plan_regular' then 'Meetup Regular'
       when 'open_to_plans' then 'Open to Connect'
       when 'good_check_in' then 'Meetup Check-In'
-      when 'safe_traveller' then 'Check-In Regular'
+      when 'safe_traveller' then 'Meetup Check-In Regular'
       when 'trusted_contact' then 'Safety Contact'
       when 'reliable_watcher' then 'Reliable Buddy'
       else name
@@ -32,13 +32,13 @@ set name = case code
       when 'plan_regular' then 'You completed 10 Meetups.'
       when 'open_to_plans' then 'You opened nearby discovery for the first time.'
       when 'good_check_in' then 'You completed your first Meetup home check-in.'
-      when 'safe_traveller' then 'Historical safety check-in achievement.'
+      when 'safe_traveller' then 'You completed 5 Meetup safety check-ins.'
       when 'trusted_contact' then 'Historical safety-contact achievement.'
       when 'reliable_watcher' then 'Historical safety check-in achievement.'
       else description
     end,
     is_active = case
-      when code in ('safe_traveller','trusted_contact','reliable_watcher') then false
+      when code in ('trusted_contact','reliable_watcher') then false
       else is_active
     end,
     updated_at = now()
