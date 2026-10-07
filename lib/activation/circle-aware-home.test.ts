@@ -148,7 +148,7 @@ describe("stronger signals still win", () => {
       muddy("planned", { hasSharedUpcomingPlan: true, conversationState: "established" })
     ]);
     expect(focus?.muddy.id).toBe("planned");
-    expect(focus?.plan.primary).toBe("view_plan");
+    expect(focus?.plan.primary).toBe("view_meetup");
   });
 
   it("stale location does not change who is chosen", () => {
