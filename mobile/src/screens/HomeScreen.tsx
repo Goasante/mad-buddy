@@ -24,17 +24,12 @@ type NearbyFriend = {
   glow_strength: number;
   confidence?: ConfidenceLevel;
 };
-type Plan = { id: string; title: string; startAt: string | null; placeText: string | null; status: string; goingCount: number; myRsvp: string };
 type Activity = { id: string; type: string; title: string; message: string; created_at: string };
-type OpenToPlan = { id: string; ownerName: string; activityType: string; message: string | null; broadAreaText: string | null };
 
 const quickActions: { label: string; feature: FeatureIconKey; to: string }[] = [
-  { label: "Hangout", feature: "hangout", to: "/socialize" },
-  { label: "Meet Up", feature: "safeArrival", to: "/meet-up" },
   { label: "Events", feature: "events", to: "/events" },
   { label: "Socialize", feature: "socialize", to: "/socialize" },
   { label: "Invites", feature: "invites", to: "/muddies" },
-  { label: "Reminders", feature: "reminders", to: "/plans" },
   { label: "Focus", feature: "focus", to: "/settings" }
 ];
 
@@ -61,9 +56,7 @@ export function HomeScreen() {
   const [loadingNearby, setLoadingNearby] = useState(true);
   const [nearbyMessage, setNearbyMessage] = useState("");
   const [sharingLocation, setSharingLocation] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
-  const [openToPlans, setOpenToPlans] = useState<OpenToPlan[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -91,14 +84,8 @@ export function HomeScreen() {
 
   useEffect(() => {
     void loadNearby();
-    void api.get<{ plans: Plan[] }>("/api/plans").then((r) => {
-      if (r.ok) setPlans(r.data.plans.filter((p) => p.status !== "cancelled" && p.status !== "completed").sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? "")).slice(0, 3));
-    });
     void api.get<{ notifications: Activity[] }>("/api/notifications?limit=5").then((r) => {
       if (r.ok) setActivity(r.data.notifications);
-    });
-    void api.get<{ openToPlans: OpenToPlan[] }>("/api/hangouts/open").then((r) => {
-      if (r.ok) setOpenToPlans(r.data.openToPlans);
     });
   }, [loadNearby]);
 
@@ -267,39 +254,6 @@ export function HomeScreen() {
         </div>
       </section>
 
-      {/* Upcoming plans */}
-      {plans.length > 0 ? (
-        <section className="mt-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">Upcoming plans</h2>
-            <button type="button" onClick={() => navigate("/plans")} className="text-sm font-medium text-primary hover:underline">View all</button>
-          </div>
-          <div className="rounded-2xl border border-border bg-card/40 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-lg font-semibold">{plans[0].title}</p>
-              <span className="shrink-0 rounded-full border border-border px-2.5 py-0.5 text-xs capitalize text-muted-foreground">
-                {plans[0].myRsvp === "going" ? "Going" : plans[0].myRsvp}
-              </span>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {plans[0].startAt ? new Date(plans[0].startAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Anytime"}
-            </p>
-            {plans[0].placeText ? <p className="text-sm text-muted-foreground">{plans[0].placeText}</p> : null}
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex -space-x-2">
-                  {Array.from({ length: Math.min(3, plans[0].goingCount) }).map((_, i) => (
-                    <span key={i} className="h-7 w-7 rounded-full border-2 border-background bg-secondary" />
-                  ))}
-                </div>
-                <span className="text-xs text-muted-foreground">{plans[0].goingCount} going</span>
-              </div>
-              <Button size="sm" onClick={() => navigate("/plans")}>View plan</Button>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       {/* Recent activity */}
       {activity.length > 0 ? (
         <section className="mt-6">
@@ -324,37 +278,6 @@ export function HomeScreen() {
         </section>
       ) : null}
 
-      {/* Muddies open to plans */}
-      <section className="mt-6">
-        <h2 className="mb-3 text-lg font-semibold tracking-tight">Muddies open to plans</h2>
-        {openToPlans.length === 0 ? (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card/40 p-4">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">No Muddies are available right now</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Check again later or start a new plan.</p>
-            </div>
-            <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate("/plans")}>New plan</Button>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {openToPlans.map((item) => (
-              <li key={item.id} className="flex items-center gap-3 rounded-xl border border-border bg-card/40 p-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold">
-                  {item.ownerName.slice(0, 1).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{item.ownerName}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {item.activityType.replace(/_/g, " ")}
-                    {item.broadAreaText ? ` · ${item.broadAreaText}` : ""}
-                  </p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => navigate("/plans")}>Invite</Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }
