@@ -289,7 +289,6 @@ type SettingsLinkRowProps = {
     | "/settings/privacy-setup"
     | "/settings/engagement"
     | "/settings/communication"
-    | "/hangout-mode"
     | "/badges"
     | "/buddy-score"
     | "/settings/sessions"
@@ -300,7 +299,6 @@ type SettingsLinkRowProps = {
     | "/settings/walkthrough"
     | "/help"
     | "/invite"
-    | "/safe-arrival"
     | "/safety-center";
 };
 
