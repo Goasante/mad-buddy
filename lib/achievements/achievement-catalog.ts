@@ -43,7 +43,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   { id: "first_plan", name: "First Meetup", description: "You completed your first Meetup.", iconPath: `${BADGE_DIR}/First Plan.png`, category: "connection", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("First Meetup") },
   { id: "plan_maker", name: "Meetup Maker", description: "You completed 5 Meetups.", iconPath: `${BADGE_DIR}/Plan Maker.png`, category: "connection", criteria: { type: "count", threshold: 5 }, notification: unlocked("Meetup Maker") },
   { id: "plan_regular", name: "Meetup Regular", description: "You completed 10 Meetups.", iconPath: `${BADGE_DIR}/Plan Regular.png`, category: "connection", criteria: { type: "count", threshold: 10 }, notification: unlocked("Meetup Regular") },
-  { id: "open_to_plans", name: "Open to Meetups", description: "You opened nearby discovery for the first time.", iconPath: `${BADGE_DIR}/Open to Plans.png`, category: "connection", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("Open to Meetups") },
+  { id: "open_to_plans", name: "Open to Connect", description: "You opened nearby discovery for the first time.", iconPath: `${BADGE_DIR}/Open to Plans.png`, category: "connection", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("Open to Connect") },
 
   { id: "first_moment", name: "First Moment", description: "You shared your first Moment.", iconPath: `${BADGE_DIR}/First Moment.png`, category: "community", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("First Moment") },
   { id: "moment_maker", name: "Moment Maker", description: "You shared 10 Moments.", iconPath: `${BADGE_DIR}/Moment Maker.png`, category: "community", criteria: { type: "count", threshold: 10 }, notification: unlocked("Moment Maker") },
@@ -59,7 +59,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   { id: "circle_builder", name: "Circle Builder", description: "You created 3 circles.", iconPath: `${BADGE_DIR}/Circle Builder.png`, category: "balance", criteria: { type: "count", threshold: 3 }, notification: unlocked("Circle Builder") },
   { id: "balanced_buddy", name: "Balanced Buddy", description: "You took part across 3 different circles in a month.", iconPath: `${BADGE_DIR}/Balanced Buddy.png`, category: "balance", criteria: { type: "distinct_count", threshold: 3 }, notification: unlocked("Balanced Buddy") },
 
-  { id: "good_check_in", name: "Good Check-In", description: "You completed a Meetup safety check-in.", iconPath: `${BADGE_DIR}/Good Check-In.png`, category: "safety", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("Good Check-In") },
+  { id: "good_check_in", name: "Meetup Check-In", description: "You completed your first Meetup home check-in.", iconPath: `${BADGE_DIR}/Good Check-In.png`, category: "safety", criteria: { type: "first_time", threshold: 1 }, notification: unlocked("Meetup Check-In") },
   { id: "safe_traveller", name: "Safe Traveller", description: "You completed 5 Meetup safety check-ins.", iconPath: `${BADGE_DIR}/Safe Traveller.png`, category: "safety", criteria: { type: "count", threshold: 5 }, notification: unlocked("Safety Regular") },
 
   // These belong to the retired standalone Safe Arrival workflow. Keep their
