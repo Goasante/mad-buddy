@@ -21,6 +21,8 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
  */
 export async function grantAchievement(admin: Admin, userId: string, code: string): Promise<void> {
   try {
+    const definition = ACHIEVEMENT_BY_CODE.get(code);
+    if (!definition || definition.active === false) return;
     const { data: prefs } = await admin
       .from("engagement_preferences")
       .select("achievements_enabled")
@@ -39,7 +41,6 @@ export async function grantAchievement(admin: Admin, userId: string, code: strin
       .select("id");
 
     if (inserted && inserted.length > 0) {
-      const definition = ACHIEVEMENT_BY_CODE.get(code);
       if (definition) {
         // A real in-app notification for the user's own milestone. It opens the
         // Achievements page via the "achievement:" destination convention. Sent
