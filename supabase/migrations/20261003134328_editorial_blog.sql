@@ -44,7 +44,7 @@ begin
     coalesce(length(p_draft->>'title'), 0) < 3 or coalesce(length(p_draft->>'description'), 0) < 40
     or coalesce(length(p_draft->>'body'), 0) < 300 or coalesce(length(p_draft->>'audience'), 0) = 0
     or coalesce(length(p_draft->>'searchIntent'), 0) = 0
-    or coalesce(p_draft->>'feature', '') not in ('linkr', 'upfor', 'plans', 'muddies')
+    or coalesce(p_draft->>'feature', '') not in ('linkr', 'meetups', 'muddies')
   ) then raise exception 'Article is not ready to publish'; end if;
   if p_id is null then
     if p_intent <> 'save' then raise exception 'Save the draft first'; end if;
