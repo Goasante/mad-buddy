@@ -8,7 +8,6 @@ import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
-  CalendarCheck2,
   CircleDollarSign,
   Compass,
   Gauge,
