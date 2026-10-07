@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { meetupDiscoveryCategorySchema } from "@/lib/meetups/discovery";
 
 export const meetupModeSchema = z.enum(["come_over", "coming_to", "meet_somewhere"]);
 export const arrivalSchema = z.enum(["not_started", "on_my_way", "late", "here", "left"]);
@@ -10,6 +11,7 @@ export const meetupCreateSchema = z.object({
   participantIds: z.array(z.string().uuid()).min(1).max(49),
   placeLabel: z.string().trim().min(1).max(120),
   note: z.string().max(200).default(""),
+  category: meetupDiscoveryCategorySchema.default("anything"),
   startsAt: z.string().datetime({ offset: true }),
   timezone: z.string().min(1).max(60),
   requestKey: z.string().uuid()
@@ -72,6 +74,9 @@ export const meetupSchema = z.object({
   mode: meetupModeSchema,
   placeLabel: z.string(),
   note: z.string(),
+  title: z.string().nullable().optional(),
+  category: meetupDiscoveryCategorySchema.default("anything"),
+  sourceDiscoveryId: z.string().uuid().nullable().optional(),
   startsAt: z.string(),
   expiresAt: z.string(),
   timezone: z.string(),
@@ -88,7 +93,7 @@ export type MeetupMode = z.infer<typeof meetupModeSchema>;
 export type MeetupCreate = z.infer<typeof meetupCreateSchema>;
 export type MeetupUpdate = z.infer<typeof meetupUpdateSchema>;
 export type MeetupJourneyState = z.infer<typeof journeyStateSchema>;
-export type MeetupHomeItem = Pick<Meetup, "id" | "mode" | "startsAt" | "timezone" | "placeLabel"> & {
+export type MeetupHomeItem = Pick<Meetup, "id" | "mode" | "startsAt" | "timezone" | "placeLabel" | "title" | "category" | "sourceDiscoveryId"> & {
   response: "invited" | "accepted";
 };
 
