@@ -27,6 +27,6 @@ export function featureForNotification(type: string): OptionalFeature | null {
   if (/^(event|event_room):/.test(type)) return "events";
   if (/^(linkr|socialize)[_:]/.test(type)) return "linkr";
   if (/^conference[_:]/.test(type)) return "conference";
-  if (/^meetup:/.test(type)) return "safe_arrival";
+  if (/^(meetup|meetup_discovery):/.test(type)) return "safe_arrival";
   return null;
 }
