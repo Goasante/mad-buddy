@@ -21,7 +21,7 @@ export async function processMeetupNotifications(admin: ReturnType<typeof create
   const senderNames = new Map(
     (senderProfiles.data ?? []).map((profile) => [
       profile.user_id,
-      profile.full_name || profile.username || "A Muddy"
+      profile.full_name || profile.username || "Someone"
     ])
   );
 
@@ -31,7 +31,7 @@ export async function processMeetupNotifications(admin: ReturnType<typeof create
       const permitted = await admin.rpc("meetup_notification_allowed", { p_id: row.id, p_lease_id: row.lease_id });
       if (permitted.error) throw permitted.error;
       if (permitted.data && MEETUP_NOTIFICATION_COPY[row.event]) {
-        const senderName = senderNames.get(row.sender_id) ?? "A Muddy";
+        const senderName = senderNames.get(row.sender_id) ?? "Someone";
         const baseMessage = MEETUP_NOTIFICATION_COPY[row.event];
         const message = baseMessage.startsWith("A Muddy")
           ? senderName + baseMessage.slice("A Muddy".length)
