@@ -23,7 +23,7 @@ describe("privacy-safe push payloads", () => {
       title: "Safe Arrival request",
       message: "Heading to a private destination at 5.6037,-0.1870"
     });
-    expect(payload.body).toBe("There is an update to a Safe Arrival session.");
+    expect(payload.body).toBe("There is an update related to a Meetup.");
     expect(JSON.stringify(payload)).not.toMatch(/5\.6037|-0\.1870|private destination/i);
   });
 
