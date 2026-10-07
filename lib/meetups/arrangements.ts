@@ -29,7 +29,7 @@ export async function loadMeetupHome(admin: Admin, actorId: string): Promise<Mee
           sourceDiscoveryId: m.sourceDiscoveryId,
           response
         }] : [];
-  }).slice(0, 3);
+  }).slice(0, 8);
 }
 
 export async function loadMeetupMuddies(admin: Admin, actorId: string) {
