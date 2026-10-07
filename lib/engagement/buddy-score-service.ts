@@ -155,3 +155,13 @@ export async function recordConfirmedModerationPenalty(admin: Admin, input: { us
   }, { onConflict: "user_id,event_type,source_reference", ignoreDuplicates: true });
   return { recorded: !error, reason: error ? "write_failed" as const : "confirmed_outcome" as const };
 }
+
+
+/** Record one completed Meetup immediately; reconciliation later is idempotent. */
+export async function recordMeetupCompletionScore(admin: Admin, userId: string, meetupId: string): Promise<void> {
+  const item = candidate("meetup_completed", `meetup:${meetupId}`);
+  await admin.from("buddy_score_ledger").upsert(
+    { user_id: userId, ...item, rule_version: BUDDY_SCORE_RULE_VERSION },
+    { onConflict: "user_id,event_type,source_reference", ignoreDuplicates: true }
+  );
+}
