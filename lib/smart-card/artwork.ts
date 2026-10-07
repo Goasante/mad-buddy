@@ -63,7 +63,6 @@ export const SMART_CARD_SCENES = {
   offline_status: 55,
   access_status: 56,
   suggestions: 57,
-  upfor_fallback: 58,
 } as const satisfies Record<ApprovedSmartCardStateId, number>;
 
 /** Reviewed transparent scenes. Characters illustrate general social moments;
@@ -129,7 +128,6 @@ export const SMART_CARD_ARTWORK_FILES = {
   offline_status: "55-waiting-for-connection.webp",
   access_status: "56-your-access.webp",
   suggestions: "57-people-to-connect.webp",
-  upfor_fallback: "58-upfor-fallback.webp",
 } as const satisfies Record<ApprovedSmartCardStateId, string>;
 
 type ArtworkCard = { id: SmartCard["id"] | ApprovedSmartCardStateId; eyebrow?: string };
