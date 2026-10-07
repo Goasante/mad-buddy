@@ -194,7 +194,7 @@ describe("misconfigured environment", () => {
   it("reports unavailable, never a confident no_muddies with status ok", async () => {
     envConfigured = false;
     const projection = await loadActivationProjection(USER);
-    expect(projection.status).toBe("ok");
+    expect(projection.status).toBe("unavailable");
     // The shape is still the safe fallback -- callers that ignore `status`
     // (there should be none left) at least still get the least-harm answer.
     expect(projection.state).toBe("no_muddies");
