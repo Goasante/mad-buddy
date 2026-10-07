@@ -28,7 +28,7 @@ async function loadOwnActivity(
   // byte-identical filters, so on a Profile request they are resolved once and
   // passed in. Plans are deliberately NOT shared: Identity counts completed
   // plans while Journey counts non-draft ones -- same table, different fact.
-  const [friendships, moments, createdPlans, participations, safeArrivals] = await Promise.all([
+  const [friendships, moments, createdPlans, participations, safeArrivals, meetupParticipations] = await Promise.all([
     shared.muddyCount !== undefined
       ? Promise.resolve({ count: shared.muddyCount })
       : admin.from("friendships").select("id", { count: "exact", head: true }).or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
@@ -39,7 +39,8 @@ async function loadOwnActivity(
     admin.from("plan_participants").select("plan_id").eq("user_id", userId).eq("rsvp_status", "going"),
     shared.completedSafeArrivalCount !== undefined
       ? Promise.resolve({ count: shared.completedSafeArrivalCount })
-      : admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed")
+      : admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
+    admin.from("meetup_participants").select("meetup_id").eq("user_id", userId).eq("response", "accepted")
   ]);
 
   const participatingPlanIds = [...new Set((participations.data ?? []).map((row) => row.plan_id))];
@@ -51,11 +52,18 @@ async function loadOwnActivity(
     ...(completedParticipating.data ?? []).map((row) => row.id)
   ]);
 
+  const participatingMeetupIds = [...new Set((meetupParticipations.data ?? []).map((row) => row.meetup_id))];
+  const endedMeetups = participatingMeetupIds.length
+    ? await admin.from("meetups").select("id").in("id", participatingMeetupIds).eq("status", "ended")
+    : { data: [] };
+  const completedMeetupIds = new Set((endedMeetups.data ?? []).map((row) => row.id));
+
   return {
     muddyCount: friendships.count ?? 0,
     momentCount: moments.count ?? 0,
     completedPlanCount: completedPlanIds.size,
-    completedSafeArrivalCount: safeArrivals.count ?? 0
+    completedSafeArrivalCount: safeArrivals.count ?? 0,
+    completedMeetupCount: completedMeetupIds.size
   };
 }
 
