@@ -22,7 +22,7 @@
  * This matters more than it looks. An earlier draft mapped /linkr, /discover
  * and /hangout-mode onto /socialize, and /safety-center onto /safety, with the
  * reasoning "the closest equivalent rather than a dead route". That is exactly
- * backwards. Linkr and UpFor do not exist in the mobile app; sending someone
+ * backwards. Linkr does not yet exist in the mobile app; sending someone
  * who tapped "Linkr" to Socialize does not give them Linkr, it teaches them
  * that Linkr looks like Socialize -- and it hides the gap from us too, which
  * defeats the point of this adapter. A route that lands on the SPA's "*"
@@ -39,11 +39,12 @@ const EXACT_MAP: Readonly<Record<string, string>> = {
   "/friends": "/muddies",
   // Same surface. Web /meeting-pings is the SPA's /pings.
   "/meeting-pings": "/pings",
-  // Same surface. mobile/src/screens/SafetyScreen.tsx is titled "Safe Arrival"
-  // and calls /api/safe-arrival -- it IS the Safe Arrival screen, just routed
-  // at /safety. (/safety-center is a DIFFERENT web page rendering
-  // safety-center-page.tsx, and is deliberately absent below.)
-  "/safe-arrival": "/safety",
+  // Retired social-coordination routes converge on Meetups.
+  "/safe-arrival": "/meet-up",
+  "/hangout-mode": "/meet-up",
+  "/upfor": "/meet-up",
+  "/plans": "/meet-up",
+  "/safety": "/meet-up",
   // Same surface. Access/billing is the SPA's subscription screen.
   "/settings/access": "/subscription"
 };
@@ -60,7 +61,6 @@ const EXACT_MAP: Readonly<Record<string, string>> = {
 export const MOBILE_ROUTES_NOT_BUILT: readonly string[] = [
   "/linkr",
   "/discover",
-  "/hangout-mode",
   "/safety-center",
   "/drops",
   "/moments/new",
