@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 /**
  * Mad Buddy Access administration.
  *
- * This is the surface that actually unlocks Linkr and UpFor. The server actions
+ * This surface manages temporary Mad Buddy Access grants. The server actions
  * behind it have existed and been tested since the access model shipped, but
  * nothing rendered them -- so an owner needing to give somebody Access had no
  * screen for it, and the nearest thing that looked right (Revenue -> premium
@@ -31,7 +31,7 @@ export default async function AccessAdminPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Mad Buddy Access"
-        description="Grants Linkr and UpFor. Every action here is written to the audit log before it takes effect."
+        description="Manage temporary Access grants. Every action here is written to the audit log before it takes effect."
       />
 
       <AdminSection
@@ -52,7 +52,7 @@ export default async function AccessAdminPage() {
         title={openWindow ? "Global access is OPEN" : "Open access to everyone"}
         description={
           openWindow
-            ? `Everybody currently has Linkr and UpFor ${openWindow.expiresLabel}. Reason: ${openWindow.reason}`
+            ? `Everybody currently has Access ${openWindow.expiresLabel}. Reason: ${openWindow.reason}`
             : "A promotion window. One row, applied to everyone, with no change to individual accounts."
         }
       >
