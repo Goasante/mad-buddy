@@ -3,8 +3,7 @@ import { articleImageSchema, imageIdFromBlock, JOURNAL_INLINE_IMAGE_LIMIT } from
 
 export const BLOG_FEATURES = {
   linkr: { name: "Linkr", title: "Start with a conversation.", body: "Choose to discover new people with Linkr, then take the conversation at your own pace." },
-  upfor: { name: "UpFor", title: "Make room for a shared interest.", body: "Show what you are up for and give a conversation a practical starting point." },
-  plans: { name: "Plans", title: "Give that catch-up a date.", body: "Turn a good intention into a plan your friends can respond to." },
+  meetups: { name: "Meetups", title: "Turn a connection into time together.", body: "Invite Muddies or meet someone new nearby, then agree when and where to meet." },
   muddies: { name: "Muddies", title: "Stay close, without a location pin.", body: "Connect with trusted friends and use privacy-safe proximity on your terms." }
 } as const;
 
@@ -15,7 +14,7 @@ export const articleSchema = z.object({
   category: z.enum(["Friendship", "Privacy", "Making plans", "Behind Mad Buddy"]),
   audience: z.string().trim().max(180),
   searchIntent: z.string().trim().max(180),
-  feature: z.enum(["linkr", "upfor", "plans", "muddies"]),
+  feature: z.enum(["linkr", "meetups", "muddies"]),
   body: z.string().trim().max(50000),
   cover: articleImageSchema.nullable().optional(),
   images: z.array(articleImageSchema).max(JOURNAL_INLINE_IMAGE_LIMIT).optional()
