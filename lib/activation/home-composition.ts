@@ -409,7 +409,7 @@ export function composeHome(input: HomeCompositionInputs): HomeComposition {
 }
 
 /**
- * UpFor is a Glow concept, and Glow has not happened yet.
+ * Meetups become more useful after the first real social signal.
  *
  * "Let your Muddies know you are free right now" only means something once
  * somebody can actually see you -- teaching it before the first Glow explains
@@ -420,7 +420,7 @@ export function composeHome(input: HomeCompositionInputs): HomeComposition {
  * rather than introducing a second way to vary that list.
  */
 export function earlyActivationHiddenActionHrefs(input: HomeCompositionInputs): string[] {
-  return isEarlyActivation(input) ? [UPFOR_HREF] : [];
+  return isEarlyActivation(input) ? [MEETUPS_HREF] : [];
 }
 
 /** The canonical UpFor entry point, as the first-time rail links to it. */
