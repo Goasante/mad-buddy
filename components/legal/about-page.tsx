@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Camera, Hand, MessageCircle, Radio, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, CalendarDays, Camera, MessageCircle, Radio, Users } from "lucide-react";
 import { PublicPageShell } from "@/components/front-door/public-shell";
 
 const features = [
@@ -14,24 +14,19 @@ const features = [
     icon: Radio
   },
   {
-    title: "UpFor",
-    description: "Share what you are open to doing right now and turn a passing intention into something other people can join.",
-    icon: Hand
+    title: "Meetups",
+    description: "Invite Muddies or meet new people nearby, agree a time and place, and keep everyone coordinated as you meet.",
+    icon: CalendarDays
   },
   {
-    title: "Plans & Events",
-    description: "Move from intention to an actual time, place, RSVP, and shared experience.",
+    title: "Events",
+    description: "Discover and join shared experiences that are bigger than a single Meetup.",
     icon: CalendarDays
   },
   {
     title: "Messages & Stories",
     description: "Keep conversations and 12-hour private Stories attached to the Muddies who matter.",
     icon: MessageCircle
-  },
-  {
-    title: "Safe Arrival",
-    description: "A safety-focused arrival experience designed to help chosen people know whether you got there without turning them into live trackers.",
-    icon: ShieldCheck
   },
   {
     title: "Profile & media",
@@ -69,7 +64,7 @@ export function AboutPage() {
             Built to get people out of the app and into real life.
           </h1>
           <p className="mt-5 text-base leading-8 text-[#4E0401]/65 dark:text-[#FFF8F1]/65">
-            Mad Buddy helps you notice when trusted friends are roughly nearby, deliberately discover new people through Linkr, show what you are up for, and turn that momentum into plans.
+            Mad Buddy helps you notice when trusted friends are roughly nearby, deliberately discover new people through Linkr, and turn that social momentum into real Meetups.
           </p>
         </section>
 
