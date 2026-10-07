@@ -145,8 +145,8 @@ export function SmartCardHero({
   }, [percent]);
 
   useEffect(() => {
-    if (card.id !== "upfor_fallback") return;
-    void recordSmartCardImpressionAction("upfor_fallback");
+    if (card.id !== "meetup_fallback") return;
+    void recordSmartCardImpressionAction("meetup_fallback");
   }, [card.id]);
 
   // A dismissible card is retired by the same tap that follows its CTA:
