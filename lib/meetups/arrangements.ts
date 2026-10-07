@@ -17,7 +17,7 @@ export async function loadMeetupHome(admin: Admin, actorId: string): Promise<Mee
   const meetups = await loadMeetups(admin, actorId);
   return meetups.flatMap((m) => {
     const response = m.members.find((p) => p.userId === actorId)?.response;
-    return m.status === "active" && Date.parse(m.startsAt) > Date.now() - 2 * 60 * 60_000 && (response === "accepted" || response === "invited")
+    return m.status === "active" && Date.parse(m.startsAt) > Date.now() - 2 * 60 * 60_000 && response === "accepted"
       ? [{
           id: m.id,
           mode: m.mode,
