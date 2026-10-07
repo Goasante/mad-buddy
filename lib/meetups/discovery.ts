@@ -85,6 +85,7 @@ export const meetupDiscoveryItemSchema = z.object({
   maxAttendees: z.number().int(),
   interestLimit: z.number().int(),
   interestCount: z.number().int(),
+  refreshCount: z.number().int().min(0).max(2),
   myInterestStatus: z.enum(["pending", "accepted", "declined", "withdrawn"]).nullable(),
   meetupId: z.string().uuid().nullable(),
   conversationId: z.string().uuid().nullable(),
