@@ -33,7 +33,7 @@ describe("every wired state resolves to a real tier", () => {
     for (const id of ["journey", "journey_complete", "buddy_progress", "achievement", "birthday", "weekend_plans"] as const) {
       expect(smartCardTier(id)).toBeGreaterThan(ALWAYS_ELIGIBLE_MAX_TIER);
     }
-    expect(smartCardTier("upfor_fallback")).toBe(6);
+    expect(smartCardTier("meetup_fallback")).toBe(6);
   });
 });
 
@@ -78,14 +78,14 @@ describe("tiers 1 and 2 always reach Home, quietly beside Card A", () => {
 });
 
 describe("tiers 3-6 wait until activation has stopped teaching", () => {
-  it.each(["birthday", "weekend_plans", "journey", "buddy_progress", "upfor_fallback"] as const)(
+  it.each(["birthday", "weekend_plans", "journey", "buddy_progress", "meetup_fallback"] as const)(
     "%s is suppressed during early activation",
     (id) => {
       expect(gate(id, true).eligible).toBe(false);
     }
   );
 
-  it.each(["journey", "buddy_progress", "upfor_fallback"] as const)(
+  it.each(["journey", "buddy_progress", "meetup_fallback"] as const)(
     "%s returns once Home is mature",
     (id) => {
       expect(gate(id, false).eligible).toBe(true);
