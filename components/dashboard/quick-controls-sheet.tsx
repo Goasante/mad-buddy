@@ -132,9 +132,9 @@ export function QuickControlsSheet({
               />
             </QuickGroup>
 
-            {/* Safety */}
-            <QuickGroup label="Safety" className="mt-5">
-              <QuickLink href="/meet-up" icon={ShieldCheck} label="Meetups" description="Invite Muddies or meet someone new nearby" />
+            {/* Meetups */}
+            <QuickGroup label="Meetups" className="mt-5">
+              <QuickLink href="/meet-up" icon={Hand} label="Meetups" description="Invite Muddies or meet someone new nearby" />
             </QuickGroup>
 
             {/* Appearance */}
