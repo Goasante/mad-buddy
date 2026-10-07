@@ -1,2810 +1,1020 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
-
-// "expired" added by the batch-14 jobs migration, so the 30-day request expiry
-// from batch 8 has a terminal state to sweep into.
-export type FriendRequestStatus =
-  | "pending"
-  | "accepted"
-  | "declined"
-  | "cancelled"
-  | "blocked"
-  | "expired";
-export type VisibilityStatus = "visible" | "ghost" | "app_open_only";
-
-/**
- * Mad Buddy Access sources (20260824110000_access_entitlement_model).
- *
- * Independent reasons a person may currently use Linkr and UpFor. Deliberately
- * NOT a ranked tier: a user may hold several at once and access is the union,
- * so revoking one never destroys another. `apple_subscription` and
- * `google_subscription` exist so native stores need no schema change later;
- * nothing implements them yet.
- */
-export type AccessSourceName =
-  | "welcome_access"
-  | "web_subscription"
-  | "apple_subscription"
-  | "google_subscription"
-  | "admin_grant"
-  | "staff"
-  | "global_promo";
-export type LocationConfidence = "high" | "medium" | "low";
-export type ProximityLevel = "close" | "near" | "far" | "hidden";
-/**
- * The RETIRED three-tier ladder.
- *
- * Deliberately NOT widened to include `mad_buddy_access`. Around twenty
- * subsystems are keyed on this ladder -- wallpaper tiers, tour entitlement
- * gating, buddy-score earned rewards, the per-tier entitlement registry, the
- * legacy comparison UI -- and Mad Buddy Access is not a rung on it. Widening
- * this union broke all of them at once, and the only ways to satisfy the
- * compiler would have been to invent an arbitrary position for Access in each
- * ladder (a wallpaper tier, a reward threshold) or to loosen those types. Both
- * would be fabricating product decisions to serve a type.
- *
- * What a subscription ROW may hold is `SubscriptionProduct` below.
- */
-export type SubscriptionPlan = "free" | "buddy_plus" | "buddy_pro";
-
-/**
- * What `subscriptions.plan` can actually contain.
- *
- * The legacy ladder, plus the current product. Access rows are written as
- * `mad_buddy_access` and never as a tier: the resolver only asks whether a
- * subscription is live, so a tier label would have worked while quietly
- * attributing this product's revenue to one nobody can buy, and would break
- * reconciliation against the Paystack plan code PLN_pbpn6h7vprirvlu.
- *
- * Mirrors the `subscription_plan` enum after
- * 20260824130000_access_subscription_plan.
- */
-export type SubscriptionProduct = SubscriptionPlan | "mad_buddy_access";
-
-/**
- * A subscription row's product, seen from the LEGACY TIER LADDER.
- *
- * Mad Buddy Access maps to `"free"`, and that is the correct answer rather than
- * a fudge: Access grants nothing THROUGH the ladder. It does not raise a
- * wallpaper tier, unlock a tour, or change an entitlement row -- what it
- * unlocks (Linkr and UpFor) is decided entirely by `lib/access/resolver`.
- *
- * So to every ladder-shaped consumer, an Access subscriber genuinely has no
- * tier. Reporting `buddy_plus` instead would hand them capabilities nobody
- * bought.
- *
- * Revenue and admin surfaces that need to know WHICH PRODUCT sold should read
- * `subscriptions.plan` directly (a `SubscriptionProduct`) rather than going
- * through this.
- */
-export function legacyTierOf(plan: SubscriptionProduct): SubscriptionPlan {
-  return plan === "mad_buddy_access" ? "free" : plan;
-}
-export type SubscriptionStatus =
-  | "free"
-  | "trialing"
-  | "active"
-  | "past_due"
-  | "non_renewing"
-  | "attention"
-  | "cancelled"
-  | "expired";
-export type PremiumTrialStatus = "active" | "expired" | "converted" | "cancelled" | "revoked";
-export type PremiumTrialEventType =
-  | "eligible"
-  | "started"
-  | "active"
-  | "ending_soon"
-  | "expired"
-  | "converted"
-  | "cancelled"
-  | "revoked"
-  | "premium_feature_used";
-export type ExperimentStatus = "draft" | "scheduled" | "running" | "paused" | "completed" | "cancelled";
-export type ExperimentPlatform = "web" | "android" | "ios";
-export type ExperimentAudience = "all_eligible" | "selected_testers";
-export type BillingEventType =
-  | "pricing_viewed"
-  | "checkout_started"
-  | "payment_attempted"
-  | "payment_succeeded"
-  | "payment_failed"
-  | "payment_recovered"
-  | "subscription_activated"
-  | "subscription_renewed"
-  | "subscription_cancelled"
-  | "subscription_expired"
-  | "plan_upgraded"
-  | "plan_downgraded";
-export type BillingEventSource = "app_server" | "paystack_webhook" | "paystack_verify" | "admin";
-export type ReportStatus = "open" | "reviewing" | "resolved" | "dismissed";
-export type MeetupStatus = "pending" | "accepted" | "declined" | "expired";
-
-type RowWithTimestamps = {
-  created_at: string;
-  updated_at: string;
-};
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
-      blog_images: {
-        Row: { id: string; sha256: string; width: number; height: number; bytes: number; created_by: string; created_at: string };
-        Insert: { id?: string; sha256: string; width: number; height: number; bytes: number; created_by: string; created_at?: string };
-        Update: never;
-        Relationships: [];
-      };
-      blog_posts: {
-        Row: { id: string; slug: string; draft: Json; published: Json | null; published_at: string | null; published_updated_at: string | null; version: number; updated_at: string; updated_by: string | null };
-        Insert: { id?: string; slug: string; draft: Json; published?: Json | null; published_at?: string | null; published_updated_at?: string | null; version?: number; updated_at?: string; updated_by?: string | null };
-        Update: { draft?: Json; published?: Json | null; published_at?: string | null; published_updated_at?: string | null; version?: number; updated_at?: string; updated_by?: string | null };
-        Relationships: [];
-      };
-      blog_revisions: {
-        Row: { id: string; post_id: string; version: number; draft: Json; published: Json | null; saved_at: string };
-        Insert: { id?: string; post_id: string; version: number; draft: Json; published?: Json | null; saved_at?: string };
-        Update: never;
-        Relationships: [];
-      };
-      profiles: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          full_name: string;
-          username: string;
-          bio: string | null;
-          avatar_url: string | null;
-          mood_status: string | null;
-          visibility_status: VisibilityStatus;
-          is_onboarded: boolean;
-          deleted_at: string | null;
-          trusted_member_since: string | null;
-          // Added by the batch-9 profiles migration.
-          username_normalized: string | null;
-          profile_media_id: string | null;
-          institution: string | null;
-          programme: string | null;
-          graduation_year: number | null;
-          general_area: string | null;
-          pronouns: string | null;
-          username_changed_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          full_name: string;
-          username: string;
-          bio?: string | null;
-          avatar_url?: string | null;
-          mood_status?: string | null;
-          visibility_status?: VisibilityStatus;
-          is_onboarded?: boolean;
-          deleted_at?: string | null;
-          trusted_member_since?: string | null;
-          username_normalized?: string | null;
-          profile_media_id?: string | null;
-          institution?: string | null;
-          programme?: string | null;
-          graduation_year?: number | null;
-          general_area?: string | null;
-          pronouns?: string | null;
-          username_changed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
-        Relationships: [];
-      };
-      wallpapers: {
-        Row: RowWithTimestamps & {
-          id: string;
-          slug: string;
-          name: string;
-          render_mode: "ambient" | "plain" | "image";
-          tier: SubscriptionPlan;
-          thumb_url: string | null;
-          light_url: string | null;
-          dark_url: string | null;
-          is_enabled: boolean;
-          sort_order: number;
-          source: "bundled" | "managed" | "custom";
-          created_by: string | null;
-        };
-        Insert: {
-          id?: string;
-          slug: string;
-          name: string;
-          render_mode: "ambient" | "plain" | "image";
-          tier?: SubscriptionPlan;
-          thumb_url?: string | null;
-          light_url?: string | null;
-          dark_url?: string | null;
-          is_enabled?: boolean;
-          sort_order?: number;
-          source?: "bundled" | "managed" | "custom";
-          created_by?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["wallpapers"]["Insert"]>;
-        Relationships: [];
-      };
-      user_wallpaper_preferences: {
-        Row: {
-          user_id: string;
-          selected_slug: string;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          selected_slug?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["user_wallpaper_preferences"]["Insert"]>;
-        Relationships: [];
-      };
-      custom_wallpapers: {
-        Row: RowWithTimestamps & {
-          id: string;
-          owner_id: string;
-          storage_key: string;
-          mime_type: "image/webp" | "image/jpeg" | "image/png";
-          size_bytes: number;
-          width: number | null;
-          height: number | null;
-          state: "active" | "removed";
-        };
-        Insert: {
-          id?: string;
-          owner_id: string;
-          storage_key: string;
-          mime_type: "image/webp" | "image/jpeg" | "image/png";
-          size_bytes: number;
-          width?: number | null;
-          height?: number | null;
-          state?: "active" | "removed";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["custom_wallpapers"]["Insert"]>;
-        Relationships: [];
-      };
-      admin_users: {
-        Row: RowWithTimestamps & {
-          id: string;
-          email: string;
-          auth_user_id: string | null;
-          role: "owner" | "admin" | "support";
-          invited_by_user_id: string | null;
-          disabled_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          email: string;
-          auth_user_id?: string | null;
-          role?: "owner" | "admin" | "support";
-          invited_by_user_id?: string | null;
-          disabled_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["admin_users"]["Insert"]>;
-        Relationships: [];
-      };
-      friend_requests: {
-        Row: RowWithTimestamps & {
-          id: string;
-          sender_id: string;
-          receiver_id: string;
-          status: FriendRequestStatus;
-          // Added by the batch-8 discovery migration.
-          context_type: RequestContextType | null;
-          context_id: string | null;
-          message: string | null;
-          responded_at: string | null;
-          expires_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          sender_id: string;
-          receiver_id: string;
-          status?: FriendRequestStatus;
-          context_type?: RequestContextType | null;
-          context_id?: string | null;
-          message?: string | null;
-          responded_at?: string | null;
-          expires_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["friend_requests"]["Insert"]>;
-        Relationships: [];
-      };
-      friendships: {
-        Row: {
-          id: string;
-          user_one_id: string;
-          user_two_id: string;
-          created_at: string;
-          // Added by the batch-8 discovery migration.
-          accepted_request_id: string | null;
-          ended_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_one_id: string;
-          user_two_id: string;
-          created_at?: string;
-          accepted_request_id?: string | null;
-          ended_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["friendships"]["Insert"]>;
-        Relationships: [];
-      };
-      user_locations: {
-        Row: {
-          id: string;
-          user_id: string;
-          latitude: number;
-          longitude: number;
-          accuracy: number;
-          confidence: LocationConfidence;
-          last_updated: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          latitude: number;
-          longitude: number;
-          accuracy: number;
-          confidence: LocationConfidence;
-          last_updated?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["user_locations"]["Insert"]>;
-        Relationships: [];
-      };
-      proximity_events: {
-        Row: {
-          id: string;
-          user_id: string;
-          friend_id: string;
-          proximity_level: ProximityLevel;
-          glow_strength: number;
-          confidence: LocationConfidence;
-          created_at: string;
-          expires_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          friend_id: string;
-          proximity_level: ProximityLevel;
-          glow_strength: number;
-          confidence: LocationConfidence;
-          created_at?: string;
-          expires_at: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["proximity_events"]["Insert"]>;
-        Relationships: [];
-      };
-      notifications: {
-        Row: {
-          id: string;
-          user_id: string;
-          type: string;
-          title: string;
-          message: string;
-          is_read: boolean;
-          created_at: string;
-          dedupe_key: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          type: string;
-          title: string;
-          message: string;
-          is_read?: boolean;
-          created_at?: string;
-          dedupe_key?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
-        Relationships: [];
-      };
-      notification_dispatches: {
-        Row: { id: string; user_id: string; dedupe_key: string | null; payload: Json; context: Json; created_at: string; expires_at: string };
-        Insert: { id?: string; user_id: string; dedupe_key?: string | null; payload: Json; context?: Json; created_at?: string; expires_at?: string };
-        Update: Partial<Database["public"]["Tables"]["notification_dispatches"]["Insert"]>;
-        Relationships: [];
-      };
-      notification_push_deliveries: {
-        Row: { id: string; dispatch_id: string; transport: string; target_id: string; status: string; attempts: number; run_at: string; locked_at: string | null; lease_id: string | null; last_error: string | null };
-        Insert: { id?: string; dispatch_id: string; transport: string; target_id: string; status?: string; attempts?: number; run_at?: string; locked_at?: string | null; lease_id?: string | null; last_error?: string | null };
-        Update: Partial<Database["public"]["Tables"]["notification_push_deliveries"]["Insert"]>;
-        Relationships: [];
-      };
-      blocked_users: {
-        Row: { id: string; blocker_id: string; blocked_id: string; created_at: string };
-        Insert: { id?: string; blocker_id: string; blocked_id: string; created_at?: string };
-        Update: Partial<Database["public"]["Tables"]["blocked_users"]["Insert"]>;
-        Relationships: [];
-      };
-      trusted_member_applications: {
-        Row: {
-          id: string;
-          user_id: string;
-          status: string;
-          note: string | null;
-          premium_days_at_apply: number | null;
-          journeys_complete_at_apply: number | null;
-          reviewed_by: string | null;
-          reviewed_at: string | null;
-          review_note: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          status?: string;
-          note?: string | null;
-          premium_days_at_apply?: number | null;
-          journeys_complete_at_apply?: number | null;
-          reviewed_by?: string | null;
-          reviewed_at?: string | null;
-          review_note?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["trusted_member_applications"]["Insert"]>;
-        Relationships: [];
-      };
-      profile_photos: {
-        Row: {
-          id: string;
-          user_id: string;
-          media_asset_id: string;
-          position: number;
-          visibility: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          media_asset_id: string;
-          position: number;
-          visibility?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["profile_photos"]["Insert"]>;
-        Relationships: [];
-      };
-      discovery_passes: {
-        Row: {
-          id: string;
-          user_id: string;
-          passed_user_id: string;
-          created_at: string;
-          expires_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          passed_user_id: string;
-          created_at?: string;
-          expires_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["discovery_passes"]["Insert"]>;
-        Relationships: [];
-      };
-      reports: {
-        Row: RowWithTimestamps & {
-          id: string;
-          reporter_id: string | null;
-          reported_user_id: string | null;
-          reported_user_label: string;
-          reason: string;
-          description: string | null;
-          status: ReportStatus;
-        };
-        Insert: {
-          id?: string;
-          reporter_id?: string | null;
-          reported_user_id?: string | null;
-          reported_user_label?: string;
-          reason: string;
-          description?: string | null;
-          status?: ReportStatus;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
-        Relationships: [];
-      };
-      subscriptions: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          provider: string;
-          stripe_customer_id: string | null;
-          stripe_subscription_id: string | null;
-          paystack_customer_code: string | null;
-          paystack_subscription_code: string | null;
-          paystack_email_token: string | null;
-          paystack_authorization_code: string | null;
-          plan: SubscriptionProduct;
-          status: SubscriptionStatus;
-          current_period_start: string | null;
-          current_period_end: string | null;
-          // Added by the batch-10 entitlements migration.
-          subject_type: "user" | "workspace" | "community";
-          cancel_at_period_end: boolean;
-          trial_ends_at: string | null;
-          grace_ends_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          provider?: string;
-          subject_type?: "user" | "workspace" | "community";
-          cancel_at_period_end?: boolean;
-          trial_ends_at?: string | null;
-          grace_ends_at?: string | null;
-          stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-          paystack_customer_code?: string | null;
-          paystack_subscription_code?: string | null;
-          paystack_email_token?: string | null;
-          paystack_authorization_code?: string | null;
-          plan?: SubscriptionProduct;
-          status?: SubscriptionStatus;
-          current_period_start?: string | null;
-          current_period_end?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
-        Relationships: [];
-      };
-      premium_trial_config: {
-        Row: RowWithTimestamps & {
-          key: "default";
-          enabled: boolean;
-          eligible_plan: Exclude<SubscriptionPlan, "free">;
-          duration_days: number;
-          eligibility_rules: Json;
-          campaign_source: string | null;
-          available_from: string | null;
-          available_until: string | null;
-          updated_by: string | null;
-        };
-        Insert: {
-          key?: "default";
-          enabled?: boolean;
-          eligible_plan?: Exclude<SubscriptionPlan, "free">;
-          duration_days?: number;
-          eligibility_rules?: Json;
-          campaign_source?: string | null;
-          available_from?: string | null;
-          available_until?: string | null;
-          updated_by?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["premium_trial_config"]["Insert"]>;
-        Relationships: [];
-      };
-      premium_trials: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          plan: Exclude<SubscriptionPlan, "free">;
-          status: PremiumTrialStatus;
-          trial_started_at: string;
-          trial_ends_at: string;
-          source: "self_service" | "owner_grant" | "campaign";
-          campaign_source: string | null;
-          owner_override: boolean;
-          override_reason: string | null;
-          granted_by: string | null;
-          converted_at: string | null;
-          cancelled_at: string | null;
-          revoked_at: string | null;
-          revoked_by: string | null;
-          revocation_reason: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          plan: Exclude<SubscriptionPlan, "free">;
-          status?: PremiumTrialStatus;
-          trial_started_at: string;
-          trial_ends_at: string;
-          source?: "self_service" | "owner_grant" | "campaign";
-          campaign_source?: string | null;
-          owner_override?: boolean;
-          override_reason?: string | null;
-          granted_by?: string | null;
-          converted_at?: string | null;
-          cancelled_at?: string | null;
-          revoked_at?: string | null;
-          revoked_by?: string | null;
-          revocation_reason?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["premium_trials"]["Insert"]>;
-        Relationships: [];
-      };
-      premium_trial_events: {
-        Row: {
-          id: string;
-          trial_id: string | null;
-          user_id: string;
-          event_type: PremiumTrialEventType;
-          event_key: string;
-          feature_key: string | null;
-          metadata: Json;
-          occurred_at: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          trial_id?: string | null;
-          user_id: string;
-          event_type: PremiumTrialEventType;
-          event_key: string;
-          feature_key?: string | null;
-          metadata?: Json;
-          occurred_at?: string;
-          created_at?: string;
-        };
-        Update: never;
-        Relationships: [];
-      };
-      premium_trial_notifications: {
-        Row: RowWithTimestamps & {
-          id: string;
-          trial_id: string;
-          user_id: string;
-          notification_type: "started" | "ending_soon" | "expired" | "converted" | "revoked";
-          delivery_status: "pending" | "processing" | "delivered" | "failed";
-          attempts: number;
-          last_attempt_at: string | null;
-          delivered_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          trial_id: string;
-          user_id: string;
-          notification_type: "started" | "ending_soon" | "expired" | "converted" | "revoked";
-          delivery_status?: "pending" | "processing" | "delivered" | "failed";
-          attempts?: number;
-          last_attempt_at?: string | null;
-          delivered_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["premium_trial_notifications"]["Insert"]>;
-        Relationships: [];
-      };
-      paystack_webhook_events: {
-        Row: {
-          id: string;
-          type: string;
-          created_at: string;
-        };
-        Insert: {
-          id: string;
-          type: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["paystack_webhook_events"]["Insert"]>;
-        Relationships: [];
-      };
-      billing_events: {
-        Row: {
-          id: string;
-          event_type: BillingEventType;
-          source: BillingEventSource;
-          provider: string;
-          user_id: string | null;
-          subscription_id: string | null;
-          subscription_plan: SubscriptionProduct;
-          previous_plan: SubscriptionPlan | null;
-          amount_minor: number | null;
-          provider_fee_minor: number | null;
-          net_amount_minor: number | null;
-          fee_status: "verified" | "unavailable";
-          currency: string | null;
-          transaction_reference: string | null;
-          provider_event_id: string | null;
-          dedupe_key: string;
-          occurred_at: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_type: BillingEventType;
-          source: BillingEventSource;
-          provider?: string;
-          user_id?: string | null;
-          subscription_id?: string | null;
-          subscription_plan?: SubscriptionProduct;
-          previous_plan?: SubscriptionPlan | null;
-          amount_minor?: number | null;
-          provider_fee_minor?: number | null;
-          net_amount_minor?: number | null;
-          fee_status?: "verified" | "unavailable";
-          currency?: string | null;
-          transaction_reference?: string | null;
-          provider_event_id?: string | null;
-          dedupe_key: string;
-          occurred_at?: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["billing_events"]["Insert"]>;
-        Relationships: [];
-      };
-      financial_snapshots: {
-        Row: {
-          id: string;
-          snapshot_date: string;
-          currency: string;
-          active_free_users: number;
-          buddy_plus_users: number;
-          buddy_pro_users: number;
-          active_paid_subscriptions: number;
-          opening_mrr_minor: number | null;
-          new_mrr_minor: number | null;
-          expansion_mrr_minor: number | null;
-          reactivation_mrr_minor: number | null;
-          contraction_mrr_minor: number | null;
-          churned_mrr_minor: number | null;
-          ending_mrr_minor: number;
-          reconciliation_status: "baseline" | "reconciled" | "reconciliation_required";
-          reconciliation_reason:
-            | "opening_snapshot_unavailable"
-            | "lifecycle_movements_do_not_match_trusted_mrr"
-            | null;
-          reconciliation_difference_minor: number | null;
-          captured_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          snapshot_date: string;
-          currency: string;
-          active_free_users: number;
-          buddy_plus_users: number;
-          buddy_pro_users: number;
-          active_paid_subscriptions: number;
-          opening_mrr_minor?: number | null;
-          new_mrr_minor?: number | null;
-          expansion_mrr_minor?: number | null;
-          reactivation_mrr_minor?: number | null;
-          contraction_mrr_minor?: number | null;
-          churned_mrr_minor?: number | null;
-          ending_mrr_minor: number;
-          reconciliation_status?: "baseline" | "reconciled" | "reconciliation_required";
-          reconciliation_reason?:
-            | "opening_snapshot_unavailable"
-            | "lifecycle_movements_do_not_match_trusted_mrr"
-            | null;
-          reconciliation_difference_minor?: number | null;
-          captured_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["financial_snapshots"]["Insert"]>;
-        Relationships: [];
-      };
-      provider_cost_records: {
-        Row: {
-          id: string;
-          provider: string;
-          billing_period: string;
-          currency: string;
-          amount_minor: number;
-          category: "database" | "hosting" | "email" | "sms" | "media_storage" | "push" | "api" | "other";
-          source: "manual" | "invoice" | "api";
-          notes: string | null;
-          created_by: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          provider: string;
-          billing_period: string;
-          currency: string;
-          amount_minor: number;
-          category: Database["public"]["Tables"]["provider_cost_records"]["Row"]["category"];
-          source: Database["public"]["Tables"]["provider_cost_records"]["Row"]["source"];
-          notes?: string | null;
-          created_by?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["provider_cost_records"]["Insert"]>;
-        Relationships: [];
-      };
-      business_alert_rules: {
-        Row: {
-          rule_key: "mrr_drop" | "cancellation_spike" | "payment_failure_spike" | "recovery_rate_drop" | "infrastructure_cost_spike";
-          enabled: boolean;
-          threshold_percent: number;
-          updated_by: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          rule_key: Database["public"]["Tables"]["business_alert_rules"]["Row"]["rule_key"];
-          enabled?: boolean;
-          threshold_percent: number;
-          updated_by?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["business_alert_rules"]["Insert"]>;
-        Relationships: [];
-      };
-      friend_circles: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          name: string;
-          description: string | null;
-          visibility_rule: string;
-          icon: string | null;
-          theme: string | null;
-          is_system_circle: boolean;
-          archived_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          name: string;
-          description?: string | null;
-          visibility_rule?: string;
-          icon?: string | null;
-          theme?: string | null;
-          is_system_circle?: boolean;
-          archived_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["friend_circles"]["Insert"]>;
-        Relationships: [];
-      };
-      circle_members: {
-        Row: { id: string; circle_id: string; friend_id: string; added_by: string | null; created_at: string };
-        Insert: { id?: string; circle_id: string; friend_id: string; added_by?: string | null; created_at?: string };
-        Update: Partial<Database["public"]["Tables"]["circle_members"]["Insert"]>;
-        Relationships: [];
-      };
-      close_friend_relationships: {
-        Row: {
-          id: string;
-          owner_id: string;
-          friend_id: string;
-          priority_level: "standard" | "priority";
-          notification_preference: CloseFriendNotificationPreference;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          owner_id: string;
-          friend_id: string;
-          priority_level?: "standard" | "priority";
-          notification_preference?: CloseFriendNotificationPreference;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["close_friend_relationships"]["Insert"]>;
-        Relationships: [];
-      };
-      visibility_sessions: {
-        Row: {
-          id: string;
-          user_id: string;
-          feature_type: VisibilityFeatureType;
-          visibility_mode: VisibilityMode;
-          starts_at: string;
-          ends_at: string | null;
-          source: "manual" | "schedule" | "hangout_mode" | "event_mode";
-          status: "active" | "ended" | "expired";
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          feature_type?: VisibilityFeatureType;
-          visibility_mode: VisibilityMode;
-          starts_at?: string;
-          ends_at?: string | null;
-          source?: "manual" | "schedule" | "hangout_mode" | "event_mode";
-          status?: "active" | "ended" | "expired";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["visibility_sessions"]["Insert"]>;
-        Relationships: [];
-      };
-      visibility_targets: {
-        Row: {
-          id: string;
-          session_id: string;
-          target_type: "circle" | "user" | "group";
-          target_id: string;
-          access_type: "include" | "exclude";
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          session_id: string;
-          target_type: "circle" | "user" | "group";
-          target_id: string;
-          access_type?: "include" | "exclude";
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["visibility_targets"]["Insert"]>;
-        Relationships: [];
-      };
-      privacy_zones: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          name: string;
-          latitude: number;
-          longitude: number;
-          radius: number;
-          is_active: boolean;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          name: string;
-          latitude: number;
-          longitude: number;
-          radius: number;
-          is_active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["privacy_zones"]["Insert"]>;
-        Relationships: [];
-      };
-      meetup_requests: {
-        Row: {
-          id: string;
-          sender_id: string;
-          receiver_id: string;
-          message: string | null;
-          status: MeetupStatus;
-          expires_at: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          sender_id: string;
-          receiver_id: string;
-          message?: string | null;
-          status?: MeetupStatus;
-          expires_at: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["meetup_requests"]["Insert"]>;
-        Relationships: [];
-      };
-      user_statuses: {
-        Row: {
-          id: string;
-          user_id: string;
-          availability_type: AvailabilityType;
-          activity_type: ActivityType | null;
-          custom_text: string | null;
-          visibility_type: StatusVisibilityType;
-          starts_at: string;
-          expires_at: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          availability_type: AvailabilityType;
-          activity_type?: ActivityType | null;
-          custom_text?: string | null;
-          visibility_type?: StatusVisibilityType;
-          starts_at?: string;
-          expires_at: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["user_statuses"]["Insert"]>;
-        Relationships: [];
-      };
-      status_visibility_targets: {
-        Row: {
-          id: string;
-          status_id: string;
-          target_type: "circle" | "user" | "group";
-          target_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          status_id: string;
-          target_type: "circle" | "user" | "group";
-          target_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["status_visibility_targets"]["Insert"]>;
-        Relationships: [];
-      };
-      waves: {
-        Row: {
-          id: string;
-          sender_id: string;
-          recipient_id: string;
-          source: WaveSource;
-          reply_to_wave_id: string | null;
-          sent_at: string;
-          seen_at: string | null;
-          responded_at: string | null;
-          response_type: WaveResponseType | null;
-          expires_at: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          sender_id: string;
-          recipient_id: string;
-          source?: WaveSource;
-          reply_to_wave_id?: string | null;
-          sent_at?: string;
-          seen_at?: string | null;
-          responded_at?: string | null;
-          response_type?: WaveResponseType | null;
-          expires_at?: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["waves"]["Insert"]>;
-        Relationships: [];
-      };
-      wave_mutes: {
-        Row: {
-          id: string;
-          user_id: string;
-          muted_user_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          muted_user_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["wave_mutes"]["Insert"]>;
-        Relationships: [];
-      };
-      meeting_pings: {
-        Row: {
-          id: string;
-          sender_id: string;
-          recipient_id: string;
-          ping_type: PingType;
-          custom_message: string | null;
-          proposed_time: string;
-          expires_at: string;
-          place_type: "custom" | "chat";
-          custom_place_text: string | null;
-          status: PingStatus;
-          seen_at: string | null;
-          responded_at: string | null;
-          cancelled_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          sender_id: string;
-          recipient_id: string;
-          ping_type: PingType;
-          custom_message?: string | null;
-          proposed_time: string;
-          expires_at: string;
-          place_type?: "custom" | "chat";
-          custom_place_text?: string | null;
-          status?: PingStatus;
-          seen_at?: string | null;
-          responded_at?: string | null;
-          cancelled_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["meeting_pings"]["Insert"]>;
-        Relationships: [];
-      };
-      meeting_ping_responses: {
-        Row: {
-          id: string;
-          ping_id: string;
-          responder_id: string;
-          response_type: PingResponseType;
-          suggested_time: string | null;
-          message: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          ping_id: string;
-          responder_id: string;
-          response_type: PingResponseType;
-          suggested_time?: string | null;
-          message?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["meeting_ping_responses"]["Insert"]>;
-        Relationships: [];
-      };
-      temporary_plans: {
-        Row: {
-          id: string;
-          source_ping_id: string;
-          creator_id: string;
-          participant_id: string;
-          title: string;
-          meeting_time: string;
-          place_text: string | null;
-          status: "active" | "cancelled" | "completed";
-          expires_at: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          source_ping_id: string;
-          creator_id: string;
-          participant_id: string;
-          title: string;
-          meeting_time: string;
-          place_text?: string | null;
-          status?: "active" | "cancelled" | "completed";
-          expires_at: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["temporary_plans"]["Insert"]>;
-        Relationships: [];
-      };
-      user_preferences: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          glow_theme: string;
-          mood_status: string | null;
-          ghost_mode_type: string;
-          scheduled_visibility: Json;
-          notification_preferences: Json;
-          // Added by the batch-7 messaging migration.
-          communication_preferences: Json;
-          app_preferences: Json;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          glow_theme?: string;
-          mood_status?: string | null;
-          ghost_mode_type?: string;
-          scheduled_visibility?: Json;
-          notification_preferences?: Json;
-          communication_preferences?: Json;
-          app_preferences?: Json;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["user_preferences"]["Insert"]>;
-        Relationships: [];
-      };
-      tours: {
-        Row: RowWithTimestamps & {
-          id: string;
-          slug: string;
-          title: string;
-          description: string;
-          kind: "main" | "feature";
-        };
-        Insert: {
-          id?: string;
-          slug: string;
-          title: string;
-          description?: string;
-          kind?: "main" | "feature";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["tours"]["Insert"]>;
-        Relationships: [];
-      };
-      tour_versions: {
-        Row: RowWithTimestamps & {
-          id: string;
-          tour_id: string;
-          version: number;
-          status: "draft" | "published" | "paused" | "retired";
-          audience: Json;
-          starts_at: string | null;
-          ends_at: string | null;
-          published_at: string | null;
-          updated_by: string | null;
-          publish_reason: string | null;
-        };
-        Insert: {
-          id?: string;
-          tour_id: string;
-          version: number;
-          status?: "draft" | "published" | "paused" | "retired";
-          audience?: Json;
-          starts_at?: string | null;
-          ends_at?: string | null;
-          published_at?: string | null;
-          updated_by?: string | null;
-          publish_reason?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["tour_versions"]["Insert"]>;
-        Relationships: [];
-      };
-      tour_steps: {
-        Row: {
-          id: string;
-          tour_version_id: string;
-          position: number;
-          step_key: string;
-          title: string;
-          body: string;
-          target_id: string | null;
-          route: string | null;
-          media_path: string | null;
-          cta_label: string | null;
-          cta_href: string | null;
-          requires_feature_flag: string | null;
-          entitlement_keys: string[];
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          tour_version_id: string;
-          position: number;
-          step_key: string;
-          title: string;
-          body: string;
-          target_id?: string | null;
-          route?: string | null;
-          media_path?: string | null;
-          cta_label?: string | null;
-          cta_href?: string | null;
-          requires_feature_flag?: string | null;
-          entitlement_keys?: string[];
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["tour_steps"]["Insert"]>;
-        Relationships: [];
-      };
-      user_tour_progress: {
-        Row: {
-          id: string;
-          user_id: string;
-          tour_version_id: string;
-          status: "started" | "completed" | "skipped" | "dismissed";
-          current_step_key: string | null;
-          started_at: string;
-          completed_at: string | null;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          tour_version_id: string;
-          status: "started" | "completed" | "skipped" | "dismissed";
-          current_step_key?: string | null;
-          started_at?: string;
-          completed_at?: string | null;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["user_tour_progress"]["Insert"]>;
-        Relationships: [];
-      };
-      app_feedback: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          category: "feedback" | "suggestion";
-          rating: number | null;
-          message: string;
-          status: "new" | "reviewing" | "resolved" | "closed";
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          category: "feedback" | "suggestion";
-          rating?: number | null;
-          message?: string;
-          status?: "new" | "reviewing" | "resolved" | "closed";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["app_feedback"]["Insert"]>;
-        Relationships: [];
-      };
-      support_requests: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          full_name: string;
-          email: string;
-          message: string;
-          status: "open" | "in_progress" | "resolved" | "closed";
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          full_name: string;
-          email: string;
-          message: string;
-          status?: "open" | "in_progress" | "resolved" | "closed";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["support_requests"]["Insert"]>;
-        Relationships: [];
-      };
-      best_buddies: {
-        Row: {
-          id: string;
-          user_id: string;
-          friend_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          friend_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["best_buddies"]["Insert"]>;
-        Relationships: [];
-      };
-      event_modes: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string;
-          name: string;
-          starts_at: string;
-          ends_at: string;
-          visibility_rule: string;
-          is_active: boolean;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          name: string;
-          starts_at: string;
-          ends_at: string;
-          visibility_rule?: string;
-          is_active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_modes"]["Insert"]>;
-        Relationships: [];
-      };
-      rate_limits: {
-        Row: RowWithTimestamps & {
-          id: string;
-          user_id: string | null;
-          ip_hash: string | null;
-          action: string;
-          count: number;
-          window_start: string;
-          window_end: string;
-        };
-        Insert: {
-          id?: string;
-          user_id?: string | null;
-          ip_hash?: string | null;
-          action: string;
-          count?: number;
-          window_start: string;
-          window_end: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["rate_limits"]["Insert"]>;
-        Relationships: [];
-      };
-      consent_logs: {
-        Row: {
-          id: string;
-          user_id: string;
-          consent_type: string;
-          consent_text: string;
-          granted: boolean;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          consent_type: string;
-          consent_text: string;
-          granted: boolean;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["consent_logs"]["Insert"]>;
-        Relationships: [];
-      };
-      deletion_audit_logs: {
-        Row: {
-          id: string;
-          user_id: string | null;
-          deleted_user_label: string;
-          deletion_reason: string | null;
-          deleted_at: string;
-          retained_billing_reference: string | null;
-          retained_report_reference: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id?: string | null;
-          deleted_user_label?: string;
-          deletion_reason?: string | null;
-          deleted_at?: string;
-          retained_billing_reference?: string | null;
-          retained_report_reference?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["deletion_audit_logs"]["Insert"]>;
-        Relationships: [];
-      };
-      stripe_webhook_events: {
-        Row: {
-          id: string;
-          type: string;
-          processed_at: string;
-          created_at: string;
-        };
-        Insert: {
-          id: string;
-          type: string;
-          processed_at?: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["stripe_webhook_events"]["Insert"]>;
-        Relationships: [];
-      };
-      plans: {
-        Row: {
-          id: string;
-          creator_id: string;
-          title: string;
-          description: string | null;
-          plan_type: PlanType;
-          visibility_type: PlanVisibilityType;
-          status: PlanStatus;
-          start_at: string | null;
-          end_at: string | null;
-          timezone: string;
-          rsvp_deadline: string | null;
-          max_participants: number;
-          place_type: PlanPlaceType;
-          place_id: string | null;
-          custom_place_text: string | null;
-          reminder_minutes: number | null;
-          source_hangout_id: string | null;
-          source_ping_id: string | null;
-          created_at: string;
-          updated_at: string;
-          cancelled_at: string | null;
-          completed_at: string | null;
-          /** What the plan IS. Distinct from plan_type (how it is scheduled). */
-          category: PlanCategory | null;
-          /** User-uploaded cover; outranks the canonical illustration. */
-          cover_image_url: string | null;
-          /**
-           * Days after the Plan ends that its chat closes. One of 1/3/7/14.
-           * The close INSTANT is derived from this plus the Plan's live
-           * timing, never stored, so a rescheduled Plan moves its own closure.
-           */
-          chat_close_days: number;
-        };
-        Insert: {
-          id?: string;
-          creator_id: string;
-          title: string;
-          description?: string | null;
-          plan_type: PlanType;
-          chat_close_days?: number;
-          category?: PlanCategory | null;
-          cover_image_url?: string | null;
-          visibility_type?: PlanVisibilityType;
-          status?: PlanStatus;
-          start_at?: string | null;
-          end_at?: string | null;
-          timezone?: string;
-          rsvp_deadline?: string | null;
-          max_participants?: number;
-          place_type?: PlanPlaceType;
-          place_id?: string | null;
-          custom_place_text?: string | null;
-          reminder_minutes?: number | null;
-          source_hangout_id?: string | null;
-          source_ping_id?: string | null;
-          created_at?: string;
-          updated_at?: string;
-          cancelled_at?: string | null;
-          completed_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["plans"]["Insert"]>;
-        Relationships: [];
-      };
-      plan_participants: {
-        Row: {
-          id: string;
-          plan_id: string;
-          user_id: string;
-          role: PlanRole;
-          rsvp_status: RsvpStatus;
-          response_note: string | null;
-          attendance_visibility: AttendanceVisibility;
-          invited_by: string | null;
-          viewed_at: string | null;
-          responded_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          plan_id: string;
-          user_id: string;
-          role?: PlanRole;
-          rsvp_status?: RsvpStatus;
-          response_note?: string | null;
-          attendance_visibility?: AttendanceVisibility;
-          invited_by?: string | null;
-          viewed_at?: string | null;
-          responded_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["plan_participants"]["Insert"]>;
-        Relationships: [];
-      };
-      plan_polls: {
-        Row: {
-          id: string;
-          plan_id: string;
-          creator_id: string;
-          poll_type: PollType;
-          question: string;
-          selection_mode: PollSelectionMode;
-          results_visibility: PollResultsVisibility;
-          closes_at: string | null;
-          status: PollStatus;
-          confirmed_option_id: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          plan_id: string;
-          creator_id: string;
-          poll_type: PollType;
-          question: string;
-          selection_mode?: PollSelectionMode;
-          results_visibility?: PollResultsVisibility;
-          closes_at?: string | null;
-          status?: PollStatus;
-          confirmed_option_id?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["plan_polls"]["Insert"]>;
-        Relationships: [];
-      };
-      plan_poll_options: {
-        Row: {
-          id: string;
-          poll_id: string;
-          label: string;
-          value: string | null;
-          sort_order: number;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          poll_id: string;
-          label: string;
-          value?: string | null;
-          sort_order?: number;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["plan_poll_options"]["Insert"]>;
-        Relationships: [];
-      };
-      plan_poll_votes: {
-        Row: {
-          id: string;
-          poll_id: string;
-          option_id: string;
-          user_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          poll_id: string;
-          option_id: string;
-          user_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["plan_poll_votes"]["Insert"]>;
-        Relationships: [];
-      };
-      hangout_sessions: {
-        Row: {
-          id: string;
-          owner_id: string;
-          area_tier: string | null;
-          area_derived_at: string | null;
-          discovery_scope: string;
-          activity_type: HangoutActivityType;
-          message: string | null;
-          audience_type: HangoutAudienceType;
-          broad_area_text: string | null;
-          starts_at: string;
-          ends_at: string;
-          max_participants: number;
-          allow_pings: boolean;
-          allow_friend_invites: boolean;
-          status: HangoutStatus;
-          converted_plan_id: string | null;
-          timezone: string;
-          audience_announce_claimed_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          owner_id: string;
-          area_tier?: string | null;
-          area_derived_at?: string | null;
-          discovery_scope?: string;
-          activity_type: HangoutActivityType;
-          message?: string | null;
-          audience_type?: HangoutAudienceType;
-          broad_area_text?: string | null;
-          starts_at?: string;
-          ends_at: string;
-          max_participants?: number;
-          allow_pings?: boolean;
-          allow_friend_invites?: boolean;
-          status?: HangoutStatus;
-          converted_plan_id?: string | null;
-          timezone?: string;
-          audience_announce_claimed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["hangout_sessions"]["Insert"]>;
-        Relationships: [];
-      };
-      socialize_sessions: {
-        Row: {
-          id: string;
-          user_id: string;
-          activity: string;
-          note: string | null;
-          area_tier: string;
-          starts_at: string;
-          expires_at: string;
-          ended_at: string | null;
-          status: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          activity: string;
-          note?: string | null;
-          area_tier: string;
-          starts_at?: string;
-          expires_at: string;
-          ended_at?: string | null;
-          status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["socialize_sessions"]["Insert"]>;
-        Relationships: [];
-      };
-      hangout_audience_targets: {
-        Row: {
-          id: string;
-          hangout_session_id: string;
-          target_type: "circle" | "user" | "group";
-          target_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          hangout_session_id: string;
-          target_type: "circle" | "user" | "group";
-          target_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["hangout_audience_targets"]["Insert"]>;
-        Relationships: [];
-      };
-      hangout_requests: {
-        Row: {
-          id: string;
-          hangout_session_id: string;
-          requester_id: string;
-          status: HangoutRequestStatus;
-          message: string | null;
-          responded_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          hangout_session_id: string;
-          requester_id: string;
-          status?: HangoutRequestStatus;
-          message?: string | null;
-          responded_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["hangout_requests"]["Insert"]>;
-        Relationships: [];
-      };
-      events: {
-        Row: {
-          id: string;
-          host_id: string;
-          name: string;
-          description: string | null;
-          venue_label: string | null;
-          starts_at: string;
-          ends_at: string;
-          checkin_opens_minutes_before: number;
-          visibility: EventVisibility;
-          status: EventStatus;
-          /**
-           * Cover artwork via the canonical media_assets stack (Stage F).
-           * NULL for drafts and for legacy events predating the published-cover
-           * rule; those render the deterministic generated fallback.
-           */
-          cover_media_id: string | null;
-          /** Focal point 0..1 for cropping one image across every surface. */
-          cover_focal_x: number;
-          cover_focal_y: number;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          host_id: string;
-          name: string;
-          description?: string | null;
-          venue_label?: string | null;
-          starts_at: string;
-          ends_at: string;
-          checkin_opens_minutes_before?: number;
-          visibility?: EventVisibility;
-          status?: EventStatus;
-          cover_media_id?: string | null;
-          cover_focal_x?: number;
-          cover_focal_y?: number;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
-        Relationships: [];
-      };
-      event_rsvps: {
-        Row: {
-          id: string;
-          event_id: string;
-          user_id: string;
-          status: EventRsvpStatus;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_id: string;
-          user_id: string;
-          status: EventRsvpStatus;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_rsvps"]["Insert"]>;
-        Relationships: [];
-      };
-      linkr_profiles: {
-        Row: {
-          user_id: string;
-          enabled: boolean;
-          intent: LinkrIntentValue;
-          bio: string | null;
-          discovery_distance: LinkrDistanceValue;
-          require_photos: boolean;
-          only_active_now: boolean;
-          only_new_today: boolean;
-          event_mode_enabled: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          enabled?: boolean;
-          intent?: LinkrIntentValue;
-          bio?: string | null;
-          discovery_distance?: LinkrDistanceValue;
-          require_photos?: boolean;
-          only_active_now?: boolean;
-          only_new_today?: boolean;
-          event_mode_enabled?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["linkr_profiles"]["Insert"]>;
-        Relationships: [];
-      };
-      linkr_actions: {
-        Row: {
-          id: string;
-          actor_id: string;
-          target_id: string;
-          action: "pass" | "connect";
-          event_id: string | null;
-          expires_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          actor_id: string;
-          target_id: string;
-          action: "pass" | "connect";
-          event_id?: string | null;
-          expires_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["linkr_actions"]["Insert"]>;
-        Relationships: [];
-      };
-      linkr_connections: {
-        Row: {
-          id: string;
-          user_low: string;
-          user_high: string;
-          event_id: string | null;
-          conversation_id: string | null;
-          connected_at: string;
-          ended_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_low: string;
-          user_high: string;
-          event_id?: string | null;
-          conversation_id?: string | null;
-          connected_at?: string;
-          ended_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["linkr_connections"]["Insert"]>;
-        Relationships: [];
-      };
-      linkr_interests: {
-        Row: {
-          id: string;
-          user_id: string;
-          interest: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          interest: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["linkr_interests"]["Insert"]>;
-        Relationships: [];
-      };
-      event_audience_targets: {
-        Row: {
-          id: string;
-          event_id: string;
-          target_type: EventAudienceTargetType;
-          target_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_id: string;
-          target_type: EventAudienceTargetType;
-          target_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_audience_targets"]["Insert"]>;
-        Relationships: [];
-      };
-      event_locations: {
-        Row: {
-          event_id: string;
-          latitude: number;
-          longitude: number;
-          locality: string | null;
-          region: string | null;
-          country_code: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          event_id: string;
-          latitude: number;
-          longitude: number;
-          locality?: string | null;
-          region?: string | null;
-          country_code?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_locations"]["Insert"]>;
-        Relationships: [];
-      };
-      event_admins: {
-        Row: {
-          id: string;
-          event_id: string;
-          user_id: string;
-          role: EventAdminRole;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_id: string;
-          user_id: string;
-          role?: EventAdminRole;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_admins"]["Insert"]>;
-        Relationships: [];
-      };
-      event_updates: {
-        Row: {
-          id: string;
-          event_id: string;
-          author_id: string;
-          body: string;
-          priority: EventUpdatePriority;
-          edited_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_id: string;
-          author_id: string;
-          body: string;
-          priority?: EventUpdatePriority;
-          edited_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_updates"]["Insert"]>;
-        Relationships: [];
-      };
-      event_update_reactions: {
-        Row: {
-          id: string;
-          event_update_id: string;
-          user_id: string;
-          reaction_type: EventUpdateReactionType;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_update_id: string;
-          user_id: string;
-          reaction_type: EventUpdateReactionType;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_update_reactions"]["Insert"]>;
-        Relationships: [];
-      };
-      event_linkr_opt_ins: {
-        Row: {
-          id: string;
-          event_id: string;
-          user_id: string;
-          enabled: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_id: string;
-          user_id: string;
-          enabled?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_linkr_opt_ins"]["Insert"]>;
-        Relationships: [];
-      };
-      safe_arrival_sessions: {
-        Row: {
-          id: string;
-          traveller_id: string;
-          destination_type: SafeArrivalDestinationType;
-          destination_label: string;
-          destination_event_id: string | null;
-          expected_arrival_at: string;
-          grace_period_minutes: number;
-          note: string | null;
-          status: SafeArrivalStatus;
-          started_at: string;
-          confirmed_at: string | null;
-          cancelled_at: string | null;
-          unconfirmed_notified_at: string | null;
-          unconfirmed_at: string | null;
-          expired_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          traveller_id: string;
-          destination_type?: SafeArrivalDestinationType;
-          destination_label: string;
-          destination_event_id?: string | null;
-          expected_arrival_at: string;
-          grace_period_minutes?: number;
-          note?: string | null;
-          status?: SafeArrivalStatus;
-          started_at?: string;
-          confirmed_at?: string | null;
-          cancelled_at?: string | null;
-          unconfirmed_notified_at?: string | null;
-          unconfirmed_at?: string | null;
-          expired_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["safe_arrival_sessions"]["Insert"]>;
-        Relationships: [];
-      };
-      safe_arrival_contacts: {
-        Row: {
-          id: string;
-          session_id: string;
-          contact_user_id: string;
-          acknowledgement_status: SafeArrivalAcknowledgement;
-          acknowledged_at: string | null;
-          notified_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          session_id: string;
-          contact_user_id: string;
-          acknowledgement_status?: SafeArrivalAcknowledgement;
-          acknowledged_at?: string | null;
-          notified_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["safe_arrival_contacts"]["Insert"]>;
-        Relationships: [];
-      };
-      safe_arrival_events: {
-        Row: {
-          id: string;
-          session_id: string;
-          event_type: SafeArrivalEventType;
-          created_by: string | null;
-          metadata: Json;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          session_id: string;
-          event_type: SafeArrivalEventType;
-          created_by?: string | null;
-          metadata?: Json;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["safe_arrival_events"]["Insert"]>;
-        Relationships: [];
-      };
-      safe_arrival_blocks: {
-        Row: {
-          id: string;
-          user_id: string;
-          blocked_traveller_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          blocked_traveller_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["safe_arrival_blocks"]["Insert"]>;
-        Relationships: [];
-      };
-      check_ins: {
-        Row: {
-          id: string;
-          user_id: string;
-          context_type: CheckInContextType;
-          context_id: string;
-          method: CheckInMethod;
-          visibility: CheckInVisibility;
-          status: CheckInStatus;
-          event_glow_enabled: boolean;
-          checked_in_at: string;
-          checked_out_at: string | null;
-          verified_by: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          context_type: CheckInContextType;
-          context_id: string;
-          method?: CheckInMethod;
-          visibility?: CheckInVisibility;
-          status?: CheckInStatus;
-          event_glow_enabled?: boolean;
-          checked_in_at?: string;
-          checked_out_at?: string | null;
-          verified_by?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["check_ins"]["Insert"]>;
-        Relationships: [];
-      };
-      event_circles: {
-        Row: {
-          id: string;
-          event_id: string | null;
-          owner_id: string;
-          name: string;
-          description: string | null;
-          join_mode: EventCircleJoinMode;
-          status: EventCircleStatus;
-          member_visibility: EventCircleMemberVisibility;
-          opens_at: string | null;
-          closes_at: string | null;
-          archives_at: string | null;
-          max_members: number;
-          /** Event Rooms productization: the "Show in event" switch. */
-          listed_in_event: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_id?: string | null;
-          owner_id: string;
-          name: string;
-          description?: string | null;
-          join_mode?: EventCircleJoinMode;
-          status?: EventCircleStatus;
-          member_visibility?: EventCircleMemberVisibility;
-          opens_at?: string | null;
-          closes_at?: string | null;
-          archives_at?: string | null;
-          max_members?: number;
-          listed_in_event?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_circles"]["Insert"]>;
-        Relationships: [];
-      };
-      event_circle_invitations: {
-        Row: {
-          id: string;
-          event_circle_id: string;
-          invited_user_id: string;
-          invited_by: string;
-          status: "pending" | "accepted" | "revoked";
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_circle_id: string;
-          invited_user_id: string;
-          invited_by: string;
-          status?: "pending" | "accepted" | "revoked";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_circle_invitations"]["Insert"]>;
-        Relationships: [];
-      };
-      event_circle_group_targets: {
-        Row: {
-          id: string;
-          event_circle_id: string;
-          group_conversation_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_circle_id: string;
-          group_conversation_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_circle_group_targets"]["Insert"]>;
-        Relationships: [];
-      };
-      event_announcement_reactions: {
-        Row: {
-          id: string;
-          event_announcement_id: string;
-          user_id: string;
-          reaction_type: EventUpdateReactionType;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_announcement_id: string;
-          user_id: string;
-          reaction_type: EventUpdateReactionType;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_announcement_reactions"]["Insert"]>;
-        Relationships: [];
-      };
-      event_circle_members: {
-        Row: {
-          id: string;
-          event_circle_id: string;
-          user_id: string;
-          role: EventCircleRole;
-          status: EventCircleMemberStatus;
-          joined_at: string;
-          left_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_circle_id: string;
-          user_id: string;
-          role?: EventCircleRole;
-          status?: EventCircleMemberStatus;
-          joined_at?: string;
-          left_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_circle_members"]["Insert"]>;
-        Relationships: [];
-      };
-      event_announcements: {
-        Row: {
-          id: string;
-          event_circle_id: string;
-          author_id: string;
-          title: string;
-          body: string;
-          priority: "normal" | "high";
-          published_at: string;
-          expires_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_circle_id: string;
-          author_id: string;
-          title: string;
-          body: string;
-          priority?: "normal" | "high";
-          published_at?: string;
-          expires_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["event_announcements"]["Insert"]>;
-        Relationships: [];
-      };
-      media_assets: {
-        Row: {
-          id: string;
-          owner_id: string;
-          storage_key: string;
-          content_type: MediaContentType;
-          size_bytes: number;
-          width: number | null;
-          height: number | null;
-          processing_status: MediaProcessingStatus;
-          moderation_status: ModerationStatus;
-          context_type: MediaContextType;
-          intended_conversation_id: string | null;
-          intended_media_kind: "image" | "voice_note" | null;
-          upload_expires_at: string | null;
-          duration_ms: number | null;
-          waveform_data: Json | null;
-          retention_policy: MediaRetentionPolicy;
-          created_at: string;
-          updated_at: string;
-          deleted_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          owner_id: string;
-          storage_key: string;
-          content_type: MediaContentType;
-          size_bytes: number;
-          width?: number | null;
-          height?: number | null;
-          processing_status?: MediaProcessingStatus;
-          moderation_status?: ModerationStatus;
-          context_type: MediaContextType;
-          intended_conversation_id?: string | null;
-          intended_media_kind?: "image" | "voice_note" | null;
-          upload_expires_at?: string | null;
-          duration_ms?: number | null;
-          waveform_data?: Json | null;
-          retention_policy?: MediaRetentionPolicy;
-          created_at?: string;
-          updated_at?: string;
-          deleted_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["media_assets"]["Insert"]>;
-        Relationships: [];
-      };
-      media_variants: {
-        Row: {
-          id: string;
-          media_asset_id: string;
-          variant_type: MediaVariantType;
-          storage_key: string;
-          width: number | null;
-          height: number | null;
-          size_bytes: number | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          media_asset_id: string;
-          variant_type: MediaVariantType;
-          storage_key: string;
-          width?: number | null;
-          height?: number | null;
-          size_bytes?: number | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["media_variants"]["Insert"]>;
-        Relationships: [];
-      };
-      media_deletion_queue: {
-        Row: {
-          id: string;
-          media_asset_id: string;
-          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation" | "orphaned_upload";
-          queued_at: string;
-          processed_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          media_asset_id: string;
-          reason: "parent_deleted" | "parent_expired" | "user_deleted" | "moderation" | "orphaned_upload";
-          queued_at?: string;
-          processed_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["media_deletion_queue"]["Insert"]>;
-        Relationships: [];
-      };
-      moments: {
-        Row: {
-          id: string;
-          author_id: string;
-          content_type: MomentContentType;
-          text_content: string | null;
-          media_id: string | null;
-          caption: string | null;
-          audience_type: MomentAudienceType;
-          status: MomentStatus;
-          surface: MomentSurface;
-          starts_at: string;
-          expires_at: string;
-          created_at: string;
-          updated_at: string;
-          deleted_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          author_id: string;
-          content_type: MomentContentType;
-          text_content?: string | null;
-          media_id?: string | null;
-          caption?: string | null;
-          audience_type: MomentAudienceType;
-          status?: MomentStatus;
-          surface?: MomentSurface;
-          starts_at?: string;
-          expires_at: string;
-          created_at?: string;
-          updated_at?: string;
-          deleted_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["moments"]["Insert"]>;
-        Relationships: [];
-      };
-      moment_audience_targets: {
-        Row: {
-          id: string;
-          moment_id: string;
-          target_type: AudienceTargetType;
-          target_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          moment_id: string;
-          target_type: AudienceTargetType;
-          target_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["moment_audience_targets"]["Insert"]>;
-        Relationships: [];
-      };
-      moment_reactions: {
-        Row: {
-          id: string;
-          moment_id: string;
-          user_id: string;
-          reaction_type: ReactionType;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          moment_id: string;
-          user_id: string;
-          reaction_type: ReactionType;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["moment_reactions"]["Insert"]>;
-        Relationships: [];
-      };
-      /** One row per viewer per Moment: reach, not a hit counter. */
-      moment_views: {
-        Row: {
-          id: string;
-          moment_id: string;
-          viewer_id: string;
-          viewed_at: string;
-        };
-        Insert: {
-          id?: string;
-          moment_id: string;
-          viewer_id: string;
-          viewed_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["moment_views"]["Insert"]>;
-        Relationships: [];
-      };
-      /**
-       * One-way, private content interest. Deliberately not a follow graph:
-       * there is no "following" direction and no creator-readable list.
-       */
-      tune_ins: {
-        Row: {
-          id: string;
-          viewer_id: string;
-          creator_id: string;
-          /** The Spotlight Moment that led here, when there was one. */
-          source_moment_id: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          viewer_id: string;
-          creator_id: string;
-          source_moment_id?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["tune_ins"]["Insert"]>;
-        Relationships: [];
-      };
-      muddy_drops: {
-        Row: {
-          id: string;
-          creator_id: string;
-          drop_type: DropType;
-          context_type: DropContextType;
-          context_id: string;
-          content_type: DropContentType;
-          text_content: string | null;
-          media_id: string | null;
-          action_type: DropActionType | null;
-          action_target_id: string | null;
-          status: DropStatus;
-          starts_at: string;
-          expires_at: string;
-          max_unlocks: number | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          creator_id: string;
-          drop_type: DropType;
-          context_type: DropContextType;
-          context_id: string;
-          content_type: DropContentType;
-          text_content?: string | null;
-          media_id?: string | null;
-          action_type?: DropActionType | null;
-          action_target_id?: string | null;
-          status?: DropStatus;
-          starts_at?: string;
-          expires_at: string;
-          max_unlocks?: number | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["muddy_drops"]["Insert"]>;
-        Relationships: [];
-      };
-      drop_audience_targets: {
-        Row: {
-          id: string;
-          drop_id: string;
-          target_type: AudienceTargetType;
-          target_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          drop_id: string;
-          target_type: AudienceTargetType;
-          target_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["drop_audience_targets"]["Insert"]>;
-        Relationships: [];
-      };
-      drop_unlocks: {
-        Row: {
-          id: string;
-          drop_id: string;
-          user_id: string;
-          unlocked_at: string;
-          viewed_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          drop_id: string;
-          user_id: string;
-          unlocked_at?: string;
-          viewed_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["drop_unlocks"]["Insert"]>;
-        Relationships: [];
-      };
-      content_reports: {
-        Row: {
-          id: string;
-          reporter_id: string | null;
-          content_type: ReportableContentType;
-          content_id: string;
-          reported_user_id: string | null;
-          category: ReportCategory;
-          details: string | null;
-          status: ContentReportStatus;
-          created_at: string;
-          resolved_at: string | null;
-          legacy_support_request_id: string | null;
-        };
-        Insert: {
-          id?: string;
-          reporter_id?: string | null;
-          content_type: ReportableContentType;
-          content_id: string;
-          reported_user_id?: string | null;
-          category: ReportCategory;
-          details?: string | null;
-          status?: ContentReportStatus;
-          created_at?: string;
-          resolved_at?: string | null;
-          legacy_support_request_id?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["content_reports"]["Insert"]>;
-        Relationships: [];
-      };
-      moderation_actions: {
-        Row: {
-          id: string;
-          report_id: string | null;
-          moderator_id: string | null;
-          action_type: ModerationActionType;
-          reason: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          report_id?: string | null;
-          moderator_id?: string | null;
-          action_type: ModerationActionType;
-          reason?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["moderation_actions"]["Insert"]>;
-        Relationships: [];
-      };
-      hidden_content: {
-        Row: {
-          id: string;
-          user_id: string;
-          content_type: ReportableContentType;
-          content_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          content_type: ReportableContentType;
-          content_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["hidden_content"]["Insert"]>;
-        Relationships: [];
-      };
-      conversations: {
-        Row: {
-          id: string;
-          conversation_type: ConversationType;
-          created_by: string | null;
-          context_type: ConversationContextType | null;
-          context_id: string | null;
-          status: ConversationStatus;
-          direct_key: string | null;
-          created_at: string;
-          updated_at: string;
-          last_message_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          conversation_type: ConversationType;
-          created_by?: string | null;
-          context_type?: ConversationContextType | null;
-          context_id?: string | null;
-          status?: ConversationStatus;
-          direct_key?: string | null;
-          created_at?: string;
-          updated_at?: string;
-          last_message_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["conversations"]["Insert"]>;
-        Relationships: [];
-      };
-      // ---------------------------------------------------------------
-      // Chats V4 + Event Rooms tables, taken verbatim from
-      // `supabase gen types typescript --linked` against PRODUCTION after
-      // the coordinated migration. MERGED into this curated file rather than
-      // replacing it: the generated output omits the named aliases and helpers
-      // (SubscriptionPlan, legacyTierOf, ...) the rest of the codebase imports
-      // from here, and swapping wholesale produced 308 type errors.
-      // ---------------------------------------------------------------
-      conversation_message_pins: {
-        Row: {
-          conversation_id: string
+      access_global_windows: {
+        Row: {
+          created_at: string
+          created_by: string
+          expires_at: string | null
           id: string
-          message_id: string
-          pinned_at: string
-          pinned_by: string | null
+          reason: string
+          revoked_at: string | null
+          revoked_by: string | null
+          revoked_reason: string | null
+          starts_at: string
         }
         Insert: {
-          conversation_id: string
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
           id?: string
-          message_id: string
-          pinned_at?: string
-          pinned_by?: string | null
+          reason: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          revoked_reason?: string | null
+          starts_at?: string
         }
         Update: {
-          conversation_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
           id?: string
-          message_id?: string
-          pinned_at?: string
-          pinned_by?: string | null
+          reason?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          revoked_reason?: string | null
+          starts_at?: string
+        }
+        Relationships: []
+      }
+      access_grants: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          granted_by: string | null
+          id: string
+          metadata: Json
+          reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          revoked_reason: string | null
+          source: Database["public"]["Enums"]["access_source"]
+          starts_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          granted_by?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          revoked_reason?: string | null
+          source: Database["public"]["Enums"]["access_source"]
+          starts_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          granted_by?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          revoked_reason?: string | null
+          source?: Database["public"]["Enums"]["access_source"]
+          starts_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      access_launch: {
+        Row: {
+          created_at: string
+          id: boolean
+          launched_at: string
+          note: string | null
+          welcome_days: number
+        }
+        Insert: {
+          created_at?: string
+          id?: boolean
+          launched_at: string
+          note?: string | null
+          welcome_days?: number
+        }
+        Update: {
+          created_at?: string
+          id?: boolean
+          launched_at?: string
+          note?: string | null
+          welcome_days?: number
+        }
+        Relationships: []
+      }
+      access_reminder_log: {
+        Row: {
+          grant_id: string
+          id: string
+          milestone: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          grant_id: string
+          id?: string
+          milestone: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          grant_id?: string
+          id?: string
+          milestone?: string
+          sent_at?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "conversation_message_pins_conversation_id_fkey"
-            columns: ["conversation_id"]
+            foreignKeyName: "access_reminder_log_grant_id_fkey"
+            columns: ["grant_id"]
             isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversation_message_pins_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
+            referencedRelation: "access_grants"
             referencedColumns: ["id"]
           },
         ]
       }
-      chat_polls: {
+      account_deletion_requests: {
         Row: {
-          allow_multiple: boolean
-          closed_at: string | null
-          conversation_id: string
-          created_at: string
-          created_by: string | null
-          is_anonymous: boolean
-          message_id: string
-          question: string
+          id: string
+          reason: string | null
+          requested_at: string
+          stage: string
+          updated_at: string
+          user_id: string
         }
         Insert: {
-          allow_multiple?: boolean
-          closed_at?: string | null
-          conversation_id: string
-          created_at?: string
-          created_by?: string | null
-          is_anonymous?: boolean
-          message_id: string
-          question: string
+          id?: string
+          reason?: string | null
+          requested_at?: string
+          stage?: string
+          updated_at?: string
+          user_id: string
         }
         Update: {
-          allow_multiple?: boolean
-          closed_at?: string | null
-          conversation_id?: string
+          id?: string
+          reason?: string | null
+          requested_at?: string
+          stage?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      account_trust_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          risk_level: string
+          user_id: string
+        }
+        Insert: {
           created_at?: string
-          created_by?: string | null
-          is_anonymous?: boolean
-          message_id?: string
-          question?: string
+          event_type: string
+          id?: string
+          risk_level?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          risk_level?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      account_verifications: {
+        Row: {
+          created_at: string
+          evidence_label: string | null
+          expires_at: string | null
+          id: string
+          provider: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          verification_type: string
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          evidence_label?: string | null
+          expires_at?: string | null
+          id?: string
+          provider?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          verification_type: string
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          evidence_label?: string | null
+          expires_at?: string | null
+          id?: string
+          provider?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          verification_type?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
+      achievement_definitions: {
+        Row: {
+          category: string
+          code: string
+          created_at: string
+          criteria_type: string
+          criteria_value: number
+          description: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          code: string
+          created_at?: string
+          criteria_type: string
+          criteria_value?: number
+          description: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          code?: string
+          created_at?: string
+          criteria_type?: string
+          criteria_value?: number
+          description?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      activation_milestones: {
+        Row: {
+          id: string
+          milestone: string
+          reached_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          milestone: string
+          reached_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          milestone?: string
+          reached_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_assignments: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          role_id: string
+          starts_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          role_id: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          role_id?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "chat_polls_conversation_id_fkey"
-            columns: ["conversation_id"]
+            foreignKeyName: "admin_assignments_role_id_fkey"
+            columns: ["role_id"]
             isOneToOne: false
-            referencedRelation: "conversations"
+            referencedRelation: "admin_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_audit_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_role: string | null
+          auth_strength: string | null
+          case_reference: string | null
+          created_at: string
+          id: string
+          new_state: Json | null
+          previous_state: Json | null
+          reason: string | null
+          session_reference: string | null
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_role?: string | null
+          auth_strength?: string | null
+          case_reference?: string | null
+          created_at?: string
+          id?: string
+          new_state?: Json | null
+          previous_state?: Json | null
+          reason?: string | null
+          session_reference?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_role?: string | null
+          auth_strength?: string | null
+          case_reference?: string | null
+          created_at?: string
+          id?: string
+          new_state?: Json | null
+          previous_state?: Json | null
+          reason?: string | null
+          session_reference?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: []
+      }
+      admin_role_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          permission_key: string
+          role_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permission_key: string
+          role_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permission_key?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "admin_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system_role: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system_role?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system_role?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      admin_users: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          disabled_at: string | null
+          email: string
+          id: string
+          invited_by_user_id: string | null
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          disabled_at?: string | null
+          email: string
+          id?: string
+          invited_by_user_id?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          disabled_at?: string | null
+          email?: string
+          id?: string
+          invited_by_user_id?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      analytics_daily_user_facts: {
+        Row: {
+          action_count: number
+          created_at: string
+          event_date: string
+          event_name: string
+          feature_key: string
+          first_occurred_at: string
+          id: string
+          last_occurred_at: string
+          subscription_plan: Database["public"]["Enums"]["subscription_plan"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action_count?: number
+          created_at?: string
+          event_date: string
+          event_name: string
+          feature_key?: string
+          first_occurred_at: string
+          id?: string
+          last_occurred_at: string
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action_count?: number
+          created_at?: string
+          event_date?: string
+          event_name?: string
+          feature_key?: string
+          first_occurred_at?: string
+          id?: string
+          last_occurred_at?: string
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      app_feedback: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          message: string
+          rating: number | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          message?: string
+          rating?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          message?: string
+          rating?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      appeals: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          decided_at: string | null
+          decision: string | null
+          decision_note: string | null
+          id: string
+          reason: string
+          source_action_id: string | null
+          source_restriction_id: string | null
+          status: string
+          subject_user_id: string
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string | null
+          decision_note?: string | null
+          id?: string
+          reason: string
+          source_action_id?: string | null
+          source_restriction_id?: string | null
+          status?: string
+          subject_user_id: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string | null
+          decision_note?: string | null
+          id?: string
+          reason?: string
+          source_action_id?: string | null
+          source_restriction_id?: string | null
+          status?: string
+          subject_user_id?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appeals_source_action_id_fkey"
+            columns: ["source_action_id"]
+            isOneToOne: false
+            referencedRelation: "case_actions"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "chat_polls_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: true
-            referencedRelation: "messages"
+            foreignKeyName: "appeals_source_restriction_id_fkey"
+            columns: ["source_restriction_id"]
+            isOneToOne: false
+            referencedRelation: "user_restrictions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      best_buddies: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      billing_events: {
+        Row: {
+          amount_minor: number | null
+          created_at: string
+          currency: string | null
+          dedupe_key: string
+          event_type: string
+          fee_status: string
+          id: string
+          net_amount_minor: number | null
+          occurred_at: string
+          previous_plan: Database["public"]["Enums"]["subscription_plan"] | null
+          provider: string
+          provider_event_id: string | null
+          provider_fee_minor: number | null
+          source: string
+          subscription_id: string | null
+          subscription_plan: Database["public"]["Enums"]["subscription_plan"]
+          transaction_reference: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount_minor?: number | null
+          created_at?: string
+          currency?: string | null
+          dedupe_key: string
+          event_type: string
+          fee_status?: string
+          id?: string
+          net_amount_minor?: number | null
+          occurred_at?: string
+          previous_plan?:
+            | Database["public"]["Enums"]["subscription_plan"]
+            | null
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_minor?: number | null
+          source: string
+          subscription_id?: string | null
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          transaction_reference?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount_minor?: number | null
+          created_at?: string
+          currency?: string | null
+          dedupe_key?: string
+          event_type?: string
+          fee_status?: string
+          id?: string
+          net_amount_minor?: number | null
+          occurred_at?: string
+          previous_plan?:
+            | Database["public"]["Enums"]["subscription_plan"]
+            | null
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_minor?: number | null
+          source?: string
+          subscription_id?: string | null
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          transaction_reference?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      birthday_notification_deliveries: {
+        Row: {
+          birthday_day: string
+          birthday_user_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          recipient_id: string
+          status: string
+        }
+        Insert: {
+          birthday_day: string
+          birthday_user_id: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          recipient_id: string
+          status?: string
+        }
+        Update: {
+          birthday_day?: string
+          birthday_user_id?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          recipient_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      blocked_users: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      blog_images: {
+        Row: {
+          bytes: number
+          created_at: string
+          created_by: string
+          height: number
+          id: string
+          sha256: string
+          width: number
+        }
+        Insert: {
+          bytes: number
+          created_at?: string
+          created_by: string
+          height: number
+          id?: string
+          sha256: string
+          width: number
+        }
+        Update: {
+          bytes?: number
+          created_at?: string
+          created_by?: string
+          height?: number
+          id?: string
+          sha256?: string
+          width?: number
+        }
+        Relationships: []
+      }
+      blog_posts: {
+        Row: {
+          draft: Json
+          id: string
+          published: Json | null
+          published_at: string | null
+          published_updated_at: string | null
+          slug: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          draft: Json
+          id?: string
+          published?: Json | null
+          published_at?: string | null
+          published_updated_at?: string | null
+          slug: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          draft?: Json
+          id?: string
+          published?: Json | null
+          published_at?: string | null
+          published_updated_at?: string | null
+          slug?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      blog_revisions: {
+        Row: {
+          draft: Json
+          id: string
+          post_id: string
+          published: Json | null
+          saved_at: string
+          version: number
+        }
+        Insert: {
+          draft: Json
+          id?: string
+          post_id: string
+          published?: Json | null
+          saved_at?: string
+          version: number
+        }
+        Update: {
+          draft?: Json
+          id?: string
+          post_id?: string
+          published?: Json | null
+          saved_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_revisions_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      buddy_score_ledger: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          points_delta: number
+          rule_version: number
+          source_reference: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          points_delta: number
+          rule_version: number
+          source_reference: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          points_delta?: number
+          rule_version?: number
+          source_reference?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      business_alert_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          rule_key: string
+          threshold_percent: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          rule_key: string
+          threshold_percent: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          rule_key?: string
+          threshold_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      case_actions: {
+        Row: {
+          action_type: string
+          actor_id: string | null
+          case_id: string
+          created_at: string
+          ends_at: string | null
+          id: string
+          reason_code: string | null
+          reversed_at: string | null
+          starts_at: string
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action_type: string
+          actor_id?: string | null
+          case_id: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          reason_code?: string | null
+          reversed_at?: string | null
+          starts_at?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action_type?: string
+          actor_id?: string | null
+          case_id?: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          reason_code?: string | null
+          reversed_at?: string | null
+          starts_at?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_actions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "trust_safety_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      case_evidence: {
+        Row: {
+          access_level: string
+          case_id: string
+          created_at: string
+          evidence_type: string
+          id: string
+          protected_reference: string
+          retention_expires_at: string | null
+        }
+        Insert: {
+          access_level?: string
+          case_id: string
+          created_at?: string
+          evidence_type: string
+          id?: string
+          protected_reference: string
+          retention_expires_at?: string | null
+        }
+        Update: {
+          access_level?: string
+          case_id?: string
+          created_at?: string
+          evidence_type?: string
+          id?: string
+          protected_reference?: string
+          retention_expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_evidence_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "trust_safety_cases"
             referencedColumns: ["id"]
           },
         ]
@@ -2877,106 +1087,483 @@ export type Database = {
           },
         ]
       }
-      saved_messages: {
+      chat_polls: {
         Row: {
-          folder_id: string | null
-          message_id: string
-          saved_at: string
-          user_id: string
-        }
-        Insert: {
-          folder_id?: string | null
-          message_id: string
-          saved_at?: string
-          user_id: string
-        }
-        Update: {
-          folder_id?: string | null
-          message_id?: string
-          saved_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "saved_messages_folder_id_fkey"
-            columns: ["folder_id"]
-            isOneToOne: false
-            referencedRelation: "saved_message_folders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saved_messages_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      saved_message_folders: {
-        Row: {
+          allow_multiple: boolean
+          closed_at: string | null
+          conversation_id: string
           created_at: string
-          id: string
-          name: string
-          sort_order: number
-          updated_at: string
-          user_id: string
+          created_by: string | null
+          is_anonymous: boolean
+          message_id: string
+          question: string
         }
         Insert: {
+          allow_multiple?: boolean
+          closed_at?: string | null
+          conversation_id: string
           created_at?: string
-          id?: string
-          name: string
-          sort_order?: number
-          updated_at?: string
-          user_id: string
+          created_by?: string | null
+          is_anonymous?: boolean
+          message_id: string
+          question: string
         }
         Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          sort_order?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      conversation_presence: {
-        Row: {
-          conversation_id: string
-          last_active_at: string
-          presence_state: string
-          present_until: string
-          typing_until: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          conversation_id: string
-          last_active_at?: string
-          presence_state?: string
-          present_until: string
-          typing_until?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
+          allow_multiple?: boolean
+          closed_at?: string | null
           conversation_id?: string
-          last_active_at?: string
-          presence_state?: string
-          present_until?: string
-          typing_until?: string | null
-          updated_at?: string
-          user_id?: string
+          created_at?: string
+          created_by?: string | null
+          is_anonymous?: boolean
+          message_id?: string
+          question?: string
         }
         Relationships: [
           {
-            foreignKeyName: "conversation_presence_conversation_id_fkey"
+            foreignKeyName: "chat_polls_conversation_id_fkey"
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "chat_polls_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      check_ins: {
+        Row: {
+          checked_in_at: string
+          checked_out_at: string | null
+          context_id: string
+          context_type: string
+          created_at: string
+          event_glow_enabled: boolean
+          id: string
+          method: string
+          status: string
+          updated_at: string
+          user_id: string
+          verified_by: string | null
+          visibility: string
+        }
+        Insert: {
+          checked_in_at?: string
+          checked_out_at?: string | null
+          context_id: string
+          context_type: string
+          created_at?: string
+          event_glow_enabled?: boolean
+          id?: string
+          method?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          verified_by?: string | null
+          visibility?: string
+        }
+        Update: {
+          checked_in_at?: string
+          checked_out_at?: string | null
+          context_id?: string
+          context_type?: string
+          created_at?: string
+          event_glow_enabled?: boolean
+          id?: string
+          method?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          verified_by?: string | null
+          visibility?: string
+        }
+        Relationships: []
+      }
+      circle_members: {
+        Row: {
+          added_by: string | null
+          circle_id: string
+          created_at: string
+          friend_id: string
+          id: string
+        }
+        Insert: {
+          added_by?: string | null
+          circle_id: string
+          created_at?: string
+          friend_id: string
+          id?: string
+        }
+        Update: {
+          added_by?: string | null
+          circle_id?: string
+          created_at?: string
+          friend_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_members_circle_id_fkey"
+            columns: ["circle_id"]
+            isOneToOne: false
+            referencedRelation: "friend_circles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      close_friend_relationships: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          notification_preference: string
+          owner_id: string
+          priority_level: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          notification_preference?: string
+          owner_id: string
+          priority_level?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          notification_preference?: string
+          owner_id?: string
+          priority_level?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      conference_hidden_users: {
+        Row: {
+          created_at: string
+          hidden_user_id: string
+          viewer_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hidden_user_id: string
+          viewer_user_id: string
+        }
+        Update: {
+          created_at?: string
+          hidden_user_id?: string
+          viewer_user_id?: string
+        }
+        Relationships: []
+      }
+      conference_locations: {
+        Row: {
+          accuracy: number
+          last_updated: string
+          latitude: number
+          longitude: number
+          user_id: string
+        }
+        Insert: {
+          accuracy: number
+          last_updated?: string
+          latitude: number
+          longitude: number
+          user_id: string
+        }
+        Update: {
+          accuracy?: number
+          last_updated?: string
+          latitude?: number
+          longitude?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      conference_replies: {
+        Row: {
+          author_user_id: string
+          body: string
+          created_at: string
+          hype_count: number
+          id: string
+          pass_count: number
+          reply_to_reply_id: string | null
+          status: string
+          topic_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          body: string
+          created_at?: string
+          hype_count?: number
+          id?: string
+          pass_count?: number
+          reply_to_reply_id?: string | null
+          status?: string
+          topic_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          body?: string
+          created_at?: string
+          hype_count?: number
+          id?: string
+          pass_count?: number
+          reply_to_reply_id?: string | null
+          status?: string
+          topic_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conference_replies_reply_to_reply_id_fkey"
+            columns: ["reply_to_reply_id"]
+            isOneToOne: false
+            referencedRelation: "conference_replies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conference_replies_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "conference_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conference_topics: {
+        Row: {
+          author_user_id: string
+          body: string
+          created_at: string
+          expires_at: string
+          hype_count: number
+          id: string
+          last_activity_at: string
+          origin_latitude: number | null
+          origin_longitude: number | null
+          pass_count: number
+          reply_count: number
+          status: string
+          unique_voice_count: number
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          body: string
+          created_at?: string
+          expires_at?: string
+          hype_count?: number
+          id?: string
+          last_activity_at?: string
+          origin_latitude?: number | null
+          origin_longitude?: number | null
+          pass_count?: number
+          reply_count?: number
+          status?: string
+          unique_voice_count?: number
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          body?: string
+          created_at?: string
+          expires_at?: string
+          hype_count?: number
+          id?: string
+          last_activity_at?: string
+          origin_latitude?: number | null
+          origin_longitude?: number | null
+          pass_count?: number
+          reply_count?: number
+          status?: string
+          unique_voice_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      conference_voice_ids: {
+        Row: {
+          created_at: string
+          topic_id: string
+          user_id: string
+          voice_number: number
+        }
+        Insert: {
+          created_at?: string
+          topic_id: string
+          user_id: string
+          voice_number: number
+        }
+        Update: {
+          created_at?: string
+          topic_id?: string
+          user_id?: string
+          voice_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conference_voice_ids_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "conference_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conference_votes: {
+        Row: {
+          created_at: string
+          id: string
+          reply_id: string | null
+          topic_id: string | null
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reply_id?: string | null
+          topic_id?: string | null
+          updated_at?: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reply_id?: string | null
+          topic_id?: string | null
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conference_votes_reply_id_fkey"
+            columns: ["reply_id"]
+            isOneToOne: false
+            referencedRelation: "conference_replies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conference_votes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "conference_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consent_logs: {
+        Row: {
+          consent_text: string
+          consent_type: string
+          created_at: string
+          granted: boolean
+          id: string
+          user_id: string
+        }
+        Insert: {
+          consent_text: string
+          consent_type: string
+          created_at?: string
+          granted: boolean
+          id?: string
+          user_id: string
+        }
+        Update: {
+          consent_text?: string
+          consent_type?: string
+          created_at?: string
+          granted?: boolean
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contact_match_sessions: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          expires_at: string | null
+          id: string
+          matched_count: number
+          status: string
+          submitted_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          expires_at?: string | null
+          id?: string
+          matched_count?: number
+          status?: string
+          submitted_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          expires_at?: string | null
+          id?: string
+          matched_count?: number
+          status?: string
+          submitted_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      content_reports: {
+        Row: {
+          category: string
+          content_id: string
+          content_type: string
+          created_at: string
+          details: string | null
+          id: string
+          reported_user_id: string | null
+          reporter_id: string | null
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          category: string
+          content_id: string
+          content_type: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reported_user_id?: string | null
+          reporter_id?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          category?: string
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reported_user_id?: string | null
+          reporter_id?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: []
       }
       conversation_chat_settings: {
         Row: {
@@ -3020,6 +1607,171 @@ export type Database = {
             foreignKeyName: "conversation_chat_settings_conversation_id_fkey"
             columns: ["conversation_id"]
             isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_members: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          hidden_at: string | null
+          history_visible_from: string
+          id: string
+          joined_at: string
+          last_read_at: string | null
+          last_read_message_id: string | null
+          left_at: string | null
+          muted_until: string | null
+          read_receipts_enabled: boolean
+          role: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          hidden_at?: string | null
+          history_visible_from?: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          last_read_message_id?: string | null
+          left_at?: string | null
+          muted_until?: string | null
+          read_receipts_enabled?: boolean
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          hidden_at?: string | null
+          history_visible_from?: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          last_read_message_id?: string | null
+          left_at?: string | null
+          muted_until?: string | null
+          read_receipts_enabled?: boolean
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_members_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_message_pins: {
+        Row: {
+          conversation_id: string
+          id: string
+          message_id: string
+          pinned_at: string
+          pinned_by: string | null
+        }
+        Insert: {
+          conversation_id: string
+          id?: string
+          message_id: string
+          pinned_at?: string
+          pinned_by?: string | null
+        }
+        Update: {
+          conversation_id?: string
+          id?: string
+          message_id?: string
+          pinned_at?: string
+          pinned_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_message_pins_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_message_pins_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_pins: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_pins_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_presence: {
+        Row: {
+          conversation_id: string
+          last_active_at: string
+          presence_state: string
+          present_until: string
+          typing_until: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          last_active_at?: string
+          presence_state?: string
+          present_until: string
+          typing_until?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          last_active_at?: string
+          presence_state?: string
+          present_until?: string
+          typing_until?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_presence_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
             referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
@@ -3104,6 +1856,2987 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          context_id: string | null
+          context_type: string | null
+          conversation_type: string
+          created_at: string
+          created_by: string | null
+          direct_key: string | null
+          id: string
+          last_message_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          context_id?: string | null
+          context_type?: string | null
+          conversation_type: string
+          created_at?: string
+          created_by?: string | null
+          direct_key?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          context_id?: string | null
+          context_type?: string | null
+          conversation_type?: string
+          created_at?: string
+          created_by?: string | null
+          direct_key?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      custom_wallpapers: {
+        Row: {
+          created_at: string
+          height: number | null
+          id: string
+          mime_type: string
+          owner_id: string
+          size_bytes: number
+          state: string
+          storage_key: string
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          mime_type: string
+          owner_id: string
+          size_bytes: number
+          state?: string
+          storage_key: string
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          mime_type?: string
+          owner_id?: string
+          size_bytes?: number
+          state?: string
+          storage_key?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
+      deletion_audit_logs: {
+        Row: {
+          created_at: string
+          deleted_at: string
+          deleted_user_label: string
+          deletion_reason: string | null
+          id: string
+          retained_billing_reference: string | null
+          retained_report_reference: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string
+          deleted_user_label?: string
+          deletion_reason?: string | null
+          id?: string
+          retained_billing_reference?: string | null
+          retained_report_reference?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string
+          deleted_user_label?: string
+          deletion_reason?: string | null
+          id?: string
+          retained_billing_reference?: string | null
+          retained_report_reference?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      device_push_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          last_seen_at: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          platform: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          platform?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      discoverability_identifiers: {
+        Row: {
+          created_at: string
+          id: string
+          identifier_type: string
+          is_discoverable: boolean
+          protected_identifier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          identifier_type: string
+          is_discoverable?: boolean
+          protected_identifier: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          identifier_type?: string
+          is_discoverable?: boolean
+          protected_identifier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      discovery_passes: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          passed_user_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          passed_user_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          passed_user_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      domain_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          dedupe_key: string | null
+          event_type: string
+          feature_key: string | null
+          id: string
+          occurred_at: string
+          payload: Json
+          resource_id: string | null
+          resource_type: string
+          subscription_plan: Database["public"]["Enums"]["subscription_plan"]
+          version: number
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          event_type: string
+          feature_key?: string | null
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          resource_id?: string | null
+          resource_type: string
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          version?: number
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          event_type?: string
+          feature_key?: string | null
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          resource_id?: string | null
+          resource_type?: string
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
+          version?: number
+        }
+        Relationships: []
+      }
+      downgrade_adjustments: {
+        Row: {
+          created_at: string
+          id: string
+          resource_id: string | null
+          resource_type: string
+          selected_action: string
+          status: string
+          subscription_change_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          resource_id?: string | null
+          resource_type: string
+          selected_action: string
+          status?: string
+          subscription_change_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          resource_id?: string | null
+          resource_type?: string
+          selected_action?: string
+          status?: string
+          subscription_change_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "downgrade_adjustments_subscription_change_id_fkey"
+            columns: ["subscription_change_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_changes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drop_audience_targets: {
+        Row: {
+          created_at: string
+          drop_id: string
+          id: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          created_at?: string
+          drop_id: string
+          id?: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          created_at?: string
+          drop_id?: string
+          id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drop_audience_targets_drop_id_fkey"
+            columns: ["drop_id"]
+            isOneToOne: false
+            referencedRelation: "muddy_drops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drop_unlocks: {
+        Row: {
+          created_at: string
+          drop_id: string
+          id: string
+          unlocked_at: string
+          user_id: string
+          viewed_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          drop_id: string
+          id?: string
+          unlocked_at?: string
+          user_id: string
+          viewed_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          drop_id?: string
+          id?: string
+          unlocked_at?: string
+          user_id?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drop_unlocks_drop_id_fkey"
+            columns: ["drop_id"]
+            isOneToOne: false
+            referencedRelation: "muddy_drops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      earned_premium_rewards: {
+        Row: {
+          created_at: string
+          ending_notified_at: string | null
+          expires_at: string
+          grace_ends_at: string | null
+          grant_key: string
+          granted_at: string
+          id: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          reward_plan: Database["public"]["Enums"]["subscription_plan"]
+          rule_version: number
+          source_score_snapshot: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ending_notified_at?: string | null
+          expires_at: string
+          grace_ends_at?: string | null
+          grant_key: string
+          granted_at?: string
+          id?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          reward_plan: Database["public"]["Enums"]["subscription_plan"]
+          rule_version: number
+          source_score_snapshot: number
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          ending_notified_at?: string | null
+          expires_at?: string
+          grace_ends_at?: string | null
+          grant_key?: string
+          granted_at?: string
+          id?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          reward_plan?: Database["public"]["Enums"]["subscription_plan"]
+          rule_version?: number
+          source_score_snapshot?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      emergency_controls: {
+        Row: {
+          control_key: string
+          disabled_at: string | null
+          disabled_by: string | null
+          incident_id: string | null
+          is_disabled: boolean
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          control_key: string
+          disabled_at?: string | null
+          disabled_by?: string | null
+          incident_id?: string | null
+          is_disabled?: boolean
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          control_key?: string
+          disabled_at?: string | null
+          disabled_by?: string | null
+          incident_id?: string | null
+          is_disabled?: boolean
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emergency_controls_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "security_incidents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engagement_preferences: {
+        Row: {
+          achievements_enabled: boolean
+          created_at: string
+          daily_notification_budget: number
+          exam_mode_allow_close_friends: boolean
+          exam_mode_until: string | null
+          recaps_enabled: boolean
+          streak_notifications_enabled: boolean
+          streaks_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          achievements_enabled?: boolean
+          created_at?: string
+          daily_notification_budget?: number
+          exam_mode_allow_close_friends?: boolean
+          exam_mode_until?: string | null
+          recaps_enabled?: boolean
+          streak_notifications_enabled?: boolean
+          streaks_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          achievements_enabled?: boolean
+          created_at?: string
+          daily_notification_budget?: number
+          exam_mode_allow_close_friends?: boolean
+          exam_mode_until?: string | null
+          recaps_enabled?: boolean
+          streak_notifications_enabled?: boolean
+          streaks_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      entitlement_overrides: {
+        Row: {
+          boolean_value: boolean | null
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          entitlement_key: string
+          id: string
+          integer_value: number | null
+          reason: string | null
+          starts_at: string | null
+          subject_id: string
+          subject_type: string
+          value_type: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          entitlement_key: string
+          id?: string
+          integer_value?: number | null
+          reason?: string | null
+          starts_at?: string | null
+          subject_id: string
+          subject_type?: string
+          value_type: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          entitlement_key?: string
+          id?: string
+          integer_value?: number | null
+          reason?: string | null
+          starts_at?: string | null
+          subject_id?: string
+          subject_type?: string
+          value_type?: string
+        }
+        Relationships: []
+      }
+      event_admins: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_admins_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_announcement_reactions: {
+        Row: {
+          created_at: string
+          event_announcement_id: string
+          id: string
+          reaction_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_announcement_id: string
+          id?: string
+          reaction_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_announcement_id?: string
+          id?: string
+          reaction_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_announcement_reactions_event_announcement_id_fkey"
+            columns: ["event_announcement_id"]
+            isOneToOne: false
+            referencedRelation: "event_announcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_announcements: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          event_circle_id: string
+          expires_at: string | null
+          id: string
+          priority: string
+          published_at: string
+          title: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          event_circle_id: string
+          expires_at?: string | null
+          id?: string
+          priority?: string
+          published_at?: string
+          title: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          event_circle_id?: string
+          expires_at?: string | null
+          id?: string
+          priority?: string
+          published_at?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_announcements_event_circle_id_fkey"
+            columns: ["event_circle_id"]
+            isOneToOne: false
+            referencedRelation: "event_circles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_audience_targets: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_audience_targets_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_circle_group_targets: {
+        Row: {
+          created_at: string
+          event_circle_id: string
+          group_conversation_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          event_circle_id: string
+          group_conversation_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          event_circle_id?: string
+          group_conversation_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_circle_group_targets_event_circle_id_fkey"
+            columns: ["event_circle_id"]
+            isOneToOne: false
+            referencedRelation: "event_circles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_circle_group_targets_group_conversation_id_fkey"
+            columns: ["group_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_circle_invitations: {
+        Row: {
+          created_at: string
+          event_circle_id: string
+          id: string
+          invited_by: string
+          invited_user_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_circle_id: string
+          id?: string
+          invited_by: string
+          invited_user_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_circle_id?: string
+          id?: string
+          invited_by?: string
+          invited_user_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_circle_invitations_event_circle_id_fkey"
+            columns: ["event_circle_id"]
+            isOneToOne: false
+            referencedRelation: "event_circles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_circle_members: {
+        Row: {
+          created_at: string
+          event_circle_id: string
+          id: string
+          joined_at: string
+          left_at: string | null
+          role: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_circle_id: string
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          role?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_circle_id?: string
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          role?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_circle_members_event_circle_id_fkey"
+            columns: ["event_circle_id"]
+            isOneToOne: false
+            referencedRelation: "event_circles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_circles: {
+        Row: {
+          archives_at: string | null
+          closes_at: string | null
+          created_at: string
+          description: string | null
+          event_id: string | null
+          id: string
+          join_mode: string
+          listed_in_event: boolean
+          max_members: number
+          member_visibility: string
+          name: string
+          opens_at: string | null
+          owner_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          archives_at?: string | null
+          closes_at?: string | null
+          created_at?: string
+          description?: string | null
+          event_id?: string | null
+          id?: string
+          join_mode?: string
+          listed_in_event?: boolean
+          max_members?: number
+          member_visibility?: string
+          name: string
+          opens_at?: string | null
+          owner_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          archives_at?: string | null
+          closes_at?: string | null
+          created_at?: string
+          description?: string | null
+          event_id?: string | null
+          id?: string
+          join_mode?: string
+          listed_in_event?: boolean
+          max_members?: number
+          member_visibility?: string
+          name?: string
+          opens_at?: string | null
+          owner_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_circles_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_linkr_opt_ins: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          event_id: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          event_id: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          event_id?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_linkr_opt_ins_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_locations: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          event_id: string
+          latitude: number
+          locality: string | null
+          longitude: number
+          region: string | null
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          event_id: string
+          latitude: number
+          locality?: string | null
+          longitude: number
+          region?: string | null
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          event_id?: string
+          latitude?: number
+          locality?: string | null
+          longitude?: number
+          region?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_locations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_modes: {
+        Row: {
+          created_at: string
+          ends_at: string
+          id: string
+          is_active: boolean
+          name: string
+          starts_at: string
+          updated_at: string
+          user_id: string
+          visibility_rule: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          id?: string
+          is_active?: boolean
+          name: string
+          starts_at: string
+          updated_at?: string
+          user_id: string
+          visibility_rule?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          starts_at?: string
+          updated_at?: string
+          user_id?: string
+          visibility_rule?: string
+        }
+        Relationships: []
+      }
+      event_rsvps: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_update_reactions: {
+        Row: {
+          created_at: string
+          event_update_id: string
+          id: string
+          reaction_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_update_id: string
+          id?: string
+          reaction_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_update_id?: string
+          id?: string
+          reaction_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_update_reactions_event_update_id_fkey"
+            columns: ["event_update_id"]
+            isOneToOne: false
+            referencedRelation: "event_updates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_updates: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          edited_at: string | null
+          event_id: string
+          id: string
+          priority: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          edited_at?: string | null
+          event_id: string
+          id?: string
+          priority?: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          edited_at?: string | null
+          event_id?: string
+          id?: string
+          priority?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_updates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          checkin_opens_minutes_before: number
+          cover_focal_x: number
+          cover_focal_y: number
+          cover_media_id: string | null
+          created_at: string
+          description: string | null
+          ends_at: string
+          host_id: string
+          id: string
+          name: string
+          starts_at: string
+          status: string
+          updated_at: string
+          venue_label: string | null
+          visibility: string
+        }
+        Insert: {
+          checkin_opens_minutes_before?: number
+          cover_focal_x?: number
+          cover_focal_y?: number
+          cover_media_id?: string | null
+          created_at?: string
+          description?: string | null
+          ends_at: string
+          host_id: string
+          id?: string
+          name: string
+          starts_at: string
+          status?: string
+          updated_at?: string
+          venue_label?: string | null
+          visibility?: string
+        }
+        Update: {
+          checkin_opens_minutes_before?: number
+          cover_focal_x?: number
+          cover_focal_y?: number
+          cover_media_id?: string | null
+          created_at?: string
+          description?: string | null
+          ends_at?: string
+          host_id?: string
+          id?: string
+          name?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          venue_label?: string | null
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_cover_media_id_fkey"
+            columns: ["cover_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experiment_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_plan: Database["public"]["Enums"]["subscription_plan"]
+          assigned_platform: string
+          experiment_id: string
+          id: string
+          user_id: string | null
+          variant_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_plan: Database["public"]["Enums"]["subscription_plan"]
+          assigned_platform: string
+          experiment_id: string
+          id?: string
+          user_id?: string | null
+          variant_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_plan?: Database["public"]["Enums"]["subscription_plan"]
+          assigned_platform?: string
+          experiment_id?: string
+          id?: string
+          user_id?: string | null
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiment_assignments_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "experiments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "experiment_assignments_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "experiment_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experiment_exposures: {
+        Row: {
+          assignment_id: string
+          experiment_id: string
+          first_exposed_at: string
+          id: string
+          platform: string
+          user_id: string | null
+          variant_id: string
+        }
+        Insert: {
+          assignment_id: string
+          experiment_id: string
+          first_exposed_at?: string
+          id?: string
+          platform: string
+          user_id?: string | null
+          variant_id: string
+        }
+        Update: {
+          assignment_id?: string
+          experiment_id?: string
+          first_exposed_at?: string
+          id?: string
+          platform?: string
+          user_id?: string | null
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiment_exposures_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: true
+            referencedRelation: "experiment_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "experiment_exposures_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "experiments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "experiment_exposures_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "experiment_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experiment_testers: {
+        Row: {
+          added_by: string
+          created_at: string
+          experiment_id: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          added_by: string
+          created_at?: string
+          experiment_id: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          added_by?: string
+          created_at?: string
+          experiment_id?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiment_testers_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "experiments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experiment_variants: {
+        Row: {
+          created_at: string
+          description: string
+          experiment_id: string
+          id: string
+          is_control: boolean
+          key: string
+          name: string
+          weight_basis_points: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          experiment_id: string
+          id?: string
+          is_control?: boolean
+          key: string
+          name: string
+          weight_basis_points: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          experiment_id?: string
+          id?: string
+          is_control?: boolean
+          key?: string
+          name?: string
+          weight_basis_points?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiment_variants_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "experiments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experiments: {
+        Row: {
+          allocation_percentage: number
+          audience: string
+          cancelled_at: string | null
+          completed_at: string | null
+          conflict_group: string | null
+          created_at: string
+          created_by: string
+          description: string
+          ends_at: string | null
+          guardrail_metrics: string[]
+          hypothesis: string
+          id: string
+          key: string
+          name: string
+          parent_feature_flag_id: string | null
+          paused_at: string | null
+          primary_metric: string
+          secondary_metrics: string[]
+          started_at: string | null
+          starts_at: string | null
+          status: string
+          target_plans: Database["public"]["Enums"]["subscription_plan"][]
+          target_platforms: string[]
+          updated_at: string
+        }
+        Insert: {
+          allocation_percentage?: number
+          audience?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          conflict_group?: string | null
+          created_at?: string
+          created_by: string
+          description: string
+          ends_at?: string | null
+          guardrail_metrics?: string[]
+          hypothesis: string
+          id?: string
+          key: string
+          name: string
+          parent_feature_flag_id?: string | null
+          paused_at?: string | null
+          primary_metric: string
+          secondary_metrics?: string[]
+          started_at?: string | null
+          starts_at?: string | null
+          status?: string
+          target_plans?: Database["public"]["Enums"]["subscription_plan"][]
+          target_platforms?: string[]
+          updated_at?: string
+        }
+        Update: {
+          allocation_percentage?: number
+          audience?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          conflict_group?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string
+          ends_at?: string | null
+          guardrail_metrics?: string[]
+          hypothesis?: string
+          id?: string
+          key?: string
+          name?: string
+          parent_feature_flag_id?: string | null
+          paused_at?: string | null
+          primary_metric?: string
+          secondary_metrics?: string[]
+          started_at?: string | null
+          starts_at?: string | null
+          status?: string
+          target_plans?: Database["public"]["Enums"]["subscription_plan"][]
+          target_platforms?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiments_parent_feature_flag_id_fkey"
+            columns: ["parent_feature_flag_id"]
+            isOneToOne: false
+            referencedRelation: "feature_flags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_flag_rules: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          feature_flag_id: string
+          id: string
+          rollout_percentage: number | null
+          starts_at: string | null
+          target_type: string
+          target_value: string | null
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          feature_flag_id: string
+          id?: string
+          rollout_percentage?: number | null
+          starts_at?: string | null
+          target_type: string
+          target_value?: string | null
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          feature_flag_id?: string
+          id?: string
+          rollout_percentage?: number | null
+          starts_at?: string | null
+          target_type?: string
+          target_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flag_rules_feature_flag_id_fkey"
+            columns: ["feature_flag_id"]
+            isOneToOne: false
+            referencedRelation: "feature_flags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_flags: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_value: boolean
+          description: string | null
+          id: string
+          key: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_value?: boolean
+          description?: string | null
+          id?: string
+          key: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_value?: boolean
+          description?: string | null
+          id?: string
+          key?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      financial_snapshots: {
+        Row: {
+          active_free_users: number
+          active_paid_subscriptions: number
+          buddy_plus_users: number
+          buddy_pro_users: number
+          captured_at: string
+          churned_mrr_minor: number | null
+          contraction_mrr_minor: number | null
+          currency: string
+          ending_mrr_minor: number
+          expansion_mrr_minor: number | null
+          id: string
+          new_mrr_minor: number | null
+          opening_mrr_minor: number | null
+          reactivation_mrr_minor: number | null
+          reconciliation_difference_minor: number | null
+          reconciliation_reason: string | null
+          reconciliation_status: string
+          snapshot_date: string
+          updated_at: string
+        }
+        Insert: {
+          active_free_users: number
+          active_paid_subscriptions: number
+          buddy_plus_users: number
+          buddy_pro_users: number
+          captured_at?: string
+          churned_mrr_minor?: number | null
+          contraction_mrr_minor?: number | null
+          currency: string
+          ending_mrr_minor: number
+          expansion_mrr_minor?: number | null
+          id?: string
+          new_mrr_minor?: number | null
+          opening_mrr_minor?: number | null
+          reactivation_mrr_minor?: number | null
+          reconciliation_difference_minor?: number | null
+          reconciliation_reason?: string | null
+          reconciliation_status?: string
+          snapshot_date: string
+          updated_at?: string
+        }
+        Update: {
+          active_free_users?: number
+          active_paid_subscriptions?: number
+          buddy_plus_users?: number
+          buddy_pro_users?: number
+          captured_at?: string
+          churned_mrr_minor?: number | null
+          contraction_mrr_minor?: number | null
+          currency?: string
+          ending_mrr_minor?: number
+          expansion_mrr_minor?: number | null
+          id?: string
+          new_mrr_minor?: number | null
+          opening_mrr_minor?: number | null
+          reactivation_mrr_minor?: number | null
+          reconciliation_difference_minor?: number | null
+          reconciliation_reason?: string | null
+          reconciliation_status?: string
+          snapshot_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      friend_circles: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_system_circle: boolean
+          name: string
+          theme: string | null
+          updated_at: string
+          user_id: string
+          visibility_rule: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_system_circle?: boolean
+          name: string
+          theme?: string | null
+          updated_at?: string
+          user_id: string
+          visibility_rule?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_system_circle?: boolean
+          name?: string
+          theme?: string | null
+          updated_at?: string
+          user_id?: string
+          visibility_rule?: string
+        }
+        Relationships: []
+      }
+      friend_glow_colors: {
+        Row: {
+          color_id: string
+          created_at: string
+          friend_id: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          color_id: string
+          created_at?: string
+          friend_id: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          color_id?: string
+          created_at?: string
+          friend_id?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      friend_requests: {
+        Row: {
+          context_id: string | null
+          context_type: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          message: string | null
+          receiver_id: string
+          responded_at: string | null
+          sender_id: string
+          status: Database["public"]["Enums"]["friend_request_status"]
+          updated_at: string
+        }
+        Insert: {
+          context_id?: string | null
+          context_type?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          message?: string | null
+          receiver_id: string
+          responded_at?: string | null
+          sender_id: string
+          status?: Database["public"]["Enums"]["friend_request_status"]
+          updated_at?: string
+        }
+        Update: {
+          context_id?: string | null
+          context_type?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          message?: string | null
+          receiver_id?: string
+          responded_at?: string | null
+          sender_id?: string
+          status?: Database["public"]["Enums"]["friend_request_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      friendship_recaps: {
+        Row: {
+          created_at: string
+          generated_at: string
+          id: string
+          period_end: string
+          period_start: string
+          period_type: string
+          status: string
+          summary_data: Json
+          user_id: string
+          viewed_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          id?: string
+          period_end: string
+          period_start: string
+          period_type: string
+          status?: string
+          summary_data?: Json
+          user_id: string
+          viewed_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+          period_type?: string
+          status?: string
+          summary_data?: Json
+          user_id?: string
+          viewed_at?: string | null
+        }
+        Relationships: []
+      }
+      friendship_streaks: {
+        Row: {
+          created_at: string
+          current_weeks: number
+          friendship_id: string
+          id: string
+          last_qualified_period: string | null
+          longest_weeks: number
+          paused_until: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_weeks?: number
+          friendship_id: string
+          id?: string
+          last_qualified_period?: string | null
+          longest_weeks?: number
+          paused_until?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_weeks?: number
+          friendship_id?: string
+          id?: string
+          last_qualified_period?: string | null
+          longest_weeks?: number
+          paused_until?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendship_streaks_friendship_id_fkey"
+            columns: ["friendship_id"]
+            isOneToOne: true
+            referencedRelation: "friendships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      friendships: {
+        Row: {
+          accepted_request_id: string | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          user_one_id: string
+          user_two_id: string
+        }
+        Insert: {
+          accepted_request_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          user_one_id: string
+          user_two_id: string
+        }
+        Update: {
+          accepted_request_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          user_one_id?: string
+          user_two_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendships_accepted_request_id_fkey"
+            columns: ["accepted_request_id"]
+            isOneToOne: false
+            referencedRelation: "friend_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_settings: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          description: string | null
+          history_visibility: string
+          image_media_id: string | null
+          join_mode: string
+          name: string
+          posting_mode: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          description?: string | null
+          history_visibility?: string
+          image_media_id?: string | null
+          join_mode?: string
+          name: string
+          posting_mode?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          description?: string | null
+          history_visibility?: string
+          image_media_id?: string | null
+          join_mode?: string
+          name?: string
+          posting_mode?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_settings_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_settings_image_media_id_fkey"
+            columns: ["image_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hangout_audience_targets: {
+        Row: {
+          created_at: string
+          hangout_session_id: string
+          id: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          created_at?: string
+          hangout_session_id: string
+          id?: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          created_at?: string
+          hangout_session_id?: string
+          id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hangout_audience_targets_hangout_session_id_fkey"
+            columns: ["hangout_session_id"]
+            isOneToOne: false
+            referencedRelation: "hangout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hangout_requests: {
+        Row: {
+          created_at: string
+          hangout_session_id: string
+          id: string
+          message: string | null
+          requester_id: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          hangout_session_id: string
+          id?: string
+          message?: string | null
+          requester_id: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          hangout_session_id?: string
+          id?: string
+          message?: string | null
+          requester_id?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hangout_requests_hangout_session_id_fkey"
+            columns: ["hangout_session_id"]
+            isOneToOne: false
+            referencedRelation: "hangout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hangout_sessions: {
+        Row: {
+          activity_type: string
+          allow_friend_invites: boolean
+          allow_pings: boolean
+          area_derived_at: string | null
+          area_tier: string | null
+          audience_announce_claimed_at: string | null
+          audience_type: string
+          broad_area_text: string | null
+          converted_plan_id: string | null
+          created_at: string
+          discovery_scope: string
+          ends_at: string
+          id: string
+          max_participants: number
+          message: string | null
+          owner_id: string
+          starts_at: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          activity_type: string
+          allow_friend_invites?: boolean
+          allow_pings?: boolean
+          area_derived_at?: string | null
+          area_tier?: string | null
+          audience_announce_claimed_at?: string | null
+          audience_type?: string
+          broad_area_text?: string | null
+          converted_plan_id?: string | null
+          created_at?: string
+          discovery_scope?: string
+          ends_at: string
+          id?: string
+          max_participants?: number
+          message?: string | null
+          owner_id: string
+          starts_at?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          activity_type?: string
+          allow_friend_invites?: boolean
+          allow_pings?: boolean
+          area_derived_at?: string | null
+          area_tier?: string | null
+          audience_announce_claimed_at?: string | null
+          audience_type?: string
+          broad_area_text?: string | null
+          converted_plan_id?: string | null
+          created_at?: string
+          discovery_scope?: string
+          ends_at?: string
+          id?: string
+          max_participants?: number
+          message?: string | null
+          owner_id?: string
+          starts_at?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hangout_sessions_converted_plan_id_fkey"
+            columns: ["converted_plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hidden_content: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      idempotency_keys: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          key: string
+          result: Json | null
+          scope: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          key: string
+          result?: Json | null
+          scope: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          key?: string
+          result?: Json | null
+          scope?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      incident_actions: {
+        Row: {
+          action_type: string
+          actor_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          incident_id: string
+        }
+        Insert: {
+          action_type: string
+          actor_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          incident_id: string
+        }
+        Update: {
+          action_type?: string
+          actor_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          incident_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incident_actions_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "security_incidents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invite_links: {
+        Row: {
+          context_id: string | null
+          created_at: string
+          creator_id: string
+          delivery_type: string
+          expires_at: string
+          id: string
+          invite_type: string
+          max_uses: number
+          revoked_at: string | null
+          status: string
+          token_hash: string
+          updated_at: string
+          uses_count: number
+        }
+        Insert: {
+          context_id?: string | null
+          created_at?: string
+          creator_id: string
+          delivery_type?: string
+          expires_at: string
+          id?: string
+          invite_type: string
+          max_uses?: number
+          revoked_at?: string | null
+          status?: string
+          token_hash: string
+          updated_at?: string
+          uses_count?: number
+        }
+        Update: {
+          context_id?: string | null
+          created_at?: string
+          creator_id?: string
+          delivery_type?: string
+          expires_at?: string
+          id?: string
+          invite_type?: string
+          max_uses?: number
+          revoked_at?: string | null
+          status?: string
+          token_hash?: string
+          updated_at?: string
+          uses_count?: number
+        }
+        Relationships: []
+      }
+      jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          job_type: string
+          last_error_at: string | null
+          last_error_code: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          payload: Json
+          priority: number
+          run_at: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          job_type: string
+          last_error_at?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          run_at?: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          job_type?: string
+          last_error_at?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          run_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      life_timeline_resets: {
+        Row: {
+          created_at: string
+          hidden_before: string
+          id: string
+          relationship_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hidden_before?: string
+          id?: string
+          relationship_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          hidden_before?: string
+          id?: string
+          relationship_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      linkr_actions: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          event_id: string | null
+          expires_at: string | null
+          id: string
+          target_id: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          event_id?: string | null
+          expires_at?: string | null
+          id?: string
+          target_id: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          event_id?: string | null
+          expires_at?: string | null
+          id?: string
+          target_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkr_actions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkr_connections: {
+        Row: {
+          connected_at: string
+          conversation_id: string | null
+          created_at: string
+          ended_at: string | null
+          event_id: string | null
+          id: string
+          updated_at: string
+          user_high: string
+          user_low: string
+        }
+        Insert: {
+          connected_at?: string
+          conversation_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          event_id?: string | null
+          id?: string
+          updated_at?: string
+          user_high: string
+          user_low: string
+        }
+        Update: {
+          connected_at?: string
+          conversation_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          event_id?: string | null
+          id?: string
+          updated_at?: string
+          user_high?: string
+          user_low?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkr_connections_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkr_connections_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkr_interests: {
+        Row: {
+          created_at: string
+          id: string
+          interest: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interest: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interest?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      linkr_profiles: {
+        Row: {
+          bio: string | null
+          created_at: string
+          discovery_distance: string
+          enabled: boolean
+          event_mode_enabled: boolean
+          intent: string
+          only_active_now: boolean
+          only_new_today: boolean
+          require_photos: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          discovery_distance?: string
+          enabled?: boolean
+          event_mode_enabled?: boolean
+          intent?: string
+          only_active_now?: boolean
+          only_new_today?: boolean
+          require_photos?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          discovery_distance?: string
+          enabled?: boolean
+          event_mode_enabled?: boolean
+          intent?: string
+          only_active_now?: boolean
+          only_new_today?: boolean
+          require_photos?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      maintenance_mode: {
+        Row: {
+          activated_at: string | null
+          activated_by: string | null
+          id: boolean
+          is_active: boolean
+          message: string | null
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          activated_by?: string | null
+          id?: boolean
+          is_active?: boolean
+          message?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          activated_by?: string | null
+          id?: boolean
+          is_active?: boolean
+          message?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      media_assets: {
+        Row: {
+          content_type: string
+          context_type: string
+          created_at: string
+          deleted_at: string | null
+          duration_ms: number | null
+          height: number | null
+          id: string
+          intended_conversation_id: string | null
+          intended_media_kind: string | null
+          moderation_status: string
+          original_file_name: string | null
+          owner_id: string
+          processing_status: string
+          retention_policy: string
+          size_bytes: number
+          storage_key: string
+          updated_at: string
+          upload_expires_at: string | null
+          waveform_data: Json | null
+          width: number | null
+        }
+        Insert: {
+          content_type: string
+          context_type: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_ms?: number | null
+          height?: number | null
+          id?: string
+          intended_conversation_id?: string | null
+          intended_media_kind?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_id: string
+          processing_status?: string
+          retention_policy?: string
+          size_bytes: number
+          storage_key: string
+          updated_at?: string
+          upload_expires_at?: string | null
+          waveform_data?: Json | null
+          width?: number | null
+        }
+        Update: {
+          content_type?: string
+          context_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_ms?: number | null
+          height?: number | null
+          id?: string
+          intended_conversation_id?: string | null
+          intended_media_kind?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_id?: string
+          processing_status?: string
+          retention_policy?: string
+          size_bytes?: number
+          storage_key?: string
+          updated_at?: string
+          upload_expires_at?: string | null
+          waveform_data?: Json | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_intended_conversation_id_fkey"
+            columns: ["intended_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_deletion_queue: {
+        Row: {
+          id: string
+          media_asset_id: string
+          processed_at: string | null
+          queued_at: string
+          reason: string
+        }
+        Insert: {
+          id?: string
+          media_asset_id: string
+          processed_at?: string | null
+          queued_at?: string
+          reason: string
+        }
+        Update: {
+          id?: string
+          media_asset_id?: string
+          processed_at?: string | null
+          queued_at?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_deletion_queue_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: true
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_variants: {
+        Row: {
+          created_at: string
+          height: number | null
+          id: string
+          media_asset_id: string
+          size_bytes: number | null
+          storage_key: string
+          variant_type: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          media_asset_id: string
+          size_bytes?: number | null
+          storage_key: string
+          variant_type: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          media_asset_id?: string
+          size_bytes?: number | null
+          storage_key?: string
+          variant_type?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_variants_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_ping_responses: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          ping_id: string
+          responder_id: string
+          response_type: string
+          suggested_time: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          ping_id: string
+          responder_id: string
+          response_type: string
+          suggested_time?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          ping_id?: string
+          responder_id?: string
+          response_type?: string
+          suggested_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_ping_responses_ping_id_fkey"
+            columns: ["ping_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_pings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_pings: {
+        Row: {
+          cancelled_at: string | null
+          created_at: string
+          custom_message: string | null
+          custom_place_text: string | null
+          expires_at: string
+          id: string
+          ping_type: string
+          place_type: string
+          proposed_time: string
+          recipient_id: string
+          responded_at: string | null
+          seen_at: string | null
+          sender_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          created_at?: string
+          custom_message?: string | null
+          custom_place_text?: string | null
+          expires_at: string
+          id?: string
+          ping_type: string
+          place_type?: string
+          proposed_time: string
+          recipient_id: string
+          responded_at?: string | null
+          seen_at?: string | null
+          sender_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          created_at?: string
+          custom_message?: string | null
+          custom_place_text?: string | null
+          expires_at?: string
+          id?: string
+          ping_type?: string
+          place_type?: string
+          proposed_time?: string
+          recipient_id?: string
+          responded_at?: string | null
+          seen_at?: string | null
+          sender_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meetup_activity: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          detail: Json
+          event: string
+          id: string
+          meetup_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json
+          event: string
+          id?: string
+          meetup_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json
+          event?: string
+          id?: string
+          meetup_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetup_activity_meetup_id_fkey"
+            columns: ["meetup_id"]
+            isOneToOne: false
+            referencedRelation: "meetups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetup_discoveries: {
+        Row: {
+          category: string
+          created_at: string
+          creator_id: string
+          id: string
+          interest_limit: number
+          listing_duration_minutes: number
+          listing_expires_at: string
+          max_attendees: number
+          meetup_style: string
+          refresh_count: number
+          request_key: string
+          starts_at: string
+          status: string
+          timezone: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          creator_id: string
+          id?: string
+          interest_limit?: number
+          listing_duration_minutes: number
+          listing_expires_at: string
+          max_attendees: number
+          meetup_style: string
+          refresh_count?: number
+          request_key: string
+          starts_at: string
+          status?: string
+          timezone: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          creator_id?: string
+          id?: string
+          interest_limit?: number
+          listing_duration_minutes?: number
+          listing_expires_at?: string
+          max_attendees?: number
+          meetup_style?: string
+          refresh_count?: number
+          request_key?: string
+          starts_at?: string
+          status?: string
+          timezone?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meetup_discovery_interests: {
+        Row: {
+          created_at: string
+          discovery_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discovery_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discovery_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetup_discovery_interests_discovery_id_fkey"
+            columns: ["discovery_id"]
+            isOneToOne: false
+            referencedRelation: "meetup_discoveries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetup_mutations: {
+        Row: {
+          actor_id: string
+          meetup_id: string
+          request_key: string
+          result: Json
+        }
+        Insert: {
+          actor_id: string
+          meetup_id: string
+          request_key: string
+          result: Json
+        }
+        Update: {
+          actor_id?: string
+          meetup_id?: string
+          request_key?: string
+          result?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetup_mutations_meetup_id_fkey"
+            columns: ["meetup_id"]
+            isOneToOne: false
+            referencedRelation: "meetups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetup_notification_outbox: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          dedupe_key: string
+          event: string
+          id: string
+          lease_id: string | null
+          meetup_id: string
+          recipient_id: string
+          revision: number
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          dedupe_key: string
+          event: string
+          id?: string
+          lease_id?: string | null
+          meetup_id: string
+          recipient_id: string
+          revision: number
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          dedupe_key?: string
+          event?: string
+          id?: string
+          lease_id?: string | null
+          meetup_id?: string
+          recipient_id?: string
+          revision?: number
+          sender_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetup_notification_outbox_meetup_id_fkey"
+            columns: ["meetup_id"]
+            isOneToOne: false
+            referencedRelation: "meetups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetup_participants: {
+        Row: {
+          arrival: string
+          delay_minutes: number | null
+          home_arrived_at: string | null
+          home_started_at: string | null
+          journey_state: string
+          meetup_id: string
+          met_at: string | null
+          proximity_enabled: boolean
+          proximity_observed_at: string | null
+          response: string
+          suggested_start_at: string | null
+          user_id: string
+        }
+        Insert: {
+          arrival?: string
+          delay_minutes?: number | null
+          home_arrived_at?: string | null
+          home_started_at?: string | null
+          journey_state?: string
+          meetup_id: string
+          met_at?: string | null
+          proximity_enabled?: boolean
+          proximity_observed_at?: string | null
+          response?: string
+          suggested_start_at?: string | null
+          user_id: string
+        }
+        Update: {
+          arrival?: string
+          delay_minutes?: number | null
+          home_arrived_at?: string | null
+          home_started_at?: string | null
+          journey_state?: string
+          meetup_id?: string
+          met_at?: string | null
+          proximity_enabled?: boolean
+          proximity_observed_at?: string | null
+          response?: string
+          suggested_start_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetup_participants_meetup_id_fkey"
+            columns: ["meetup_id"]
+            isOneToOne: false
+            referencedRelation: "meetups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetup_requests: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          message: string | null
+          receiver_id: string
+          sender_id: string
+          status: Database["public"]["Enums"]["meetup_status"]
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          message?: string | null
+          receiver_id: string
+          sender_id: string
+          status?: Database["public"]["Enums"]["meetup_status"]
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          message?: string | null
+          receiver_id?: string
+          sender_id?: string
+          status?: Database["public"]["Enums"]["meetup_status"]
+        }
+        Relationships: []
+      }
+      meetups: {
+        Row: {
+          arranged_at: string
+          beacon_confirmed_at: string | null
+          beacon_latitude: number | null
+          beacon_longitude: number | null
+          beacon_set_at: string | null
+          beacon_set_by: string | null
+          category: string
+          created_at: string
+          creator_id: string
+          expires_at: string
+          host_id: string | null
+          id: string
+          mode: string
+          note: string
+          place_label: string
+          request_key: string
+          revision: number
+          source_discovery_id: string | null
+          starts_at: string
+          status: string
+          timezone: string
+          title: string | null
+          together_at: string | null
+        }
+        Insert: {
+          arranged_at?: string
+          beacon_confirmed_at?: string | null
+          beacon_latitude?: number | null
+          beacon_longitude?: number | null
+          beacon_set_at?: string | null
+          beacon_set_by?: string | null
+          category?: string
+          created_at?: string
+          creator_id: string
+          expires_at: string
+          host_id?: string | null
+          id?: string
+          mode: string
+          note?: string
+          place_label: string
+          request_key: string
+          revision?: number
+          source_discovery_id?: string | null
+          starts_at: string
+          status?: string
+          timezone: string
+          title?: string | null
+          together_at?: string | null
+        }
+        Update: {
+          arranged_at?: string
+          beacon_confirmed_at?: string | null
+          beacon_latitude?: number | null
+          beacon_longitude?: number | null
+          beacon_set_at?: string | null
+          beacon_set_by?: string | null
+          category?: string
+          created_at?: string
+          creator_id?: string
+          expires_at?: string
+          host_id?: string | null
+          id?: string
+          mode?: string
+          note?: string
+          place_label?: string
+          request_key?: string
+          revision?: number
+          source_discovery_id?: string | null
+          starts_at?: string
+          status?: string
+          timezone?: string
+          title?: string | null
+          together_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetups_source_discovery_id_fkey"
+            columns: ["source_discovery_id"]
+            isOneToOne: false
+            referencedRelation: "meetup_discoveries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_contacts: {
         Row: {
           display_name: string
@@ -3129,80 +4862,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "message_contacts_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: true
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      message_places: {
-        Row: {
-          address_label: string | null
-          area_label: string | null
-          message_id: string
-          place_kind: string
-          place_name: string
-        }
-        Insert: {
-          address_label?: string | null
-          area_label?: string | null
-          message_id: string
-          place_kind?: string
-          place_name: string
-        }
-        Update: {
-          address_label?: string | null
-          area_label?: string | null
-          message_id?: string
-          place_kind?: string
-          place_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_places_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: true
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      message_files: {
-        Row: {
-          byte_size: number
-          file_name: string
-          media_id: string
-          message_id: string
-          mime_type: string
-          page_count: number | null
-        }
-        Insert: {
-          byte_size: number
-          file_name: string
-          media_id: string
-          message_id: string
-          mime_type: string
-          page_count?: number | null
-        }
-        Update: {
-          byte_size?: number
-          file_name?: string
-          media_id?: string
-          message_id?: string
-          mime_type?: string
-          page_count?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_files_media_id_fkey"
-            columns: ["media_id"]
-            isOneToOne: false
-            referencedRelation: "media_assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "message_files_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: true
             referencedRelation: "messages"
@@ -3250,2962 +4909,4496 @@ export type Database = {
           },
         ]
       }
-      conversation_pins: {
+      message_files: {
         Row: {
-          user_id: string;
-          conversation_id: string;
-          created_at: string;
-        };
+          byte_size: number
+          file_name: string
+          media_id: string
+          message_id: string
+          mime_type: string
+          page_count: number | null
+        }
         Insert: {
-          user_id: string;
-          conversation_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["conversation_pins"]["Insert"]>;
-        Relationships: [];
-      };
-      conversation_members: {
-        Row: {
-          id: string;
-          conversation_id: string;
-          user_id: string;
-          role: ConversationRole;
-          status: ConversationMemberStatus;
-          joined_at: string;
-          left_at: string | null;
-          muted_until: string | null;
-          last_read_message_id: string | null;
-          read_receipts_enabled: boolean;
-          history_visible_from: string;
-          /**
-           * When this member hid the conversation from their own inbox.
-           * Null means visible. Per-member: the other participant is
-           * unaffected, and nothing is deleted.
-           */
-          hidden_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          conversation_id: string;
-          user_id: string;
-          role?: ConversationRole;
-          status?: ConversationMemberStatus;
-          joined_at?: string;
-          left_at?: string | null;
-          muted_until?: string | null;
-          last_read_message_id?: string | null;
-          read_receipts_enabled?: boolean;
-          history_visible_from?: string;
-          hidden_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["conversation_members"]["Insert"]>;
-        Relationships: [];
-      };
-      group_settings: {
-        Row: {
-          conversation_id: string;
-          name: string;
-          description: string | null;
-          image_media_id: string | null;
-          join_mode: GroupJoinMode;
-          visibility: GroupVisibility;
-          history_visibility: GroupHistoryVisibility;
-          posting_mode: GroupPostingMode;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          conversation_id: string;
-          name: string;
-          description?: string | null;
-          image_media_id?: string | null;
-          join_mode?: GroupJoinMode;
-          visibility?: GroupVisibility;
-          history_visibility?: GroupHistoryVisibility;
-          posting_mode?: GroupPostingMode;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["group_settings"]["Insert"]>;
-        Relationships: [];
-      };
-      messages: {
-        Row: {
-          id: string;
-          conversation_id: string;
-          sender_id: string | null;
-          message_type: MessageType;
-          text_content: string | null;
-          media_id: string | null;
-          reply_to_message_id: string | null;
-          system_event_type: SystemEventType | null;
-          quick_action_type: QuickActionType | null;
-          duration_seconds: number | null;
-          waveform_data: Json | null;
-          status: MessageStatus;
-          client_message_id: string | null;
-          forwarded_from_message_id: string | null;
-          created_at: string;
-          edited_at: string | null;
-          deleted_at: string | null;
-          /* Chats V4 retention, added by 20260828203000 and confirmed present
-             in production. media_mode drives Keep vs 24h; expires_at is the
-             canonical expiry the authorization path checks BEFORE cleanup runs;
-             kept_at/kept_by record a Keep in Chat. */
-          media_mode: string | null;
-          expires_at: string | null;
-          kept_at: string | null;
-          kept_by: string | null;
-        };
-        Insert: {
-          id?: string;
-          conversation_id: string;
-          sender_id?: string | null;
-          message_type?: MessageType;
-          text_content?: string | null;
-          media_id?: string | null;
-          reply_to_message_id?: string | null;
-          system_event_type?: SystemEventType | null;
-          quick_action_type?: QuickActionType | null;
-          duration_seconds?: number | null;
-          waveform_data?: Json | null;
-          status?: MessageStatus;
-          client_message_id?: string | null;
-          forwarded_from_message_id?: string | null;
-          created_at?: string;
-          edited_at?: string | null;
-          deleted_at?: string | null;
-          media_mode?: string | null;
-          expires_at?: string | null;
-          kept_at?: string | null;
-          kept_by?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
-        Relationships: [];
-      };
-      /**
-       * Structured @mentions. Identity is the user id, so a display-name
-       * change cannot break or misdirect a mention. No conversation_id: it is
-       * derivable from the message, and storing it twice could drift.
-       */
-      message_mentions: {
-        Row: {
-          message_id: string;
-          mentioned_user_id: string;
-          created_at: string;
-        };
-        Insert: {
-          message_id: string;
-          mentioned_user_id: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["message_mentions"]["Insert"]>;
-        Relationships: [];
-      };
-      message_reactions: {
-        Row: {
-          id: string;
-          message_id: string;
-          user_id: string;
-          reaction_type: MessageReactionType;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          message_id: string;
-          user_id: string;
-          reaction_type: MessageReactionType;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["message_reactions"]["Insert"]>;
-        Relationships: [];
-      };
-      message_hides: {
-        Row: { id: string; message_id: string; user_id: string; created_at: string };
-        Insert: { id?: string; message_id: string; user_id: string; created_at?: string };
-        Update: Partial<Database["public"]["Tables"]["message_hides"]["Insert"]>;
-        Relationships: [];
-      };
-      invite_links: {
-        Row: {
-          id: string;
-          creator_id: string;
-          invite_type: InviteType;
-          context_id: string | null;
-          token_hash: string;
-          delivery_type: InviteDeliveryType;
-          status: InviteStatus;
-          max_uses: number;
-          uses_count: number;
-          expires_at: string;
-          revoked_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          creator_id: string;
-          invite_type: InviteType;
-          context_id?: string | null;
-          token_hash: string;
-          delivery_type?: InviteDeliveryType;
-          status?: InviteStatus;
-          max_uses?: number;
-          uses_count?: number;
-          expires_at: string;
-          revoked_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["invite_links"]["Insert"]>;
-        Relationships: [];
-      };
-      qr_sessions: {
-        Row: {
-          id: string;
-          user_id: string;
-          token_hash: string;
-          starts_at: string;
-          expires_at: string;
-          used_at: string | null;
-          used_by: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          token_hash: string;
-          starts_at?: string;
-          expires_at: string;
-          used_at?: string | null;
-          used_by?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["qr_sessions"]["Insert"]>;
-        Relationships: [];
-      };
-      discoverability_identifiers: {
-        Row: {
-          id: string;
-          user_id: string;
-          identifier_type: IdentifierType;
-          protected_identifier: string;
-          is_discoverable: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          identifier_type: IdentifierType;
-          protected_identifier: string;
-          is_discoverable?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["discoverability_identifiers"]["Insert"]>;
-        Relationships: [];
-      };
-      contact_match_sessions: {
-        Row: {
-          id: string;
-          user_id: string;
-          status: ContactMatchStatus;
-          submitted_count: number;
-          matched_count: number;
-          created_at: string;
-          expires_at: string | null;
-          deleted_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          status?: ContactMatchStatus;
-          submitted_count?: number;
-          matched_count?: number;
-          created_at?: string;
-          expires_at?: string | null;
-          deleted_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["contact_match_sessions"]["Insert"]>;
-        Relationships: [];
-      };
-      account_verifications: {
-        Row: {
-          id: string;
-          user_id: string;
-          verification_type: VerificationType;
-          status: VerificationStatus;
-          provider: string | null;
-          evidence_label: string | null;
-          verified_at: string | null;
-          expires_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          verification_type: VerificationType;
-          status?: VerificationStatus;
-          provider?: string | null;
-          evidence_label?: string | null;
-          verified_at?: string | null;
-          expires_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["account_verifications"]["Insert"]>;
-        Relationships: [];
-      };
-      verification_requests: {
-        Row: {
-          id: string;
-          user_id: string;
-          legal_name: string;
-          document_type: "passport" | "national_id" | "drivers_licence" | "voter_id";
-          country_code: string;
-          status: "draft" | "pending" | "under_review" | "more_information_required" | "verified" | "declined" | "revoked" | "cancelled";
-          submitted_at: string | null;
-          reviewed_by: string | null;
-          reviewed_at: string | null;
-          user_message: string | null;
-          internal_note: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          legal_name: string;
-          document_type: "passport" | "national_id" | "drivers_licence" | "voter_id";
-          country_code?: string;
-          status?: "draft" | "pending" | "under_review" | "more_information_required" | "verified" | "declined" | "revoked" | "cancelled";
-          submitted_at?: string | null;
-          reviewed_by?: string | null;
-          reviewed_at?: string | null;
-          user_message?: string | null;
-          internal_note?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["verification_requests"]["Insert"]>;
-        Relationships: [];
-      };
-      verification_evidence: {
-        Row: {
-          id: string;
-          request_id: string;
-          user_id: string;
-          evidence_kind: "document_front" | "document_back" | "selfie";
-          storage_path: string;
-          content_type: string;
-          size_bytes: number;
-          original_file_name: string | null;
-          validated_at: string | null;
-          retention_expires_at: string;
-          deleted_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          request_id: string;
-          user_id: string;
-          evidence_kind: "document_front" | "document_back" | "selfie";
-          storage_path: string;
-          content_type: string;
-          size_bytes: number;
-          original_file_name?: string | null;
-          validated_at?: string | null;
-          retention_expires_at?: string;
-          deleted_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["verification_evidence"]["Insert"]>;
-        Relationships: [];
-      };
-      account_trust_events: {
-        Row: {
-          id: string;
-          user_id: string;
-          event_type: TrustEventType;
-          risk_level: "low" | "medium" | "high";
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          event_type: TrustEventType;
-          risk_level?: "low" | "medium" | "high";
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["account_trust_events"]["Insert"]>;
-        Relationships: [];
-      };
-      onboarding_progress: {
-        Row: {
-          user_id: string;
-          current_step: OnboardingStepName;
-          profile_completed_at: string | null;
-          privacy_reviewed_at: string | null;
-          visibility_configured_at: string | null;
-          location_prompted_at: string | null;
-          location_permission_result: PermissionResult | null;
-          first_muddy_added_at: string | null;
-          activated_at: string | null;
-          completed_at: string | null;
-          skipped_optional: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          current_step?: OnboardingStepName;
-          profile_completed_at?: string | null;
-          privacy_reviewed_at?: string | null;
-          visibility_configured_at?: string | null;
-          location_prompted_at?: string | null;
-          location_permission_result?: PermissionResult | null;
-          first_muddy_added_at?: string | null;
-          activated_at?: string | null;
-          completed_at?: string | null;
-          skipped_optional?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["onboarding_progress"]["Insert"]>;
-        Relationships: [];
-      };
-      activation_milestones: {
-        Row: { id: string; user_id: string; milestone: MilestoneName; reached_at: string };
-        Insert: { id?: string; user_id: string; milestone: MilestoneName; reached_at?: string };
-        Update: Partial<Database["public"]["Tables"]["activation_milestones"]["Insert"]>;
-        Relationships: [];
-      };
-      /**
-       * Per-user Mad Buddy Access. Append-mostly: a revoke sets `revoked_at`
-       * and `revoked_by`, it never deletes the row or rewrites `expires_at`,
-       * because "who granted this, when, and why" is what an audit asks.
-       *
-       * `expires_at: null` means indefinite (staff, "until revoked").
-       *
-       * A partial unique index allows exactly ONE `welcome_access` row per
-       * user, which is what makes the 14 days unresettable by clearing
-       * cookies, reinstalling or signing out. The database refuses a second
-       * one even to the service role.
-       */
-      access_grants: {
-        Row: {
-          id: string;
-          user_id: string;
-          source: AccessSourceName;
-          starts_at: string;
-          expires_at: string | null;
-          granted_by: string | null;
-          reason: string | null;
-          revoked_at: string | null;
-          revoked_by: string | null;
-          revoked_reason: string | null;
-          metadata: Json;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          source: AccessSourceName;
-          starts_at?: string;
-          expires_at?: string | null;
-          granted_by?: string | null;
-          reason?: string | null;
-          revoked_at?: string | null;
-          revoked_by?: string | null;
-          revoked_reason?: string | null;
-          metadata?: Json;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["access_grants"]["Insert"]>;
-        Relationships: [];
-      };
-      /**
-       * Periods where Access is open to everyone.
-       *
-       * One row per window, never one row per user: mass-updating users would
-       * make the end of a promotion destructive, because each person must fall
-       * back to whatever they independently hold. Since this table never
-       * touches user rows, ending a window restores those sources by itself.
-       */
-      /**
-       * Dedupe ledger for Welcome Access reminders.
-       *
-       * UNIQUE (grant_id, milestone) is what makes the reminder job safe under
-       * retries and overlapping cron runs. The job claims a row BEFORE sending,
-       * so a crash costs a missed reminder rather than a duplicate one.
-       */
-      access_reminder_log: {
-        Row: {
-          id: string;
-          grant_id: string;
-          user_id: string;
-          milestone: string;
-          sent_at: string;
-        };
-        Insert: {
-          id?: string;
-          grant_id: string;
-          user_id: string;
-          milestone: string;
-          sent_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["access_reminder_log"]["Insert"]>;
-        Relationships: [];
-      };
-      access_global_windows: {
-        Row: {
-          id: string;
-          starts_at: string;
-          expires_at: string | null;
-          created_by: string | null;
-          reason: string;
-          revoked_at: string | null;
-          revoked_by: string | null;
-          revoked_reason: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          starts_at?: string;
-          expires_at?: string | null;
-          created_by: string;
-          reason: string;
-          revoked_at?: string | null;
-          revoked_by?: string | null;
-          revoked_reason?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["access_global_windows"]["Insert"]>;
-        Relationships: [];
-      };
-      profile_field_privacy: {
-        Row: {
-          id: string;
-          user_id: string;
-          field_name: ProfileFieldName;
-          visibility: ProfileFieldVisibility;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          field_name: ProfileFieldName;
-          visibility: ProfileFieldVisibility;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["profile_field_privacy"]["Insert"]>;
-        Relationships: [];
-      };
-      profile_birth_details: {
-        Row: {
-          user_id: string;
-          date_of_birth: string;
-          /**
-           * When the single self-serve correction was spent. NULL means it is
-           * still available; a timestamp means further changes go through
-           * support. Added by 20260819120000_profile_owns_identity.sql.
-           */
-          correction_used_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          date_of_birth: string;
-          correction_used_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["profile_birth_details"]["Insert"]>;
-        Relationships: [];
-      };
-      birthday_notification_deliveries: {
-        Row: {
-          id: string;
-          birthday_user_id: string;
-          recipient_id: string;
-          birthday_day: string;
-          status: "pending" | "processing" | "delivered" | "suppressed";
-          created_at: string;
-          claimed_at: string | null;
-          completed_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          birthday_user_id: string;
-          recipient_id: string;
-          birthday_day: string;
-          status?: "pending" | "processing" | "delivered" | "suppressed";
-          created_at?: string;
-          claimed_at?: string | null;
-          completed_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["birthday_notification_deliveries"]["Insert"]>;
-        Relationships: [];
-      };
-      user_interests: {
-        Row: { id: string; user_id: string; interest: string; created_at: string };
-        Insert: { id?: string; user_id: string; interest: string; created_at?: string };
-        Update: Partial<Database["public"]["Tables"]["user_interests"]["Insert"]>;
-        Relationships: [];
-      };
-      entitlement_overrides: {
-        Row: {
-          id: string;
-          subject_type: "user" | "workspace" | "community";
-          subject_id: string;
-          entitlement_key: string;
-          value_type: "integer" | "boolean";
-          integer_value: number | null;
-          boolean_value: boolean | null;
-          reason: string | null;
-          starts_at: string | null;
-          ends_at: string | null;
-          created_by: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          subject_type?: "user" | "workspace" | "community";
-          subject_id: string;
-          entitlement_key: string;
-          value_type: "integer" | "boolean";
-          integer_value?: number | null;
-          boolean_value?: boolean | null;
-          reason?: string | null;
-          starts_at?: string | null;
-          ends_at?: string | null;
-          created_by?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["entitlement_overrides"]["Insert"]>;
-        Relationships: [];
-      };
-      subscription_changes: {
-        Row: {
-          id: string;
-          subscription_id: string | null;
-          user_id: string;
-          change_type: "upgrade" | "downgrade" | "cancel" | "reactivate";
-          from_plan: SubscriptionPlan;
-          to_plan: SubscriptionPlan;
-          effective_at: string | null;
-          status: "scheduled" | "applied" | "cancelled" | "failed";
-          requested_at: string;
-          applied_at: string | null;
-          cancelled_at: string | null;
-          reason: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          subscription_id?: string | null;
-          user_id: string;
-          change_type: "upgrade" | "downgrade" | "cancel" | "reactivate";
-          from_plan: SubscriptionPlan;
-          to_plan: SubscriptionPlan;
-          effective_at?: string | null;
-          status?: "scheduled" | "applied" | "cancelled" | "failed";
-          requested_at?: string;
-          applied_at?: string | null;
-          cancelled_at?: string | null;
-          reason?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["subscription_changes"]["Insert"]>;
-        Relationships: [];
-      };
-      downgrade_adjustments: {
-        Row: {
-          id: string;
-          subscription_change_id: string;
-          resource_type: "personal_circles" | "close_friends" | "private_groups" | "active_plans" | "storage";
-          resource_id: string | null;
-          selected_action: "keep" | "archive" | "revert" | "restrict";
-          status: "pending" | "applied" | "failed";
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          subscription_change_id: string;
-          resource_type: "personal_circles" | "close_friends" | "private_groups" | "active_plans" | "storage";
-          resource_id?: string | null;
-          selected_action: "keep" | "archive" | "revert" | "restrict";
-          status?: "pending" | "applied" | "failed";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["downgrade_adjustments"]["Insert"]>;
-        Relationships: [];
-      };
-      promotion_codes: {
-        Row: {
-          id: string;
-          code_hash: string;
-          discount_type: "percent" | "fixed" | "trial_extension";
-          discount_value: number;
-          currency: string | null;
-          eligible_plans: string[];
-          starts_at: string | null;
-          expires_at: string | null;
-          max_redemptions: number | null;
-          redemptions_count: number;
-          per_user_limit: number;
-          status: "active" | "paused" | "expired";
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          code_hash: string;
-          discount_type: "percent" | "fixed" | "trial_extension";
-          discount_value: number;
-          currency?: string | null;
-          eligible_plans?: string[];
-          starts_at?: string | null;
-          expires_at?: string | null;
-          max_redemptions?: number | null;
-          redemptions_count?: number;
-          per_user_limit?: number;
-          status?: "active" | "paused" | "expired";
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["promotion_codes"]["Insert"]>;
-        Relationships: [];
-      };
-      promotion_redemptions: {
-        Row: {
-          id: string;
-          promotion_id: string;
-          user_id: string;
-          subscription_id: string | null;
-          redeemed_at: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          promotion_id: string;
-          user_id: string;
-          subscription_id?: string | null;
-          redeemed_at?: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["promotion_redemptions"]["Insert"]>;
-        Relationships: [];
-      };
-      friendship_recaps: {
-        Row: {
-          id: string;
-          user_id: string;
-          period_type: "weekly" | "monthly" | "semester" | "annual";
-          period_start: string;
-          period_end: string;
-          summary_data: Json;
-          generated_at: string;
-          viewed_at: string | null;
-          status: "generating" | "ready" | "failed" | "dismissed";
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          period_type: "weekly" | "monthly" | "semester" | "annual";
-          period_start: string;
-          period_end: string;
-          summary_data?: Json;
-          generated_at?: string;
-          viewed_at?: string | null;
-          status?: "generating" | "ready" | "failed" | "dismissed";
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["friendship_recaps"]["Insert"]>;
-        Relationships: [];
-      };
-      recap_preferences: {
-        Row: {
-          user_id: string;
-          weekly_enabled: boolean;
-          monthly_enabled: boolean;
-          annual_enabled: boolean;
-          sharing_enabled: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          weekly_enabled?: boolean;
-          monthly_enabled?: boolean;
-          annual_enabled?: boolean;
-          sharing_enabled?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["recap_preferences"]["Insert"]>;
-        Relationships: [];
-      };
-      friendship_streaks: {
-        Row: {
-          id: string;
-          friendship_id: string;
-          current_weeks: number;
-          longest_weeks: number;
-          last_qualified_period: string | null;
-          status: "active" | "paused" | "ended";
-          paused_until: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          friendship_id: string;
-          current_weeks?: number;
-          longest_weeks?: number;
-          last_qualified_period?: string | null;
-          status?: "active" | "paused" | "ended";
-          paused_until?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["friendship_streaks"]["Insert"]>;
-        Relationships: [];
-      };
-      streak_qualifying_events: {
-        Row: {
-          id: string;
-          friendship_id: string;
-          actor_id: string;
-          event_type: StreakEventTypeName;
-          event_reference_id: string | null;
-          period_key: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          friendship_id: string;
-          actor_id: string;
-          event_type: StreakEventTypeName;
-          event_reference_id?: string | null;
-          period_key: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["streak_qualifying_events"]["Insert"]>;
-        Relationships: [];
-      };
-      achievement_definitions: {
-        Row: {
-          id: string;
-          code: string;
-          name: string;
-          description: string;
-          category: "connection" | "community" | "privacy" | "balance" | "safety";
-          criteria_type: "first_time" | "count" | "distinct_count";
-          criteria_value: number;
-          is_active: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          code: string;
-          name: string;
-          description: string;
-          category: "connection" | "community" | "privacy" | "balance" | "safety";
-          criteria_type: "first_time" | "count" | "distinct_count";
-          criteria_value?: number;
-          is_active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["achievement_definitions"]["Insert"]>;
-        Relationships: [];
-      };
-      user_achievements: {
-        Row: {
-          id: string;
-          user_id: string;
-          achievement_code: string;
-          earned_at: string;
-          viewed_at: string | null;
-          shared_at: string | null;
-          hidden: boolean;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          achievement_code: string;
-          earned_at?: string;
-          viewed_at?: string | null;
-          shared_at?: string | null;
-          hidden?: boolean;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["user_achievements"]["Insert"]>;
-        Relationships: [];
-      };
-      smart_card_acknowledgements: {
-        Row: {
-          id: string;
-          user_id: string;
-          card_id: string;
-          acknowledged_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          card_id: string;
-          acknowledged_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["smart_card_acknowledgements"]["Insert"]>;
-        Relationships: [];
-      };
-      buddy_score_ledger: {
-        Row: {
-          id: string;
-          user_id: string;
-          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
-          points_delta: number;
-          source_reference: string;
-          rule_version: number;
-          metadata: Json;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
-          points_delta: number;
-          source_reference: string;
-          rule_version: number;
-          metadata?: Json;
-          created_at?: string;
-        };
-        Update: never;
-        Relationships: [];
-      };
-      earned_premium_rewards: {
-        Row: { id: string; user_id: string; reward_plan: "buddy_plus" | "buddy_pro"; source_score_snapshot: number; grant_key: string; granted_at: string; expires_at: string; grace_ends_at: string | null; ending_notified_at: string | null; rule_version: number; status: "active" | "grace" | "expired" | "revoked"; revoked_at: string | null; revoke_reason: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; user_id: string; reward_plan: "buddy_plus" | "buddy_pro"; source_score_snapshot: number; grant_key: string; granted_at?: string; expires_at: string; grace_ends_at?: string | null; ending_notified_at?: string | null; rule_version: number; status: "active" | "grace" | "expired" | "revoked"; revoked_at?: string | null; revoke_reason?: string | null; created_at?: string; updated_at?: string };
-        Update: Partial<Database["public"]["Tables"]["earned_premium_rewards"]["Insert"]>;
-        Relationships: [];
-      };
-      engagement_preferences: {
-        Row: {
-          user_id: string;
-          recaps_enabled: boolean;
-          streaks_enabled: boolean;
-          achievements_enabled: boolean;
-          streak_notifications_enabled: boolean;
-          daily_notification_budget: number;
-          exam_mode_until: string | null;
-          exam_mode_allow_close_friends: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          recaps_enabled?: boolean;
-          streaks_enabled?: boolean;
-          achievements_enabled?: boolean;
-          streak_notifications_enabled?: boolean;
-          daily_notification_budget?: number;
-          exam_mode_until?: string | null;
-          exam_mode_allow_close_friends?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["engagement_preferences"]["Insert"]>;
-        Relationships: [];
-      };
-      notification_budget_usage: {
-        Row: {
-          id: string;
-          user_id: string;
-          day_key: string;
-          sent_count: number;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          day_key: string;
-          sent_count?: number;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["notification_budget_usage"]["Insert"]>;
-        Relationships: [];
-      };
-      push_subscriptions: {
-        Row: {
-          id: string;
-          user_id: string;
-          endpoint: string;
-          p256dh: string;
-          auth: string;
-          user_agent: string | null;
-          created_at: string;
-          last_seen_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          endpoint: string;
-          p256dh: string;
-          auth: string;
-          user_agent?: string | null;
-          created_at?: string;
-          last_seen_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["push_subscriptions"]["Insert"]>;
-        Relationships: [];
-      };
-      account_sessions: {
-        Row: {
-          session_id: string;
-          user_id: string;
-          created_at: string;
-          last_seen_at: string;
-          user_agent: string | null;
-          not_after: string | null;
-        };
-        Insert: {
-          session_id: string;
-          user_id: string;
-          created_at: string;
-          last_seen_at: string;
-          user_agent?: string | null;
-          not_after?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["account_sessions"]["Insert"]>;
-        Relationships: [];
-      };
-      device_push_tokens: {
-        Row: {
-          id: string;
-          user_id: string;
-          token: string;
-          platform: string;
-          created_at: string;
-          last_seen_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          token: string;
-          platform: string;
-          created_at?: string;
-          last_seen_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["device_push_tokens"]["Insert"]>;
-        Relationships: [];
-      };
-      admin_roles: {
-        Row: {
-          id: string;
-          name: string;
-          description: string | null;
-          is_system_role: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          description?: string | null;
-          is_system_role?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["admin_roles"]["Insert"]>;
-        Relationships: [];
-      };
-      admin_role_permissions: {
-        Row: { id: string; role_id: string; permission_key: string; created_at: string };
-        Insert: { id?: string; role_id: string; permission_key: string; created_at?: string };
-        Update: Partial<Database["public"]["Tables"]["admin_role_permissions"]["Insert"]>;
-        Relationships: [];
-      };
-      admin_assignments: {
-        Row: {
-          id: string;
-          user_id: string;
-          role_id: string;
-          status: "active" | "suspended" | "revoked";
-          assigned_by: string | null;
-          starts_at: string;
-          expires_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          role_id: string;
-          status?: "active" | "suspended" | "revoked";
-          assigned_by?: string | null;
-          starts_at?: string;
-          expires_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["admin_assignments"]["Insert"]>;
+          byte_size: number
+          file_name: string
+          media_id: string
+          message_id: string
+          mime_type: string
+          page_count?: number | null
+        }
+        Update: {
+          byte_size?: number
+          file_name?: string
+          media_id?: string
+          message_id?: string
+          mime_type?: string
+          page_count?: number | null
+        }
         Relationships: [
           {
-            foreignKeyName: "admin_assignments_role_id_fkey";
-            columns: ["role_id"];
-            referencedRelation: "admin_roles";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
-      admin_audit_events: {
+            foreignKeyName: "message_files_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_files_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_hides: {
         Row: {
-          id: string;
-          actor_id: string | null;
-          actor_role: string | null;
-          action: string;
-          target_type: string | null;
-          target_id: string | null;
-          case_reference: string | null;
-          previous_state: Json | null;
-          new_state: Json | null;
-          reason: string | null;
-          auth_strength: "password" | "mfa" | "step_up" | "break_glass" | null;
-          session_reference: string | null;
-          created_at: string;
-        };
+          created_at: string
+          id: string
+          message_id: string
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          actor_id?: string | null;
-          actor_role?: string | null;
-          action: string;
-          target_type?: string | null;
-          target_id?: string | null;
-          case_reference?: string | null;
-          previous_state?: Json | null;
-          new_state?: Json | null;
-          reason?: string | null;
-          auth_strength?: "password" | "mfa" | "step_up" | "break_glass" | null;
-          session_reference?: string | null;
-          created_at?: string;
-        };
-        // Append-only: a database trigger rejects UPDATE and DELETE.
-        Update: never;
-        Relationships: [];
-      };
-      sensitive_access_log: {
+          created_at?: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_hides_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_mentions: {
         Row: {
-          id: string;
-          actor_id: string | null;
-          category: string;
-          subject_user_id: string | null;
-          case_reference: string | null;
-          reason: string;
-          approved_by: string | null;
-          accessed_at: string;
-          created_at: string;
-        };
+          created_at: string
+          mentioned_user_id: string
+          message_id: string
+        }
         Insert: {
-          id?: string;
-          actor_id?: string | null;
-          category: string;
-          subject_user_id?: string | null;
-          case_reference?: string | null;
-          reason: string;
-          approved_by?: string | null;
-          accessed_at?: string;
-          created_at?: string;
-        };
-        Update: never;
-        Relationships: [];
-      };
-      trust_safety_cases: {
+          created_at?: string
+          mentioned_user_id: string
+          message_id: string
+        }
+        Update: {
+          created_at?: string
+          mentioned_user_id?: string
+          message_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_mentions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_places: {
         Row: {
-          id: string;
-          case_type: string;
-          priority: "level_1" | "level_2" | "level_3" | "level_4";
-          status: string;
-          subject_user_id: string | null;
-          created_from_report_id: string | null;
-          assigned_to: string | null;
-          opened_at: string;
-          resolved_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
+          address_label: string | null
+          area_label: string | null
+          message_id: string
+          place_kind: string
+          place_name: string
+        }
         Insert: {
-          id?: string;
-          case_type: string;
-          priority?: "level_1" | "level_2" | "level_3" | "level_4";
-          status?: string;
-          subject_user_id?: string | null;
-          created_from_report_id?: string | null;
-          assigned_to?: string | null;
-          opened_at?: string;
-          resolved_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["trust_safety_cases"]["Insert"]>;
-        Relationships: [];
-      };
-      case_evidence: {
+          address_label?: string | null
+          area_label?: string | null
+          message_id: string
+          place_kind?: string
+          place_name: string
+        }
+        Update: {
+          address_label?: string | null
+          area_label?: string | null
+          message_id?: string
+          place_kind?: string
+          place_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_places_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_reactions: {
         Row: {
-          id: string;
-          case_id: string;
-          evidence_type: string;
-          protected_reference: string;
-          access_level: "level_1" | "level_2" | "level_3" | "level_4";
-          retention_expires_at: string | null;
-          created_at: string;
-        };
+          created_at: string
+          id: string
+          message_id: string
+          reaction_type: string
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          case_id: string;
-          evidence_type: string;
-          protected_reference: string;
-          access_level?: "level_1" | "level_2" | "level_3" | "level_4";
-          retention_expires_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["case_evidence"]["Insert"]>;
-        Relationships: [];
-      };
-      case_actions: {
+          created_at?: string
+          id?: string
+          message_id: string
+          reaction_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          reaction_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
         Row: {
-          id: string;
-          case_id: string;
-          actor_id: string | null;
-          action_type: string;
-          target_type: string | null;
-          target_id: string | null;
-          reason_code: string | null;
-          starts_at: string;
-          ends_at: string | null;
-          reversed_at: string | null;
-          created_at: string;
-        };
+          client_message_id: string | null
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          duration_seconds: number | null
+          edited_at: string | null
+          expires_at: string | null
+          forwarded_from_message_id: string | null
+          id: string
+          kept_at: string | null
+          kept_by: string | null
+          media_id: string | null
+          media_mode: string
+          message_type: string
+          quick_action_type: string | null
+          reply_to_message_id: string | null
+          sender_id: string | null
+          status: string
+          system_event_type: string | null
+          text_content: string | null
+          waveform_data: Json | null
+        }
         Insert: {
-          id?: string;
-          case_id: string;
-          actor_id?: string | null;
-          action_type: string;
-          target_type?: string | null;
-          target_id?: string | null;
-          reason_code?: string | null;
-          starts_at?: string;
-          ends_at?: string | null;
-          reversed_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["case_actions"]["Insert"]>;
-        Relationships: [];
-      };
-      user_restrictions: {
+          client_message_id?: string | null
+          conversation_id: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_seconds?: number | null
+          edited_at?: string | null
+          expires_at?: string | null
+          forwarded_from_message_id?: string | null
+          id?: string
+          kept_at?: string | null
+          kept_by?: string | null
+          media_id?: string | null
+          media_mode?: string
+          message_type?: string
+          quick_action_type?: string | null
+          reply_to_message_id?: string | null
+          sender_id?: string | null
+          status?: string
+          system_event_type?: string | null
+          text_content?: string | null
+          waveform_data?: Json | null
+        }
+        Update: {
+          client_message_id?: string | null
+          conversation_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_seconds?: number | null
+          edited_at?: string | null
+          expires_at?: string | null
+          forwarded_from_message_id?: string | null
+          id?: string
+          kept_at?: string | null
+          kept_by?: string | null
+          media_id?: string | null
+          media_mode?: string
+          message_type?: string
+          quick_action_type?: string | null
+          reply_to_message_id?: string | null
+          sender_id?: string | null
+          status?: string
+          system_event_type?: string | null
+          text_content?: string | null
+          waveform_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_forwarded_from_message_id_fkey"
+            columns: ["forwarded_from_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moderation_actions: {
         Row: {
-          id: string;
-          user_id: string;
-          restriction_type: string;
-          case_id: string | null;
-          reason_code: string | null;
-          starts_at: string;
-          ends_at: string | null;
-          lifted_at: string | null;
-          created_at: string;
-        };
+          action_type: string
+          created_at: string
+          id: string
+          moderator_id: string | null
+          reason: string | null
+          report_id: string | null
+        }
         Insert: {
-          id?: string;
-          user_id: string;
-          restriction_type: string;
-          case_id?: string | null;
-          reason_code?: string | null;
-          starts_at?: string;
-          ends_at?: string | null;
-          lifted_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["user_restrictions"]["Insert"]>;
-        Relationships: [];
-      };
-      moderation_strikes: {
+          action_type: string
+          created_at?: string
+          id?: string
+          moderator_id?: string | null
+          reason?: string | null
+          report_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          moderator_id?: string | null
+          reason?: string | null
+          report_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_actions_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "content_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_audience_targets: {
         Row: {
-          id: string;
-          user_id: string;
-          report_kind: "user" | "content";
-          report_id: string;
-          action_type: string;
-          points: number;
-          reason_code: string;
-          created_by: string | null;
-          expires_at: string;
-          reversed_at: string | null;
-          created_at: string;
-        };
+          created_at: string
+          id: string
+          moment_id: string
+          target_id: string
+          target_type: string
+        }
         Insert: {
-          id?: string;
-          user_id: string;
-          report_kind: "user" | "content";
-          report_id: string;
-          action_type: string;
-          points: number;
-          reason_code: string;
-          created_by?: string | null;
-          expires_at?: string;
-          reversed_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["moderation_strikes"]["Insert"]>;
-        Relationships: [];
-      };
-      support_tickets: {
+          created_at?: string
+          id?: string
+          moment_id: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          moment_id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_audience_targets_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_reactions: {
         Row: {
-          id: string;
-          user_id: string | null;
-          category: string;
-          subject: string;
-          description: string;
-          diagnostics: Json;
-          priority: "low" | "normal" | "high" | "urgent";
-          status: string;
-          assigned_to: string | null;
-          created_at: string;
-          updated_at: string;
-          resolved_at: string | null;
-        };
+          created_at: string
+          id: string
+          moment_id: string
+          reaction_type: string
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          user_id?: string | null;
-          category: string;
-          subject: string;
-          description: string;
-          diagnostics?: Json;
-          priority?: "low" | "normal" | "high" | "urgent";
-          status?: string;
-          assigned_to?: string | null;
-          created_at?: string;
-          updated_at?: string;
-          resolved_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["support_tickets"]["Insert"]>;
-        Relationships: [];
-      };
-      tier_entitlement_overrides: {
+          created_at?: string
+          id?: string
+          moment_id: string
+          reaction_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          moment_id?: string
+          reaction_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_reactions_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_views: {
         Row: {
-          id: string;
-          plan: SubscriptionPlan;
-          entitlement_key: string;
-          value_type: "number" | "boolean";
-          numeric_value: number | null;
-          is_unlimited: boolean;
-          boolean_value: boolean | null;
-          updated_by: string | null;
-          updated_at: string;
-        };
+          id: string
+          moment_id: string
+          viewed_at: string
+          viewer_id: string
+        }
         Insert: {
-          id?: string;
-          plan: SubscriptionPlan;
-          entitlement_key: string;
-          value_type: "number" | "boolean";
-          numeric_value?: number | null;
-          is_unlimited?: boolean;
-          boolean_value?: boolean | null;
-          updated_by?: string | null;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["tier_entitlement_overrides"]["Insert"]>;
-        Relationships: [];
-      };
-      friend_glow_colors: {
+          id?: string
+          moment_id: string
+          viewed_at?: string
+          viewer_id: string
+        }
+        Update: {
+          id?: string
+          moment_id?: string
+          viewed_at?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_views_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moments: {
         Row: {
-          owner_id: string;
-          friend_id: string;
-          color_id: string;
-          created_at: string;
-          updated_at: string;
-        };
+          audience_type: string
+          author_id: string
+          caption: string | null
+          content_type: string
+          created_at: string
+          deleted_at: string | null
+          expires_at: string
+          id: string
+          media_id: string | null
+          starts_at: string
+          status: string
+          text_content: string | null
+          updated_at: string
+        }
         Insert: {
-          owner_id: string;
-          friend_id: string;
-          color_id: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["friend_glow_colors"]["Insert"]>;
-        Relationships: [];
-      };
-      maintenance_mode: {
+          audience_type: string
+          author_id: string
+          caption?: string | null
+          content_type: string
+          created_at?: string
+          deleted_at?: string | null
+          expires_at: string
+          id?: string
+          media_id?: string | null
+          starts_at?: string
+          status?: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience_type?: string
+          author_id?: string
+          caption?: string | null
+          content_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          expires_at?: string
+          id?: string
+          media_id?: string | null
+          starts_at?: string
+          status?: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moments_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      muddy_drops: {
         Row: {
-          id: boolean;
-          is_active: boolean;
-          message: string | null;
-          activated_by: string | null;
-          activated_at: string | null;
-          updated_at: string;
-        };
+          action_target_id: string | null
+          action_type: string | null
+          content_type: string
+          context_id: string
+          context_type: string
+          created_at: string
+          creator_id: string
+          drop_type: string
+          expires_at: string
+          id: string
+          max_unlocks: number | null
+          media_id: string | null
+          starts_at: string
+          status: string
+          text_content: string | null
+          updated_at: string
+        }
         Insert: {
-          id?: boolean;
-          is_active?: boolean;
-          message?: string | null;
-          activated_by?: string | null;
-          activated_at?: string | null;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["maintenance_mode"]["Insert"]>;
-        Relationships: [];
-      };
-      support_ticket_messages: {
+          action_target_id?: string | null
+          action_type?: string | null
+          content_type: string
+          context_id: string
+          context_type: string
+          created_at?: string
+          creator_id: string
+          drop_type: string
+          expires_at: string
+          id?: string
+          max_unlocks?: number | null
+          media_id?: string | null
+          starts_at?: string
+          status?: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_target_id?: string | null
+          action_type?: string | null
+          content_type?: string
+          context_id?: string
+          context_type?: string
+          created_at?: string
+          creator_id?: string
+          drop_type?: string
+          expires_at?: string
+          id?: string
+          max_unlocks?: number | null
+          media_id?: string | null
+          starts_at?: string
+          status?: string
+          text_content?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "muddy_drops_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_budget_usage: {
         Row: {
-          id: string;
-          ticket_id: string;
-          sender_type: "user" | "agent" | "system";
-          sender_id: string | null;
-          message: string;
-          attachment_media_id: string | null;
-          created_at: string;
-        };
+          created_at: string
+          day_key: string
+          id: string
+          sent_count: number
+          updated_at: string
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          ticket_id: string;
-          sender_type: "user" | "agent" | "system";
-          sender_id?: string | null;
-          message: string;
-          attachment_media_id?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["support_ticket_messages"]["Insert"]>;
-        Relationships: [];
-      };
-      support_internal_notes: {
+          created_at?: string
+          day_key: string
+          id?: string
+          sent_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day_key?: string
+          id?: string
+          sent_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_dispatches: {
         Row: {
-          id: string;
-          ticket_id: string;
-          author_id: string | null;
-          body: string;
-          created_at: string;
-        };
+          context: Json
+          created_at: string
+          dedupe_key: string | null
+          expires_at: string
+          id: string
+          payload: Json
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          ticket_id: string;
-          author_id?: string | null;
-          body: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["support_internal_notes"]["Insert"]>;
-        Relationships: [];
-      };
-      support_ticket_events: {
+          context?: Json
+          created_at?: string
+          dedupe_key?: string | null
+          expires_at?: string
+          id?: string
+          payload: Json
+          user_id: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          dedupe_key?: string | null
+          expires_at?: string
+          id?: string
+          payload?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_push_deliveries: {
         Row: {
-          id: string;
-          ticket_id: string;
-          actor_id: string | null;
-          event_type:
-            | "status_changed"
-            | "priority_changed"
-            | "assigned"
-            | "unassigned"
-            | "transferred"
-            | "reopened"
-            | "response_sent"
-            | "note_added";
-          from_value: string | null;
-          to_value: string | null;
-          note: string | null;
-          created_at: string;
-        };
+          attempts: number
+          dispatch_id: string
+          id: string
+          last_error: string | null
+          lease_id: string | null
+          locked_at: string | null
+          run_at: string
+          status: string
+          target_id: string
+          transport: string
+        }
         Insert: {
-          id?: string;
-          ticket_id: string;
-          actor_id?: string | null;
-          event_type:
-            | "status_changed"
-            | "priority_changed"
-            | "assigned"
-            | "unassigned"
-            | "transferred"
-            | "reopened"
-            | "response_sent"
-            | "note_added";
-          from_value?: string | null;
-          to_value?: string | null;
-          note?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["support_ticket_events"]["Insert"]>;
-        Relationships: [];
-      };
-      appeals: {
+          attempts?: number
+          dispatch_id: string
+          id?: string
+          last_error?: string | null
+          lease_id?: string | null
+          locked_at?: string | null
+          run_at?: string
+          status?: string
+          target_id: string
+          transport: string
+        }
+        Update: {
+          attempts?: number
+          dispatch_id?: string
+          id?: string
+          last_error?: string | null
+          lease_id?: string | null
+          locked_at?: string | null
+          run_at?: string
+          status?: string
+          target_id?: string
+          transport?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_push_deliveries_dispatch_id_fkey"
+            columns: ["dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "notification_dispatches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
         Row: {
-          id: string;
-          subject_user_id: string;
-          source_action_id: string | null;
-          source_restriction_id: string | null;
-          reason: string;
-          status: "submitted" | "in_review" | "decided" | "withdrawn";
-          submitted_at: string;
-          assigned_to: string | null;
-          decided_at: string | null;
-          decision: "upheld" | "modified" | "reversed" | null;
-          decision_note: string | null;
-          created_at: string;
-          updated_at: string;
-        };
+          created_at: string
+          dedupe_key: string | null
+          id: string
+          is_read: boolean
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
         Insert: {
-          id?: string;
-          subject_user_id: string;
-          source_action_id?: string | null;
-          source_restriction_id?: string | null;
-          reason: string;
-          status?: "submitted" | "in_review" | "decided" | "withdrawn";
-          submitted_at?: string;
-          assigned_to?: string | null;
-          decided_at?: string | null;
-          decision?: "upheld" | "modified" | "reversed" | null;
-          decision_note?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["appeals"]["Insert"]>;
-        Relationships: [];
-      };
-      security_incidents: {
+          created_at?: string
+          dedupe_key?: string | null
+          id?: string
+          is_read?: boolean
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string | null
+          id?: string
+          is_read?: boolean
+          message?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      onboarding_progress: {
         Row: {
-          id: string;
-          title: string;
-          severity: "sev_1" | "sev_2" | "sev_3" | "sev_4";
-          status: string;
-          incident_type: string;
-          commander_id: string | null;
-          detected_at: string;
-          contained_at: string | null;
-          resolved_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
+          activated_at: string | null
+          completed_at: string | null
+          created_at: string
+          current_step: string
+          first_muddy_added_at: string | null
+          location_permission_result: string | null
+          location_prompted_at: string | null
+          privacy_reviewed_at: string | null
+          profile_completed_at: string | null
+          skipped_optional: boolean
+          updated_at: string
+          user_id: string
+          visibility_configured_at: string | null
+        }
         Insert: {
-          id?: string;
-          title: string;
-          severity: "sev_1" | "sev_2" | "sev_3" | "sev_4";
-          status?: string;
-          incident_type: string;
-          commander_id?: string | null;
-          detected_at?: string;
-          contained_at?: string | null;
-          resolved_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["security_incidents"]["Insert"]>;
-        Relationships: [];
-      };
-      incident_actions: {
+          activated_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          current_step?: string
+          first_muddy_added_at?: string | null
+          location_permission_result?: string | null
+          location_prompted_at?: string | null
+          privacy_reviewed_at?: string | null
+          profile_completed_at?: string | null
+          skipped_optional?: boolean
+          updated_at?: string
+          user_id: string
+          visibility_configured_at?: string | null
+        }
+        Update: {
+          activated_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          current_step?: string
+          first_muddy_added_at?: string | null
+          location_permission_result?: string | null
+          location_prompted_at?: string | null
+          privacy_reviewed_at?: string | null
+          profile_completed_at?: string | null
+          skipped_optional?: boolean
+          updated_at?: string
+          user_id?: string
+          visibility_configured_at?: string | null
+        }
+        Relationships: []
+      }
+      paystack_webhook_events: {
         Row: {
-          id: string;
-          incident_id: string;
-          actor_id: string | null;
-          action_type: string;
-          description: string | null;
-          created_at: string;
-        };
+          created_at: string
+          id: string
+          type: string
+        }
         Insert: {
-          id?: string;
-          incident_id: string;
-          actor_id?: string | null;
-          action_type: string;
-          description?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["incident_actions"]["Insert"]>;
-        Relationships: [];
-      };
-      emergency_controls: {
+          created_at?: string
+          id: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      plan_participants: {
         Row: {
-          control_key: string;
-          is_disabled: boolean;
-          reason: string | null;
-          incident_id: string | null;
-          disabled_by: string | null;
-          disabled_at: string | null;
-          updated_at: string;
-        };
+          attendance_visibility: string
+          created_at: string
+          id: string
+          invited_by: string | null
+          plan_id: string
+          responded_at: string | null
+          response_note: string | null
+          role: string
+          rsvp_status: string
+          updated_at: string
+          user_id: string
+          viewed_at: string | null
+        }
         Insert: {
-          control_key: string;
-          is_disabled?: boolean;
-          reason?: string | null;
-          incident_id?: string | null;
-          disabled_by?: string | null;
-          disabled_at?: string | null;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["emergency_controls"]["Insert"]>;
-        Relationships: [];
-      };
+          attendance_visibility?: string
+          created_at?: string
+          id?: string
+          invited_by?: string | null
+          plan_id: string
+          responded_at?: string | null
+          response_note?: string | null
+          role?: string
+          rsvp_status?: string
+          updated_at?: string
+          user_id: string
+          viewed_at?: string | null
+        }
+        Update: {
+          attendance_visibility?: string
+          created_at?: string
+          id?: string
+          invited_by?: string | null
+          plan_id?: string
+          responded_at?: string | null
+          response_note?: string | null
+          role?: string
+          rsvp_status?: string
+          updated_at?: string
+          user_id?: string
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_participants_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_poll_options: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          poll_id: string
+          sort_order: number
+          value: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          poll_id: string
+          sort_order?: number
+          value?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          poll_id?: string
+          sort_order?: number
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_poll_options_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "plan_polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_poll_votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_id: string
+          poll_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_id: string
+          poll_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_id?: string
+          poll_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_poll_votes_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "plan_poll_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_poll_votes_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "plan_polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_polls: {
+        Row: {
+          closes_at: string | null
+          confirmed_option_id: string | null
+          created_at: string
+          creator_id: string
+          id: string
+          plan_id: string
+          poll_type: string
+          question: string
+          results_visibility: string
+          selection_mode: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closes_at?: string | null
+          confirmed_option_id?: string | null
+          created_at?: string
+          creator_id: string
+          id?: string
+          plan_id: string
+          poll_type: string
+          question: string
+          results_visibility?: string
+          selection_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closes_at?: string | null
+          confirmed_option_id?: string | null
+          created_at?: string
+          creator_id?: string
+          id?: string
+          plan_id?: string
+          poll_type?: string
+          question?: string
+          results_visibility?: string
+          selection_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_polls_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          cancelled_at: string | null
+          category: string | null
+          chat_close_days: number
+          completed_at: string | null
+          cover_image_url: string | null
+          created_at: string
+          creator_id: string
+          custom_place_text: string | null
+          description: string | null
+          end_at: string | null
+          id: string
+          max_participants: number
+          place_id: string | null
+          place_type: string
+          plan_type: string
+          reminder_minutes: number | null
+          rsvp_deadline: string | null
+          source_hangout_id: string | null
+          source_ping_id: string | null
+          start_at: string | null
+          status: string
+          timezone: string
+          title: string
+          updated_at: string
+          visibility_type: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          category?: string | null
+          chat_close_days?: number
+          completed_at?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          creator_id: string
+          custom_place_text?: string | null
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          max_participants?: number
+          place_id?: string | null
+          place_type?: string
+          plan_type: string
+          reminder_minutes?: number | null
+          rsvp_deadline?: string | null
+          source_hangout_id?: string | null
+          source_ping_id?: string | null
+          start_at?: string | null
+          status?: string
+          timezone?: string
+          title: string
+          updated_at?: string
+          visibility_type?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          category?: string | null
+          chat_close_days?: number
+          completed_at?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          creator_id?: string
+          custom_place_text?: string | null
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          max_participants?: number
+          place_id?: string | null
+          place_type?: string
+          plan_type?: string
+          reminder_minutes?: number | null
+          rsvp_deadline?: string | null
+          source_hangout_id?: string | null
+          source_ping_id?: string | null
+          start_at?: string | null
+          status?: string
+          timezone?: string
+          title?: string
+          updated_at?: string
+          visibility_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plans_source_hangout_fk"
+            columns: ["source_hangout_id"]
+            isOneToOne: false
+            referencedRelation: "hangout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plans_source_ping_id_fkey"
+            columns: ["source_ping_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_pings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      premium_trial_config: {
+        Row: {
+          available_from: string | null
+          available_until: string | null
+          campaign_source: string | null
+          created_at: string
+          duration_days: number
+          eligibility_rules: Json
+          eligible_plan: Database["public"]["Enums"]["subscription_plan"]
+          enabled: boolean
+          key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          available_from?: string | null
+          available_until?: string | null
+          campaign_source?: string | null
+          created_at?: string
+          duration_days?: number
+          eligibility_rules?: Json
+          eligible_plan?: Database["public"]["Enums"]["subscription_plan"]
+          enabled?: boolean
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          available_from?: string | null
+          available_until?: string | null
+          campaign_source?: string | null
+          created_at?: string
+          duration_days?: number
+          eligibility_rules?: Json
+          eligible_plan?: Database["public"]["Enums"]["subscription_plan"]
+          enabled?: boolean
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      premium_trial_events: {
+        Row: {
+          created_at: string
+          event_key: string
+          event_type: string
+          feature_key: string | null
+          id: string
+          metadata: Json
+          occurred_at: string
+          trial_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_key: string
+          event_type: string
+          feature_key?: string | null
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          trial_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_key?: string
+          event_type?: string
+          feature_key?: string | null
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          trial_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premium_trial_events_trial_id_fkey"
+            columns: ["trial_id"]
+            isOneToOne: false
+            referencedRelation: "premium_trials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      premium_trial_notifications: {
+        Row: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          delivery_status: string
+          id: string
+          last_attempt_at: string | null
+          notification_type: string
+          trial_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
+          id?: string
+          last_attempt_at?: string | null
+          notification_type: string
+          trial_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
+          id?: string
+          last_attempt_at?: string | null
+          notification_type?: string
+          trial_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premium_trial_notifications_trial_id_fkey"
+            columns: ["trial_id"]
+            isOneToOne: false
+            referencedRelation: "premium_trials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      premium_trials: {
+        Row: {
+          campaign_source: string | null
+          cancelled_at: string | null
+          converted_at: string | null
+          created_at: string
+          granted_by: string | null
+          id: string
+          override_reason: string | null
+          owner_override: boolean
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          revocation_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          source: string
+          status: string
+          trial_ends_at: string
+          trial_started_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_source?: string | null
+          cancelled_at?: string | null
+          converted_at?: string | null
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          override_reason?: string | null
+          owner_override?: boolean
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          revocation_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          source?: string
+          status?: string
+          trial_ends_at: string
+          trial_started_at: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_source?: string | null
+          cancelled_at?: string | null
+          converted_at?: string | null
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          override_reason?: string | null
+          owner_override?: boolean
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          revocation_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          source?: string
+          status?: string
+          trial_ends_at?: string
+          trial_started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       privacy_requests: {
         Row: {
-          id: string;
-          user_id: string;
-          request_type: string;
-          status: string;
-          verified_at: string | null;
-          submitted_at: string;
-          completed_at: string | null;
-          assigned_to: string | null;
-          legal_hold_reason: string | null;
-          legal_hold_expires_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          legal_hold_expires_at: string | null
+          legal_hold_reason: string | null
+          request_type: string
+          status: string
+          submitted_at: string
+          updated_at: string
+          user_id: string
+          verified_at: string | null
+        }
         Insert: {
-          id?: string;
-          user_id: string;
-          request_type: string;
-          status?: string;
-          verified_at?: string | null;
-          submitted_at?: string;
-          completed_at?: string | null;
-          assigned_to?: string | null;
-          legal_hold_reason?: string | null;
-          legal_hold_expires_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["privacy_requests"]["Insert"]>;
-        Relationships: [];
-      };
-      feature_flags: {
-        Row: {
-          id: string;
-          key: string;
-          description: string | null;
-          status: "off" | "on" | "rollout" | "archived";
-          default_value: boolean;
-          created_by: string | null;
-          created_at: string;
-          updated_at: string;
-          updated_by: string | null;
-        };
-        Insert: {
-          id?: string;
-          key: string;
-          description?: string | null;
-          status?: "off" | "on" | "rollout" | "archived";
-          default_value?: boolean;
-          created_by?: string | null;
-          created_at?: string;
-          updated_at?: string;
-          updated_by?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["feature_flags"]["Insert"]>;
-        Relationships: [];
-      };
-      feature_flag_rules: {
-        Row: {
-          id: string;
-          feature_flag_id: string;
-          target_type: string;
-          target_value: string | null;
-          rollout_percentage: number | null;
-          starts_at: string | null;
-          ends_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          feature_flag_id: string;
-          target_type: string;
-          target_value?: string | null;
-          rollout_percentage?: number | null;
-          starts_at?: string | null;
-          ends_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["feature_flag_rules"]["Insert"]>;
-        Relationships: [];
-      };
-      experiments: {
-        Row: {
-          id: string;
-          key: string;
-          name: string;
-          description: string;
-          hypothesis: string;
-          status: ExperimentStatus;
-          parent_feature_flag_id: string | null;
-          allocation_percentage: number;
-          audience: ExperimentAudience;
-          target_platforms: ExperimentPlatform[];
-          target_plans: SubscriptionPlan[];
-          conflict_group: string | null;
-          starts_at: string | null;
-          ends_at: string | null;
-          primary_metric: string;
-          secondary_metrics: string[];
-          guardrail_metrics: string[];
-          created_by: string;
-          started_at: string | null;
-          paused_at: string | null;
-          completed_at: string | null;
-          cancelled_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          key: string;
-          name: string;
-          description: string;
-          hypothesis: string;
-          status?: ExperimentStatus;
-          parent_feature_flag_id?: string | null;
-          allocation_percentage?: number;
-          audience?: ExperimentAudience;
-          target_platforms?: ExperimentPlatform[];
-          target_plans?: SubscriptionPlan[];
-          conflict_group?: string | null;
-          starts_at?: string | null;
-          ends_at?: string | null;
-          primary_metric: string;
-          secondary_metrics?: string[];
-          guardrail_metrics?: string[];
-          created_by: string;
-          started_at?: string | null;
-          paused_at?: string | null;
-          completed_at?: string | null;
-          cancelled_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["experiments"]["Insert"]>;
-        Relationships: [];
-      };
-      experiment_variants: {
-        Row: {
-          id: string;
-          experiment_id: string;
-          key: string;
-          name: string;
-          description: string;
-          weight_basis_points: number;
-          is_control: boolean;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          experiment_id: string;
-          key: string;
-          name: string;
-          description?: string;
-          weight_basis_points: number;
-          is_control?: boolean;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["experiment_variants"]["Insert"]>;
-        Relationships: [];
-      };
-      experiment_testers: {
-        Row: {
-          id: string;
-          experiment_id: string;
-          user_id: string | null;
-          added_by: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          experiment_id: string;
-          user_id: string;
-          added_by: string;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["experiment_testers"]["Insert"]>;
-        Relationships: [];
-      };
-      experiment_assignments: {
-        Row: {
-          id: string;
-          experiment_id: string;
-          user_id: string | null;
-          variant_id: string;
-          assigned_plan: SubscriptionPlan;
-          assigned_platform: ExperimentPlatform;
-          assigned_at: string;
-        };
-        Insert: {
-          id?: string;
-          experiment_id: string;
-          user_id: string;
-          variant_id: string;
-          assigned_plan: SubscriptionPlan;
-          assigned_platform: ExperimentPlatform;
-          assigned_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["experiment_assignments"]["Insert"]>;
-        Relationships: [];
-      };
-      experiment_exposures: {
-        Row: {
-          id: string;
-          experiment_id: string;
-          assignment_id: string;
-          user_id: string | null;
-          variant_id: string;
-          platform: ExperimentPlatform;
-          first_exposed_at: string;
-        };
-        Insert: {
-          id?: string;
-          experiment_id: string;
-          assignment_id: string;
-          user_id: string;
-          variant_id: string;
-          platform: ExperimentPlatform;
-          first_exposed_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["experiment_exposures"]["Insert"]>;
-        Relationships: [];
-      };
-      relationship_notes: {
-        Row: {
-          id: string;
-          author_id: string;
-          subject_id: string;
-          body: string;
-          created_at: string;
-          updated_at: string;
-          source: "user";
-        };
-        Insert: {
-          id?: string;
-          author_id: string;
-          subject_id: string;
-          body: string;
-          created_at?: string;
-          updated_at?: string;
-          source?: "user";
-        };
-        Update: Partial<Database["public"]["Tables"]["relationship_notes"]["Insert"]>;
-        Relationships: [];
-      };
-      life_timeline_resets: {
-        Row: {
-          id: string;
-          user_id: string;
-          relationship_id: string;
-          hidden_before: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          relationship_id: string;
-          hidden_before?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["life_timeline_resets"]["Insert"]>;
-        Relationships: [];
-      };
-      scheduler_incidents: {
-        Row: {
-          id: string;
-          scheduler: string;
-          opened_at: string;
-          resolved_at: string | null;
-          consecutive_failures: number;
-          missing_ticks: boolean;
-          alerted_at: string | null;
-          recovery_notified_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          scheduler?: string;
-          opened_at?: string;
-          resolved_at?: string | null;
-          consecutive_failures?: number;
-          missing_ticks?: boolean;
-          alerted_at?: string | null;
-          recovery_notified_at?: string | null;
-          created_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["scheduler_incidents"]["Insert"]>;
-        Relationships: [];
-      };
-      jobs: {
-        Row: {
-          id: string;
-          job_type: string;
-          payload: Json;
-          priority: number;
-          status: "queued" | "scheduled" | "processing" | "completed" | "failed" | "retrying" | "dead_letter";
-          attempts: number;
-          max_attempts: number;
-          run_at: string;
-          locked_at: string | null;
-          locked_by: string | null;
-          last_error_code: string | null;
-          last_error_at: string | null;
-          idempotency_key: string | null;
-          created_at: string;
-          completed_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          job_type: string;
-          payload?: Json;
-          priority?: number;
-          status?: "queued" | "scheduled" | "processing" | "completed" | "failed" | "retrying" | "dead_letter";
-          attempts?: number;
-          max_attempts?: number;
-          run_at?: string;
-          locked_at?: string | null;
-          locked_by?: string | null;
-          last_error_code?: string | null;
-          last_error_at?: string | null;
-          idempotency_key?: string | null;
-          created_at?: string;
-          completed_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
-        Relationships: [];
-      };
-      idempotency_keys: {
-        Row: {
-          id: string;
-          user_id: string | null;
-          scope: string;
-          key: string;
-          result: Json | null;
-          status: "in_progress" | "completed" | "failed";
-          expires_at: string;
-          created_at: string;
-          completed_at: string | null;
-        };
-        Insert: {
-          id?: string;
-          user_id?: string | null;
-          scope: string;
-          key: string;
-          result?: Json | null;
-          status?: "in_progress" | "completed" | "failed";
-          expires_at?: string;
-          created_at?: string;
-          completed_at?: string | null;
-        };
-        Update: Partial<Database["public"]["Tables"]["idempotency_keys"]["Insert"]>;
-        Relationships: [];
-      };
-      domain_events: {
-        Row: {
-          id: string;
-          event_type: string;
-          version: number;
-          resource_type: string;
-          resource_id: string | null;
-          resource_key: string | null;
-          actor_id: string | null;
-          payload: Json;
-          occurred_at: string;
-          created_at: string;
-          dedupe_key: string | null;
-          feature_key: string | null;
-          subscription_plan: SubscriptionProduct;
-        };
-        Insert: {
-          id?: string;
-          event_type: string;
-          version?: number;
-          resource_type: string;
-          resource_id?: string | null;
-          resource_key?: string | null;
-          actor_id?: string | null;
-          payload?: Json;
-          occurred_at?: string;
-          created_at?: string;
-          dedupe_key?: string | null;
-          feature_key?: string | null;
-          subscription_plan?: SubscriptionProduct;
-        };
-        // Append-only: a database trigger rejects UPDATE and DELETE.
-        Update: never;
-        Relationships: [];
-      };
-      analytics_daily_user_facts: {
-        Row: {
-          id: string;
-          event_date: string;
-          user_id: string;
-          event_name: string;
-          feature_key: string;
-          subscription_plan: SubscriptionProduct;
-          action_count: number;
-          first_occurred_at: string;
-          last_occurred_at: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          event_date: string;
-          user_id: string;
-          event_name: string;
-          feature_key?: string;
-          subscription_plan?: SubscriptionProduct;
-          action_count?: number;
-          first_occurred_at: string;
-          last_occurred_at: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["analytics_daily_user_facts"]["Insert"]>;
-        Relationships: [];
-      };
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          legal_hold_expires_at?: string | null
+          legal_hold_reason?: string | null
+          request_type: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          legal_hold_expires_at?: string | null
+          legal_hold_reason?: string | null
+          request_type?: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       privacy_setup_versions: {
         Row: {
-          user_id: string;
-          policy_version: string;
-          setup_completed_at: string | null;
-          last_reviewed_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
+          created_at: string
+          last_reviewed_at: string | null
+          policy_version: string
+          setup_completed_at: string | null
+          updated_at: string
+          user_id: string
+        }
         Insert: {
-          user_id: string;
-          policy_version: string;
-          setup_completed_at?: string | null;
-          last_reviewed_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["privacy_setup_versions"]["Insert"]>;
-        Relationships: [];
-      };
-    };
-    Views: Record<string, never>;
+          created_at?: string
+          last_reviewed_at?: string | null
+          policy_version: string
+          setup_completed_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_reviewed_at?: string | null
+          policy_version?: string
+          setup_completed_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      privacy_zones: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          latitude: number
+          longitude: number
+          name: string
+          radius: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          latitude: number
+          longitude: number
+          name: string
+          radius: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profile_birth_details: {
+        Row: {
+          correction_used_at: string | null
+          created_at: string
+          date_of_birth: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          correction_used_at?: string | null
+          created_at?: string
+          date_of_birth: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          correction_used_at?: string | null
+          created_at?: string
+          date_of_birth?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profile_field_privacy: {
+        Row: {
+          created_at: string
+          field_name: string
+          id: string
+          updated_at: string
+          user_id: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          field_name: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          visibility: string
+        }
+        Update: {
+          created_at?: string
+          field_name?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
+      profile_photos: {
+        Row: {
+          created_at: string
+          id: string
+          media_asset_id: string
+          position: number
+          updated_at: string
+          user_id: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          media_asset_id: string
+          position: number
+          updated_at?: string
+          user_id: string
+          visibility?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          media_asset_id?: string
+          position?: number
+          updated_at?: string
+          user_id?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_photos_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          deleted_at: string | null
+          full_name: string
+          general_area: string | null
+          graduation_year: number | null
+          id: string
+          institution: string | null
+          is_onboarded: boolean
+          mood_status: string | null
+          profile_media_id: string | null
+          programme: string | null
+          pronouns: string | null
+          trusted_member_since: string | null
+          updated_at: string
+          user_id: string
+          username: string
+          username_changed_at: string | null
+          username_normalized: string | null
+          visibility_status: Database["public"]["Enums"]["visibility_status"]
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          full_name: string
+          general_area?: string | null
+          graduation_year?: number | null
+          id?: string
+          institution?: string | null
+          is_onboarded?: boolean
+          mood_status?: string | null
+          profile_media_id?: string | null
+          programme?: string | null
+          pronouns?: string | null
+          trusted_member_since?: string | null
+          updated_at?: string
+          user_id: string
+          username: string
+          username_changed_at?: string | null
+          username_normalized?: string | null
+          visibility_status?: Database["public"]["Enums"]["visibility_status"]
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          full_name?: string
+          general_area?: string | null
+          graduation_year?: number | null
+          id?: string
+          institution?: string | null
+          is_onboarded?: boolean
+          mood_status?: string | null
+          profile_media_id?: string | null
+          programme?: string | null
+          pronouns?: string | null
+          trusted_member_since?: string | null
+          updated_at?: string
+          user_id?: string
+          username?: string
+          username_changed_at?: string | null
+          username_normalized?: string | null
+          visibility_status?: Database["public"]["Enums"]["visibility_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_profile_media_id_fkey"
+            columns: ["profile_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_codes: {
+        Row: {
+          code_hash: string
+          created_at: string
+          currency: string | null
+          discount_type: string
+          discount_value: number
+          eligible_plans: string[]
+          expires_at: string | null
+          id: string
+          max_redemptions: number | null
+          per_user_limit: number
+          redemptions_count: number
+          starts_at: string | null
+          status: string
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          currency?: string | null
+          discount_type: string
+          discount_value: number
+          eligible_plans?: string[]
+          expires_at?: string | null
+          id?: string
+          max_redemptions?: number | null
+          per_user_limit?: number
+          redemptions_count?: number
+          starts_at?: string | null
+          status?: string
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          currency?: string | null
+          discount_type?: string
+          discount_value?: number
+          eligible_plans?: string[]
+          expires_at?: string | null
+          id?: string
+          max_redemptions?: number | null
+          per_user_limit?: number
+          redemptions_count?: number
+          starts_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      promotion_redemptions: {
+        Row: {
+          created_at: string
+          id: string
+          promotion_id: string
+          redeemed_at: string
+          subscription_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          promotion_id: string
+          redeemed_at?: string
+          subscription_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          promotion_id?: string
+          redeemed_at?: string
+          subscription_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_redemptions_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_redemptions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_cost_records: {
+        Row: {
+          amount_minor: number
+          billing_period: string
+          category: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          notes: string | null
+          provider: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          amount_minor: number
+          billing_period: string
+          category: string
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          id?: string
+          notes?: string | null
+          provider: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          billing_period?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          notes?: string | null
+          provider?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      proximity_events: {
+        Row: {
+          confidence: Database["public"]["Enums"]["location_confidence"]
+          created_at: string
+          expires_at: string
+          friend_id: string
+          glow_strength: number
+          id: string
+          proximity_level: Database["public"]["Enums"]["proximity_level"]
+          user_id: string
+        }
+        Insert: {
+          confidence: Database["public"]["Enums"]["location_confidence"]
+          created_at?: string
+          expires_at: string
+          friend_id: string
+          glow_strength: number
+          id?: string
+          proximity_level: Database["public"]["Enums"]["proximity_level"]
+          user_id: string
+        }
+        Update: {
+          confidence?: Database["public"]["Enums"]["location_confidence"]
+          created_at?: string
+          expires_at?: string
+          friend_id?: string
+          glow_strength?: number
+          id?: string
+          proximity_level?: Database["public"]["Enums"]["proximity_level"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_seen_at: string
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_seen_at?: string
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_seen_at?: string
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      qr_sessions: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          starts_at: string
+          token_hash: string
+          used_at: string | null
+          used_by: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          starts_at?: string
+          token_hash: string
+          used_at?: string | null
+          used_by?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          starts_at?: string
+          token_hash?: string
+          used_at?: string | null
+          used_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          action: string
+          count: number
+          created_at: string
+          id: string
+          ip_hash: string | null
+          updated_at: string
+          user_id: string | null
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          action: string
+          count?: number
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          updated_at?: string
+          user_id?: string | null
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          action?: string
+          count?: number
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          updated_at?: string
+          user_id?: string | null
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      recap_preferences: {
+        Row: {
+          annual_enabled: boolean
+          created_at: string
+          monthly_enabled: boolean
+          sharing_enabled: boolean
+          updated_at: string
+          user_id: string
+          weekly_enabled: boolean
+        }
+        Insert: {
+          annual_enabled?: boolean
+          created_at?: string
+          monthly_enabled?: boolean
+          sharing_enabled?: boolean
+          updated_at?: string
+          user_id: string
+          weekly_enabled?: boolean
+        }
+        Update: {
+          annual_enabled?: boolean
+          created_at?: string
+          monthly_enabled?: boolean
+          sharing_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+          weekly_enabled?: boolean
+        }
+        Relationships: []
+      }
+      relationship_notes: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          source: string
+          subject_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          source?: string
+          subject_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          source?: string
+          subject_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          reason: string
+          reported_user_id: string | null
+          reported_user_label: string
+          reporter_id: string | null
+          status: Database["public"]["Enums"]["report_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          reason: string
+          reported_user_id?: string | null
+          reported_user_label?: string
+          reporter_id?: string | null
+          status?: Database["public"]["Enums"]["report_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          reason?: string
+          reported_user_id?: string | null
+          reported_user_label?: string
+          reporter_id?: string | null
+          status?: Database["public"]["Enums"]["report_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      safe_arrival_blocks: {
+        Row: {
+          blocked_traveller_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          blocked_traveller_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          blocked_traveller_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      safe_arrival_contacts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledgement_status: string
+          contact_user_id: string
+          created_at: string
+          id: string
+          notified_at: string | null
+          session_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledgement_status?: string
+          contact_user_id: string
+          created_at?: string
+          id?: string
+          notified_at?: string | null
+          session_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledgement_status?: string
+          contact_user_id?: string
+          created_at?: string
+          id?: string
+          notified_at?: string | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safe_arrival_contacts_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "safe_arrival_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safe_arrival_events: {
+        Row: {
+          client_mutation_id: string | null
+          created_at: string
+          created_by: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          session_id: string
+        }
+        Insert: {
+          client_mutation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          session_id: string
+        }
+        Update: {
+          client_mutation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safe_arrival_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "safe_arrival_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safe_arrival_sessions: {
+        Row: {
+          cancelled_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          destination_event_id: string | null
+          destination_label: string
+          destination_type: string
+          expected_arrival_at: string
+          expired_at: string | null
+          grace_period_minutes: number
+          id: string
+          note: string | null
+          started_at: string
+          status: string
+          traveller_id: string
+          unconfirmed_at: string | null
+          unconfirmed_notified_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          destination_event_id?: string | null
+          destination_label: string
+          destination_type?: string
+          expected_arrival_at: string
+          expired_at?: string | null
+          grace_period_minutes?: number
+          id?: string
+          note?: string | null
+          started_at?: string
+          status?: string
+          traveller_id: string
+          unconfirmed_at?: string | null
+          unconfirmed_notified_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          destination_event_id?: string | null
+          destination_label?: string
+          destination_type?: string
+          expected_arrival_at?: string
+          expired_at?: string | null
+          grace_period_minutes?: number
+          id?: string
+          note?: string | null
+          started_at?: string
+          status?: string
+          traveller_id?: string
+          unconfirmed_at?: string | null
+          unconfirmed_notified_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safe_arrival_sessions_destination_event_id_fkey"
+            columns: ["destination_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_message_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saved_messages: {
+        Row: {
+          folder_id: string | null
+          message_id: string
+          saved_at: string
+          user_id: string
+        }
+        Insert: {
+          folder_id?: string | null
+          message_id: string
+          saved_at?: string
+          user_id: string
+        }
+        Update: {
+          folder_id?: string | null
+          message_id?: string
+          saved_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_messages_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "saved_message_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_messages_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduler_incidents: {
+        Row: {
+          alerted_at: string | null
+          consecutive_failures: number
+          created_at: string
+          id: string
+          missing_ticks: boolean
+          opened_at: string
+          recovery_notified_at: string | null
+          resolved_at: string | null
+          scheduler: string
+        }
+        Insert: {
+          alerted_at?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          id?: string
+          missing_ticks?: boolean
+          opened_at?: string
+          recovery_notified_at?: string | null
+          resolved_at?: string | null
+          scheduler?: string
+        }
+        Update: {
+          alerted_at?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          id?: string
+          missing_ticks?: boolean
+          opened_at?: string
+          recovery_notified_at?: string | null
+          resolved_at?: string | null
+          scheduler?: string
+        }
+        Relationships: []
+      }
+      security_incidents: {
+        Row: {
+          commander_id: string | null
+          contained_at: string | null
+          created_at: string
+          detected_at: string
+          id: string
+          incident_type: string
+          resolved_at: string | null
+          severity: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          commander_id?: string | null
+          contained_at?: string | null
+          created_at?: string
+          detected_at?: string
+          id?: string
+          incident_type: string
+          resolved_at?: string | null
+          severity: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          commander_id?: string | null
+          contained_at?: string | null
+          created_at?: string
+          detected_at?: string
+          id?: string
+          incident_type?: string
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sensitive_access_log: {
+        Row: {
+          accessed_at: string
+          actor_id: string | null
+          approved_by: string | null
+          case_reference: string | null
+          category: string
+          created_at: string
+          id: string
+          reason: string
+          subject_user_id: string | null
+        }
+        Insert: {
+          accessed_at?: string
+          actor_id?: string | null
+          approved_by?: string | null
+          case_reference?: string | null
+          category: string
+          created_at?: string
+          id?: string
+          reason: string
+          subject_user_id?: string | null
+        }
+        Update: {
+          accessed_at?: string
+          actor_id?: string | null
+          approved_by?: string | null
+          case_reference?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          subject_user_id?: string | null
+        }
+        Relationships: []
+      }
+      smart_card_acknowledgements: {
+        Row: {
+          acknowledged_at: string
+          card_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          card_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          card_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      socialize_sessions: {
+        Row: {
+          activity: string
+          area_tier: string
+          created_at: string
+          ended_at: string | null
+          expires_at: string
+          id: string
+          note: string | null
+          starts_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity: string
+          area_tier: string
+          created_at?: string
+          ended_at?: string | null
+          expires_at: string
+          id?: string
+          note?: string | null
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity?: string
+          area_tier?: string
+          created_at?: string
+          ended_at?: string | null
+          expires_at?: string
+          id?: string
+          note?: string | null
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      status_visibility_targets: {
+        Row: {
+          created_at: string
+          id: string
+          status_id: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status_id: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status_id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_visibility_targets_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "user_statuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      streak_qualifying_events: {
+        Row: {
+          actor_id: string
+          created_at: string
+          event_reference_id: string | null
+          event_type: string
+          friendship_id: string
+          id: string
+          period_key: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          event_reference_id?: string | null
+          event_type: string
+          friendship_id: string
+          id?: string
+          period_key: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          event_reference_id?: string | null
+          event_type?: string
+          friendship_id?: string
+          id?: string
+          period_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "streak_qualifying_events_friendship_id_fkey"
+            columns: ["friendship_id"]
+            isOneToOne: false
+            referencedRelation: "friendships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_webhook_events: {
+        Row: {
+          created_at: string
+          id: string
+          processed_at: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          processed_at?: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          processed_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      subscription_changes: {
+        Row: {
+          applied_at: string | null
+          cancelled_at: string | null
+          change_type: string
+          created_at: string
+          effective_at: string | null
+          from_plan: string
+          id: string
+          reason: string | null
+          requested_at: string
+          status: string
+          subscription_id: string | null
+          to_plan: string
+          user_id: string
+        }
+        Insert: {
+          applied_at?: string | null
+          cancelled_at?: string | null
+          change_type: string
+          created_at?: string
+          effective_at?: string | null
+          from_plan: string
+          id?: string
+          reason?: string | null
+          requested_at?: string
+          status?: string
+          subscription_id?: string | null
+          to_plan: string
+          user_id: string
+        }
+        Update: {
+          applied_at?: string | null
+          cancelled_at?: string | null
+          change_type?: string
+          created_at?: string
+          effective_at?: string | null
+          from_plan?: string
+          id?: string
+          reason?: string | null
+          requested_at?: string
+          status?: string
+          subscription_id?: string | null
+          to_plan?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_changes_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          grace_ends_at: string | null
+          id: string
+          paystack_authorization_code: string | null
+          paystack_customer_code: string | null
+          paystack_email_token: string | null
+          paystack_subscription_code: string | null
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          provider: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subject_type: string
+          trial_ends_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          grace_ends_at?: string | null
+          id?: string
+          paystack_authorization_code?: string | null
+          paystack_customer_code?: string | null
+          paystack_email_token?: string | null
+          paystack_subscription_code?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          provider?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subject_type?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          grace_ends_at?: string | null
+          id?: string
+          paystack_authorization_code?: string | null
+          paystack_customer_code?: string | null
+          paystack_email_token?: string | null
+          paystack_subscription_code?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          provider?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subject_type?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      support_internal_notes: {
+        Row: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          ticket_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          ticket_id: string
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_internal_notes_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_requests: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          message: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          message: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          message?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      support_ticket_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          from_value: string | null
+          id: string
+          note: string | null
+          ticket_id: string
+          to_value: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          from_value?: string | null
+          id?: string
+          note?: string | null
+          ticket_id: string
+          to_value?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          from_value?: string | null
+          id?: string
+          note?: string | null
+          ticket_id?: string
+          to_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_events_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_messages: {
+        Row: {
+          attachment_media_id: string | null
+          created_at: string
+          id: string
+          message: string
+          sender_id: string | null
+          sender_type: string
+          ticket_id: string
+        }
+        Insert: {
+          attachment_media_id?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          sender_id?: string | null
+          sender_type: string
+          ticket_id: string
+        }
+        Update: {
+          attachment_media_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          sender_id?: string | null
+          sender_type?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_messages_attachment_media_id_fkey"
+            columns: ["attachment_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          category: string
+          created_at: string
+          description: string
+          diagnostics: Json
+          id: string
+          legacy_support_request_id: string | null
+          priority: string
+          resolved_at: string | null
+          status: string
+          subject: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          category: string
+          created_at?: string
+          description: string
+          diagnostics?: Json
+          id?: string
+          legacy_support_request_id?: string | null
+          priority?: string
+          resolved_at?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          description?: string
+          diagnostics?: Json
+          id?: string
+          legacy_support_request_id?: string | null
+          priority?: string
+          resolved_at?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_legacy_support_request_id_fkey"
+            columns: ["legacy_support_request_id"]
+            isOneToOne: true
+            referencedRelation: "support_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      temporary_plans: {
+        Row: {
+          created_at: string
+          creator_id: string
+          expires_at: string
+          id: string
+          meeting_time: string
+          participant_id: string
+          place_text: string | null
+          source_ping_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          expires_at: string
+          id?: string
+          meeting_time: string
+          participant_id: string
+          place_text?: string | null
+          source_ping_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          expires_at?: string
+          id?: string
+          meeting_time?: string
+          participant_id?: string
+          place_text?: string | null
+          source_ping_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temporary_plans_source_ping_id_fkey"
+            columns: ["source_ping_id"]
+            isOneToOne: true
+            referencedRelation: "meeting_pings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tier_entitlement_overrides: {
+        Row: {
+          boolean_value: boolean | null
+          entitlement_key: string
+          id: string
+          is_unlimited: boolean
+          numeric_value: number | null
+          plan: string
+          updated_at: string
+          updated_by: string | null
+          value_type: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          entitlement_key: string
+          id?: string
+          is_unlimited?: boolean
+          numeric_value?: number | null
+          plan: string
+          updated_at?: string
+          updated_by?: string | null
+          value_type: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          entitlement_key?: string
+          id?: string
+          is_unlimited?: boolean
+          numeric_value?: number | null
+          plan?: string
+          updated_at?: string
+          updated_by?: string | null
+          value_type?: string
+        }
+        Relationships: []
+      }
+      tour_steps: {
+        Row: {
+          body: string
+          created_at: string
+          cta_href: string | null
+          cta_label: string | null
+          entitlement_keys: string[]
+          id: string
+          media_path: string | null
+          position: number
+          requires_feature_flag: string | null
+          route: string | null
+          step_key: string
+          target_id: string | null
+          title: string
+          tour_version_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          cta_href?: string | null
+          cta_label?: string | null
+          entitlement_keys?: string[]
+          id?: string
+          media_path?: string | null
+          position: number
+          requires_feature_flag?: string | null
+          route?: string | null
+          step_key: string
+          target_id?: string | null
+          title: string
+          tour_version_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          cta_href?: string | null
+          cta_label?: string | null
+          entitlement_keys?: string[]
+          id?: string
+          media_path?: string | null
+          position?: number
+          requires_feature_flag?: string | null
+          route?: string | null
+          step_key?: string
+          target_id?: string | null
+          title?: string
+          tour_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tour_steps_tour_version_id_fkey"
+            columns: ["tour_version_id"]
+            isOneToOne: false
+            referencedRelation: "tour_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tour_versions: {
+        Row: {
+          audience: Json
+          created_at: string
+          ends_at: string | null
+          id: string
+          publish_reason: string | null
+          published_at: string | null
+          starts_at: string | null
+          status: string
+          tour_id: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          audience?: Json
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          publish_reason?: string | null
+          published_at?: string | null
+          starts_at?: string | null
+          status?: string
+          tour_id: string
+          updated_at?: string
+          updated_by?: string | null
+          version: number
+        }
+        Update: {
+          audience?: Json
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          publish_reason?: string | null
+          published_at?: string | null
+          starts_at?: string | null
+          status?: string
+          tour_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tour_versions_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tours: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          kind: string
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          kind?: string
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          kind?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      trust_safety_cases: {
+        Row: {
+          assigned_to: string | null
+          case_type: string
+          created_at: string
+          created_from_report_id: string | null
+          id: string
+          opened_at: string
+          priority: string
+          resolved_at: string | null
+          status: string
+          subject_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          case_type: string
+          created_at?: string
+          created_from_report_id?: string | null
+          id?: string
+          opened_at?: string
+          priority?: string
+          resolved_at?: string | null
+          status?: string
+          subject_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          case_type?: string
+          created_at?: string
+          created_from_report_id?: string | null
+          id?: string
+          opened_at?: string
+          priority?: string
+          resolved_at?: string | null
+          status?: string
+          subject_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      trusted_member_applications: {
+        Row: {
+          created_at: string
+          id: string
+          journeys_complete_at_apply: number | null
+          note: string | null
+          premium_days_at_apply: number | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          journeys_complete_at_apply?: number | null
+          note?: string | null
+          premium_days_at_apply?: number | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          journeys_complete_at_apply?: number | null
+          note?: string | null
+          premium_days_at_apply?: number | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tune_ins: {
+        Row: {
+          created_at: string
+          creator_id: string
+          id: string
+          source_moment_id: string | null
+          viewer_id: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          id?: string
+          source_moment_id?: string | null
+          viewer_id: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          id?: string
+          source_moment_id?: string | null
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tune_ins_source_moment_id_fkey"
+            columns: ["source_moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_achievements: {
+        Row: {
+          achievement_code: string
+          created_at: string
+          earned_at: string
+          hidden: boolean
+          id: string
+          shared_at: string | null
+          user_id: string
+          viewed_at: string | null
+        }
+        Insert: {
+          achievement_code: string
+          created_at?: string
+          earned_at?: string
+          hidden?: boolean
+          id?: string
+          shared_at?: string | null
+          user_id: string
+          viewed_at?: string | null
+        }
+        Update: {
+          achievement_code?: string
+          created_at?: string
+          earned_at?: string
+          hidden?: boolean
+          id?: string
+          shared_at?: string | null
+          user_id?: string
+          viewed_at?: string | null
+        }
+        Relationships: []
+      }
+      user_interests: {
+        Row: {
+          created_at: string
+          id: string
+          interest: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interest: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interest?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_locations: {
+        Row: {
+          accuracy: number
+          confidence: Database["public"]["Enums"]["location_confidence"]
+          id: string
+          last_updated: string
+          latitude: number
+          longitude: number
+          user_id: string
+        }
+        Insert: {
+          accuracy: number
+          confidence: Database["public"]["Enums"]["location_confidence"]
+          id?: string
+          last_updated?: string
+          latitude: number
+          longitude: number
+          user_id: string
+        }
+        Update: {
+          accuracy?: number
+          confidence?: Database["public"]["Enums"]["location_confidence"]
+          id?: string
+          last_updated?: string
+          latitude?: number
+          longitude?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_phone_identities: {
+        Row: {
+          contact_discovery_enabled: boolean
+          created_at: string
+          match_hmac: string | null
+          match_key_version: number
+          phone_e164: string
+          phone_region: string | null
+          phone_verified_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_discovery_enabled?: boolean
+          created_at?: string
+          match_hmac?: string | null
+          match_key_version?: number
+          phone_e164: string
+          phone_region?: string | null
+          phone_verified_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_discovery_enabled?: boolean
+          created_at?: string
+          match_hmac?: string | null
+          match_key_version?: number
+          phone_e164?: string
+          phone_region?: string | null
+          phone_verified_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_preferences: {
+        Row: {
+          app_preferences: Json
+          communication_preferences: Json
+          created_at: string
+          ghost_mode_type: string
+          glow_theme: string
+          id: string
+          mood_status: string | null
+          notification_preferences: Json
+          scheduled_visibility: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_preferences?: Json
+          communication_preferences?: Json
+          created_at?: string
+          ghost_mode_type?: string
+          glow_theme?: string
+          id?: string
+          mood_status?: string | null
+          notification_preferences?: Json
+          scheduled_visibility?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_preferences?: Json
+          communication_preferences?: Json
+          created_at?: string
+          ghost_mode_type?: string
+          glow_theme?: string
+          id?: string
+          mood_status?: string | null
+          notification_preferences?: Json
+          scheduled_visibility?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_restrictions: {
+        Row: {
+          case_id: string | null
+          created_at: string
+          ends_at: string | null
+          id: string
+          lifted_at: string | null
+          reason_code: string | null
+          restriction_type: string
+          starts_at: string
+          user_id: string
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          lifted_at?: string | null
+          reason_code?: string | null
+          restriction_type: string
+          starts_at?: string
+          user_id: string
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          lifted_at?: string | null
+          reason_code?: string | null
+          restriction_type?: string
+          starts_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_restrictions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "trust_safety_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_statuses: {
+        Row: {
+          activity_type: string | null
+          availability_type: string
+          created_at: string
+          custom_text: string | null
+          expires_at: string
+          id: string
+          starts_at: string
+          updated_at: string
+          user_id: string
+          visibility_type: string
+        }
+        Insert: {
+          activity_type?: string | null
+          availability_type: string
+          created_at?: string
+          custom_text?: string | null
+          expires_at: string
+          id?: string
+          starts_at?: string
+          updated_at?: string
+          user_id: string
+          visibility_type?: string
+        }
+        Update: {
+          activity_type?: string | null
+          availability_type?: string
+          created_at?: string
+          custom_text?: string | null
+          expires_at?: string
+          id?: string
+          starts_at?: string
+          updated_at?: string
+          user_id?: string
+          visibility_type?: string
+        }
+        Relationships: []
+      }
+      user_tour_progress: {
+        Row: {
+          completed_at: string | null
+          current_step_key: string | null
+          id: string
+          started_at: string
+          status: string
+          tour_version_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          current_step_key?: string | null
+          id?: string
+          started_at?: string
+          status: string
+          tour_version_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          current_step_key?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          tour_version_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_tour_progress_tour_version_id_fkey"
+            columns: ["tour_version_id"]
+            isOneToOne: false
+            referencedRelation: "tour_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_wallpaper_preferences: {
+        Row: {
+          selected_slug: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          selected_slug?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          selected_slug?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      visibility_sessions: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          feature_type: string
+          id: string
+          source: string
+          starts_at: string
+          status: string
+          updated_at: string
+          user_id: string
+          visibility_mode: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          feature_type?: string
+          id?: string
+          source?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          visibility_mode: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          feature_type?: string
+          id?: string
+          source?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          visibility_mode?: string
+        }
+        Relationships: []
+      }
+      visibility_targets: {
+        Row: {
+          access_type: string
+          created_at: string
+          id: string
+          session_id: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          access_type?: string
+          created_at?: string
+          id?: string
+          session_id: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          access_type?: string
+          created_at?: string
+          id?: string
+          session_id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visibility_targets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "visibility_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallpapers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dark_url: string | null
+          id: string
+          is_enabled: boolean
+          light_url: string | null
+          name: string
+          render_mode: string
+          slug: string
+          sort_order: number
+          source: string
+          thumb_url: string | null
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dark_url?: string | null
+          id?: string
+          is_enabled?: boolean
+          light_url?: string | null
+          name: string
+          render_mode: string
+          slug: string
+          sort_order?: number
+          source?: string
+          thumb_url?: string | null
+          tier?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dark_url?: string | null
+          id?: string
+          is_enabled?: boolean
+          light_url?: string | null
+          name?: string
+          render_mode?: string
+          slug?: string
+          sort_order?: number
+          source?: string
+          thumb_url?: string | null
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wave_mutes: {
+        Row: {
+          created_at: string
+          id: string
+          muted_user_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          muted_user_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          muted_user_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      waves: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          recipient_id: string
+          reply_to_wave_id: string | null
+          responded_at: string | null
+          response_type: string | null
+          seen_at: string | null
+          sender_id: string
+          sent_at: string
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          recipient_id: string
+          reply_to_wave_id?: string | null
+          responded_at?: string | null
+          response_type?: string | null
+          seen_at?: string | null
+          sender_id: string
+          sent_at?: string
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          recipient_id?: string
+          reply_to_wave_id?: string | null
+          responded_at?: string | null
+          response_type?: string | null
+          seen_at?: string | null
+          sender_id?: string
+          sent_at?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waves_reply_to_wave_id_fkey"
+            columns: ["reply_to_wave_id"]
+            isOneToOne: false
+            referencedRelation: "waves"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
     Functions: {
-      list_meetups_server: { Args: { p_actor_id: string }; Returns: Json };
-      expire_meetups_server: { Args: Record<string, never>; Returns: number };
-      refresh_meetup_proximity_server: { Args: { p_actor_id: string }; Returns: number };
-      meetup_command_server: { Args: { p_actor_id: string; p_action: string; p_input: Json }; Returns: Json };
-      claim_meetup_notifications: { Args: { p_limit?: number }; Returns: Json };
-      meetup_notification_allowed: { Args: { p_id: string; p_lease_id: string }; Returns: boolean };
-      finish_meetup_notification: { Args: { p_id: string; p_lease_id: string; p_sent: boolean }; Returns: boolean };
-      reserve_notification_budget: {
-        Args: { p_user_id: string; p_day_key: string; p_budget: number };
-        Returns: boolean;
-      };
-      enqueue_notification_dispatch: {
-        Args: { p_user_id: string; p_type: string; p_title: string; p_message: string; p_dedupe_key: string | null;
-          p_persist: boolean; p_push: boolean; p_day_key: string; p_budget: number; p_bypass_budget: boolean; p_payload: Json; p_context: Json };
-        Returns: Json;
-      };
-      claim_notification_push: {
-        Args: { p_dispatch_id?: string | null; p_limit?: number };
-        Returns: { id: string; dispatch_id: string; transport: string; target_id: string; attempts: number; lease_id: string;
-          user_id: string; payload: Json; context: Json; expires_at: string }[];
-      };
-      finish_notification_push: {
-        Args: { p_id: string; p_lease_id: string; p_outcome: string; p_error?: string | null };
-        Returns: boolean;
-      };
-      blog_image_is_published: { Args: { p_id: string }; Returns: boolean };
-      save_blog_post: { Args: { p_id: string | null; p_version: number; p_draft: Json; p_intent: string; p_actor: string }; Returns: Json };
-      /* Atomic photo-slot swap. Three writes in one transaction, so the -1
-         parking value the unique (user_id, position) constraint forces is
-         never observable and no photo is left without a slot. */
-      reorder_profile_photo: {
-        Args: { p_photo_id: string; p_new_position: number };
-        Returns: Array<{ ok: boolean; message: string }>;
-      };
-      save_profile_date_of_birth: {
-        Args: { p_date: string };
-        Returns: Array<{ outcome: "created" | "unchanged" | "corrected"; can_correct: boolean }>;
-      };
-      linkr_record_connect: {
-        Args: { p_actor: string; p_target: string; p_event_id?: string | null };
-        Returns: Array<{ matched: boolean; connection_id: string | null; created: boolean }>;
-      };
-      claim_upfor_announcement: {
-        Args: { p_session_id: string; p_require_started?: boolean };
-        Returns: boolean;
-      };
-      create_upfor_session: {
-        Args: {
-          p_activity_type: string;
-          p_message: string | null;
-          p_audience_type: string;
-          p_broad_area_text: string | null;
-          p_discovery_scope: string;
-          p_starts_at: string | null;
-          p_ends_at: string | null;
-          p_timezone: string;
-          p_max_participants: number;
-          p_allow_pings: boolean;
-          p_allow_friend_invites: boolean;
-          p_area_tier: string | null;
-          p_area_derived_at: string | null;
-          p_limit: number;
-          p_duration?: string | null;
-        };
-        Returns: Database["public"]["Tables"]["hangout_sessions"]["Row"];
-      };
-      create_upfor_session_server: {
-        Args: {
-          p_owner_id: string;
-          p_activity_type: string;
-          p_message: string | null;
-          p_audience_type: string;
-          p_broad_area_text: string | null;
-          p_discovery_scope: string;
-          p_starts_at: string | null;
-          p_ends_at: string | null;
-          p_timezone: string;
-          p_max_participants: number;
-          p_allow_pings: boolean;
-          p_allow_friend_invites: boolean;
-          p_area_tier: string | null;
-          p_area_derived_at: string | null;
-          p_duration?: string | null;
-        };
-        Returns: Database["public"]["Tables"]["hangout_sessions"]["Row"];
-      };
-      create_plan_lifecycle: {
-        Args: {
-          p_actor_id: string;
-          p_request_key: string;
-          p_title: string;
-          p_description: string | null;
-          p_plan_type: string;
-          p_start_at: string | null;
-          p_end_at: string | null;
-          p_timezone: string;
-          p_rsvp_deadline: string | null;
-          p_place_type: string;
-          p_custom_place_text: string | null;
-          p_reminder_minutes: number | null;
-          p_category: string | null;
-          p_invitee_ids: string[];
-          p_initial_going_ids: string[];
-          p_source_hangout_id: string | null;
-          p_effective_max_active_plans: number;
-          p_effective_max_participants: number;
-        };
-        Returns: Array<{ plan_id: string; conversation_id: string; created: boolean }>;
-      };
-      set_plan_participant_rsvp: {
-        Args: { p_actor_id: string; p_plan_id: string; p_status: string };
-        Returns: Array<{ rsvp_status: string; conversation_id: string }>;
-      };
+      accept_friend_request: {
+        Args: { p_request_id: string }
+        Returns: {
+          reactivated: boolean
+          receiver_id: string
+          sender_id: string
+        }[]
+      }
       add_plan_participants: {
         Args: {
-          p_actor_id: string;
-          p_plan_id: string;
-          p_participant_ids: string[];
-          p_effective_max_participants: number;
-        };
-        Returns: Array<{ added_count: number; conversation_id: string }>;
-      };
-      reconcile_plan_conversation_members: {
-        Args: { p_plan_id: string };
-        Returns: string;
-      };
-      delete_owned_plan: {
-        Args: { p_actor_id: string; p_plan_id: string };
-        Returns: boolean;
-      };
-      create_story: {
-        Args: {
-          p_actor_id: string;
-          p_media_id: string;
-          p_caption: string;
-          p_audience_type: string;
-          p_target_ids?: string[];
-        };
-        Returns: Array<{
-          story_id: string;
-          story_expires_at: string;
-          active_count: number;
-        }>;
-      };
-      queue_stale_unattached_story_media: {
-        Args: { p_before: string; p_limit?: number };
-        Returns: number;
-      };
-      delete_owned_event: {
-        Args: { p_actor_id: string; p_event_id: string };
-        Returns: boolean;
-      };
-      // Contextual Plan participant eligibility (20260907120000). One authority
-      // for block-first, friendship-or-source-UpFor eligibility. The host is
-      // NOT passed through it -- the reconciler admits the creator separately.
-      is_plan_participant_eligible: {
-        Args: { p_plan_id: string; p_host_id: string; p_candidate_id: string };
-        Returns: boolean;
-      };
-      // Event Rooms lifecycle authority (20260827120000_event_rooms_productization).
-      reconcile_event_room_conversation: {
-        Args: { p_room_id: string };
-        Returns: string;
-      };
-      create_event_room: {
-        Args: {
-          p_owner_id: string;
-          p_event_id: string | null;
-          p_name: string;
-          p_description: string | null;
-          p_join_mode: string;
-          p_max_members: number;
-          p_listed: boolean;
-          p_group_conversation_ids?: string[];
-        };
-        Returns: string;
-      };
-      join_event_room: {
-        Args: { p_room_id: string; p_user_id: string };
-        Returns: string;
-      };
-      set_event_room_membership: {
-        Args: { p_room_id: string; p_user_id: string; p_status: string };
-        Returns: string;
-      };
-      set_event_room_role: {
-        Args: { p_room_id: string; p_user_id: string; p_role: string };
-        Returns: string;
-      };
+          p_actor_id: string
+          p_effective_max_participants: number
+          p_participant_ids: string[]
+          p_plan_id: string
+        }
+        Returns: {
+          added_count: number
+          conversation_id: string
+        }[]
+      }
+      admin_active_plan_mix: {
+        Args: never
+        Returns: {
+          count: number
+          plan: string
+        }[]
+      }
+      admin_configure_cron_tick: {
+        Args: { p_secret: string; p_url: string }
+        Returns: undefined
+      }
+      admin_cron_tick_runs: {
+        Args: { p_limit?: number }
+        Returns: {
+          return_message: string
+          started_at: string
+          status: string
+        }[]
+      }
+      admin_cron_tick_status: {
+        Args: never
+        Returns: {
+          configured: boolean
+          job_scheduled: boolean
+          last_response_status_code: number
+          last_run_started_at: string
+          last_run_status: string
+        }[]
+      }
+      admin_daily_signup_counts: {
+        Args: { p_since: string }
+        Returns: {
+          count: number
+          day: string
+        }[]
+      }
+      admin_safe_arrival_health: { Args: never; Returns: Json }
+      admin_tour_analytics: {
+        Args: { p_tour_version_id: string }
+        Returns: {
+          event_count: number
+          event_type: string
+          scope: string
+          step_id: string
+          subscription_plan: Database["public"]["Enums"]["subscription_plan"]
+          user_count: number
+        }[]
+      }
+      admin_tour_eligible_count: {
+        Args: { p_tour_version_id: string }
+        Returns: number
+      }
       archive_event_room: {
-        Args: { p_room_id: string; p_archives_at: string | null };
-        Returns: string;
-      };
-      close_event_rooms_for_event: {
-        Args: { p_event_id: string };
-        Returns: number;
-      };
-      queue_stale_unattached_chat_media: {
-        Args: {
-          p_ready_before: string;
-          p_incomplete_before: string;
-          p_limit?: number;
-        };
-        Returns: number;
-      };
-      buddy_score_total: {
-        Args: { target_user_id: string };
-        Returns: Array<{ score_total: number }>;
-      };
-      get_revenue_subscription_snapshot: {
-        Args: { p_now?: string };
-        Returns: Array<{
-          stored_plan: SubscriptionPlan;
-          effective_plan: SubscriptionPlan;
-          in_grace: boolean;
-          grace_expired: boolean;
-          user_count: number;
-        }>;
-      };
-      get_admin_media_storage_summary: {
-        Args: Record<PropertyKey, never>;
-        Returns: Array<{
-          context_type: string;
-          content_type: string;
-          object_count: number;
-          original_bytes: number;
-          variant_bytes: number;
-        }>;
-      };
-      record_product_event: {
-        Args: {
-          p_event_name: string;
-          p_actor_id: string;
-          p_resource_type: string;
-          p_resource_id: string;
-          p_feature_key?: string;
-          p_occurred_at?: string;
-        };
-        Returns: string | null;
-      };
-      record_user_tour_progress: {
-        Args: {
-          p_user_id: string;
-          p_tour_version_id: string;
-          p_status: string;
-          p_current_step_key?: string | null;
-        };
-        Returns: string;
-      };
-      create_experiment_definition: {
-        Args: { p_definition: Json; p_created_by: string };
-        Returns: string;
-      };
-      /**
-       * Atomic Safe Arrival start: the session, its watcher rows and the
-       * 'created' audit event in one transaction. Returns the session id, and
-       * replays the same id for a duplicate submit within two minutes.
-       */
-      /**
-       * Public tune-in totals. security definer so it can COUNT rows the caller
-       * cannot read individually — the asymmetry that keeps identities private
-       * while the aggregate stays visible.
-       */
-      tune_in_counts: {
-        Args: { creator_ids: string[] };
-        Returns: { creator_id: string; tuned_in_count: number }[];
-      };
-      /** Per-Moment aggregates: views, reactions, attributed tune-ins. */
-      moment_engagement: {
-        Args: { moment_ids: string[] };
-        Returns: { moment_id: string; view_count: number; reaction_count: number; tuned_in_count: number }[];
-      };
-      start_safe_arrival: {
-        Args: {
-          p_traveller_id: string;
-          p_destination_label: string;
-          p_expected_arrival_at: string;
-          p_grace_period_minutes: number;
-          p_note: string | null;
-          p_contact_ids: string[];
-          p_max_active: number;
-        };
-        Returns: Array<{ session_id: string; replayed: boolean; canonical_status: string }>;
-      };
-      transition_safe_arrival: {
-        Args: {
-          p_session_id: string;
-          p_actor_id: string;
-          p_action: string;
-          p_extra_minutes?: number | null;
-          p_client_mutation_id?: string | null;
-        };
-        Returns: Array<{ session_id: string; canonical_status: string; changed: boolean; expected_arrival_at: string }>;
-      };
-      process_safe_arrival_deadline: { Args: { p_session_id: string }; Returns: string };
-      process_due_safe_arrivals: { Args: { p_limit?: number }; Returns: number };
-      admin_safe_arrival_health: { Args: Record<PropertyKey, never>; Returns: Json };
-      can_view_safe_arrival_session: {
-        Args: { p_session_id: string; p_require_accepted?: boolean };
-        Returns: boolean;
-      };
-      process_experiment_schedules: {
-        Args: Record<PropertyKey, never>;
-        Returns: number;
-      };
-      feature_flag_enabled_for_subject: {
-        Args: {
-          p_flag_id: string;
-          p_user_id: string;
-          p_plan: SubscriptionPlan;
-          p_platform: ExperimentPlatform;
-          p_now: string;
-        };
-        Returns: boolean;
-      };
-      resolve_experiment_assignment: {
-        Args: {
-          p_experiment_key: string;
-          p_user_id: string;
-          p_platform: ExperimentPlatform;
-        };
-        Returns: Array<{
-          experiment_id: string;
-          assignment_id: string;
-          variant_key: string;
-          variant_name: string;
-          is_control: boolean;
-        }>;
-      };
-      record_experiment_exposure: {
-        Args: {
-          p_experiment_key: string;
-          p_user_id: string;
-          p_platform: ExperimentPlatform;
-        };
-        Returns: Array<{
-          experiment_id: string;
-          assignment_id: string;
-          variant_key: string;
-          variant_name: string;
-          is_control: boolean;
-          first_exposure: boolean;
-        }>;
-      };
-      start_premium_trial: {
-        Args: {
-          p_user_id: string;
-          p_owner_override?: boolean;
-          p_granted_by?: string | null;
-          p_override_reason?: string | null;
-          p_override_plan?: SubscriptionPlan | null;
-          p_source?: string;
-        };
-        Returns: Database["public"]["Tables"]["premium_trials"]["Row"];
-      };
-      convert_premium_trial: {
-        Args: { p_user_id: string; p_paid_plan: SubscriptionPlan };
-        Returns: string | null;
-      };
-      end_premium_trial: {
-        Args: { p_trial_id: string; p_action: string; p_actor_id?: string | null; p_reason?: string | null };
-        Returns: boolean;
-      };
-      process_premium_trial_lifecycle: {
-        Args: Record<PropertyKey, never>;
-        Returns: number;
-      };
-      claim_premium_trial_notifications: {
-        Args: { p_limit?: number };
-        Returns: Database["public"]["Tables"]["premium_trial_notifications"]["Row"][];
-      };
+        Args: { p_archives_at: string; p_room_id: string }
+        Returns: string
+      }
       birthday_users_for_day: {
-        Args: { p_month: number; p_day: number; p_include_feb_29?: boolean };
-        Returns: Array<{ user_id: string }>;
-      };
-      // Stage 3B. Pending migration 20260807120000_group_role_architecture;
-      // typed now so the action compiles against the schema it will run on.
-      transfer_group_ownership: {
-        Args: { p_conversation_id: string; p_new_owner_id: string };
-        Returns: undefined;
-      };
-      accept_friend_request: {
-        Args: { p_request_id: string };
-        // `reactivated` is optional because the Phase 3.2B migration that adds
-        // it is still pending: against today's database the column is absent,
-        // and a required field would be a type that lies about production.
-        // Callers must treat `undefined` as "not a reactivation".
-        Returns: Array<{ sender_id: string; receiver_id: string; reactivated?: boolean }>;
-      };
+        Args: { p_day: number; p_include_feb_29?: boolean; p_month: number }
+        Returns: {
+          user_id: string
+        }[]
+      }
+      blog_image_is_published: { Args: { p_id: string }; Returns: boolean }
+      buddy_score_total: {
+        Args: { target_user_id: string }
+        Returns: {
+          score_total: number
+        }[]
+      }
+      can_publish_open_moments: {
+        Args: { subject_user_id: string }
+        Returns: boolean
+      }
+      can_view_safe_arrival_session: {
+        Args: { p_require_accepted?: boolean; p_session_id: string }
+        Returns: boolean
+      }
+      chat_poll_parent_is_live: {
+        Args: { p_message_id: string }
+        Returns: boolean
+      }
+      claim_jobs: {
+        Args: { p_limit: number; p_stale_seconds?: number; p_worker: string }
+        Returns: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          job_type: string
+          last_error_at: string | null
+          last_error_code: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          payload: Json
+          priority: number
+          run_at: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_meetup_notifications: { Args: { p_limit?: number }; Returns: Json }
+      claim_notification_push: {
+        Args: { p_dispatch_id?: string; p_limit?: number }
+        Returns: {
+          attempts: number
+          context: Json
+          dispatch_id: string
+          expires_at: string
+          id: string
+          lease_id: string
+          payload: Json
+          target_id: string
+          transport: string
+          user_id: string
+        }[]
+      }
+      claim_premium_trial_notifications: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          delivery_status: string
+          id: string
+          last_attempt_at: string | null
+          notification_type: string
+          trial_id: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "premium_trial_notifications"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_upfor_announcement: {
+        Args: { p_require_started?: boolean; p_session_id: string }
+        Returns: boolean
+      }
+      cleanup_conference: { Args: never; Returns: number }
+      cleanup_expired_conversation_presence: { Args: never; Returns: number }
+      cleanup_expired_private_location: { Args: never; Returns: number }
+      cleanup_expired_proximity_events: { Args: never; Returns: number }
+      close_event_rooms_for_event: {
+        Args: { p_event_id: string }
+        Returns: number
+      }
       consume_rate_limit: {
         Args: {
-          p_user_id: string | null;
-          p_ip_hash: string | null;
-          p_action: string;
-          p_limit: number;
-          p_window_seconds: number;
-        };
-        Returns: Array<{
-          allowed: boolean;
-          remaining: number;
-          reset_at: string;
-        }>;
-      };
-      admin_cron_tick_runs: {
-        Args: { p_limit?: number };
-        Returns: Array<{ started_at: string; status: string; return_message: string | null }>;
-      };
-      claim_jobs: {
-        Args: { p_worker: string; p_limit: number; p_stale_seconds?: number };
-        Returns: Database["public"]["Tables"]["jobs"]["Row"][];
-      };
-      cleanup_expired_private_location: { Args: Record<string, never>; Returns: number };
-      cleanup_expired_proximity_events: { Args: Record<string, never>; Returns: number };
-      location_confidence_for_accuracy: {
-        Args: { location_accuracy: number };
-        Returns: LocationConfidence;
-      };
-      prepare_deleted_user_reports: { Args: { target_user_id: string }; Returns: undefined };
-      admin_tour_analytics: {
-        Args: { p_tour_version_id: string };
-        Returns: Array<{
-          scope: string;
-          step_id: string | null;
-          event_type: string;
-          subscription_plan: SubscriptionPlan | null;
-          event_count: number;
-          user_count: number;
-        }>;
-      };
-      admin_tour_eligible_count: {
-        Args: { p_tour_version_id: string };
-        Returns: number;
-      };
-      get_cancellation_reason_counts: {
-        Args: { p_since: string };
-        Returns: Array<{ reason: string; count: number }>;
-      };
-      admin_daily_signup_counts: {
-        Args: { p_since: string };
-        Returns: Array<{ day: string; count: number }>;
-      };
-      admin_active_plan_mix: {
-        Args: Record<string, never>;
-        Returns: Array<{ plan: string; count: number }>;
-      };
+          p_action: string
+          p_ip_hash: string
+          p_limit: number
+          p_user_id: string
+          p_window_seconds: number
+        }
+        Returns: {
+          allowed: boolean
+          remaining: number
+          reset_at: string
+        }[]
+      }
       conversation_previews: {
-        Args: { p_user_id: string; p_conversation_ids: string[] };
-        Returns: Array<{
-          conversation_id: string;
-          last_text: string | null;
-          last_message_type: string | null;
-          last_created_at: string | null;
-          unread_count: number;
-          /**
-           * Newest NON-SYSTEM message, or null when a conversation holds only
-           * system events. The authority for un-hiding a conversation --
-           * deliberately distinct from conversations.last_message_at, which
-           * system events also advance.
-           */
-          last_user_message_at: string | null;
-        }>;
-      };
-    };
+        Args: { p_conversation_ids: string[]; p_user_id: string }
+        Returns: {
+          conversation_id: string
+          last_created_at: string
+          last_message_type: string
+          last_text: string
+          last_user_message_at: string
+          unread_count: number
+        }[]
+      }
+      convert_premium_trial: {
+        Args: {
+          p_paid_plan: Database["public"]["Enums"]["subscription_plan"]
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_event_room: {
+        Args: {
+          p_description: string
+          p_event_id: string
+          p_group_conversation_ids?: string[]
+          p_join_mode: string
+          p_listed: boolean
+          p_max_members: number
+          p_name: string
+          p_owner_id: string
+        }
+        Returns: string
+      }
+      create_experiment_definition: {
+        Args: { p_created_by: string; p_definition: Json }
+        Returns: string
+      }
+      create_meetup_discovery_server: {
+        Args: { p_actor_id: string; p_input: Json }
+        Returns: Json
+      }
+      create_plan_lifecycle: {
+        Args: {
+          p_actor_id: string
+          p_category: string
+          p_custom_place_text: string
+          p_description: string
+          p_effective_max_active_plans: number
+          p_effective_max_participants: number
+          p_end_at: string
+          p_initial_going_ids: string[]
+          p_invitee_ids: string[]
+          p_place_type: string
+          p_plan_type: string
+          p_reminder_minutes: number
+          p_request_key: string
+          p_rsvp_deadline: string
+          p_source_hangout_id: string
+          p_start_at: string
+          p_timezone: string
+          p_title: string
+        }
+        Returns: {
+          conversation_id: string
+          created: boolean
+          plan_id: string
+        }[]
+      }
+      create_upfor_session:
+        | {
+            Args: {
+              p_activity_type: string
+              p_allow_friend_invites: boolean
+              p_allow_pings: boolean
+              p_area_derived_at: string
+              p_area_tier: string
+              p_audience_type: string
+              p_broad_area_text: string
+              p_discovery_scope: string
+              p_ends_at: string
+              p_limit: number
+              p_max_participants: number
+              p_message: string
+              p_starts_at: string
+              p_timezone: string
+            }
+            Returns: {
+              activity_type: string
+              allow_friend_invites: boolean
+              allow_pings: boolean
+              area_derived_at: string | null
+              area_tier: string | null
+              audience_announce_claimed_at: string | null
+              audience_type: string
+              broad_area_text: string | null
+              converted_plan_id: string | null
+              created_at: string
+              discovery_scope: string
+              ends_at: string
+              id: string
+              max_participants: number
+              message: string | null
+              owner_id: string
+              starts_at: string
+              status: string
+              timezone: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "hangout_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_activity_type: string
+              p_allow_friend_invites: boolean
+              p_allow_pings: boolean
+              p_area_derived_at: string
+              p_area_tier: string
+              p_audience_type: string
+              p_broad_area_text: string
+              p_discovery_scope: string
+              p_duration?: string
+              p_ends_at: string
+              p_limit: number
+              p_max_participants: number
+              p_message: string
+              p_starts_at: string
+              p_timezone: string
+            }
+            Returns: {
+              activity_type: string
+              allow_friend_invites: boolean
+              allow_pings: boolean
+              area_derived_at: string | null
+              area_tier: string | null
+              audience_announce_claimed_at: string | null
+              audience_type: string
+              broad_area_text: string | null
+              converted_plan_id: string | null
+              created_at: string
+              discovery_scope: string
+              ends_at: string
+              id: string
+              max_participants: number
+              message: string | null
+              owner_id: string
+              starts_at: string
+              status: string
+              timezone: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "hangout_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+      create_upfor_session_server: {
+        Args: {
+          p_activity_type: string
+          p_allow_friend_invites: boolean
+          p_allow_pings: boolean
+          p_area_derived_at: string
+          p_area_tier: string
+          p_audience_type: string
+          p_broad_area_text: string
+          p_discovery_scope: string
+          p_duration?: string
+          p_ends_at: string
+          p_max_participants: number
+          p_message: string
+          p_owner_id: string
+          p_starts_at: string
+          p_timezone: string
+        }
+        Returns: {
+          activity_type: string
+          allow_friend_invites: boolean
+          allow_pings: boolean
+          area_derived_at: string | null
+          area_tier: string | null
+          audience_announce_claimed_at: string | null
+          audience_type: string
+          broad_area_text: string | null
+          converted_plan_id: string | null
+          created_at: string
+          discovery_scope: string
+          ends_at: string
+          id: string
+          max_participants: number
+          message: string | null
+          owner_id: string
+          starts_at: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hangout_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      current_experiment_plan: {
+        Args: { p_now: string; p_user_id: string }
+        Returns: Database["public"]["Enums"]["subscription_plan"]
+      }
+      delete_owned_event: {
+        Args: { p_actor_id: string; p_event_id: string }
+        Returns: boolean
+      }
+      delete_owned_plan: {
+        Args: { p_actor_id: string; p_plan_id: string }
+        Returns: boolean
+      }
+      end_premium_trial: {
+        Args: {
+          p_action: string
+          p_actor_id?: string
+          p_reason?: string
+          p_trial_id: string
+        }
+        Returns: boolean
+      }
+      enqueue_notification_dispatch: {
+        Args: {
+          p_budget: number
+          p_bypass_budget: boolean
+          p_context: Json
+          p_day_key: string
+          p_dedupe_key: string
+          p_message: string
+          p_payload: Json
+          p_persist: boolean
+          p_push: boolean
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      enqueue_safe_arrival_deadline: {
+        Args: { p_phase: string; p_run_at: string; p_session_id: string }
+        Returns: boolean
+      }
+      enqueue_safe_arrival_notifications: {
+        Args: {
+          p_actor?: string
+          p_event: string
+          p_occurrence?: string
+          p_recipients: string[]
+          p_session_id: string
+        }
+        Returns: number
+      }
+      expire_chat_messages: { Args: never; Returns: number }
+      expire_meetup_discoveries_server: { Args: never; Returns: number }
+      expire_meetups_server: { Args: never; Returns: number }
+      feature_flag_enabled_for_subject: {
+        Args: {
+          p_flag_id: string
+          p_now: string
+          p_plan: Database["public"]["Enums"]["subscription_plan"]
+          p_platform: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      finish_meetup_notification: {
+        Args: { p_id: string; p_lease_id: string; p_sent: boolean }
+        Returns: boolean
+      }
+      finish_notification_push: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_lease_id: string
+          p_outcome: string
+        }
+        Returns: boolean
+      }
+      get_admin_media_storage_summary: {
+        Args: never
+        Returns: {
+          content_type: string
+          context_type: string
+          object_count: number
+          original_bytes: number
+          variant_bytes: number
+        }[]
+      }
+      get_cancellation_reason_counts: {
+        Args: { p_since: string }
+        Returns: {
+          count: number
+          reason: string
+        }[]
+      }
+      get_revenue_subscription_snapshot: {
+        Args: { p_now?: string }
+        Returns: {
+          effective_plan: Database["public"]["Enums"]["subscription_plan"]
+          grace_expired: boolean
+          in_grace: boolean
+          stored_plan: Database["public"]["Enums"]["subscription_plan"]
+          user_count: number
+        }[]
+      }
+      is_blocked_between: { Args: { target_user_id: string }; Returns: boolean }
+      is_conversation_member: {
+        Args: { p_conversation_id: string }
+        Returns: boolean
+      }
+      is_event_circle_owner: {
+        Args: { p_event_circle_id: string }
+        Returns: boolean
+      }
+      is_friend: { Args: { target_user_id: string }; Returns: boolean }
+      is_plan_creator: { Args: { p_plan_id: string }; Returns: boolean }
+      is_safe_arrival_traveller: {
+        Args: { p_session_id: string }
+        Returns: boolean
+      }
+      join_event_room: {
+        Args: { p_room_id: string; p_user_id: string }
+        Returns: string
+      }
+      launch_welcome_access_for_existing_users: { Args: never; Returns: number }
+      linkr_record_connect: {
+        Args: { p_actor: string; p_event_id?: string; p_target: string }
+        Returns: {
+          connection_id: string
+          created: boolean
+          matched: boolean
+        }[]
+      }
+      list_meetups_server: { Args: { p_actor_id: string }; Returns: Json }
+      location_confidence_for_accuracy: {
+        Args: { location_accuracy: number }
+        Returns: Database["public"]["Enums"]["location_confidence"]
+      }
+      meetup_command_server: {
+        Args: { p_action: string; p_actor_id: string; p_input: Json }
+        Returns: Json
+      }
+      meetup_discovery_command_server: {
+        Args: { p_action: string; p_actor_id: string; p_input: Json }
+        Returns: Json
+      }
+      meetup_discovery_nearby_allowed: {
+        Args: { p_creator: string; p_viewer: string }
+        Returns: boolean
+      }
+      meetup_distance_m: {
+        Args: { p_lat1: number; p_lat2: number; p_lon1: number; p_lon2: number }
+        Returns: number
+      }
+      meetup_notification_allowed: {
+        Args: { p_id: string; p_lease_id: string }
+        Returns: boolean
+      }
+      meetup_owner_active_slot_count: {
+        Args: { p_actor_id: string }
+        Returns: number
+      }
+      meetup_pair_allowed: {
+        Args: { p_a: string; p_b: string }
+        Returns: boolean
+      }
+      moment_engagement: {
+        Args: { moment_ids: string[] }
+        Returns: {
+          moment_id: string
+          reaction_count: number
+          tuned_in_count: number
+          view_count: number
+        }[]
+      }
+      optional_feature_available: { Args: { p_key: string }; Returns: boolean }
+      prepare_deleted_user_reports: {
+        Args: { target_user_id: string }
+        Returns: undefined
+      }
+      process_due_safe_arrivals: { Args: { p_limit?: number }; Returns: number }
+      process_experiment_schedules: { Args: never; Returns: number }
+      process_premium_trial_lifecycle: { Args: never; Returns: number }
+      process_safe_arrival_deadline: {
+        Args: { p_session_id: string }
+        Returns: string
+      }
+      queue_stale_unattached_chat_media: {
+        Args: {
+          p_incomplete_before: string
+          p_limit?: number
+          p_ready_before: string
+        }
+        Returns: number
+      }
+      reconcile_event_room_conversation: {
+        Args: { p_room_id: string }
+        Returns: string
+      }
+      reconcile_plan_conversation_members: {
+        Args: { p_plan_id: string }
+        Returns: string
+      }
+      record_experiment_exposure: {
+        Args: {
+          p_experiment_key: string
+          p_platform: string
+          p_user_id: string
+        }
+        Returns: {
+          assignment_id: string
+          experiment_id: string
+          first_exposure: boolean
+          is_control: boolean
+          variant_key: string
+          variant_name: string
+        }[]
+      }
+      record_product_event: {
+        Args: {
+          p_actor_id: string
+          p_event_name: string
+          p_feature_key?: string
+          p_occurred_at?: string
+          p_resource_id: string
+          p_resource_type: string
+        }
+        Returns: string
+      }
+      record_user_tour_progress: {
+        Args: {
+          p_current_step_key?: string
+          p_status: string
+          p_tour_version_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      refresh_meetup_proximity_server: {
+        Args: { p_actor_id: string }
+        Returns: number
+      }
+      reserve_notification_budget: {
+        Args: { p_budget: number; p_day_key: string; p_user_id: string }
+        Returns: boolean
+      }
+      resolve_experiment_assignment: {
+        Args: {
+          p_experiment_key: string
+          p_platform: string
+          p_user_id: string
+        }
+        Returns: {
+          assignment_id: string
+          experiment_id: string
+          is_control: boolean
+          variant_key: string
+          variant_name: string
+        }[]
+      }
+      safe_arrival_relationship_current: {
+        Args: { p_traveller: string; p_watcher: string }
+        Returns: boolean
+      }
+      save_blog_post: {
+        Args: {
+          p_actor: string
+          p_draft: Json
+          p_id: string
+          p_intent: string
+          p_version: number
+        }
+        Returns: Json
+      }
+      save_profile_date_of_birth: {
+        Args: { p_date: string }
+        Returns: {
+          can_correct: boolean
+          outcome: string
+        }[]
+      }
+      set_event_room_membership: {
+        Args: { p_room_id: string; p_status: string; p_user_id: string }
+        Returns: string
+      }
+      set_event_room_role: {
+        Args: { p_role: string; p_room_id: string; p_user_id: string }
+        Returns: string
+      }
+      set_plan_participant_rsvp: {
+        Args: { p_actor_id: string; p_plan_id: string; p_status: string }
+        Returns: {
+          conversation_id: string
+          rsvp_status: string
+        }[]
+      }
+      start_premium_trial: {
+        Args: {
+          p_granted_by?: string
+          p_override_plan?: Database["public"]["Enums"]["subscription_plan"]
+          p_override_reason?: string
+          p_owner_override?: boolean
+          p_source?: string
+          p_user_id: string
+        }
+        Returns: {
+          campaign_source: string | null
+          cancelled_at: string | null
+          converted_at: string | null
+          created_at: string
+          granted_by: string | null
+          id: string
+          override_reason: string | null
+          owner_override: boolean
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          revocation_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          source: string
+          status: string
+          trial_ends_at: string
+          trial_started_at: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "premium_trials"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      start_safe_arrival: {
+        Args: {
+          p_contact_ids: string[]
+          p_destination_label: string
+          p_expected_arrival_at: string
+          p_grace_period_minutes: number
+          p_max_active: number
+          p_note: string
+          p_traveller_id: string
+        }
+        Returns: {
+          canonical_status: string
+          replayed: boolean
+          session_id: string
+        }[]
+      }
+      transfer_group_ownership: {
+        Args: { p_conversation_id: string; p_new_owner_id: string }
+        Returns: undefined
+      }
+      transition_safe_arrival:
+        | {
+            Args: {
+              p_action: string
+              p_actor_id: string
+              p_extra_minutes?: number
+              p_session_id: string
+            }
+            Returns: {
+              canonical_status: string
+              changed: boolean
+              expected_arrival_at: string
+              session_id: string
+            }[]
+          }
+        | {
+            Args: {
+              p_action: string
+              p_actor_id: string
+              p_client_mutation_id?: string
+              p_extra_minutes?: number
+              p_session_id: string
+            }
+            Returns: {
+              canonical_status: string
+              changed: boolean
+              expected_arrival_at: string
+              session_id: string
+            }[]
+          }
+      tune_in_counts: {
+        Args: { creator_ids: string[] }
+        Returns: {
+          creator_id: string
+          tuned_in_count: number
+        }[]
+      }
+    }
     Enums: {
-      friend_request_status: FriendRequestStatus;
-      visibility_status: VisibilityStatus;
-      location_confidence: LocationConfidence;
-      proximity_level: ProximityLevel;
-      subscription_plan: SubscriptionProduct;
-      subscription_status: SubscriptionStatus;
-      report_status: ReportStatus;
-      meetup_status: MeetupStatus;
-    };
-    CompositeTypes: Record<string, never>;
-  };
-};
+      access_source:
+        | "welcome_access"
+        | "web_subscription"
+        | "apple_subscription"
+        | "google_subscription"
+        | "admin_grant"
+        | "staff"
+        | "global_promo"
+      friend_request_status:
+        | "pending"
+        | "accepted"
+        | "declined"
+        | "cancelled"
+        | "blocked"
+        | "expired"
+      location_confidence: "high" | "medium" | "low"
+      meetup_status: "pending" | "accepted" | "declined" | "expired"
+      proximity_level: "close" | "near" | "far" | "hidden"
+      report_status: "open" | "reviewing" | "resolved" | "dismissed"
+      subscription_plan:
+        | "free"
+        | "buddy_plus"
+        | "buddy_pro"
+        | "mad_buddy_access"
+      subscription_status:
+        | "free"
+        | "trialing"
+        | "active"
+        | "past_due"
+        | "cancelled"
+        | "expired"
+        | "non_renewing"
+        | "attention"
+      visibility_status: "visible" | "ghost" | "app_open_only"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
 
-export type AvailabilityType =
-  | "free"
-  | "open_to_hang_out"
-  | "maybe_available"
-  | "busy"
-  | "do_not_disturb";
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-export type ActivityType =
-  | "studying"
-  | "working"
-  | "eating"
-  | "at_an_event"
-  | "exercising"
-  | "gaming"
-  | "travelling"
-  | "heading_home"
-  | "relaxing";
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
-export type StatusVisibilityType = "all_muddies" | "selected_circles" | "selected_muddies";
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
 
-export type WaveSource = "proximity_card" | "profile" | "chat" | "status" | "wave_back";
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
 
-export type WaveResponseType = "wave_back" | "message" | "meeting_ping" | "none";
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
 
-export type PingType = "meet" | "food" | "study" | "chat" | "walk" | "custom";
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
 
-export type PingStatus =
-  | "pending"
-  | "seen"
-  | "maybe"
-  | "counter_proposed"
-  | "accepted"
-  | "declined"
-  | "cancelled"
-  | "expired"
-  | "completed";
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
 
-export type PingResponseType = "accept" | "maybe" | "decline" | "counter_propose" | "message";
-
-export type CloseFriendNotificationPreference =
-  | "always"
-  | "meeting_pings_only"
-  | "very_close_only"
-  | "status_changes"
-  | "normal";
-
-export type VisibilityFeatureType = "glow" | "status" | "wave" | "meeting_ping";
-
-export type VisibilityMode = "all_muddies" | "selected_circles" | "close_friends" | "hidden";
-
-// --- Batch 3: Plans, RSVP, Polls, Hangout Mode ---
-
-export type PlanType = "quick" | "scheduled" | "poll";
-
-/**
- * What a plan IS, used to resolve its canonical cover illustration.
- *
- * Deliberately separate from PlanType, which describes how the plan is
- * SCHEDULED (quick / scheduled / poll) and says nothing about its subject.
- * Mirrors the plans_category_check constraint; adding a value here means
- * adding it there and registering an illustration in lib/plans/plan-covers.
- */
-export type PlanCategory =
-  | "beach"
-  | "dinner"
-  | "coffee"
-  | "study"
-  | "movie"
-  | "football"
-  | "gaming"
-  | "concert"
-  | "birthday"
-  | "travel"
-  | "workout"
-  | "party"
-  | "picnic"
-  | "hiking"
-  | "road_trip"
-  | "walk";
-export type PlanVisibilityType = "invited" | "circle" | "close_friends";
-export type PlanStatus =
-  | "draft"
-  | "inviting"
-  | "polling"
-  | "confirmed"
-  | "cancelled"
-  | "completed"
-  | "expired";
-export type PlanPlaceType = "custom" | "decide_in_chat" | "poll";
-export type PlanRole = "host" | "co_host" | "participant";
-export type RsvpStatus =
-  | "invited"
-  | "viewed"
-  | "going"
-  | "maybe"
-  | "not_going"
-  | "removed"
-  | "waitlisted";
-export type AttendanceVisibility = "names" | "counts" | "host_only";
-
-export type PollType = "time" | "date" | "place" | "activity";
-export type PollSelectionMode = "single" | "multiple";
-export type PollResultsVisibility = "immediate" | "after_vote" | "after_close" | "host_only";
-export type PollStatus = "open" | "closed" | "confirmed";
-
-export type HangoutActivityType =
-  // The original eight. `sports` and `chill` are retained deliberately: see
-  // the 20260822120000 migration for why neither was rewritten.
-  | "food"
-  | "study"
-  | "sports"
-  | "gym"
-  | "walk"
-  | "gaming"
-  | "chill"
-  | "anything"
-  // Added for the approved UpFor screen.
-  | "coffee"
-  | "football"
-  | "drinks"
-  | "movie"
-  | "drive"
-  | "party";
-export type HangoutAudienceType =
-  | "all_muddies"
-  | "close_friends"
-  | "selected_circles"
-  | "selected_muddies"
-  /** Visible inside specific PUBLIC groups. Never a private Circle. */
-  | "selected_groups";
-export type HangoutStatus =
-  | "draft"
-  | "active"
-  | "paused"
-  | "full"
-  | "expired"
-  | "cancelled"
-  | "converted_to_plan";
-export type HangoutRequestStatus = "pending" | "accepted" | "maybe" | "declined" | "cancelled";
-
-// --- Batch 5: Safe Arrival, Check-ins, Event Glow, Event Circles ---
-
-export type EventVisibility =
-  | "invite"
-  | "link"
-  | "community"
-  /** Eligible for geographic discovery from the published Event location. */
-  | "nearby"
-  /** Eligible for broad discovery and ranking. */
-  | "public";
-
-export type EventAudienceTargetType = "user" | "community";
-
-export type EventAdminRole = "admin";
-
-export type EventUpdatePriority = "normal" | "high";
-
-/** One active reaction per person per Update. */
-export type EventUpdateReactionType = "heart" | "fire" | "applause" | "wow";
-export type EventStatus = "draft" | "scheduled" | "active" | "ended" | "cancelled";
-export type EventRsvpStatus = "interested" | "going" | "not_going";
-
-export type SafeArrivalDestinationType = "custom" | "place" | "event";
-export type SafeArrivalStatus =
-  | "draft"
-  | "pending_acknowledgement"
-  | "active"
-  | "grace_period"
-  | "extended"
-  | "completed"
-  | "cancelled"
-  | "expired"
-  | "unconfirmed";
-export type SafeArrivalAcknowledgement = "pending" | "watching" | "declined";
-export type SafeArrivalEventType =
-  | "created"
-  | "acknowledged"
-  | "declined"
-  | "extended"
-  | "confirmed"
-  | "cancelled"
-  | "unconfirmed_alert"
-  | "expired"
-  | "transition_conflict";
-
-export type CheckInContextType = "event" | "plan" | "place" | "circle";
-export type CheckInMethod = "manual" | "qr" | "code" | "host_assisted";
-export type CheckInVisibility = "private" | "participants" | "selected_muddies" | "anonymous_count";
-export type CheckInStatus = "checked_in" | "checked_out" | "revoked" | "invalidated";
-
-export type EventCircleJoinMode = "invite" | "check_in" | "qr" | "community";
-export type EventCircleStatus = "draft" | "open" | "active" | "closing" | "archived" | "deleted";
-export type EventCircleMemberVisibility = "members" | "count_only" | "host_only";
-export type EventCircleRole = "host" | "co_host" | "moderator" | "member";
-export type EventCircleMemberStatus = "joined" | "left" | "removed" | "banned";
-
-// --- Batch 6: Moments, Drops, Private Media, Content Safety ---
-
-export type MediaContentType =
-  | "image/jpeg"
-  | "image/png"
-  | "image/webp"
-  | "audio/webm"
-  | "audio/mpeg"
-  | "audio/mp4"
-  | "audio/ogg"
-  | "video/mp4"
-  | "video/webm"
-  | "video/quicktime";
-export type MediaProcessingStatus = "pending" | "processing" | "ready" | "failed" | "quarantined";
-export type MediaContextType = "profile" | "moment" | "drop" | "event" | "plan" | "chat" | "group";
-export type MediaRetentionPolicy = "follows_parent" | "keep_30d" | "legal_hold";
-export type MediaVariantType = "thumb" | "feed" | "full";
-
-/** Shared moderation lifecycle for content and media (spec §52). */
-export type ModerationStatus =
-  | "active"
-  | "under_review"
-  | "restricted"
-  | "removed"
-  | "restored"
-  | "deleted_by_user";
-
-export type MomentContentType = "text" | "photo" | "video";
-export type MomentSurface = "moment" | "story";
-export type DropContentType = "text" | "photo";
-export type MomentAudienceType =
-  | "all_muddies"
-  | "close_friends"
-  | "selected_muddies"
-  | "selected_circles"
-  | "nearby_muddies"
-  | "event_circle"
-  | "plan"
-  | "public";
-export type MomentStatus =
-  | "active"
-  | "under_review"
-  | "restricted"
-  | "removed"
-  | "deleted_by_user"
-  | "expired";
-export type AudienceTargetType = "user" | "circle" | "event_circle" | "plan";
-export type ReactionType = "heart" | "laugh" | "wave" | "fire" | "clap";
-
-export type DropType = "circle" | "plan" | "event";
-export type DropContextType = "circle" | "plan" | "event" | "event_circle";
-export type DropActionType = "open_chat" | "join_plan" | "wave" | "rsvp" | "view_announcement";
-export type DropStatus = "draft" | "scheduled" | "active" | "expired" | "cancelled" | "removed";
-
-export type ReportableContentType =
-  | "moment"
-  | "drop"
-  | "message"
-  | "profile"
-  | "announcement"
-  | "plan"
-  | "conference_topic"
-  | "conference_reply";
-export type ReportCategory =
-  | "harassment"
-  | "threat_or_violence"
-  | "sexual_content"
-  | "hate_or_discrimination"
-  | "spam"
-  | "scam"
-  | "impersonation"
-  | "private_information"
-  | "unwanted_contact"
-  | "dangerous_location_sharing"
-  | "other";
-export type ContentReportStatus = "received" | "under_review" | "actioned" | "dismissed";
-// --- Batch 7: Messaging, Group Chat, Plan Chat, Voice Notes ---
-
-export type ConversationType = "direct" | "group" | "plan" | "event" | "safe_arrival";
-export type ConversationContextType = "plan" | "event" | "event_circle" | "safe_arrival" | "ping" | "wave";
-export type ConversationStatus = "active" | "archived" | "restricted" | "deleted";
-export type ConversationRole = "owner" | "admin" | "moderator" | "member";
-export type ConversationMemberStatus = "invited" | "joined" | "left" | "removed" | "banned";
-
-export type GroupJoinMode = "invite" | "link" | "closed";
-/**
- * Who can SEE a group exists. Deliberately separate from GroupJoinMode,
- * which decides what happens when they try to join: a public group may still
- * be invite-only. Pending migration 20260807180000.
- */
-export type GroupVisibility = "private" | "public";
-export type GroupHistoryVisibility = "since_join" | "full" | "none";
-export type GroupPostingMode = "all_members" | "admins_only" | "moderated";
-
-export type MessageType = "text" | "image" | "voice_note" | "system" | "quick_action";
-export type MessageStatus = "sent" | "delivered" | "read" | "failed" | "deleted" | "removed_by_moderation";
-export type MessageReactionType = "heart" | "laugh" | "thumbs_up" | "wave" | "fire" | "wow";
-export type SystemEventType =
-  | "plan_confirmed"
-  | "plan_time_changed"
-  | "plan_place_changed"
-  | "plan_cancelled"
-  | "poll_confirmed"
-  | "participant_joined"
-  | "participant_left"
-  | "conversation_created"
-  // Stage 3E group lifecycle; pending migration 20260807140000.
-  | "member_promoted"
-  | "member_demoted"
-  | "ownership_transferred"
-  | "participant_removed"
-  | "group_renamed"
-  | "group_avatar_changed";
-export type QuickActionType =
-  | "on_my_way"
-  | "im_here"
-  | "running_late"
-  | "where_to_meet"
-  | "cant_make_it"
-  | "start_without_me";
-
-// --- Batch 8: Discovery, Invites, QR, Contact Matching, Account Trust ---
-
-export type RequestContextType = "school" | "work" | "church" | "event" | "friend" | "socialize" | "other";
-
-export type InviteType = "personal" | "event" | "circle" | "community";
-export type InviteDeliveryType = "link" | "qr";
-export type InviteStatus = "active" | "used" | "revoked" | "expired";
-
-export type IdentifierType = "phone" | "email";
-export type ContactMatchStatus = "running" | "completed" | "failed" | "deleted";
-
-export type VerificationType = "email" | "phone" | "institution" | "organisation" | "manual_review";
-export type VerificationStatus = "pending" | "verified" | "failed" | "expired" | "revoked";
-export type TrustEventType =
-  | "request_declined"
-  | "blocked_by_user"
-  | "report_received"
-  | "invite_abuse"
-  | "duplicate_content"
-  | "rapid_requests"
-  | "impersonation_report";
-
-// --- Batch 9: Profiles, Onboarding, Privacy Setup ---
-
-export type OnboardingStepName =
-  | "not_started"
-  | "profile_started"
-  | "profile_completed"
-  | "privacy_reviewed"
-  | "visibility_configured"
-  | "location_prompted"
-  | "first_muddy_added"
-  | "activated"
-  | "completed";
-
-export type PermissionResult =
-  | "not_requested"
-  | "pre_prompt_viewed"
-  | "granted"
-  | "granted_approximate"
-  | "denied"
-  | "denied_permanently"
-  | "revoked"
-  | "unsupported"
-  | "error";
-
-export type MilestoneName =
-  | "account_created"
-  | "email_verified"
-  | "profile_completed"
-  | "privacy_setup_completed"
-  | "first_request_sent"
-  | "first_request_accepted"
-  | "first_muddy_added"
-  | "first_status_created"
-  | "first_wave_sent"
-  | "first_glow_enabled"
-  | "first_plan_created"
-  /**
-   * One successful user-authored DIRECT message.
-   *
-   * Added by 20260816120000_first_message_sent_milestone. Direct only: Plan and
-   * Circle chat have their own lifecycle semantics and are a separate decision.
-   */
-  | "first_message_sent"
-  /**
-   * Added by 20260824090000_first_reply_received_milestone (MB-GOD-060).
-   *
-   * A DIRECT conversation this person belongs to has had messages from two
-   * different senders -- "somebody replied", the completed loop that
-   * distinguishes a relationship from talking into silence. Written by a
-   * trigger on `messages` at the moment it becomes true, and backfilled for
-   * existing accounts, so Home no longer rediscovers it by scanning message
-   * history on every load.
-   */
-  | "first_reply_received";
-
-export type ProfileFieldName =
-  | "bio"
-  | "institution"
-  | "programme"
-  | "graduation_year"
-  | "general_area"
-  | "interests"
-  | "pronouns"
-  | "birthday"
-  | "age"
-  | "zodiac";
-
-export type ProfileFieldVisibility = "only_me" | "approved_muddies" | "close_friends" | "shared_communities";
-
-// --- Batch 11: Recaps, Streaks, Achievements, Healthy Engagement ---
-
-export type StreakEventTypeName =
-  | "plan_completed"
-  | "wave_exchanged"
-  | "ping_accepted"
-  | "shared_plan"
-  | "safe_arrival_completed"
-  | "event_checked_in_together"
-  | "conversation_activity";
-
-export type ModerationActionType =
-  | "no_action"
-  | "hide_content"
-  | "remove_content"
-  | "warn_user"
-  | "rate_limit_user"
-  | "suspend_feature"
-  | "temporary_suspension"
-  | "permanent_suspension"
-  | "escalate"
-  | "restore_content";
-
-export type LinkrIntentValue = "friends" | "dating" | "networking" | "anything";
-
-export type LinkrDistanceValue = "very_close" | "around_you" | "wider";
+export const Constants = {
+  public: {
+    Enums: {
+      access_source: [
+        "welcome_access",
+        "web_subscription",
+        "apple_subscription",
+        "google_subscription",
+        "admin_grant",
+        "staff",
+        "global_promo",
+      ],
+      friend_request_status: [
+        "pending",
+        "accepted",
+        "declined",
+        "cancelled",
+        "blocked",
+        "expired",
+      ],
+      location_confidence: ["high", "medium", "low"],
+      meetup_status: ["pending", "accepted", "declined", "expired"],
+      proximity_level: ["close", "near", "far", "hidden"],
+      report_status: ["open", "reviewing", "resolved", "dismissed"],
+      subscription_plan: [
+        "free",
+        "buddy_plus",
+        "buddy_pro",
+        "mad_buddy_access",
+      ],
+      subscription_status: [
+        "free",
+        "trialing",
+        "active",
+        "past_due",
+        "cancelled",
+        "expired",
+        "non_renewing",
+        "attention",
+      ],
+      visibility_status: ["visible", "ghost", "app_open_only"],
+    },
+  },
+} as const
