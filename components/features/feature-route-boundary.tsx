@@ -8,7 +8,6 @@ export function FeatureRouteBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const availability = useFeatureAvailability();
   const feature = featureForHref(pathname);
-  // Safe Arrival's server page owns the active-journey drain exception.
-  if (feature && feature !== "safe_arrival" && availability && !availability[feature]) return <LockedFeaturePreview feature={feature} />;
+  if (feature && availability && !availability[feature]) return <LockedFeaturePreview feature={feature} />;
   return children;
 }
