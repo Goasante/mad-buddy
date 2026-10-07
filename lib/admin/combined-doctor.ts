@@ -40,20 +40,42 @@ const AREA_LABEL: Record<DoctorAreaId, string> = {
   "muddies-requests": "Relationships",
   "blocks-refriend": "Relationships",
   "direct-messaging": "Messaging",
-  "plan-chat": "Plans",
-  plans: "Plans",
-  upfor: "UpFor",
+  "plan-chat": "Meetups",
+  plans: "Meetups",
+  upfor: "Meetups",
   linkr: "Linkr",
   presence: "Presence",
   notifications: "Notifications",
   push: "Push",
   events: "Events",
-  "safe-arrival": "Safe Arrival",
+  "safe-arrival": "Meetups",
   "access-billing": "Access / Billing",
   "features-tours": "Features / Limits",
   journey: "Journey",
   "privacy-account-ops": "Privacy / Account"
 };
+
+const LEGACY_COORDINATION_FINDING_IDS = new Set([
+  "plan-chat-blocked-by-rule",
+  "plan-chat-mismatch",
+  "plan-chat-healthy",
+  "stale-upfor",
+  "upfor-healthy",
+  "upfor-stranded-requests",
+  "safe-arrival-unconfirmed",
+  "safe-arrival-stalled"
+]);
+
+function renameLegacyCoordinationFinding(finding: CombinedAccountDoctorFinding): CombinedAccountDoctorFinding {
+  if (!LEGACY_COORDINATION_FINDING_IDS.has(finding.id)) return finding;
+  const replace = (value: string) =>
+    value
+      .replace(/Safe Arrival/g, "legacy Meetup journey")
+      .replace(/Plan Chat/g, "Meetup coordination chat")
+      .replace(/UpFor/g, "legacy Meetup availability")
+      .replace(/\bPlan\b/g, "Meetup");
+  return { ...finding, area: "Meetups", title: replace(finding.title), detail: replace(finding.detail) };
+}
 
 const severityRank: Record<CombinedAccountDoctorSeverity, number> = {
   issue: 0,
@@ -69,7 +91,7 @@ export function combineAccountDoctorFindings(
 ): CombinedAccountDoctorFinding[] {
   const baseFindings: CombinedAccountDoctorFinding[] = base
     .filter((finding) => !REPLACED_BASE_FINDING_IDS.has(finding.id))
-    .map((finding) => ({ ...finding }));
+    .map((finding) => renameLegacyCoordinationFinding({ ...finding }));
 
   const ownedFindings = owned.map(mapOwnedFinding);
 
