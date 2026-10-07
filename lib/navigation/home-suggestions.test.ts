@@ -169,7 +169,7 @@ describe("Suggestion card content", () => {
   });
 
   it("carries recommendation copy distinct from the feature description", () => {
-    expect(home).toContain('suggestion: "See who is up for something."');
+    expect(home).toContain('suggestion: "Turn a connection into time together."');
     expect(home).toContain('suggestion: "Grow your trusted circle."');
     expect(home).toContain('suggestion: "Find people you already know."');
   });
@@ -190,7 +190,7 @@ describe("Suggestion rendering", () => {
 
   it("only recommends routes that already exist", () => {
     const actions = home.slice(home.indexOf("const quickActions"), home.indexOf("PRIMARY_ACTION_HREFS"));
-    for (const href of ["/hangout-mode", "/invites", "/friends?tab=add"]) {
+    for (const href of ["/meet-up", "/invites", "/friends?tab=add"]) {
       expect(actions).toContain(`href: "${href}"`);
     }
   });
