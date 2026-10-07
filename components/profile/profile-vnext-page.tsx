@@ -319,7 +319,7 @@ export function ProfileVNextPage({
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border-[3px] border-[#E88C2B]/30 bg-background text-sm font-bold text-[#A65A17]">{completion.percent}%</span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold">Finish your profile</span>
-              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">A complete identity makes discovery and real-world plans feel more trustworthy.</span>
+              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">A complete identity makes discovery and real-world Meetups feel more trustworthy.</span>
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-[#A65A17]" aria-hidden="true" />
           </Link>
