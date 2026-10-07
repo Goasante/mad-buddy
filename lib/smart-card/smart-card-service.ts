@@ -9,7 +9,7 @@ import { resolveSmartCard, type SmartCard } from "@/lib/smart-card/smart-card";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
-export const UPFOR_FALLBACK_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+export const MEETUP_FALLBACK_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Cards the user has permanently retired by acknowledging them.
@@ -32,9 +32,9 @@ export async function loadAcknowledgedSmartCardIds(
   return new Set(
     (data ?? [])
       .filter((row) => {
-        if (row.card_id !== "upfor_fallback") return true;
+        if (row.card_id !== "meetup_fallback") return true;
         const seenAt = Date.parse(row.acknowledged_at);
-        return Number.isFinite(seenAt) && now - seenAt < UPFOR_FALLBACK_COOLDOWN_MS;
+        return Number.isFinite(seenAt) && now - seenAt < MEETUP_FALLBACK_COOLDOWN_MS;
       })
       .map((row) => row.card_id)
   );
@@ -57,10 +57,10 @@ export async function acknowledgeSmartCard(userId: string, cardId: string): Prom
 
 /**
  * Record a low-stakes fallback impression. Unlike a permanent acknowledgement,
- * this timestamp is only honored for a short cooldown, so UpFor can return
+ * this timestamp is only honored for a short cooldown, so Meet Up can return
  * later without occupying Home on every visit.
  */
-export async function recordSmartCardImpression(userId: string, cardId: "upfor_fallback"): Promise<void> {
+export async function recordSmartCardImpression(userId: string, cardId: "meetup_fallback"): Promise<void> {
   const env = getSupabaseServerEnv();
   if (!env.url || !env.serviceRoleKey) return;
 
