@@ -58,12 +58,12 @@ export async function acknowledgeSmartCardAction(acknowledgementKey: string): Pr
 
 
 /**
- * Low-stakes exposure tracking for the one evergreen fallback. This action is
+ * Low-stakes exposure tracking for the evergreen Meet Up fallback. This action is
  * intentionally narrow: live safety, invitation and coordination cards are
  * never suppressible by impression.
  */
 export async function recordSmartCardImpressionAction(cardId: string): Promise<void> {
-  if (cardId !== "upfor_fallback") return;
+  if (cardId !== "meetup_fallback") return;
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -71,5 +71,5 @@ export async function recordSmartCardImpressionAction(cardId: string): Promise<v
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  await recordSmartCardImpression(user.id, "upfor_fallback");
+  await recordSmartCardImpression(user.id, "meetup_fallback");
 }
