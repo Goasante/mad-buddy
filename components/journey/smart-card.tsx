@@ -60,8 +60,8 @@ const ILLUSTRATIONS: Record<SmartCardIllustration, string> = {
  *
  * THIS IS THE OPPOSITE OF A HEIGHT CAP. The hero was compacted to make room
  * for ranked Events on Home, but compacting every state equally would have
- * squeezed the two that exist precisely to be noticed: a live Safe Arrival
- * journey, and the Journey itself. Those keep the roomier padding and the
+ * squeezed the two that exist precisely to be noticed: a Meetup that is starting now,
+ * and the Journey itself. Those keep the roomier padding and the
  * larger title; the routine states (membership, buddy progress, suggestions,
  * birthday, weekend) take the compact one.
  *
@@ -70,7 +70,7 @@ const ILLUSTRATIONS: Record<SmartCardIllustration, string> = {
  * only its breathing room and title scale respond to how much the state
  * matters. A new card id defaults to compact, which is the safe direction.
  */
-const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["safe_arrival", "journey"]);
+const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["meetup_starting", "journey"]);
 
 /**
  * Which cards render the animated prism instead of the sheen.
