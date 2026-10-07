@@ -14,7 +14,7 @@
  *
  * MILESTONES ARE EVIDENCE, NOT PERMISSION. `activation_milestones` records
  * what somebody has done, so it answers "have they ever" (has this person ever
- * made a Plan) rather than "may they proceed". Nothing here blocks: the app is
+ * made a Meetup) rather than "may they proceed". Nothing here blocks: the app is
  * fully usable in every state, and activation only decides what to SAY.
  */
 
@@ -122,7 +122,7 @@ export function resolveActivationState(input: ActivationInputs): ActivationState
    * it would turn a narrow ownership correction into a wider refactor. */
 
   // Nothing else is reachable without at least one Muddy: Glow has nobody to
-  // show, and a Plan has nobody to invite.
+  // show, and a Meetup has nobody to invite.
   if (input.muddyCount === 0) {
     // They have already acted. Repeating "start with one person" would ignore
     // the request they just sent and imply it did not count.
@@ -166,7 +166,7 @@ export function resolveActivationState(input: ActivationInputs): ActivationState
 
   // Located, visible, and genuinely nobody around. That is an ordinary evening,
   // not a failure, and the copy for it should say so.
-  if (input.muddyCount > 0 && !input.milestones.has("first_plan_created")) return "no_one_nearby";
+  if (input.muddyCount > 0 && !input.milestones.has("first_meetup_created") && !input.milestones.has("first_plan_created")) return "no_one_nearby";
 
   return "activated";
 }
@@ -174,10 +174,10 @@ export function resolveActivationState(input: ActivationInputs): ActivationState
 /**
  * The single strongest next action for a state.
  *
- * CONTEXTUAL, NOT A FUNNEL. "Make a Plan" is the wrong thing to push at
+ * CONTEXTUAL, NOT A FUNNEL. "Create a Meetup" is the wrong thing to push at
  * somebody with nobody nearby and no Muddies -- it is the app asking for a
  * commitment it has not earned. Each state gets the smallest action that is
- * genuinely useful in that situation, and Plans arrive when a Plan is actually
+ * genuinely useful in that situation, and Meetups arrive when a Meetup is actually
  * the natural next thing.
  */
 export type ActivationAction =
@@ -217,14 +217,14 @@ export function primaryActionFor(state: ActivationState): ActivationAction {
       return "refresh_location";
     case "muddy_nearby":
       // Somebody is around NOW. A wave is one tap and costs nothing; asking
-      // for a Plan here skips the part where they say hello.
+      // for a Meetup here skips the part where they say hello.
       return "wave";
     case "no_one_nearby":
       // Nobody to wave at, so the useful move is arranging something for when
-      // people ARE free. This is where a Plan is genuinely the right ask.
-      return "make_plan";
+      // people ARE free. This is where a Meetup is genuinely the right ask.
+      return "make_meetup";
     case "upcoming_plan":
-      return "view_plan";
+      return "view_meetup";
     case "activated":
       return "message";
   }
@@ -255,7 +255,7 @@ export function primaryActionFor(state: ActivationState): ActivationAction {
  *
  * Note what is NOT here: "make a plan" is deliberately absent as a per-person
  * primary. Pushing a commitment as the opening move with one new Muddy is the
- * app asking for more than the relationship has earned; Plans remain reachable
+ * app asking for more than the relationship has earned; Meetups remain reachable
  * as a secondary action and as the primary for the quiet-evening state.
  */
 export type MuddyContext = {
@@ -265,7 +265,7 @@ export type MuddyContext = {
 };
 
 export function actionForMuddy(context: MuddyContext): ActivationAction {
-  if (context.hasSharedUpcomingPlan) return "view_plan";
+  if (context.hasSharedUpcomingMeetup) return "view_meetup";
   if (!context.hasExistingConversation) return "say_hi";
   if (context.isNearby) return "wave";
   return "message";
@@ -333,8 +333,8 @@ export type MuddyActionPlan = {
 export function planActionsForMuddy(context: MuddyActionContext): MuddyActionPlan {
   // Something already arranged beats anything the app could suggest, and
   // proposing a second plan to somebody you are already meeting is noise.
-  if (context.hasSharedUpcomingPlan) {
-    return { primary: "view_plan", secondary: "message", reason: "shared_plan" };
+  if (context.hasSharedUpcomingMeetup) {
+    return { primary: "view_meetup", secondary: "message", reason: "shared_plan" };
   }
 
   /* Never spoken: a first message is the smallest real step. A wave at
@@ -343,7 +343,7 @@ export function planActionsForMuddy(context: MuddyActionContext): MuddyActionPla
    * Keyed on conversationState, NOT on the row-existence boolean beside it.
    * The two could disagree -- a thread created by "Say hi" is
    * hasExistingConversation: true with nothing said in it -- and when they
-   * did, this fell through to "established" and offered a Plan to somebody
+   * did, this fell through to "established" and offered a Meetup to somebody
    * who had never exchanged a word. One field decides. */
   if (context.conversationState === "none") {
     /* NEARBY CHANGES WHAT THE SECOND OPTION SHOULD BE.
@@ -361,7 +361,7 @@ export function planActionsForMuddy(context: MuddyActionContext): MuddyActionPla
     if (context.isNearby && context.waveAvailable) {
       return { primary: "say_hi", secondary: "wave", reason: "new_relationship" };
     }
-    return { primary: "say_hi", secondary: "make_plan", reason: "new_relationship" };
+    return { primary: "say_hi", secondary: "make_meetup", reason: "new_relationship" };
   }
 
   if (context.isNearby) {
@@ -372,13 +372,13 @@ export function planActionsForMuddy(context: MuddyActionContext): MuddyActionPla
     }
     // Cooldown. Offering a Wave the server will refuse is worse than offering
     // the message that always works.
-    return { primary: "message", secondary: "make_plan", reason: "nearby_wave_blocked" };
+    return { primary: "message", secondary: "make_meetup", reason: "nearby_wave_blocked" };
   }
 
   /* ONE MESSAGE IS NOT A RELATIONSHIP.
    *
    * "Has a conversation" used to mean "established", so the very first hello
-   * promoted a Plan to primary -- the app answering somebody's opening message
+   * promoted a Meetup to primary -- the app answering somebody's opening message
    * by asking them to commit to meeting. The natural next move after saying hi
    * is to keep talking.
    *
@@ -387,12 +387,12 @@ export function planActionsForMuddy(context: MuddyActionContext): MuddyActionPla
    * Somebody who sent three messages into silence is still waiting, and
    * suggesting a plan there would be worse, not better. */
   if (context.conversationState === "started") {
-    return { primary: "message", secondary: "make_plan", reason: "conversation_started" };
+    return { primary: "message", secondary: "make_meetup", reason: "conversation_started" };
   }
 
   // Talked before, not nearby, nothing arranged: a plan is finally the natural
   // suggestion rather than a demand made too early.
-  return { primary: "make_plan", secondary: "message", reason: "established" };
+  return { primary: "make_meetup", secondary: "message", reason: "established" };
 }
 
 /**
@@ -410,10 +410,10 @@ export function hasReachedFirstValue(milestones: ReadonlySet<string>): boolean {
      *
      * Its absence here was the gap: a person could add a Muddy, message them,
      * get a reply, and still be shown a training-wheels Home because the only
-     * things that counted were a Wave, a Plan or a status. Recorded at the
+     * things that counted were a Wave, a Meetup or a status. Recorded at the
      * canonical send boundary for DIRECT messages only. */
     milestones.has("first_message_sent") ||
-    milestones.has("first_plan_created") ||
+    milestones.has("first_meetup_created") ||\n    milestones.has("first_plan_created") ||
     /* Kept, with a reservation recorded rather than acted on.
      *
      * A status is broadcast -- expression rather than interaction with a
