@@ -37,6 +37,7 @@ import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
 import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
 import { conversationHref } from "@/lib/messaging/open-conversation";
+import { isFutureMeetupTime } from "@/lib/meetups/scheduling";
 import { MeetNewPeople, MeetNewPeopleSafety, type MeetupDiscoveryAction } from "@/components/meetups/meet-new-people";
 import { MEETUP_DISCOVERY_CATEGORY_OPTIONS, discoveryCategoryLabel, type MeetupDiscoveryCategory, type MeetupDiscoveryHub } from "@/lib/meetups/discovery";
 
@@ -549,7 +550,6 @@ function CreateMeetup({
   const [place, setPlace] = useState("");
   const [category, setCategory] = useState<MeetupDiscoveryCategory>("anything");
   const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 30 * 60_000)));
-  const [minStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 60_000)));
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -589,9 +589,8 @@ function CreateMeetup({
         setMessage("Add the agreed place.");
         return;
       }
-      const scheduled = new Date(startsAt);
-      if (!startsAt || !Number.isFinite(scheduled.getTime()) || scheduled.getTime() <= Date.now() + 60_000) {
-        setMessage("Choose a future date and time.");
+      if (!isFutureMeetupTime(startsAt)) {
+        setMessage("Choose a time at least one minute from now. Later today is fine.");
         return;
       }
       setStep(3);
@@ -609,9 +608,8 @@ function CreateMeetup({
 
   function submit() {
     if (pending || !selectedIds.length || !place.trim()) return;
-    const scheduled = new Date(startsAt);
-    if (!Number.isFinite(scheduled.getTime()) || scheduled.getTime() <= Date.now() + 60_000) {
-      setMessage("Choose a future date and time.");
+    if (!isFutureMeetupTime(startsAt)) {
+      setMessage("Choose a time at least one minute from now. Later today is fine.");
       setStep(2);
       return;
     }
@@ -790,7 +788,6 @@ function CreateMeetup({
               <input
                 type="datetime-local"
                 value={startsAt}
-                min={minStartsAt}
                 onChange={(event) => {
                   resetRequestKey();
                   setStartsAt(event.target.value);
@@ -798,7 +795,7 @@ function CreateMeetup({
                 className={inputClass}
               />
               <p className="mt-2 text-xs text-muted-foreground">
-                Meetups are scheduled. The live arrival window opens two hours before this time.
+                Later today is fine. Choose a time at least one minute from now. The live arrival window opens two hours before this time.
               </p>
             </div>
 

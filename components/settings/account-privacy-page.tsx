@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { ChevronRight, Eye, MessageCircle, UserRoundX, Phone } from "lucide-react";
 import { SettingsSubHeader } from "@/components/settings/settings-sub-header";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
+import { LocationForGlowSetting } from "@/components/settings/location-for-glow-setting";
+import { enableLocationForGlowOnWeb } from "@/lib/settings/web-client";
 
 const privacyRows = [
   {
@@ -31,10 +36,16 @@ const privacyRows = [
 ] as const;
 
 export function AccountPrivacyPage() {
+  const [feedback, setFeedback] = useState<{ message: string; error: boolean } | null>(null);
+
   return (
     <div data-tour-id={TOUR_TARGET_IDS.PRIVACY_OVERVIEW} className="mr-auto max-w-[680px] space-y-6 pt-6">
       <SettingsSubHeader title="Account privacy" description="Manage the privacy controls that Mad Buddy currently enforces." />
       <nav className="divide-y divide-border/70 border-y border-border/70" aria-label="Privacy settings">
+        <LocationForGlowSetting
+          onEnable={enableLocationForGlowOnWeb}
+          onFeedback={(message, error = false) => setFeedback({ message, error })}
+        />
         {privacyRows.map((row) => (
           <Link
             key={row.href}
@@ -61,6 +72,11 @@ export function AccountPrivacyPage() {
           </Link>
         ))}
       </nav>
+      {feedback && (
+        <p role="status" className={feedback.error ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
+          {feedback.message}
+        </p>
+      )}
     </div>
   );
 }
