@@ -28,6 +28,7 @@ export type ProfileIdentitySummary = {
     momentCount: number;
     completedPlanCount: number;
     completedSafeArrivalCount: number;
+    completedMeetupCount: number;
   } | null;
 };
 
