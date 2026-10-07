@@ -156,7 +156,7 @@ describe("against real resolver output", () => {
     const reachable = new Set([
       "/home", "/muddies", "/messages", "/plans", "/events",
       "/notifications", "/groups", "/pings", "/safety", "/subscription",
-      "/socialize", "/profile", "/settings", "/buddy-score", "/help", "/more"
+      "/socialize", "/profile", "/settings", "/buddy-score", "/help", "/more", "/meet-up"
     ]);
     for (const type of types) {
       const adapted = adapt(resolveNotificationDestination(type));
