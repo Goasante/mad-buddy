@@ -18,7 +18,7 @@ const ERRORS: Record<string, string> = {
   MEETUP_ACCEPT_FIRST: "Wait until you and another participant have accepted, including the host.",
   MEETUP_TOO_EARLY: "Meetup updates open two hours before the scheduled time.",
   MEETUP_ENDED: "This meetup has ended.",
-  MEETUP_LIMIT: "You have too many active meetups. End an old one first.",
+  MEETUP_LIMIT: "You can have up to three active Meetups or listings at a time. End one first.",
   MEETUP_TIME: "Choose a future date and time.",
   MEETUP_LOCATION_REQUIRED: "Mad Buddy needs a fresh location fix before setting the Meetup Glow point.",
   MEETUP_HOST_BEACON: "The host needs to set the Meetup Glow point first.",
