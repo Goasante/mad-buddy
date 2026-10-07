@@ -18,6 +18,7 @@ import { Modal } from "@/components/ui/modal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Link, syncCurrentLocation } from "@/lib/platform";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
+import { conversationHref } from "@/lib/messaging/open-conversation";
 import {
   MEETUP_DISCOVERY_CATEGORY_OPTIONS,
   discoveryCategoryLabel,
@@ -335,7 +336,7 @@ export function MeetNewPeople({
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {item.conversationId ? (
-                  <Link href={"/messages?conversation=" + item.conversationId} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
+                  <Link href={conversationHref(item.conversationId)} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
                     <MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat
                   </Link>
                 ) : null}
