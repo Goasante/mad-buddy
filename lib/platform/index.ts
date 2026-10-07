@@ -24,6 +24,7 @@ export { Image, type ImageProps } from "./image";
 export { useRouter, usePathname, useSearchParams } from "./router";
 export { useRevalidate } from "./revalidate";
 export { syncCurrentLocation, type LocationSyncResult } from "./location";
+export { subscribeMeetupRealtime } from "./meetup-realtime";
 
 /** Compile-time platform marker for shared UI that needs shell-specific chrome. */
 export const PLATFORM_KIND: "web" | "mobile" = "web";
