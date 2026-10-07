@@ -19,11 +19,11 @@ describe("Dribbble-inspired mobile navigation", () => {
     expect(css).not.toContain("--mobile-nav-height:");
   });
 
-  it("keeps the canonical Messages, Muddies, Linkr and UpFor destinations unchanged", () => {
+  it("keeps the canonical Messages, Muddies, Linkr and Meetups destinations unchanged", () => {
     expect(mobileTabs).toContain('{ href: "/messages", label: "Messages"');
     expect(mobileTabs).toContain('{ href: "/friends", label: "Muddies"');
     expect(mobileTabs).toContain('{ href: "/linkr", label: "Linkr"');
-    expect(mobileTabs).toContain('{ href: "/hangout-mode", label: "UpFor"');
+    expect(mobileTabs).toContain('{ href: "/meet-up", label: "Meetups"');
     expect(mobileTabs).toContain('brandIcon: "linkr"');
     expect(mobileTabs).toContain('brandIcon: "upfor"');
   });
