@@ -5,6 +5,7 @@ import type { SmartCard } from "./smart-card";
 export const SMART_CARD_SCENES = {
   meetup_starting: 13,
   meetup_upcoming: 37,
+  meetup_fallback: 58,
   core_fallback: 1,
   safe_arrival_overdue: 2,
   safe_arrival_action: 3,
@@ -70,6 +71,7 @@ export const SMART_CARD_SCENES = {
 export const SMART_CARD_ARTWORK_FILES = {
   meetup_starting: "13-plan-starting.webp",
   meetup_upcoming: "37-upcoming-plan.webp",
+  meetup_fallback: "58-upfor-fallback.webp",
   core_fallback: "01-core-fallback.webp",
   safe_arrival_overdue: "02-safe-arrival-overdue.webp",
   safe_arrival_action: "03-safe-arrival-action.webp",
