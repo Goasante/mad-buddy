@@ -39,20 +39,16 @@ export function previousWeekKey(nowMs: number): string {
 // ---------------------------------------------------------------------------
 
 export type StreakEventType =
-  | "meetup_completed"\n  | "plan_completed"
+  | "meetup_completed"
   | "wave_exchanged"
   | "ping_accepted"
-  | "shared_plan"
-  | "safe_arrival_completed"
   | "event_checked_in_together"
   | "conversation_activity";
 
 const MEANINGFUL_EVENTS: ReadonlySet<string> = new Set<StreakEventType>([
-  "meetup_completed",\n  "plan_completed",
+  "meetup_completed",
   "wave_exchanged",
   "ping_accepted",
-  "shared_plan",
-  "safe_arrival_completed",
   "event_checked_in_together",
   "conversation_activity"
 ]);
