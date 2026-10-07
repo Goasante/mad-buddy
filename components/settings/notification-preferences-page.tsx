@@ -19,7 +19,7 @@ const categoryMeta: Array<{ id: NotificationCategory; label: string; description
   { id: "waves", label: "Waves", description: "When a Muddy waves at you." },
   { id: "pings", label: "Meeting Pings", description: "When someone wants to meet." },
   { id: "proximity", label: "Nearby Muddies", description: "When friends become nearby." },
-  { id: "plans", label: "Plans", description: "Invites, changes, and reminders." },
+  { id: "plans", label: "Meetups", description: "Meetup invitations, changes, and reminders." },
   { id: "status", label: "Status updates", description: "When friends set a status." },
   { id: "birthdays", label: "Birthdays", description: "Birthday reminders from approved Muddies." },
   { id: "conference", label: "Conference", description: "Direct replies to your anonymous Voices." }
