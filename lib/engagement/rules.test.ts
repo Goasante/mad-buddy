@@ -159,7 +159,7 @@ describe("recap safety (spec §4)", () => {
 
   it("strips anything not explicitly allowed, even if a query leaks it", () => {
     const sanitized = sanitizeRecapSummary({
-      plansCompleted: 4,
+      meetupsCompleted: 4,
       muddiesInteractedWith: 6,
       // All of these must not survive.
       messageContent: "see you at 12 Oxford Street",
@@ -168,7 +168,7 @@ describe("recap safety (spec §4)", () => {
       blockedUsers: ["someone"]
     } as Record<string, unknown>);
 
-    expect(sanitized.plansCompleted).toBe(4);
+    expect(sanitized.meetupsCompleted).toBe(4);
     expect(sanitized.muddiesInteractedWith).toBe(6);
     expect(Object.keys(sanitized).sort()).toEqual([...RECAP_ALLOWED_FIELDS].sort());
     expect(JSON.stringify(sanitized)).not.toMatch(/Oxford|5\.6037|someone/);
