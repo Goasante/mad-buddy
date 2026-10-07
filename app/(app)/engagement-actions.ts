@@ -212,7 +212,8 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
         is_active: true
       }))
     : definitionsRes.data ?? [];
-  const visibleDefinitions = definitions.filter((definition) => definition.is_active || earnedByCode.has(definition.code));
+  const migratedLegacyCodes = new Set(["first_plan", "plan_maker", "plan_regular"]);
+  const visibleDefinitions = definitions.filter((definition) => !migratedLegacyCodes.has(definition.code) && (definition.is_active || earnedByCode.has(definition.code)));
   const achievements = visibleDefinitions.map((definition) => ({
     code: definition.code,
     name: definition.name,
