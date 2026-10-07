@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { planAttendancePairs } from "@/lib/life/plan-attendance";
+import { meetupAttendancePairs, planAttendancePairs } from "@/lib/life/plan-attendance";
 import { buildLifeEvent, LIFE_EVENT_CLASSIFICATION } from "@/lib/life/events";
 import { buildTimeline, timelineFacts, type TimelineSourceRow } from "@/lib/life/timeline";
 import { stripComments } from "@/lib/content/strip-comments";
@@ -169,5 +169,29 @@ describe("relationship.reactivated", () => {
       { eventType: "relationship.ended", actorId: ALICE, occurredAt: "2026-04-01T00:00:00.000Z", payload: { subjectId: BOB } }
     ];
     expect(timelineFacts(buildTimeline(rows, ALICE).entries).endedAtMs).not.toBeNull();
+  });
+});
+
+
+describe("meetupAttendancePairs", () => {
+  it("records one shared fact per confirmed pair", () => {
+    const pairs = meetupAttendancePairs([
+      { meetupId: "meetup-1", userId: ALICE },
+      { meetupId: "meetup-1", userId: BOB },
+      { meetupId: "meetup-1", userId: CARA }
+    ], AT);
+    expect(pairs).toHaveLength(3);
+    expect(pairs.every((pair) => pair.eventType === "meetup.attended_together")).toBe(true);
+    expect(LIFE_EVENT_CLASSIFICATION["meetup.attended_together"].visibility).toBe("shared");
+    expect(LIFE_EVENT_CLASSIFICATION["meetup.attended_together"].aiEligible).toBe(false);
+  });
+
+  it("keeps Meetup history idempotent and location-free", () => {
+    const [pair] = meetupAttendancePairs([
+      { meetupId: "meetup-1", userId: ALICE },
+      { meetupId: "meetup-1", userId: BOB }
+    ], AT);
+    expect(Object.keys(pair!.payload ?? {})).toEqual(["meetupId"]);
+    expect(buildLifeEvent(pair!).dedupeKey).toContain("meetup.attended_together");
   });
 });
