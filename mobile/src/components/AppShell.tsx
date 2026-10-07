@@ -89,15 +89,15 @@ export function AppShell() {
 
       {/* THE SHARED NAVIGATION.
           This was a hand-written bar with its own tabs
-          (Home/Muddies/Pulse/Messages/Plans) that had drifted months behind
+          (Home/Muddies/Pulse/Messages) that had drifted months behind
           the web app -- the most visible symptom of maintaining two apps.
           It now renders the SAME component the web shell uses, so the two
           cannot diverge again.
 
-          `isBuiltForMobile` is what makes that safe: Linkr and UpFor exist in
-          the shared tab list but not in this app yet, so they keep their slot
-          (the layout matches web) while being dimmed and unable to navigate.
-          Without it they would route to the unavailable screen. */}
+          `isBuiltForMobile` keeps shared destinations honest on native. Meetups
+          now owns the former UpFor tab and is implemented on both platforms;
+          unavailable shared destinations remain dimmed rather than navigating
+          to a dead screen. */}
       <MobileNav
         onHomeReselect={() => navigate("/home")}
         messageUnreadCount={unread}
