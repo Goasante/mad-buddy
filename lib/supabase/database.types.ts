@@ -145,6 +145,92 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      meetups: {
+        Row: {
+          id: string;
+          creator_id: string;
+          host_id: string | null;
+          mode: "come_over" | "coming_to" | "meet_somewhere";
+          place_label: string;
+          note: string;
+          starts_at: string;
+          timezone: string;
+          status: "active" | "cancelled" | "ended";
+          revision: number;
+          request_key: string;
+          created_at: string;
+          arranged_at: string;
+          expires_at: string;
+          beacon_latitude: number | null;
+          beacon_longitude: number | null;
+          beacon_set_by: string | null;
+          beacon_set_at: string | null;
+          beacon_confirmed_at: string | null;
+          together_at: string | null;
+          source_discovery_id: string | null;
+          title: string | null;
+          category: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          host_id?: string | null;
+          mode: "come_over" | "coming_to" | "meet_somewhere";
+          place_label: string;
+          note?: string;
+          starts_at: string;
+          timezone: string;
+          status?: "active" | "cancelled" | "ended";
+          revision?: number;
+          request_key: string;
+          created_at?: string;
+          arranged_at?: string;
+          expires_at?: string;
+          beacon_latitude?: number | null;
+          beacon_longitude?: number | null;
+          beacon_set_by?: string | null;
+          beacon_set_at?: string | null;
+          beacon_confirmed_at?: string | null;
+          together_at?: string | null;
+          source_discovery_id?: string | null;
+          title?: string | null;
+          category?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["meetups"]["Insert"]>;
+        Relationships: [];
+      };
+      meetup_participants: {
+        Row: {
+          meetup_id: string;
+          user_id: string;
+          response: "invited" | "accepted" | "declined";
+          arrival: "not_started" | "on_my_way" | "late" | "here" | "left";
+          delay_minutes: number | null;
+          met_at: string | null;
+          suggested_start_at: string | null;
+          proximity_enabled: boolean;
+          journey_state: "waiting" | "on_the_way" | "approaching" | "nearby" | "at_spot" | "here" | "left";
+          proximity_observed_at: string | null;
+          home_started_at: string | null;
+          home_arrived_at: string | null;
+        };
+        Insert: {
+          meetup_id: string;
+          user_id: string;
+          response?: "invited" | "accepted" | "declined";
+          arrival?: "not_started" | "on_my_way" | "late" | "here" | "left";
+          delay_minutes?: number | null;
+          met_at?: string | null;
+          suggested_start_at?: string | null;
+          proximity_enabled?: boolean;
+          journey_state?: "waiting" | "on_the_way" | "approaching" | "nearby" | "at_spot" | "here" | "left";
+          proximity_observed_at?: string | null;
+          home_started_at?: string | null;
+          home_arrived_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["meetup_participants"]["Insert"]>;
+        Relationships: [];
+      };
       profiles: {
         Row: RowWithTimestamps & {
           id: string;
