@@ -9,6 +9,7 @@ function read(name: string) {
 describe("Meet New People database boundary", () => {
   const lifecycle = read("20261007141400_meet_new_people_discovery.sql");
   const projection = read("20261007142230_meet_new_people_projection_hardening.sql");
+  const refreshProjection = read("20261007144246_meet_new_people_refresh_projection.sql");
 
   it("enforces the shared owner limit and fixed response pool server-side", () => {
     expect(lifecycle).toContain("public.meetup_owner_active_slot_count(p_actor_id)>=3");
@@ -28,6 +29,10 @@ describe("Meet New People database boundary", () => {
     expect(lifecycle).toContain("pa.response='accepted'");
     expect(lifecycle).toContain("pb.response='accepted'");
     expect(lifecycle).toContain("context_type='meetup'");
+  });
+
+  it("returns the server-authoritative listing refresh count", () => {
+    expect(refreshProjection).toContain("'refreshCount',d.refresh_count");
   });
 
   it("does not count a discovery and its materialized Meetup as two slots", () => {
