@@ -9,10 +9,8 @@ import { type FeatureAvailability } from "@/lib/features/availability";
  * facts once, then the engine chooses the first truthful applicable state.
  */
 
-import { gracePeriodEndMs } from "@/lib/safety/safe-arrival";
 import type { HomeUpForContext } from "@/lib/social/home-upfor-context";
 import type { LinkrMutualForCard } from "@/lib/smart-card/linkr-context";
-import { isPlanDecisionRsvpEligible } from "@/lib/smart-card/home-context";
 import type {
   BlockedFeatureForCard,
   EventLinkrOfferForCard,
@@ -21,17 +19,12 @@ import type {
   PlanDecisionForCard,
   RecentAchievementForCard
 } from "@/lib/smart-card/home-context";
-import { conversationHref } from "@/lib/messaging/open-conversation";
-import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
-import { MAX_ACTIVE_UPFORS } from "@/lib/social/upfor-limits";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
 import type { MeetupHomeItem } from "@/lib/meetups/rules";
 import {
-  isWeekendPlanningWindow,
   smartCardProgress,
-  weekendWindowExpiry,
   type SmartCard,
   type SmartCardProvider
 } from "@/lib/smart-card/smart-card";
@@ -152,13 +145,6 @@ function expiresAt(iso: string | null | undefined): number | undefined {
   return Number.isFinite(ms) ? ms : undefined;
 }
 
-function earliestExpiry(values: readonly (string | null | undefined)[]): number | undefined {
-  const times = values
-    .map((value) => expiresAt(value))
-    .filter((value): value is number => value !== undefined);
-  return times.length > 0 ? Math.min(...times) : undefined;
-}
-
 /**
  * Relative clock copy that is timezone-independent.
  *
@@ -235,14 +221,6 @@ const TOGETHER_LINE: Record<string, string> = {
   Movie: "You're watching a movie together.",
   Drinks: "You're getting drinks together."
 };
-
-function acceptedTogetherLine(activityLabel: string): string {
-  return TOGETHER_LINE[activityLabel] ?? "You are going to " + activityLabel.toLowerCase() + ".";
-}
-
-function upForSessionDestination(sessionId: string): string {
-  return `/hangout-mode?hangout=${encodeURIComponent(sessionId)}`;
-}
 
 function currentLinkrMutuals(input: SmartCardInput): readonly LinkrMutualForCard[] {
   const nowMs = input.now.getTime();
