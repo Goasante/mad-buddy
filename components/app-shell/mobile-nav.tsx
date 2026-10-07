@@ -217,7 +217,7 @@ function MobileNavTab({
   muddyRequestCount?: number;
   /**
    * The destination exists on web but not in the native app yet (Linkr,
-   * UpFor). The tab KEEPS ITS SLOT so the layout is identical on both
+   * Meetups). The tab KEEPS ITS SLOT so the layout is identical on both
    * platforms and the feature reads as "coming", not "gone" -- but it must
    * not navigate, because the route would land on the unavailable screen and
    * look like a fault. Always false on web.
