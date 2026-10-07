@@ -39,7 +39,7 @@ export function previousWeekKey(nowMs: number): string {
 // ---------------------------------------------------------------------------
 
 export type StreakEventType =
-  | "plan_completed"
+  | "meetup_completed"\n  | "plan_completed"
   | "wave_exchanged"
   | "ping_accepted"
   | "shared_plan"
@@ -48,7 +48,7 @@ export type StreakEventType =
   | "conversation_activity";
 
 const MEANINGFUL_EVENTS: ReadonlySet<string> = new Set<StreakEventType>([
-  "plan_completed",
+  "meetup_completed",\n  "plan_completed",
   "wave_exchanged",
   "ping_accepted",
   "shared_plan",
@@ -172,6 +172,10 @@ export function streakSummaryLabel(weeks: number, friendName: string): string {
  * enforced rather than remembered.
  */
 export type RecapSummary = {
+  meetupsCreated: number;
+  meetupsCompleted: number;
+  meetupListings: number;
+  /** Historical fields kept so older stored recaps still deserialize safely. */
   plansCreated: number;
   plansCompleted: number;
   muddiesInteractedWith: number;
@@ -186,6 +190,9 @@ export type RecapSummary = {
 };
 
 export const RECAP_ALLOWED_FIELDS: ReadonlyArray<keyof RecapSummary> = [
+  "meetupsCreated",
+  "meetupsCompleted",
+  "meetupListings",
   "plansCreated",
   "plansCompleted",
   "muddiesInteractedWith",
@@ -222,7 +229,7 @@ export function sanitizeRecapSummary(raw: Record<string, unknown>): RecapSummary
  * shaming, the copy states what happened and stops.
  */
 export function recapHeadline(summary: RecapSummary): string {
-  if (summary.muddiesInteractedWith === 0 && summary.plansCompleted === 0) {
+  if (summary.muddiesInteractedWith === 0 && summary.meetupsCompleted === 0) {
     // Empty period must not read as failure (spec §12 edge case).
     return "A quiet month. Your Muddies are here whenever you are.";
   }
@@ -231,7 +238,7 @@ export function recapHeadline(summary: RecapSummary): string {
       summary.muddiesInteractedWith === 1 ? "Muddy" : "different Muddies"
     } this month.`;
   }
-  return `You completed ${summary.plansCompleted} ${summary.plansCompleted === 1 ? "plan" : "plans"} this month.`;
+  return `You completed ${summary.meetupsCompleted} ${summary.meetupsCompleted === 1 ? "Meetup" : "Meetups"} this month.`;
 }
 
 export const RECAP_REFLECTION_PROMPT = "Which friendship do you want to make more time for next month?";
