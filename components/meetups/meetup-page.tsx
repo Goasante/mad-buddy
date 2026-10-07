@@ -18,10 +18,10 @@ import {
   Navigation,
   Plus,
   TimerReset,
-  Users,
-  X
+  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import {
   JOURNEY_LABELS,
   MEETUP_TITLES,
@@ -168,6 +168,26 @@ function StatusPill({ label, tone }: { label: string; tone: "success" | "waiting
   return <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${className}`}>{label}</span>;
 }
 
+function MeetupMobileHeader({ title = "Meetups", onBack }: { title?: string; onBack?: () => void }) {
+  if (PLATFORM_KIND !== "web") return null;
+  const backClass = "focus-ring grid h-11 w-11 place-items-center rounded-full text-foreground transition active:scale-95 motion-reduce:active:scale-100";
+  return (
+    <header className="fixed inset-x-0 top-0 z-40 grid grid-cols-[44px_1fr_44px] items-center gap-2 bg-background px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] md:hidden">
+      {onBack ? (
+        <button type="button" onClick={onBack} aria-label="Back to Meetups" className={backClass}>
+          <ArrowLeft className="h-[22px] w-[22px]" aria-hidden="true" />
+        </button>
+      ) : (
+        <Link href="/dashboard" aria-label="Back to Home" className={backClass}>
+          <ArrowLeft className="h-[22px] w-[22px]" aria-hidden="true" />
+        </Link>
+      )}
+      <h1 className="truncate text-center text-lg font-semibold tracking-tight">{title}</h1>
+      <span className="h-11 w-11" aria-hidden="true" />
+    </header>
+  );
+}
+
 export function MeetupPage({
   viewerId,
   meetups,
@@ -212,6 +232,19 @@ export function MeetupPage({
       : "mine";
   });
 
+  // Query-only navigation keeps this component mounted on web and mobile.
+  // An accepted discovery link must leave discovery and open its Meetup.
+  const navigationKey = JSON.stringify([focusedId, openCreate, contextualMuddyId, openNewPeople, focusedDiscoveryId]);
+  const [previousNavigationKey, setPreviousNavigationKey] = useState(navigationKey);
+  if (previousNavigationKey !== navigationKey) {
+    setPreviousNavigationKey(navigationKey);
+    setCreating(openCreate || Boolean(contextualMuddyId));
+    setNewPeopleOpen(false);
+    setNewPeopleSafetyOpen(openNewPeople);
+    const mine = focusedMeetup?.members.find((person) => person.userId === viewerId);
+    setTab((focusedMeetup && meetupPhase(focusedMeetup, clockNow) === "upcoming") || mine?.response === "declined" ? "mine" : "active");
+  }
+
   useCountdownResume(setClockNow, 30_000);
 
   const refresh = useCallback(async () => {
@@ -253,13 +286,13 @@ export function MeetupPage({
     <div className="mx-auto w-full max-w-xl px-3 pb-3 pt-2 sm:px-4">
       {PLATFORM_KIND === "mobile" ? (
         <div className="mb-3">
-          <h1 className="text-2xl font-bold tracking-tight">Meet Up</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Meetups</h1>
           <p className="mt-1 text-sm text-muted-foreground">Make it happen, together.</p>
         </div>
       ) : (
         <>
           <div className="mb-3 hidden md:block">
-            <h1 className="text-3xl font-bold tracking-tight">Meet Up</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Meetups</h1>
             <p className="mt-1 text-sm text-muted-foreground">Make it happen, together.</p>
           </div>
           <p className="mb-3 text-sm text-muted-foreground md:hidden">Make it happen, together.</p>
@@ -299,6 +332,7 @@ export function MeetupPage({
           <button
             type="button"
             onClick={() => setTab("active")}
+            aria-pressed={tab === "active"}
             className={[
               "rounded-xl px-3 py-2.5 text-sm font-semibold transition",
               tab === "active" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"
@@ -309,6 +343,7 @@ export function MeetupPage({
           <button
             type="button"
             onClick={() => setTab("mine")}
+            aria-pressed={tab === "mine"}
             className={[
               "rounded-xl px-3 py-2.5 text-sm font-semibold transition",
               tab === "mine" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
@@ -323,7 +358,8 @@ export function MeetupPage({
 
   if (newPeopleOpen) {
     return (
-      <main className="mx-auto min-h-screen max-w-xl">
+      <main className="mx-auto w-full min-w-0 max-w-xl">
+        <MeetupMobileHeader title="Meet New People" onBack={() => setNewPeopleOpen(false)} />
         <MeetNewPeople
           hub={discoveryHub}
           nowMs={clockNow}
@@ -346,41 +382,20 @@ export function MeetupPage({
           setNewPeopleOpen(true);
         }}
       />
-      <main className="mx-auto min-h-screen max-w-xl pb-40">
-      {PLATFORM_KIND === "web" && (
-        <header className="fixed inset-x-0 top-0 z-40 grid grid-cols-[44px_1fr_44px] items-center gap-2 bg-background px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] md:hidden">
-          <Link
-            href="/dashboard"
-            aria-label="Back"
-            className="focus-ring grid h-[44px] w-[44px] place-items-center rounded-full text-foreground transition active:scale-95"
-          >
-            <ArrowLeft className="h-[22px] w-[22px]" />
-          </Link>
-          <h1 className="truncate text-center text-[1.125rem] font-semibold tracking-tight">Meet Up</h1>
-          <span className="h-[44px] w-[44px]" aria-hidden="true" />
-        </header>
-      )}
+      <main className="mx-auto w-full min-w-0 max-w-xl pb-24">
+      <MeetupMobileHeader />
 
       <div
         className={
           PLATFORM_KIND === "web"
-            ? "fixed inset-x-0 top-[var(--mobile-header-height)] z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl md:static md:border-0 md:bg-transparent md:backdrop-blur-none"
+            ? "sticky top-[var(--mobile-header-height)] z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl md:top-0 md:border-0 md:bg-transparent md:backdrop-blur-none"
             : "sticky top-0 z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl"
         }
       >
         {controls}
       </div>
 
-      <div
-        className={[
-          "px-3 sm:px-4 md:pt-4",
-          PLATFORM_KIND === "web"
-            ? creating
-              ? "pt-[6.75rem]"
-              : "pt-[10.75rem]"
-            : "pt-4"
-        ].join(" ")}
-      >
+      <div className="px-3 pt-4 sm:px-4">
         {!creating && safeHome.map((meetup) => (
           <SafeHomeCard
             key={`home-${meetup.id}`}
@@ -401,6 +416,7 @@ export function MeetupPage({
 
         {creating ? (
           <CreateMeetup
+            key={contextualMuddyId ?? "new"}
             muddies={muddies}
             initialMuddyId={contextualMuddyId}
             saveAction={saveAction}
@@ -422,6 +438,7 @@ export function MeetupPage({
               <section className="space-y-3">
                 {!active.length ? (
                   <EmptyMeetups
+                    canArrange={discoveryHub.activeSlots < discoveryHub.maxActiveSlots}
                     onArrange={() => setCreating(true)}
                     title="Nothing active right now"
                     body="Active is for meetups in the arrival or check-in window. Upcoming meetups are under Your Meetups."
@@ -446,6 +463,7 @@ export function MeetupPage({
               <section className="space-y-6">
                 {!upcoming.length ? (
                   <EmptyMeetups
+                    canArrange={discoveryHub.activeSlots < discoveryHub.maxActiveSlots}
                     onArrange={() => setCreating(true)}
                     title="No upcoming meetups"
                     body="Finished and expired meetups leave this screen automatically."
@@ -483,22 +501,24 @@ export function MeetupPage({
 
 function EmptyMeetups({
   onArrange,
+  canArrange = true,
   title = "No meetups here yet",
   body = "Invite a Muddy over, go to their place, or agree somewhere to meet."
 }: {
   onArrange: () => void;
+  canArrange?: boolean;
   title?: string;
   body?: string;
 }) {
   return (
-    <section className={panelClass + " overflow-hidden"}>
+    <section className={panelClass + " min-w-0 overflow-hidden"}>
       <div className="flex min-h-44 flex-col items-center justify-center bg-gradient-to-br from-primary/10 via-transparent to-transparent px-6 py-8 text-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
           <Users className="h-7 w-7" />
         </div>
         <h2 className="text-lg font-bold">{title}</h2>
         <p className="mt-2 max-w-xs text-sm text-muted-foreground">{body}</p>
-        <Button className="mt-5 rounded-2xl" onClick={onArrange}>
+        <Button className="mt-5 rounded-2xl" onClick={onArrange} disabled={!canArrange}>
           <Plus className="h-4 w-4" />
           Arrange a meetup
         </Button>
@@ -585,7 +605,13 @@ function CreateMeetup({
   }
 
   function submit() {
-    if (!selectedIds.length || !place.trim()) return;
+    if (pending || !selectedIds.length || !place.trim()) return;
+    const scheduled = new Date(startsAt);
+    if (!Number.isFinite(scheduled.getTime()) || scheduled.getTime() <= Date.now() + 60_000) {
+      setMessage("Choose a future date and time.");
+      setStep(2);
+      return;
+    }
     requestKey.current ??= crypto.randomUUID();
 
     const input = {
@@ -611,7 +637,7 @@ function CreateMeetup({
   }
 
   return (
-    <section className={panelClass + " overflow-hidden"}>
+    <section className={panelClass + " min-w-0 overflow-hidden"}>
       <div className="border-b border-border/70 px-5 py-5">
         <div className="flex items-center gap-3">
           {step > 1 && (
@@ -673,6 +699,7 @@ function CreateMeetup({
                     key={value}
                     type="button"
                     onClick={() => chooseMode(value)}
+                    aria-pressed={selected}
                     className={[
                       "flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition",
                       selected
@@ -813,6 +840,7 @@ function CreateMeetup({
                     key={muddy.id}
                     type="button"
                     onClick={() => toggleParticipant(muddy.id)}
+                    aria-pressed={selected}
                     className={[
                       "flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition",
                       selected ? "border-primary/50 bg-primary/10" : "border-border bg-background"
@@ -857,7 +885,7 @@ function CreateMeetup({
                 </p>
                 <p className="flex items-center gap-2 text-muted-foreground">
                   <Users className="h-4 w-4 text-primary" />
-                  ${discoveryCategoryLabel(category)}
+                  {discoveryCategoryLabel(category)}
                 </p>
                 <p className="flex items-center gap-2">
                   <CalendarClock className="h-4 w-4 text-primary" />
@@ -1023,7 +1051,10 @@ function MeetupCard({
   }, []);
 
   useEffect(() => {
-    if (focused) card.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (focused) card.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      block: "start"
+    });
   }, [focused]);
 
   const mine = m.members.find((person) => person.userId === viewerId);
@@ -1039,6 +1070,7 @@ function MeetupCard({
   const status = meetupStatus(m, viewerId);
 
   function update(command: Record<string, unknown>) {
+    if (pending) return;
     const signature = JSON.stringify({ ...command, revision: m.revision });
     if (retry.current?.signature !== signature) retry.current = { signature, key: crypto.randomUUID() };
 
@@ -1091,14 +1123,14 @@ function MeetupCard({
         ref={card}
         className={[
           panelClass,
-          "overflow-hidden transition",
+          "min-w-0 scroll-mt-64 overflow-hidden transition md:scroll-mt-8",
           focused ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
         ].join(" ")}
       >
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="w-full p-4 text-left sm:p-5"
+          className="focus-ring w-full p-4 text-left sm:p-5"
           aria-expanded={expanded}
         >
           <div className="flex min-w-0 items-start gap-3">
@@ -1151,7 +1183,7 @@ function MeetupCard({
 
         {expanded && (
           <div className="space-y-4 border-t border-border/70 px-4 pb-5 pt-4 sm:px-5">
-            {!!m.note && <p className="rounded-2xl bg-secondary/50 px-4 py-3 text-sm">{m.note}</p>}
+            {!!m.note && <p className="break-words rounded-2xl bg-secondary/50 px-4 py-3 text-sm">{m.note}</p>}
 
             {m.conversationId ? (
               <Link
@@ -1495,30 +1527,14 @@ function MeetupCard({
         )}
       </article>
 
-      {statusOpen && ready && (
-        <div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 px-2"
-          onClick={() => setStatusOpen(false)}
-        >
-          <section
-            className="w-full max-w-xl rounded-t-[28px] border border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold">Update my status</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Keep the shared meetup journey in sync.</p>
-              </div>
-              <button
-                type="button"
-                aria-label="Close status actions"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-muted-foreground"
-                onClick={() => setStatusOpen(false)}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
+      <Modal
+        open={statusOpen && ready}
+        onOpenChange={setStatusOpen}
+        variant="sheet"
+        title="Update my status"
+        description="Keep the shared meetup journey in sync."
+      >
+        <fieldset disabled={pending}>
             <div className="space-y-2.5">
               <button
                 type="button"
@@ -1572,6 +1588,7 @@ function MeetupCard({
                     min={1}
                     max={120}
                     value={delay}
+                    aria-label="Minutes late"
                     onChange={(event) => setDelay(Number(event.target.value))}
                     className="h-11 w-24 rounded-xl border border-border bg-background px-3 text-sm"
                   />
@@ -1579,6 +1596,7 @@ function MeetupCard({
                   <Button
                     variant="outline"
                     className="ml-auto rounded-xl"
+                    disabled={!Number.isInteger(delay) || delay < 1 || delay > 120}
                     onClick={() => {
                       setStatusOpen(false);
                       update({ action: "arrival", arrival: "late", delayMinutes: delay });
@@ -1606,23 +1624,16 @@ function MeetupCard({
                 </span>
               </button>
             </div>
-          </section>
-        </div>
-      )}
+        </fieldset>
+      </Modal>
 
-      {homePromptOpen && (
-        <div
-          className="fixed inset-0 z-[82] flex items-end justify-center bg-black/55 px-2"
-          onClick={() => setHomePromptOpen(false)}
-        >
-          <section
-            className="w-full max-w-xl rounded-t-[28px] border border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h3 className="text-xl font-bold">Heading home?</h3>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              End your part of the meetup, or let {m.sourceDiscoveryId ? "the people in this Meetup" : "your Muddies"} know when you get home.
-            </p>
+      <Modal
+        open={homePromptOpen}
+        onOpenChange={setHomePromptOpen}
+        variant="sheet"
+        title="Heading home?"
+        description={`End your part of the meetup, or let ${m.sourceDiscoveryId ? "the people in this Meetup" : "your Muddies"} know when you get home.`}
+      >
             <div className="mt-5 grid gap-2">
               <Button
                 variant="outline"
@@ -1644,9 +1655,7 @@ function MeetupCard({
                 {m.sourceDiscoveryId ? "Let the Meetup know when I’m home" : "Let my Muddies know when I’m home"}
               </Button>
             </div>
-          </section>
-        </div>
-      )}
+      </Modal>
     </>
   );
 }
