@@ -18,7 +18,17 @@ export async function loadMeetupHome(admin: Admin, actorId: string): Promise<Mee
   return meetups.flatMap((m) => {
     const response = m.members.find((p) => p.userId === actorId)?.response;
     return m.status === "active" && Date.parse(m.startsAt) > Date.now() - 2 * 60 * 60_000 && (response === "accepted" || response === "invited")
-      ? [{ id: m.id, mode: m.mode, startsAt: m.startsAt, timezone: m.timezone, placeLabel: m.placeLabel, response }] : [];
+      ? [{
+          id: m.id,
+          mode: m.mode,
+          startsAt: m.startsAt,
+          timezone: m.timezone,
+          placeLabel: m.placeLabel,
+          title: m.title,
+          category: m.category,
+          sourceDiscoveryId: m.sourceDiscoveryId,
+          response
+        }] : [];
   }).slice(0, 3);
 }
 
