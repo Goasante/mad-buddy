@@ -94,16 +94,9 @@ export default async function DashboardPage() {
    * Fails closed as a whole. If it yields nothing, Home still renders its
    * Smart Card from the states that were already proven.
    */
+  // Plans are retired from Home. Events remain in the agenda while Meetups
+  // arrive through their own canonical projection.
   const visibleAgendaItems = (agenda?.items ?? []).filter((item) => item.kind !== "plan");
-  const agendaPlans: typeof visibleAgendaItems = [];
-  /*
-   * A poll is coordination for people who are actually participating.
-   * The Home agenda intentionally also contains invitations, declines and
-   * waitlisted rows so the Plans surface can explain them, but those states
-   * must not become "Vote now" jobs. Hosts project as going, so going/maybe is
-   * the complete actionable set here and matches Plan Chat membership.
-   */
-  const decisionAgendaPlans = agendaPlans;
   const smartCardProjection = user
     ? await loadHomeSmartCardProjection({
         userId: user.id,
