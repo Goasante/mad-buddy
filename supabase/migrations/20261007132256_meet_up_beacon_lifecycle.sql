@@ -703,7 +703,7 @@ drop policy if exists "meetup participants can receive broadcasts" on realtime.m
 drop function if exists public.meetup_realtime_allowed(text);
 
 create or replace function private.meetup_realtime_allowed(p_topic text) returns boolean
-language sql stable security definer set search_path = '' as $
+language sql stable security definer set search_path = '' as $$
   select (select auth.uid()) is not null
     and split_part(p_topic,':',1)='meetup'
     and exists(
@@ -711,7 +711,7 @@ language sql stable security definer set search_path = '' as $
       where p.user_id=(select auth.uid())
         and p.meetup_id::text=split_part(p_topic,':',2)
     )
-$;
+$$;
 revoke all on function private.meetup_realtime_allowed(text) from public,anon,authenticated;
 grant execute on function private.meetup_realtime_allowed(text) to authenticated;
 
