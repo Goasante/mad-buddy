@@ -1,6 +1,6 @@
 "use client";
 
-import { Link, PLATFORM_KIND, useRevalidate } from "@/lib/platform";
+import { Link, PLATFORM_KIND, syncCurrentLocation, useRevalidate } from "@/lib/platform";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowLeft,
@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Clock3,
   House,
-  Info,
   LogOut,
   MapPin,
   Navigation,
@@ -23,7 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  ARRIVAL_LABELS,
+  JOURNEY_LABELS,
   MEETUP_TITLES,
   canUpdateArrival,
   isMeetupHintFresh,
@@ -34,6 +33,8 @@ import {
 } from "@/lib/meetups/rules";
 import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
+import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
+import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
 
 export type MeetupSaveAction = (input: unknown, create?: boolean) => Promise<{ ok: boolean; message: string }>;
 
@@ -63,6 +64,48 @@ function compactTimeLabel(iso: string, timezone: string) {
     minute: "2-digit"
   }).format(value);
   return `${date} · ${time}`;
+}
+
+function localDateTimeValue(date: Date) {
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
+
+function journeyGlowClass(state: Meetup["members"][number]["journeyState"], fresh: boolean) {
+  if (state === "here") return "ring-4 ring-emerald-500/45 shadow-[0_0_22px_hsl(var(--primary)/0.28)]";
+  if (state === "at_spot" && fresh) return "ring-4 ring-primary/45 shadow-[0_0_20px_hsl(var(--primary)/0.24)]";
+  if (state === "nearby" && fresh) return "ring-4 ring-primary/30";
+  if (state === "approaching" && fresh) return "ring-2 ring-primary/30";
+  if (state === "on_the_way") return "ring-2 ring-primary/15";
+  return "";
+}
+
+function activityText(item: Meetup["activity"][number], meetup: Meetup) {
+  const who = item.actorName;
+  if (item.event === "created") return `${who} arranged the meetup`;
+  if (item.event === "accepted") return `${who} accepted`;
+  if (item.event === "declined") return `${who} cannot make it`;
+  if (item.event === "on_my_way") return `${who} is on the way`;
+  if (item.event === "late") {
+    const minutes = typeof item.detail.delayMinutes === "number" ? item.detail.delayMinutes : null;
+    return minutes ? `${who} is running about ${minutes} min late` : `${who} is running late`;
+  }
+  if (item.event === "here") return `${who} is here`;
+  if (item.event === "left") return `${who} left`;
+  if (item.event === "met") return `${who} confirmed meeting`;
+  if (item.event === "beacon_set") return `${who} set the Meetup Glow point`;
+  if (item.event === "beacon_locked") return `${who} confirmed the Meetup Glow point`;
+  if (item.event === "beacon_reset") return `${who} reset the Meetup Glow point`;
+  if (item.event === "home_started") return `${who} is heading home`;
+  if (item.event === "home_arrived") return `${who} checked in at home`;
+  if (item.event === "cancelled") return "Meetup cancelled";
+  if (item.event === "ended") return "Meetup ended";
+  if (item.event === "suggested") return `${who} suggested another time`;
+  if (item.event === "rescheduled") {
+    const startsAt = typeof item.detail.startsAt === "string" ? item.detail.startsAt : null;
+    return startsAt ? `${who} moved the meetup to ${compactTimeLabel(startsAt, meetup.timezone)}` : `${who} changed the meetup time`;
+  }
+  return null;
 }
 
 function initials(name: string) {
@@ -159,18 +202,33 @@ export function MeetupPage({
 
   useFeedRefresh(refresh);
 
-  // "Active" is intentionally a LIVE state, not a synonym for every row whose
-  // database lifecycle is still open. A future meetup belongs in Your Meetups
-  // until its two-hour arrival window begins. That keeps the two tabs distinct.
-  const active = meetups.filter((meetup) => {
-    if (meetup.status !== "active") return false;
+  const safeHome = meetups.filter((meetup) => {
     const mine = meetup.members.find((person) => person.userId === viewerId);
-    return mine?.response !== "declined" && meetupPhase(meetup, clockNow) !== "upcoming";
+    return mine?.homeStartedAt && !mine.homeArrivedAt;
   });
-  const activeIds = new Set(active.map((meetup) => meetup.id));
-  const upcoming = meetups.filter((meetup) => meetup.status === "active" && !activeIds.has(meetup.id));
-  const history = meetups.filter((meetup) => meetup.status !== "active");
-  const yourMeetupsCount = upcoming.length + history.length;
+  const safeHomeWatching = meetups.filter((meetup) =>
+    meetup.members.some((person) => person.userId !== viewerId && person.homeStartedAt && !person.homeArrivedAt)
+  );
+  const normalMeetups = meetups.filter((meetup) => meetup.status === "active");
+  // "Active" is the two-hour arrival/check-in window. Future arrangements stay
+  // under Your Meetups until that window opens; finished meetups disappear.
+  const active = normalMeetups.filter((meetup) => {
+    const mine = meetup.members.find((person) => person.userId === viewerId);
+    const phase = meetupPhase(meetup, clockNow);
+    return mine?.response !== "declined" && (phase === "active" || phase === "unconfirmed");
+  });
+  const upcoming = normalMeetups.filter((meetup) => meetupPhase(meetup, clockNow) === "upcoming");
+  const yourMeetupsCount = upcoming.length;
+
+  useMeetupRealtime({
+    meetupIds: normalMeetups.map((meetup) => meetup.id),
+    enabled: normalMeetups.length > 0,
+    onChange: refresh
+  });
+
+  useMeetupLocationSync(
+    active.some((meetup) => canUpdateArrival(meetup, viewerId, clockNow))
+  );
 
   const controls = (
     <div className="mx-auto w-full max-w-xl px-3 pb-3 pt-2 sm:px-4">
@@ -260,13 +318,31 @@ export function MeetupPage({
             : "pt-4"
         ].join(" ")}
       >
+        {!creating && safeHome.map((meetup) => (
+          <SafeHomeCard
+            key={`home-${meetup.id}`}
+            meetup={meetup}
+            viewerId={viewerId}
+            saveAction={saveAction}
+            refreshAction={refresh}
+          />
+        ))}
+
+        {!creating && safeHomeWatching.map((meetup) => (
+          <SafeHomeWatchCard
+            key={`watch-home-${meetup.id}`}
+            meetup={meetup}
+            viewerId={viewerId}
+          />
+        ))}
+
         {creating ? (
           <CreateMeetup
             muddies={muddies}
             saveAction={saveAction}
-            onCreated={(createdWhen) => {
+            onCreated={(createdStart) => {
               setCreating(false);
-              setTab(createdWhen === "now" ? "active" : "mine");
+              setTab(Date.parse(createdStart) - Date.now() <= 2 * 60 * 60_000 ? "active" : "mine");
               void refresh();
             }}
           />
@@ -304,58 +380,32 @@ export function MeetupPage({
 
             {tab === "mine" && (
               <section className="space-y-6">
-                {!upcoming.length && !history.length ? (
+                {!upcoming.length ? (
                   <EmptyMeetups
                     onArrange={() => setCreating(true)}
-                    title="No upcoming or past meetups"
-                    body="Anything happening now stays under Active. Future and finished meetups live here."
+                    title="No upcoming meetups"
+                    body="Finished and expired meetups leave this screen automatically."
                   />
                 ) : (
-                  <>
-                    {!!upcoming.length && (
-                      <div>
-                        <div className="mb-3 flex items-center justify-between px-1">
-                          <h2 className="text-sm font-bold">Upcoming</h2>
-                          <span className="text-xs text-muted-foreground">{upcoming.length}</span>
-                        </div>
-                        <div className="space-y-3">
-                          {upcoming.map((meetup) => (
-                            <MeetupCard
-                              key={meetup.id}
-                              meetup={meetup}
-                              viewerId={viewerId}
-                              focused={meetup.id === focusedId}
-                              initialExpanded={meetup.id === focusedId}
-                              saveAction={saveAction}
-                              refreshAction={refresh}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {!!history.length && (
-                      <div>
-                        <div className="mb-3 flex items-center justify-between px-1">
-                          <h2 className="text-sm font-bold">Past & cancelled</h2>
-                          <span className="text-xs text-muted-foreground">{history.length}</span>
-                        </div>
-                        <div className="space-y-3">
-                          {history.map((meetup) => (
-                            <MeetupCard
-                              key={meetup.id}
-                              meetup={meetup}
-                              viewerId={viewerId}
-                              focused={meetup.id === focusedId}
-                              initialExpanded={meetup.id === focusedId}
-                              saveAction={saveAction}
-                              refreshAction={refresh}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  <div>
+                    <div className="mb-3 flex items-center justify-between px-1">
+                      <h2 className="text-sm font-bold">Upcoming</h2>
+                      <span className="text-xs text-muted-foreground">{upcoming.length}</span>
+                    </div>
+                    <div className="space-y-3">
+                      {upcoming.map((meetup) => (
+                        <MeetupCard
+                          key={meetup.id}
+                          meetup={meetup}
+                          viewerId={viewerId}
+                          focused={meetup.id === focusedId}
+                          initialExpanded={meetup.id === focusedId}
+                          saveAction={saveAction}
+                          refreshAction={refresh}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 )}
               </section>
             )}
@@ -398,15 +448,15 @@ function CreateMeetup({
   saveAction
 }: {
   muddies: { id: string; name: string }[];
-  onCreated: (when: "now" | "later") => void;
+  onCreated: (startsAtIso: string) => void;
   saveAction: MeetupSaveAction;
 }) {
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<MeetupMode>("come_over");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [place, setPlace] = useState("");
-  const [when, setWhen] = useState<"now" | "later">("now");
-  const [startsAt, setStartsAt] = useState("");
+  const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 30 * 60_000)));
+  const [minStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 60_000)));
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -446,8 +496,9 @@ function CreateMeetup({
         setMessage("Add the agreed place.");
         return;
       }
-      if (when === "later" && (!startsAt || !Number.isFinite(new Date(startsAt).getTime()))) {
-        setMessage("Choose a date and time.");
+      const scheduled = new Date(startsAt);
+      if (!startsAt || !Number.isFinite(scheduled.getTime()) || scheduled.getTime() <= Date.now() + 60_000) {
+        setMessage("Choose a future date and time.");
         return;
       }
       setStep(3);
@@ -472,8 +523,7 @@ function CreateMeetup({
       participantIds: selectedIds,
       placeLabel: place,
       note,
-      when,
-      ...(when === "later" ? { startsAt: new Date(startsAt).toISOString() } : {}),
+      startsAt: new Date(startsAt).toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       requestKey: requestKey.current
     };
@@ -482,7 +532,7 @@ function CreateMeetup({
       try {
         const result = await saveAction(input, true);
         setMessage(result.message);
-        if (result.ok) onCreated(when);
+        if (result.ok) onCreated(new Date(startsAt).toISOString());
       } catch {
         setMessage("Could not save. Try again; your invitation will not be duplicated.");
       }
@@ -608,47 +658,20 @@ function CreateMeetup({
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-bold">When?</label>
-              <div className="grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetRequestKey();
-                    setWhen("now");
-                  }}
-                  className={[
-                    "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
-                    when === "now" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                  ].join(" ")}
-                >
-                  Now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetRequestKey();
-                    setWhen("later");
-                  }}
-                  className={[
-                    "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
-                    when === "later" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-                  ].join(" ")}
-                >
-                  Later
-                </button>
-              </div>
-
-              {when === "later" && (
-                <input
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(event) => {
-                    resetRequestKey();
-                    setStartsAt(event.target.value);
-                  }}
-                  className={inputClass + " mt-3"}
-                />
-              )}
+              <label className="mb-2 block text-sm font-bold">Date & time</label>
+              <input
+                type="datetime-local"
+                value={startsAt}
+                min={minStartsAt}
+                onChange={(event) => {
+                  resetRequestKey();
+                  setStartsAt(event.target.value);
+                }}
+                className={inputClass}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Meetups are scheduled. The live arrival window opens two hours before this time.
+              </p>
             </div>
 
             <div>
@@ -736,11 +759,15 @@ function CreateMeetup({
                 </p>
                 <p className="flex items-center gap-2">
                   <CalendarClock className="h-4 w-4 text-primary" />
-                  {when === "now" ? "Now" : startsAt ? new Date(startsAt).toLocaleString() : "Later"}
+                  {startsAt ? new Date(startsAt).toLocaleString() : "Choose a date & time"}
                 </p>
                 {!!note && <p className="rounded-xl bg-background px-3 py-2 text-muted-foreground">{note}</p>}
               </div>
             </div>
+
+            <p className="rounded-2xl bg-primary/8 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+              Sending this meetup also activates temporary Meetup Proximity for you during its live window. Invited Muddies get the same explanation before they accept.
+            </p>
 
             <div>
               <h3 className="mb-2 text-sm font-bold">Invited ({selectedMuddies.length})</h3>
@@ -777,6 +804,89 @@ function CreateMeetup({
   );
 }
 
+function SafeHomeWatchCard({ meetup, viewerId }: { meetup: Meetup; viewerId: string }) {
+  const headingHome = meetup.members.filter(
+    (person) => person.userId !== viewerId && person.homeStartedAt && !person.homeArrivedAt
+  );
+  if (!headingHome.length) return null;
+  return (
+    <section className={panelClass + " mb-3 p-4"}>
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+          <House className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">Safe Home check-in</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {headingHome.map((person) => person.name).join(", ")} {headingHome.length === 1 ? "is" : "are"} heading home. You'll get an update when they check in.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SafeHomeCard({
+  meetup,
+  viewerId,
+  saveAction,
+  refreshAction
+}: {
+  meetup: Meetup;
+  viewerId: string;
+  saveAction: MeetupSaveAction;
+  refreshAction: () => Promise<void>;
+}) {
+  const retry = useRef<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState("");
+  const mine = meetup.members.find((person) => person.userId === viewerId);
+  if (!mine?.homeStartedAt || mine.homeArrivedAt) return null;
+
+  function confirmHome() {
+    retry.current ??= crypto.randomUUID();
+    const input: MeetupUpdate = {
+      action: "home_arrived",
+      id: meetup.id,
+      revision: meetup.revision,
+      requestKey: retry.current
+    };
+    startTransition(async () => {
+      try {
+        const result = await saveAction(input);
+        setMessage(result.message);
+        if (result.ok) {
+          retry.current = null;
+          await refreshAction();
+        }
+      } catch {
+        setMessage("Could not send your home check-in. Try again.");
+      }
+    });
+  }
+
+  return (
+    <section className={panelClass + " mb-3 border-emerald-500/20 bg-emerald-500/[0.06] p-4"}>
+      <div className="flex items-start gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-300">
+          <House className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">Heading home from {meetup.placeLabel}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Your meetup itself is finished. This small check-in stays only until you say you're home.
+          </p>
+        </div>
+      </div>
+      <Button className="mt-3 h-11 w-full rounded-2xl" disabled={pending} onClick={confirmHome}>
+        <CheckCircle2 className="h-4 w-4" />
+        {pending ? "Sending…" : "I'm home"}
+      </Button>
+      {message && <p role="status" className="mt-2 text-xs text-muted-foreground">{message}</p>}
+    </section>
+  );
+}
+
 function MeetupCard({
   meetup: m,
   viewerId,
@@ -796,6 +906,7 @@ function MeetupCard({
   const retry = useRef<{ signature: string; key: string } | null>(null);
   const [expanded, setExpanded] = useState(initialExpanded);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [homePromptOpen, setHomePromptOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const [date, setDate] = useState("");
@@ -818,6 +929,11 @@ function MeetupCard({
   const open = m.status === "active";
   const ready = now !== null && canUpdateArrival(m, viewerId, now);
   const confirmed = m.members.filter((person) => person.metAt).length;
+  const acceptedMembers = m.members.filter((person) => person.response === "accepted");
+  const hereCount = acceptedMembers.filter((person) => person.arrival === "here" || person.journeyState === "here" || person.journeyState === "at_spot").length;
+  const nearbyCount = acceptedMembers.filter((person) => person.journeyState === "nearby").length;
+  const approachingCount = acceptedMembers.filter((person) => person.journeyState === "approaching").length;
+  const onWayCount = acceptedMembers.filter((person) => person.arrival === "on_my_way" || person.arrival === "late").length;
   const status = meetupStatus(m, viewerId);
 
   function update(command: Record<string, unknown>) {
@@ -833,10 +949,21 @@ function MeetupCard({
 
     startTransition(async () => {
       try {
+        if (command.action === "beacon") {
+          const location = await syncCurrentLocation();
+          if (!location.ok) {
+            setMessage(location.message ?? "Mad Buddy needs your current location to set the Meetup Glow point.");
+            return;
+          }
+        }
+
         const result = await saveAction(input);
         setMessage(result.message);
         if (result.ok) {
           retry.current = null;
+          if (command.action === "respond" && command.response === "accepted") {
+            void syncCurrentLocation();
+          }
           await refreshAction();
         }
       } catch {
@@ -927,7 +1054,9 @@ function MeetupCard({
             {!creator && open && mine?.response === "invited" && (
               <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
                 <p className="text-sm font-bold">{"You're invited"}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Accept to join the meetup and receive updates.</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Accept to join. During the live meetup window, temporary Meetup Proximity turns on automatically so the group can see coarse Glow states like getting closer, nearby and here. No map, exact location, route or distance is shown.
+                </p>
                 <fieldset disabled={pending} className="mt-4 grid grid-cols-2 gap-2">
                   <Button className="rounded-2xl" onClick={() => update({ action: "respond", response: "accepted" })}>
                     <Check className="h-4 w-4" />
@@ -944,6 +1073,47 @@ function MeetupCard({
               </section>
             )}
 
+            {mine?.response === "accepted" && (
+              <section className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold">
+                      {m.togetherAt
+                        ? mine?.metAt
+                          ? "You're together ✨"
+                          : "Meetup underway ✨"
+                        : m.beaconStatus === "unset"
+                          ? "Meetup scheduled"
+                          : "Meetup forming ✨"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {m.togetherAt
+                        ? acceptedMembers.length > 2
+                          ? "Some of the group has met. Glow keeps showing who is still making their way there."
+                          : "Meetup Glow has done its job."
+                        : m.beaconStatus === "unset"
+                          ? "The Meetup Glow point will be set when someone reaches the agreed spot."
+                          : "Glow gets stronger as everyone reaches the meetup point."}
+                    </p>
+                  </div>
+                  <span className={[
+                    "h-11 w-11 shrink-0 rounded-full bg-primary/15 ring-primary/25",
+                    m.togetherAt ? "ring-4 shadow-[0_0_24px_hsl(var(--primary)/0.28)]" : hereCount > 0 ? "ring-4" : nearbyCount > 0 ? "ring-2" : ""
+                  ].join(" ")} aria-hidden="true" />
+                </div>
+                {m.beaconStatus !== "unset" && (
+                  <p className="mt-3 text-xs font-medium text-muted-foreground">
+                    {[
+                      hereCount ? `${hereCount} here` : "",
+                      nearbyCount ? `${nearbyCount} nearby` : "",
+                      approachingCount ? `${approachingCount} getting closer` : "",
+                      onWayCount ? `${onWayCount} on the way` : ""
+                    ].filter(Boolean).join(" · ") || "Waiting for everyone to head out"}
+                  </p>
+                )}
+              </section>
+            )}
+
             <section>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-bold">People ({m.members.length})</h3>
@@ -952,25 +1122,35 @@ function MeetupCard({
 
               <ul className="divide-y divide-border/60 rounded-2xl bg-secondary/40 px-3">
                 {m.members.map((person) => {
-                  const nearby =
-                    person.nearby &&
-                    person.observedAt &&
-                    now !== null &&
-                    isMeetupHintFresh(person.observedAt, now);
+                  const fresh = now !== null && isMeetupHintFresh(person.observedAt, now);
+                  const automaticJourney =
+                    fresh && ["approaching", "nearby", "at_spot"].includes(person.journeyState)
+                      ? person.journeyState === "at_spot" && person.userId === viewerId
+                        ? "Looks like you're here"
+                        : JOURNEY_LABELS[person.journeyState]
+                      : null;
 
                   const personStatus = person.metAt
-                    ? "Confirmed"
+                    ? "Met"
                     : person.response !== "accepted"
                       ? responseLabel(person.response)
-                      : person.arrival === "not_started"
-                        ? "Going"
-                        : person.delayMinutes
-                          ? ARRIVAL_LABELS[person.arrival] + " · " + person.delayMinutes + " min"
-                          : ARRIVAL_LABELS[person.arrival];
+                      : person.arrival === "left"
+                        ? "Left"
+                        : person.arrival === "here"
+                          ? "Here"
+                          : person.delayMinutes
+                            ? `Running late · ${person.delayMinutes} min`
+                            : automaticJourney
+                              ?? (person.arrival === "on_my_way" ? JOURNEY_LABELS[person.journeyState] : "Going");
 
                   return (
                     <li key={person.key} className="flex items-center gap-3 py-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-xs font-bold">
+                      <span
+                        className={[
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-xs font-bold transition",
+                          journeyGlowClass(person.journeyState, fresh)
+                        ].join(" ")}
+                      >
                         {initials(person.userId === viewerId ? "You" : person.name)}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -978,51 +1158,88 @@ function MeetupCard({
                           {person.userId === viewerId ? "You" : person.name}
                           {person.userId === m.hostId ? " · Host" : ""}
                         </span>
-                        {nearby && <span className="block text-[11px] font-medium text-primary">Nearby now</span>}
+                        {automaticJourney && (
+                          <span className="block text-[11px] font-medium text-primary">{automaticJourney}</span>
+                        )}
                       </span>
-                      <span className="text-[11px] font-semibold text-muted-foreground">{personStatus}</span>
+                      <span className="max-w-[8rem] text-right text-[11px] font-semibold text-muted-foreground">
+                        {personStatus}
+                      </span>
                     </li>
                   );
                 })}
               </ul>
             </section>
 
+            {!!m.activity.length && (
+              <section>
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <h3 className="text-sm font-bold">Recent activity</h3>
+                  <span className="text-[11px] text-muted-foreground">Shared with participants</span>
+                </div>
+                <ol className="space-y-2 rounded-2xl bg-secondary/35 p-3">
+                  {m.activity.slice(0, 6).map((item) => {
+                    const label = activityText(item, m);
+                    if (!label) return null;
+                    return (
+                      <li key={item.id} className="flex items-start gap-3 text-xs">
+                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary/70" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 leading-5">{label}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {new Intl.DateTimeFormat("en", {
+                            timeZone: m.timezone,
+                            hour: "numeric",
+                            minute: "2-digit"
+                          }).format(new Date(item.createdAt))}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            )}
+
             {open && (
               <fieldset disabled={pending} className="space-y-3">
-                {mine?.response === "accepted" && (
-                  <section className="flex items-center gap-3 rounded-2xl border border-border bg-background px-3 py-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-                      <Navigation className="h-5 w-5" />
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <span className="block text-sm font-bold">Allow nearby hint</span>
-                      <span className="block text-xs text-muted-foreground">No exact location shared.</span>
-                    </button>
-                    <span title="Ghost Mode and Privacy Zones still apply.">
-                      <Info className="h-4 w-4 text-muted-foreground" />
-                    </span>
-                    <button
-                      type="button"
-                      aria-pressed={mine.proximityEnabled}
-                      aria-label="Allow nearby hint for this meetup"
-                      onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
-                      className={[
-                        "relative h-7 w-12 shrink-0 rounded-full transition",
-                        mine.proximityEnabled ? "bg-primary" : "bg-secondary"
-                      ].join(" ")}
-                    >
-                      <span
-                        className={[
-                          "absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition",
-                          mine.proximityEnabled ? "left-6" : "left-1"
-                        ].join(" ")}
-                      />
-                    </button>
+                {mine?.response === "accepted" && ready && m.beaconStatus !== "locked" && (
+                  <section className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                        <Navigation className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold">
+                          {m.beaconStatus === "unset" ? "Set the Meetup Glow point" : "Confirm the Meetup Glow point"}
+                        </span>
+                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                          {m.mode === "meet_somewhere"
+                            ? m.beaconStatus === "unset"
+                              ? "The first person at the agreed spot can set it. Another arrival at the same spot confirms it."
+                              : "Someone has set the spot. If you're there too, confirm it."
+                            : m.hostId === viewerId
+                              ? "You're the host. Set the fixed meetup point when you're at the agreed place."
+                              : "The host will set the fixed meetup point. Exact locations are never shown to participants."}
+                        </span>
+                      </span>
+                    </div>
+                    {(m.mode === "meet_somewhere" || m.hostId === viewerId || m.beaconStatus === "provisional") && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3 w-full rounded-2xl"
+                        onClick={() => update({ action: "beacon" })}
+                      >
+                        <MapPin className="h-4 w-4" />
+                        {"I'm at the meetup spot"}
+                      </Button>
+                    )}
                   </section>
+                )}
+
+                {mine?.response === "accepted" && (
+                  <p className="rounded-2xl bg-secondary/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+                    Accepting a meetup activates temporary Meetup Proximity during its live window. Mad Buddy uses it only for coarse Glow states; no exact location, route, or distance is shown.
+                  </p>
                 )}
 
                 {!creator && mine?.response === "accepted" && (
@@ -1114,6 +1331,20 @@ function MeetupCard({
                           </div>
                         ))}
 
+                    {(creator || m.hostId === viewerId) && m.beaconStatus !== "unset" && confirmed === 0 && (
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-2xl"
+                        onClick={() => {
+                          if (window.confirm("Reset the Meetup Glow point? People will wait for a new meetup spot.")) {
+                            update({ action: "reset_beacon" });
+                          }
+                        }}
+                      >
+                        Reset Meetup Glow point
+                      </Button>
+                    )}
+
                     {(creator || m.hostId === viewerId) && (
                       <Button
                         variant="danger"
@@ -1170,7 +1401,7 @@ function MeetupCard({
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-bold">Update my status</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Let your Muddies know where you are.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Keep the shared meetup journey in sync.</p>
               </div>
               <button
                 type="button"
@@ -1200,22 +1431,36 @@ function MeetupCard({
                 </span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setStatusOpen(false);
-                  update({ action: "arrival", arrival: "here" });
-                }}
-                className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
-                  <MapPin className="h-5 w-5" />
-                </span>
-                <span>
-                  <span className="block text-sm font-bold">{"I'm here"}</span>
-                  <span className="block text-xs text-muted-foreground">{"I've arrived at the agreed place"}</span>
-                </span>
-              </button>
+              {m.beaconStatus !== "unset" || m.mode === "meet_somewhere" || m.hostId === viewerId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusOpen(false);
+                    update(m.beaconStatus === "locked" ? { action: "arrival", arrival: "here" } : { action: "beacon" });
+                  }}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                    <MapPin className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold">{"I'm here"}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {m.beaconStatus === "locked" ? "Confirm you've reached the meetup point" : "Set or confirm the Meetup Glow point"}
+                    </span>
+                  </span>
+                </button>
+              ) : (
+                <div className="flex w-full items-center gap-3 rounded-2xl bg-secondary/40 p-4 text-left">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+                    <MapPin className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold">Meetup point not set yet</span>
+                    <span className="block text-xs text-muted-foreground">The host will set it when they are at the agreed place.</span>
+                  </span>
+                </div>
+              )}
 
               <div className="rounded-2xl bg-secondary/55 p-4">
                 <div className="flex items-center gap-3">
@@ -1254,7 +1499,7 @@ function MeetupCard({
                 type="button"
                 onClick={() => {
                   setStatusOpen(false);
-                  update({ action: "arrival", arrival: "left" });
+                  setHomePromptOpen(true);
                 }}
                 className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
               >
@@ -1266,6 +1511,44 @@ function MeetupCard({
                   <span className="block text-xs text-muted-foreground">{"I'm leaving now"}</span>
                 </span>
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {homePromptOpen && (
+        <div
+          className="fixed inset-0 z-[82] flex items-end justify-center bg-black/55 px-2"
+          onClick={() => setHomePromptOpen(false)}
+        >
+          <section
+            className="w-full max-w-xl rounded-t-[28px] border border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold">Heading home?</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              End your part of the meetup, or let your Muddies know when you get home.
+            </p>
+            <div className="mt-5 grid gap-2">
+              <Button
+                variant="outline"
+                className="h-12 rounded-2xl"
+                onClick={() => {
+                  setHomePromptOpen(false);
+                  update({ action: "arrival", arrival: "left" });
+                }}
+              >
+                I'm good
+              </Button>
+              <Button
+                className="h-12 rounded-2xl"
+                onClick={() => {
+                  setHomePromptOpen(false);
+                  update({ action: "home_start" });
+                }}
+              >
+                Let my Muddies know when I'm home
+              </Button>
             </div>
           </section>
         </div>

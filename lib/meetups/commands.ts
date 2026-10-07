@@ -16,9 +16,15 @@ const ERRORS: Record<string, string> = {
   MEETUP_NOT_MUDDIES: "Choose current Muddies who can receive your invitation.",
   MEETUP_ACCESS: "This meetup is no longer available to you.",
   MEETUP_ACCEPT_FIRST: "Wait until you and another participant have accepted, including the host.",
-  MEETUP_TOO_EARLY: "Arrival updates open two hours before the meetup.",
-  MEETUP_ENDED: "This meetup has ended.", MEETUP_LIMIT: "You have too many active meetups. End an old one first.",
-  MEETUP_TIME: "Choose a future date and time."
+  MEETUP_TOO_EARLY: "Meetup updates open two hours before the scheduled time.",
+  MEETUP_ENDED: "This meetup has ended.",
+  MEETUP_LIMIT: "You have too many active meetups. End an old one first.",
+  MEETUP_TIME: "Choose a future date and time.",
+  MEETUP_LOCATION_REQUIRED: "Mad Buddy needs a fresh location fix before setting the Meetup Glow point.",
+  MEETUP_HOST_BEACON: "The host needs to set the Meetup Glow point first.",
+  MEETUP_BEACON_MISMATCH: "You do not appear to be at the same meetup spot yet.",
+  MEETUP_BEACON_REQUIRED: "Set the Meetup Glow point before marking yourself here.",
+  MEETUP_BEACON_LOCKED: "The meetup point cannot be reset after people confirm meeting."
 };
 
 /** actorId must come from a freshly authenticated server request, never its body. */
@@ -27,7 +33,7 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
   if (!parsed.success) return { ok: false, message: "Check the people, place, and time before continuing." };
   const value = parsed.data;
   if ("timezone" in value && !isValidTimeZone(value.timezone)) return { ok: false, message: "Choose a valid timezone." };
-  if ("when" in value && value.when === "later" && !value.startsAt) return { ok: false, message: ERRORS.MEETUP_TIME };
+  if ("startsAt" in value && !value.startsAt) return { ok: false, message: ERRORS.MEETUP_TIME };
   // The transaction validates future times after checking its idempotency ledger.
   // A retry after the chosen time has passed must acknowledge the saved intent.
   if (!(await optionalFeatureEnabled("safe_arrival"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
@@ -45,5 +51,27 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
     try { await processMeetupNotifications(admin); }
     catch { logBackendEvent("error", { action: "meetups.notification_delivery", errorType: "DeliveryFailed" }); }
   });
-  return { ok: true, message: create ? "Invitation created." : "Meetup updated." };
+  const successMessage = create ? "Meetup scheduled and invitations sent." : (() => {
+    if (!("action" in value)) return "Meetup updated.";
+    switch (value.action) {
+      case "respond": return value.response === "accepted"
+        ? "Invitation accepted. Meetup Glow will activate around the meetup time."
+        : "You declined the meetup.";
+      case "arrival":
+        if (value.arrival === "on_my_way") return "Everyone can now see you're on the way.";
+        if (value.arrival === "late") return `Everyone can see you're running about ${value.delayMinutes ?? 0} minutes late.`;
+        if (value.arrival === "here") return "You're marked as here.";
+        return "You've left the meetup.";
+      case "beacon": return "Meetup Glow point updated.";
+      case "reset_beacon": return "Meetup Glow point reset.";
+      case "met": return "You confirmed that you met.";
+      case "suggest": return "New time suggested.";
+      case "reschedule": return "Meetup moved. Everyone has been asked to confirm the new time.";
+      case "home_start": return "Your Muddies will see that you're heading home.";
+      case "home_arrived": return "Home check-in sent.";
+      case "cancel": return "Meetup cancelled.";
+      case "end": return "Meetup ended.";
+    }
+  })();
+  return { ok: true, message: successMessage };
 }
