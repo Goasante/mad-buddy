@@ -261,24 +261,27 @@ export function MeetupPage({
         </>
       )}
 
-      <Button
-        className="h-12 w-full rounded-2xl text-base shadow-[0_10px_24px_hsl(var(--primary)/0.18)]"
-        onClick={() => setCreating((value) => !value)}
-      >
-        {creating ? <ArrowLeft className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-        {creating ? "Back to meetups" : "Arrange a Meet Up"}
-      </Button>
-
-      {!creating ? (
-        <button
-          type="button"
-          onClick={() => setNewPeopleSafetyOpen(true)}
-          className="focus-ring mt-2.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-secondary/70"
+      <div className={creating ? "" : "grid grid-cols-[minmax(0,1fr)_auto] gap-2"}>
+        <Button
+          className="h-12 w-full min-w-0 rounded-2xl text-sm shadow-[0_10px_24px_hsl(var(--primary)/0.18)] sm:text-base"
+          onClick={() => setCreating((value) => !value)}
         >
-          <Users className="h-4 w-4 text-primary" aria-hidden="true" />
-          Meet New People
-        </button>
-      ) : null}
+          {creating ? <ArrowLeft className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+          {creating ? "Back to meetups" : "Arrange a Meet Up"}
+        </Button>
+
+        {!creating ? (
+          <button
+            type="button"
+            aria-label="Meet New People"
+            onClick={() => setNewPeopleSafetyOpen(true)}
+            className="focus-ring flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-2xl border border-border bg-card px-3 text-xs font-semibold transition hover:bg-secondary/70"
+          >
+            <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+            New people
+          </button>
+        ) : null}
+      </div>
 
       {!creating && (
         <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
