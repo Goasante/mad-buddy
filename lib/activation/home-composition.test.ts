@@ -284,14 +284,10 @@ describe("safety outranks activation; discovery does not", () => {
     expect(showsSafetyCard(travelling)).toBe(true);
   });
 
-  it("does not let composition suppress it", () => {
-    /* The worst outcome of showing it early is a busier screen; the worst
-     * outcome of hiding it is somebody not knowing a person is travelling. */
+  it("does not render the retired standalone Safe Arrival section on Home", () => {
     const home = stripComments(readFileSync("components/dashboard/dashboard-page.tsx", "utf8"));
-    const safeArrivalAt = home.indexOf("home-safe-arrival-heading");
-    const gate = home.lastIndexOf("{hasSafeArrivalSection ?", safeArrivalAt);
-    expect(gate).toBeGreaterThan(-1);
-    expect(home.slice(gate, safeArrivalAt)).not.toContain("composition.");
+    expect(home).not.toContain("home-safe-arrival-heading");
+    expect(home).not.toContain("hasSafeArrivalSection");
   });
 });
 
