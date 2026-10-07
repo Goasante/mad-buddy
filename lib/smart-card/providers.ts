@@ -1360,7 +1360,9 @@ export function smartCardProviders(input: SmartCardInput): readonly SmartCardPro
     { id: "journey_complete", build: () => journeyCompleteProvider(input) },
     { id: "achievement", build: () => achievementProvider(input) },
     { id: "journey", build: () => journeyProvider(input) },
-    { id: "buddy_progress", build: () => buddyProgressProvider(input) }
+    { id: "buddy_progress", build: () => buddyProgressProvider(input) },
+    { id: "meetup_fallback", build: () => meetupFallbackProvider() },
+    { id: "core_fallback", build: () => coreFallbackProvider() }
   ];
   if (!input.availability) return providers;
   return providers.map(provider => ({ ...provider, build: () => availableSmartCard(provider.build(), input.availability!) }));
