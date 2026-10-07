@@ -958,6 +958,43 @@ function MeetupCard({
               </section>
             )}
 
+            {mine?.response === "accepted" && (
+              <section className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold">
+                      {m.togetherAt
+                        ? "You're together ✨"
+                        : m.beaconStatus === "unset"
+                          ? "Meetup scheduled"
+                          : "Meetup forming ✨"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {m.togetherAt
+                        ? "Meetup Glow has done its job."
+                        : m.beaconStatus === "unset"
+                          ? "The Meetup Glow point will be set when someone reaches the agreed spot."
+                          : "Glow gets stronger as everyone reaches the meetup point."}
+                    </p>
+                  </div>
+                  <span className={[
+                    "h-11 w-11 shrink-0 rounded-full bg-primary/15 ring-primary/25",
+                    m.togetherAt ? "ring-4 shadow-[0_0_24px_hsl(var(--primary)/0.28)]" : hereCount > 0 ? "ring-4" : nearbyCount > 0 ? "ring-2" : ""
+                  ].join(" ")} aria-hidden="true" />
+                </div>
+                {m.beaconStatus !== "unset" && !m.togetherAt && (
+                  <p className="mt-3 text-xs font-medium text-muted-foreground">
+                    {[
+                      hereCount ? `${hereCount} here` : "",
+                      nearbyCount ? `${nearbyCount} nearby` : "",
+                      approachingCount ? `${approachingCount} getting closer` : "",
+                      onWayCount ? `${onWayCount} on the way` : ""
+                    ].filter(Boolean).join(" · ") || "Waiting for everyone to head out"}
+                  </p>
+                )}
+              </section>
+            )}
+
             <section>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-bold">People ({m.members.length})</h3>
