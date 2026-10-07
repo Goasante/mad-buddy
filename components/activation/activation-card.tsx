@@ -145,7 +145,7 @@ const COPY: Record<Exclude<ActivationState, "activated">, Copy> = {
     secondary: { label: "Message a Muddy", href: "/messages" as Route }
   },
   muddy_nearby: {
-    // The payoff. One tap, no commitment -- asking for a Plan here would skip
+    // The payoff. One tap, no commitment -- asking for a Meetup here would skip
     // the part where they say hello.
     headline: "Someone's nearby",
     body: "A Muddy is around right now. A wave is the easiest way to start.",
@@ -171,8 +171,8 @@ const ACTION_ICON: Record<ActivationAction, typeof UserPlus> = {
   say_hi: MessageCircle,
   wave: Hand,
   message: MessageCircle,
-  make_plan: CalendarCheck2,
-  view_plan: CalendarCheck2
+  make_meetup: CalendarCheck2,
+  view_meetup: CalendarCheck2
 };
 
 /**
@@ -303,7 +303,7 @@ export function ActivationCard({
   const primaryText = primaryLabel ?? copy.actionLabel;
   const Icon = ACTION_ICON[primaryActionFor(state)] ?? copy.icon;
   /* EVERY Card A state now sits on the same fixed ground, so the light/dark
-     treatment is no longer a per-state decision -- and the `upcomingPlan` flag
+     treatment is no longer a per-state decision -- and the `upcomingMeetup` flag
      that used to drive it is gone with it. It used to be: only `upcoming_plan`
      had artwork, so only that state wore white text. Keeping that conditional
      now would put dark text on dark art in every other state. One ground, one
