@@ -31,6 +31,7 @@ export function MeetupScreen() {
     const initial = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(initial);
   }, [load]);
+
   if (!user) return null;
   return <>
     {error && <p role="alert" className="p-4 text-sm">{error}<button className="ml-2 underline" onClick={() => void load()}>Retry</button></p>}

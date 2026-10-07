@@ -6,6 +6,8 @@ import { batchEligibleMuddyIds } from "@/lib/social/permissions";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 export async function loadMeetups(admin: Admin, actorId: string) {
+  const expiry = await admin.rpc("expire_meetups_server");
+  if (expiry.error) throw expiry.error;
   const { data, error } = await admin.rpc("list_meetups_server", { p_actor_id: actorId });
   if (error) throw error;
   return z.array(meetupSchema).parse(data);
