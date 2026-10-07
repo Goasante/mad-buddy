@@ -174,3 +174,53 @@ export async function grantReliableWatcherAchievement(admin: Admin, userId: stri
     // Best-effort by design.
   }
 }
+
+
+/**
+ * Current Meetup completion achievements reuse the stable historical database
+ * codes so already-earned rows remain continuous while the product language
+ * and earning source move to Meetups.
+ */
+export async function grantMeetupCompletionAchievements(admin: Admin, meetupId: string): Promise<void> {
+  try {
+    const { data: participants } = await admin
+      .from("meetup_participants")
+      .select("user_id")
+      .eq("meetup_id", meetupId)
+      .eq("response", "accepted");
+
+    const userIds = [...new Set((participants ?? []).map((row) => row.user_id))];
+    for (const userId of userIds) {
+      const { count } = await admin
+        .from("meetup_participants")
+        .select("id, meetups!inner(status)", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("response", "accepted")
+        .eq("meetups.status", "ended");
+      await Promise.all([
+        grantAchievement(admin, userId, "first_plan"),
+        grantCountAchievement(admin, userId, "plan_maker", count ?? 0),
+        grantCountAchievement(admin, userId, "plan_regular", count ?? 0)
+      ]);
+    }
+  } catch {
+    // Best-effort by design.
+  }
+}
+
+/** Meetup's integrated home check-in replaces standalone Safe Arrival progress. */
+export async function grantMeetupSafetyAchievements(admin: Admin, userId: string): Promise<void> {
+  try {
+    const { count } = await admin
+      .from("meetup_participants")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .not("home_arrived_at", "is", null);
+    await Promise.all([
+      grantAchievement(admin, userId, "good_check_in"),
+      grantCountAchievement(admin, userId, "safe_traveller", count ?? 0)
+    ]);
+  } catch {
+    // Best-effort by design.
+  }
+}
