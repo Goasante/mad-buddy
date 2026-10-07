@@ -310,11 +310,15 @@ export function MeetNewPeople({
                 <div className="mt-4 space-y-2">
                   {item.interestedPeople.map((person) => (
                     <div key={person.userId} className="flex items-center gap-2.5 rounded-xl bg-secondary/60 p-2.5">
-                      <UserAvatar src={person.avatarUrl} name={person.name} size="xs" decorative />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{person.name}</p>
-                        <p className="text-[11px] text-muted-foreground">{person.status === "accepted" ? "Accepted" : "Interested"}</p>
-                      </div>
+                      <Link href={"/friends/" + person.username} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-lg">
+                        <UserAvatar src={person.avatarUrl} name={person.name} size="xs" decorative />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{person.name}</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {person.status === "accepted" ? "Accepted · view profile" : "Interested · view profile"}
+                          </span>
+                        </span>
+                      </Link>
                       {person.status === "pending" ? (
                         <div className="flex gap-1.5">
                           <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "declined" })}>
