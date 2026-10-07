@@ -5,6 +5,7 @@ import {
   canUpdateArrival,
   meetupPhase,
   isMeetupHintFresh,
+  meetupReadyForHome,
   type Meetup
 } from "./rules";
 import { resolveNotificationDestination } from "@/lib/notifications/destination";
@@ -98,6 +99,13 @@ describe("Meet Up", () => {
     expect(meetupCreateSchema.safeParse({ ...input, latitude: 5 }).success).toBe(false);
     expect(meetupUpdateSchema.safeParse({ action: "proximity", id: a, revision: 1, requestKey: b, enabled: true }).success).toBe(false);
     expect(meetupUpdateSchema.safeParse({ action: "beacon", id: a, revision: 1, requestKey: b }).success).toBe(true);
+  });
+
+  it("keeps Home Coming Up for materialized Meetups only", () => {
+    expect(meetupReadyForHome(meetup, a, now)).toBe(true);
+    expect(meetupReadyForHome({ ...meetup, members: [member(a), { ...member(b), response: "invited" }] }, a, now)).toBe(false);
+    expect(meetupReadyForHome({ ...meetup, members: [member(a), { ...member(b), response: "declined" }] }, a, now)).toBe(false);
+    expect(meetupReadyForHome(meetup, "10000000-0000-4000-8000-000000000003", now)).toBe(false);
   });
 
   it("routes invitations without breaking the legacy Safe Arrival link", () => {
