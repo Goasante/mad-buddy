@@ -49,6 +49,17 @@ describe("the one deep link Android can honour", () => {
     });
   });
 
+  it("keeps Meet Up deep links because the mobile screen now reads them", () => {
+    expect(adapt(href("/meet-up?newPeople=1"))).toEqual({
+      type: "internal",
+      href: "/meet-up?newPeople=1"
+    });
+    expect(adapt(href("/meet-up?meetup=abc"))).toEqual({
+      type: "internal",
+      href: "/meet-up?meetup=abc"
+    });
+  });
+
   it("still opens the inbox when there is no conversation id", () => {
     expect(adapt(href("/messages"))).toEqual({ type: "internal", href: "/messages" });
   });
@@ -140,7 +151,7 @@ describe("against real resolver output", () => {
       "system_alert", "staff_message", "friendship_milestone", `birthday:${UUID}`, `message:${UUID}`,
       `group_message:${UUID}`, `hangout:${UUID}`, `plan:${UUID}`, `event:${UUID}`,
       `group:${UUID}`, `safe_arrival:${UUID}`, `linkr_connection:${UUID}`,
-      `meetup_request:${UUID}`, `event_room:${UUID}:${UUID}`
+      `meetup_request:${UUID}`, `event_room:${UUID}:${UUID}`, `meetup:${UUID}`, `meetup_discovery:${UUID}`
     ];
     const reachable = new Set([
       "/home", "/muddies", "/messages", "/plans", "/events",
