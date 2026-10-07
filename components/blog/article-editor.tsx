@@ -11,12 +11,9 @@ import { imageMarker, type ArticleImage } from "@/lib/blog/image-model";
 
 type Revision = { version: number; savedAt: string; article: Article };
 const empty: Article = { title: "", slug: "", description: "", category: "Friendship", audience: "", searchIntent: "", feature: "linkr", body: "" };
-function normalizeRetiredFeature(article: Article): Article {
-  return article.feature === "upfor" || article.feature === "plans" ? { ...article, feature: "meetups" } : article;
-}
 export function ArticleEditor({ initial = empty, id = null, version = 0, live = false, revisions = [] }: { initial?: Article; id?: string | null; version?: number; live?: boolean; revisions?: Revision[] }) {
   const router = useRouter();
-  const [article, setArticle] = useState(() => normalizeRetiredFeature(initial));
+  const [article, setArticle] = useState(initial);
   const [currentVersion, setCurrentVersion] = useState(version);
   const [isLive, setLive] = useState(live);
   const [busy, setBusy] = useState(false);
@@ -84,7 +81,7 @@ export function ArticleEditor({ initial = empty, id = null, version = 0, live = 
         <label className="block text-sm font-medium">What are they searching for?<textarea value={article.searchIntent} maxLength={180} onChange={(e) => change("searchIntent", e.target.value)} rows={3} className={inputClass} /></label>
         <label className="block text-sm font-medium">Relevant app feature<select value={article.feature} onChange={(e) => change("feature", e.target.value as Article["feature"])} className={inputClass}>{BLOG_EDITOR_FEATURES.map((key) => <option key={key} value={key} className="bg-[#151515]">{BLOG_FEATURES[key].name}</option>)}</select></label>
         <div className="rounded-xl border border-white/10 p-4 text-xs leading-6 text-white/60">Audience and search intent are editorial notes, not public copy. Only the published snapshot enters search results or the sitemap.</div>
-        {revisions.length > 0 && <label className="block text-sm font-medium">Saved versions<select value="" onChange={(e) => { const old = revisions.find((r) => r.version === Number(e.target.value)); if (old && window.confirm("Load this saved version into your editor? Unsaved text will be replaced; live content stays unchanged.")) { setArticle(normalizeRetiredFeature({ ...old.article, slug: initial.slug })); setDirty(true); setMessage("Saved version loaded. Save or publish when ready."); } }} className={inputClass}><option value="" className="bg-[#151515]">Load a previous version…</option>{revisions.map((r) => <option key={r.version} value={r.version} className="bg-[#151515]">v{r.version} · {new Date(r.savedAt).toLocaleString()}</option>)}</select></label>}
+        {revisions.length > 0 && <label className="block text-sm font-medium">Saved versions<select value="" onChange={(e) => { const old = revisions.find((r) => r.version === Number(e.target.value)); if (old && window.confirm("Load this saved version into your editor? Unsaved text will be replaced; live content stays unchanged.")) { setArticle({ ...old.article, slug: initial.slug }); setDirty(true); setMessage("Saved version loaded. Save or publish when ready."); } }} className={inputClass}><option value="" className="bg-[#151515]">Load a previous version…</option>{revisions.map((r) => <option key={r.version} value={r.version} className="bg-[#151515]">v{r.version} · {new Date(r.savedAt).toLocaleString()}</option>)}</select></label>}
         {isLive && <><Link href={`/blog/${initial.slug}` as Route} target="_blank" className="focus-ring block text-sm underline">View live article ↗</Link><button type="button" disabled={working} onClick={() => { if (window.confirm("Remove this article from the public journal? All text and saved versions will remain available here.")) void save("unpublish"); }} className="focus-ring rounded-full border border-white/20 px-4 py-2 text-xs disabled:opacity-50">Unpublish (keep content)</button></>}
       </aside>
     </fieldset>}
