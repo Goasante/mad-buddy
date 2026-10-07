@@ -7,6 +7,8 @@ export const BLOG_FEATURES = {
   muddies: { name: "Muddies", title: "Stay close, without a location pin.", body: "Connect with trusted friends and use privacy-safe proximity on your terms." }
 } as const;
 
+export const BLOG_EDITOR_FEATURES = ["linkr", "meetups", "muddies"] as const;
+
 export const articleSchema = z.object({
   slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).min(3).max(100),
   title: z.string().trim().min(3).max(110),
