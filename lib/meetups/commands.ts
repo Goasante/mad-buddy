@@ -60,11 +60,14 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
   const { data, error } = await admin.rpc("meetup_command_server", { p_actor_id: actorId, p_action: action, p_input: value });
   if (error) return { ok: false, message: ERRORS[error.message] ?? "Could not save the meetup. Refresh and try again." };
 
-  if (create && "category" in value) {
-    const meetupId =
-      data && typeof data === "object" && !Array.isArray(data) && "id" in data && typeof data.id === "string"
-        ? data.id
+  const meetupId =
+    data && typeof data === "object" && !Array.isArray(data) && "id" in data && typeof data.id === "string"
+      ? data.id
+      : !create && "id" in value && typeof value.id === "string"
+        ? value.id
         : null;
+
+  if (create && "category" in value) {
     if (meetupId) {
       const categoryUpdate = await (admin as unknown as MeetupCategoryWriter)
         .from("meetups")
