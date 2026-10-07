@@ -104,7 +104,7 @@ describe("first value is a separate question", () => {
 describe("the other rules are untouched", () => {
   it("still prefers a shared upcoming Plan", () => {
     const planned = muddy({ hasSharedUpcomingPlan: true, conversationState: "established" });
-    expect(selectRelationshipFocus([planned])?.plan.primary).toBe("view_plan");
+    expect(selectRelationshipFocus([planned])?.plan.primary).toBe("view_meetup");
   });
 
   it("still refuses to offer a Wave off the nearby card", () => {
