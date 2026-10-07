@@ -1079,14 +1079,18 @@ function MeetupCard({
                   <div>
                     <p className="text-sm font-bold">
                       {m.togetherAt
-                        ? "You're together ✨"
+                        ? mine?.metAt
+                          ? "You're together ✨"
+                          : "Meetup underway ✨"
                         : m.beaconStatus === "unset"
                           ? "Meetup scheduled"
                           : "Meetup forming ✨"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {m.togetherAt
-                        ? "Meetup Glow has done its job."
+                        ? acceptedMembers.length > 2
+                          ? "Some of the group has met. Glow keeps showing who is still making their way there."
+                          : "Meetup Glow has done its job."
                         : m.beaconStatus === "unset"
                           ? "The Meetup Glow point will be set when someone reaches the agreed spot."
                           : "Glow gets stronger as everyone reaches the meetup point."}
@@ -1097,7 +1101,7 @@ function MeetupCard({
                     m.togetherAt ? "ring-4 shadow-[0_0_24px_hsl(var(--primary)/0.28)]" : hereCount > 0 ? "ring-4" : nearbyCount > 0 ? "ring-2" : ""
                   ].join(" ")} aria-hidden="true" />
                 </div>
-                {m.beaconStatus !== "unset" && !m.togetherAt && (
+                {m.beaconStatus !== "unset" && (
                   <p className="mt-3 text-xs font-medium text-muted-foreground">
                     {[
                       hereCount ? `${hereCount} here` : "",
@@ -1121,11 +1125,13 @@ function MeetupCard({
                   const fresh = now !== null && isMeetupHintFresh(person.observedAt, now);
                   const automaticJourney =
                     fresh && ["approaching", "nearby", "at_spot"].includes(person.journeyState)
-                      ? JOURNEY_LABELS[person.journeyState]
+                      ? person.journeyState === "at_spot" && person.userId === viewerId
+                        ? "Looks like you're here"
+                        : JOURNEY_LABELS[person.journeyState]
                       : null;
 
                   const personStatus = person.metAt
-                    ? "Together"
+                    ? "Met"
                     : person.response !== "accepted"
                       ? responseLabel(person.response)
                       : person.arrival === "left"
@@ -1425,24 +1431,36 @@ function MeetupCard({
                 </span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setStatusOpen(false);
-                  update(m.beaconStatus === "locked" ? { action: "arrival", arrival: "here" } : { action: "beacon" });
-                }}
-                className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
-                  <MapPin className="h-5 w-5" />
-                </span>
-                <span>
-                  <span className="block text-sm font-bold">{"I'm here"}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {m.beaconStatus === "locked" ? "Confirm you've reached the meetup point" : "Set or confirm the Meetup Glow point"}
+              {m.beaconStatus !== "unset" || m.mode === "meet_somewhere" || m.hostId === viewerId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusOpen(false);
+                    update(m.beaconStatus === "locked" ? { action: "arrival", arrival: "here" } : { action: "beacon" });
+                  }}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                    <MapPin className="h-5 w-5" />
                   </span>
-                </span>
-              </button>
+                  <span>
+                    <span className="block text-sm font-bold">{"I'm here"}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {m.beaconStatus === "locked" ? "Confirm you've reached the meetup point" : "Set or confirm the Meetup Glow point"}
+                    </span>
+                  </span>
+                </button>
+              ) : (
+                <div className="flex w-full items-center gap-3 rounded-2xl bg-secondary/40 p-4 text-left">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+                    <MapPin className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold">Meetup point not set yet</span>
+                    <span className="block text-xs text-muted-foreground">The host will set it when they are at the agreed place.</span>
+                  </span>
+                </div>
+              )}
 
               <div className="rounded-2xl bg-secondary/55 p-4">
                 <div className="flex items-center gap-3">
