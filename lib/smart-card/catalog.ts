@@ -4,9 +4,8 @@ export type SmartCardStateSpec = {
   id: string;
   tier: SmartCardTier;
   family:
+    | "meetups"
     | "safety"
-    | "plans"
-    | "upfor"
     | "proximity"
     | "linkr"
     | "events"
@@ -43,33 +42,20 @@ export type SmartCardStateSpec = {
  * for this phase, so it cannot win Home through the Smart Card engine.
  */
 export const SMART_CARD_APPROVED_STATES = [
-  { id: "core_fallback", tier: 6, family: "muddies", purpose: "An available core connection action while UpFor is paused." },
-  { id: "safe_arrival_overdue", tier: 0, family: "safety", purpose: "A Safe Arrival check-in is overdue." },
-  { id: "safe_arrival_action", tier: 0, family: "safety", purpose: "A live Safe Arrival needs the traveller's action." },
+  { id: "core_fallback", tier: 6, family: "muddies", purpose: "An available core connection action when no more specific state wins." },
   { id: "failed_action", tier: 0, family: "system", purpose: "A consequential action failed and needs recovery." },
+  { id: "meetup_starting", tier: 2, family: "meetups", purpose: "An agreed Meetup is starting within the next few hours." },
+  { id: "meetup_upcoming", tier: 4, family: "meetups", purpose: "An agreed Meetup is coming up within the next day." },
+  { id: "meetup_fallback", tier: 6, family: "meetups", purpose: "A useful path to meet a Muddy or someone new when no stronger state wins." },
 
-  { id: "plan_rsvp", tier: 1, family: "plans", purpose: "A Plan invitation needs a response." },
-  { id: "plan_decision", tier: 1, family: "plans", purpose: "A Plan poll or unresolved decision needs the viewer." },
-  { id: "plan_changed", tier: 1, family: "plans", purpose: "A meaningful Plan change needs review or reconfirmation." },
-  { id: "upfor_requests", tier: 1, family: "upfor", purpose: "People are waiting on the owner of an UpFor." },
-  { id: "safe_arrival_watcher_request", tier: 1, family: "safety", purpose: "Someone asked the viewer to be a watcher." },
   { id: "event_invitation", tier: 1, family: "events", purpose: "An Event invitation needs a response." },
   { id: "muddy_request", tier: 1, family: "muddies", purpose: "An incoming Muddy request needs review." },
   { id: "notification_action_bundle", tier: 1, family: "notifications", purpose: "Several related actionable items need attention." },
 
-  { id: "plan_starting", tier: 2, family: "plans", purpose: "A confirmed Plan is starting soon." },
-  { id: "upfor_active_muddy", tier: 2, family: "upfor", purpose: "A Muddy the viewer asked to join is UpFor something now." },
-  { id: "upfor_opportunity", tier: 2, family: "upfor", purpose: "A Muddy is UpFor something the viewer has not acted on yet." },
-  { id: "upfor_momentum", tier: 2, family: "upfor", purpose: "An UpFor is gathering meaningful interest." },
-  { id: "upfor_accepted", tier: 2, family: "upfor", purpose: "The viewer's UpFor request was accepted." },
-  { id: "upfor_plan_chat_ready", tier: 2, family: "upfor", purpose: "A converted UpFor has a Plan Chat the accepted viewer has joined." },
-  { id: "owned_upfor_live", tier: 2, family: "upfor", purpose: "The viewer has a live UpFor with room to start more." },
-  { id: "owned_upfor_starting", tier: 2, family: "upfor", purpose: "The viewer's scheduled UpFor is starting soon." },
   { id: "nearby_muddy", tier: 2, family: "proximity", purpose: "A fresh, privacy-permitted Muddy is nearby." },
   { id: "nearby_muddies", tier: 2, family: "proximity", purpose: "Several fresh, privacy-permitted Muddies are nearby." },
   { id: "event_live", tier: 2, family: "events", purpose: "A relevant Event is happening now." },
   { id: "event_linkr_ready", tier: 2, family: "linkr", purpose: "A checked-in attendee can opt into Event Linkr." },
-  { id: "plan_chat_decision", tier: 2, family: "messaging", purpose: "A Plan Chat contains a current coordination decision." },
 
   { id: "linkr_mutual_event", tier: 3, family: "linkr", purpose: "A Linkr mutual has a shared Event context." },
   { id: "linkr_mutual", tier: 3, family: "linkr", purpose: "A new Linkr mutual is ready for a first message." },
@@ -89,12 +75,9 @@ export const SMART_CARD_APPROVED_STATES = [
   { id: "event_starting", tier: 4, family: "events", purpose: "An Event the viewer is only interested in starts soon." },
   { id: "event_saved", tier: 4, family: "events", purpose: "A saved Event is approaching." },
   { id: "linkr_opportunity", tier: 4, family: "linkr", purpose: "A grounded Linkr opportunity has a clear reason." },
-  { id: "plan_upcoming", tier: 4, family: "plans", purpose: "An upcoming commitment is worth keeping visible." },
-  { id: "upfor_scheduled", tier: 4, family: "upfor", purpose: "A scheduled UpFor is approaching." },
   { id: "group_invitation", tier: 4, family: "groups", purpose: "A Group invitation or relevant Group activity." },
   { id: "message_context", tier: 4, family: "messaging", purpose: "A meaningful unread message is tied to active coordination." },
   { id: "returning_user", tier: 4, family: "system", purpose: "A returning user needs the most relevant change since last visit." },
-  { id: "weekend_plans", tier: 4, family: "plans", purpose: "Weekend planning is timely when no stronger state wins." },
 
   { id: "profile_blocking", tier: 5, family: "profile", purpose: "Missing profile data directly blocks a desired feature." },
   { id: "profile_completion", tier: 5, family: "profile", purpose: "General profile completion, only when little else matters." },
@@ -112,7 +95,6 @@ export const SMART_CARD_APPROVED_STATES = [
   { id: "access_status", tier: 5, family: "access", purpose: "Access state only when monetization gating is active again." },
 
   { id: "suggestions", tier: 6, family: "growth", purpose: "Cold-start people suggestions when available." },
-  { id: "upfor_fallback", tier: 6, family: "upfor", purpose: "Default: ask what the viewer is UpFor today." }
 ] as const satisfies readonly SmartCardStateSpec[];
 
 export type ApprovedSmartCardStateId = (typeof SMART_CARD_APPROVED_STATES)[number]["id"];

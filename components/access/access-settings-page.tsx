@@ -49,10 +49,10 @@ const ACCESS_BENEFITS = [
 const FREE_WITH_ADS = [
   "Home, Muddies, Glow and proximity",
   "Linkr discovery and connections",
-  "UpFor discovery, creation and joining",
+  "Meet Up with Muddies or new people nearby",
   "Messages and every conversation",
-  "Plans, Plan Chat and Events",
-  "Safe Arrival, Notifications, Circles and Groups"
+  "Meetup Chat and Events",
+  "Notifications, Circles and Groups"
 ];
 
 function formatDate(iso: string): string {
@@ -230,7 +230,7 @@ export function AccessSettingsPage({ access, hadWelcomeAccess, billing = null }:
           </ul>
           {hadWelcomeAccess && !access.hasAccess ? (
             <p className="mt-2 px-1 text-xs leading-5 text-muted-foreground">
-              Your Welcome Access ended, so your account may now show ads. Your features, connections, conversations and Plans are still available.
+              Your Welcome Access ended, so your account may now show ads. Your features, connections, conversations and Meetups are still available.
             </p>
           ) : null}
         </section>

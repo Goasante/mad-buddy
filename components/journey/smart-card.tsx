@@ -70,7 +70,7 @@ const ILLUSTRATIONS: Record<SmartCardIllustration, string> = {
  * only its breathing room and title scale respond to how much the state
  * matters. A new card id defaults to compact, which is the safe direction.
  */
-const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["safe_arrival", "journey"]);
+const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["meetup_starting", "journey"]);
 
 /**
  * Which cards render the animated prism instead of the sheen.
@@ -79,7 +79,7 @@ const PROMINENT_CARD_IDS = new Set<SmartCard["id"]>(["safe_arrival", "journey"])
  * fallback -- the card most people see most often -- and it carries nothing
  * time-critical, so an animated background competes with no information.
  *
- * Scoping by id rather than by "not prominent" keeps safe_arrival excluded by
+ * Scoping by id rather than by "not prominent" keeps urgent coordination states deliberate by
  * construction, so the rule that safety outranks decoration holds without
  * needing to be re-stated here.
  *
@@ -103,7 +103,7 @@ export function SmartCardHero({
    * lowers its visual volume so the hierarchy matches the priority.
    *
    * SAFETY STATES ARE NEVER DEFERRED. The caller decides, and it does not pass
-   * this when a prominent (Safe Arrival / active Journey) card is showing --
+   * this when a prominent (a Meetup starting soon / active Journey) card is showing --
    * those outrank activation by design.
    */
   deferred = false
@@ -145,8 +145,8 @@ export function SmartCardHero({
   }, [percent]);
 
   useEffect(() => {
-    if (card.id !== "upfor_fallback") return;
-    void recordSmartCardImpressionAction("upfor_fallback");
+    if (card.id !== "meetup_fallback") return;
+    void recordSmartCardImpressionAction("meetup_fallback");
   }, [card.id]);
 
   // A dismissible card is retired by the same tap that follows its CTA:

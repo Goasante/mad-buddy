@@ -108,7 +108,7 @@ const navigationItems: Array<{
     | "/friends"
     | "/notifications"
     | "/messages"
-    | "/plans"
+    | "/meet-up"
     | "/events"
     | "/discover"
     // Linkr 2.0. `/discover` stays in this union: the old route still exists
@@ -131,7 +131,7 @@ const navigationItems: Array<{
   { href: "/friends", label: "Muddies", icon: UsersRound },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/messages", label: "Messages", icon: MessagesSquare },
-  { href: "/plans", label: "Plans", icon: CalendarCheck2, featureIcon: "plans" },
+  { href: "/meet-up", label: "Meet Up", icon: CalendarCheck2, brandIcon: "meetup" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
@@ -145,7 +145,7 @@ const navigationItems: Array<{
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
-const SECONDARY_HREFS = ["/plans", "/events", "/linkr"] as const;
+const SECONDARY_HREFS = ["/meet-up", "/events", "/linkr"] as const;
 
 /**
  * Routes that render their own in-page title instead of the shared AppHeader
@@ -161,7 +161,6 @@ const PAGES_WITH_OWN_HEADER = [
   "/notifications",
   "/profile",
   "/settings",
-  "/plans",
   "/messages",
   "/events",
   "/discover",
@@ -173,7 +172,6 @@ const PAGES_WITH_OWN_HEADER = [
   "/invites",
   "/drops",
   "/scan",
-  "/safe-arrival",
   "/meet-up",
   // Migrated to the canonical header in the Stage 2 header pass. Each of these
   // renders <PageHeader> itself, so the global AppHeader must stand down or
@@ -182,7 +180,6 @@ const PAGES_WITH_OWN_HEADER = [
   "/help",
   "/invite",
   "/safety-center",
-  "/hangout-mode",
   "/conference"
 ] as const;
 
@@ -204,7 +201,7 @@ const PAGES_WITH_OWN_HEADER = [
 //
 // Each of these clears the safe area itself, exactly once.
 //
-// /hangout-mode joined when UpFor took an inline header carrying a subtitle
+// /hangout-mode joined when Meet Up took an inline header carrying a subtitle
 // and its own actions. It was already in PAGES_WITH_OWN_HEADER but not here,
 // which is precisely the gap that produced the blank band above the title.
 const IMMERSIVE_HEADER_PAGES: readonly string[] = [
@@ -465,7 +462,7 @@ function AppShellInner({
             It was mounted shell-wide, so every screen carried a decorative
             backdrop. A conversation is the one surface where a wallpaper is
             the content's own setting rather than noise behind unrelated data:
-            Home, Linkr and UpFor are dense with cards, counts and controls,
+            Home, Linkr and Meet Up are dense with cards, counts and controls,
             and a patterned ground competes with all of it.
 
             Still mounted at THIS level rather than inside <main>, so the

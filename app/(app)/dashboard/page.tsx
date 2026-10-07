@@ -5,9 +5,7 @@ import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
-import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
 import { loadClickedPeople } from "@/lib/linkr/collections-service";
-import { loadHomeUpForContext } from "@/lib/social/home-upfor-context";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
@@ -17,11 +15,9 @@ import { loadJourney } from "@/lib/journey/journey-service";
 import { isFirstTimeJourneyState } from "@/lib/journey/journey";
 import { loadBuddyScore } from "@/lib/engagement/buddy-score-service";
 import { HOME_EXCLUDED_SMART_CARD_IDS } from "@/lib/smart-card/home-gate";
-import { isPlanDecisionRsvpEligible } from "@/lib/smart-card/home-context";
 import { loadHomeSmartCardProjection } from "@/lib/smart-card/home-projection";
 import { loadAcknowledgedSmartCardIds, loadSmartCard } from "@/lib/smart-card/smart-card-service";
 import { deriveBirthProfile } from "@/lib/profile/birth-date";
-import { isWeekendPlanningWindow } from "@/lib/smart-card/smart-card";
 import { getRankedUpcomingEvents } from "@/lib/events/ranked-events";
 import { HOME_RANKED_EVENTS_LIMIT } from "@/lib/events/ranking";
 
@@ -36,7 +32,7 @@ export default async function DashboardPage() {
   const acknowledgedIdsPromise = user
     ? loadAcknowledgedSmartCardIds(admin, user.id)
     : Promise.resolve(new Set<string>());
-  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, journey, incomingRequestCount, birthDetailsResult, buddyScore, topEvents, activation, upForContext, linkrMutuals, meetupItems] = user
+  const [profile, statusResult, agenda, profileDetailsResult, glowColorByFriendId, journey, incomingRequestCount, birthDetailsResult, buddyScore, topEvents, activation, linkrMutuals, meetupItems] = user
     ? await Promise.all([
         ensureProfileForUser(user),
         supabase
@@ -50,7 +46,6 @@ export default async function DashboardPage() {
           .select("username, avatar_url, bio, mood_status")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadSafeArrivalJourneys(admin, user.id),
         loadFriendGlowColors(admin, user.id),
         loadJourney(admin, user.id),
         countIncomingRequests(user.id),
@@ -58,11 +53,10 @@ export default async function DashboardPage() {
         loadBuddyScore(admin, user.id),
         availability.events ? getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }) : Promise.resolve([]),
         loadActivationProjection(user.id),
-        availability.upfor ? loadHomeUpForContext(admin, user.id) : Promise.resolve(null),
         availability.linkr ? loadClickedPeople(user.id) : Promise.resolve([]),
-        availability.safe_arrival ? loadMeetupHome(admin, user.id) : Promise.resolve([])
+        availability.meet_up ? loadMeetupHome(admin, user.id) : Promise.resolve([])
       ])
-    : [null, null, { items: [], hasMore: false }, null, null, {}, null, 0, null, null, [], null, null, [], []];
+    : [null, null, { items: [], hasMore: false }, null, {}, null, 0, null, null, [], null, [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -100,27 +94,13 @@ export default async function DashboardPage() {
    * Fails closed as a whole. If it yields nothing, Home still renders its
    * Smart Card from the states that were already proven.
    */
-  const agendaPlans = (agenda?.items ?? []).filter((item) => item.kind === "plan");
-  /*
-   * A poll is coordination for people who are actually participating.
-   * The Home agenda intentionally also contains invitations, declines and
-   * waitlisted rows so the Plans surface can explain them, but those states
-   * must not become "Vote now" jobs. Hosts project as going, so going/maybe is
-   * the complete actionable set here and matches Plan Chat membership.
-   */
-  const decisionAgendaPlans = agendaPlans.filter((plan) =>
-    isPlanDecisionRsvpEligible(plan.myRsvp)
-  );
+  const eventAgenda = (agenda?.items ?? []).filter((item) => item.kind !== "plan");
   const smartCardProjection = user
     ? await loadHomeSmartCardProjection({
         userId: user.id,
-        planIds: decisionAgendaPlans.map((plan) => plan.id),
-        planTitleById: new Map(decisionAgendaPlans.map((plan) => [plan.id, plan.title])),
-        /* A Plan without an explicit end leaves the Home agenda at its start,
-           so startsAt is the honest hard boundary in that case. */
-        planEndById: new Map(
-          decisionAgendaPlans.map((plan) => [plan.id, plan.endsAt ?? plan.startsAt])
-        ),
+        planIds: [],
+        planTitleById: new Map(),
+        planEndById: new Map(),
         now
       })
     : null;
@@ -130,36 +110,20 @@ export default async function DashboardPage() {
         now,
         availability,
         journey,
-        safeArrival: safeArrival
-          ? {
-              travelling: safeArrival.travelling.length > 0,
-              watcherCount: safeArrival.travelling[0]?.acceptedCount ?? 0,
-              destinationLabel: safeArrival.travelling[0]?.destinationLabel ?? null,
-              expectedArrivalAt: safeArrival.travelling[0]?.expectedArrivalAt ?? null,
-              gracePeriodMinutes: safeArrival.travelling[0]?.gracePeriodMinutes ?? null,
-              status: safeArrival.travelling[0]?.status ?? null
-            }
-          : null,
+        safeArrival: null,
         birthday: dateOfBirth
           ? deriveBirthProfile(dateOfBirth, now.toISOString().slice(0, 10))
           : null,
-        agenda: agenda?.items ?? [],
-        weekendPlanCount: isWeekendPlanningWindow(now)
-          ? (agenda?.items ?? []).filter(
-              /* `startsAt` is the agenda projection's field for both kinds.
-                 A plan also carries `startAt` from HomeUpcomingPlan with the
-                 same value, but reading the projection's own field keeps every
-                 agenda consumer on one contract. */
-              (item) => item.kind === "plan" && isWeekendPlanningWindow(new Date(item.startsAt))
-            ).length
-          : 0,
+        agenda: eventAgenda,
+        meetups: meetupItems,
+        weekendPlanCount: 0,
         nearbyFriends: activation?.nearby ?? [],
         locationFreshForProximity: activation?.locationFreshForProximity ?? false,
         muddyCount: activation?.muddyCount ?? 0,
         buddyScore,
         recentAchievement: smartCardProjection?.recentAchievement ?? null,
         suggestionCount: 0,
-        upFor: upForContext,
+        upFor: null,
         /* Both are facts Home already owns: the request count feeds its header
            badge, and Linkr mutuals are only ever MUTUAL matches, so a card
            built from them reveals nothing one-sided. */
@@ -170,8 +134,8 @@ export default async function DashboardPage() {
            between what they are handed. */
         eventLinkrOffer: smartCardProjection?.eventLinkrOffer ?? null,
         muddyBirthdays: smartCardProjection?.muddyBirthdays ?? [],
-        planDecisions: smartCardProjection?.planDecisions ?? [],
-        planChatDecisions: smartCardProjection?.planChatDecisions ?? [],
+        planDecisions: [],
+        planChatDecisions: [],
         blockedFeature: smartCardProjection?.blockedFeature ?? null,
         /* NearbyHero owns the proximity payoff and the Activation card owns
            cold-start people discovery. Excluding them HERE (rather than after
@@ -209,7 +173,7 @@ export default async function DashboardPage() {
   return (
     <DashboardPageContent
       meetupItems={meetupItems}
-      watchUpForChanges={upForContext?.joined.some((session) => session.myStatus === "pending" || session.myStatus === "accepted") ?? false}
+      watchUpForChanges={false}
       activationState={activationUnavailable ? null : activation?.state ?? null}
       firstMuddy={activation?.acknowledgeFirstMuddy ? activation.firstMuddy : null}
       firstMuddyNeedsLocation={activation ? !activation.locationGranted : false}
@@ -226,17 +190,9 @@ export default async function DashboardPage() {
       initialStatusAvailability={hasActiveStatus ? status?.availability_type : undefined}
       initialStatusActivity={hasActiveStatus ? status?.activity_type ?? null : null}
       initialStatusNote={hasActiveStatus ? status?.custom_text ?? "" : ""}
-      agendaItems={agenda?.items ?? []}
+      agendaItems={eventAgenda}
       glowColorByFriendId={glowColorByFriendId}
-      safeArrival={
-        safeArrival
-          ? {
-              travelling: safeArrival.travelling,
-              checkingOn: safeArrival.checkingOn.filter((journey) => journey.myAcknowledgement === "accepted"),
-              invitations: safeArrival.checkingOn.filter((journey) => journey.myAcknowledgement === "invited")
-            }
-          : null
-      }
+      safeArrival={null}
       profileReminder={
         user && missingProfileItems.length > 0
           ? { userId: user.id, missingItems: missingProfileItems }

@@ -4,7 +4,7 @@ import { LandingPage } from "@/components/landing/landing-page";
 import { absoluteUrl } from "@/lib/seo";
 
 const description =
-  "Meet people and make real plans with Mad Buddy. Connect with nearby friends, discover people through Linkr, and share what you're UpFor—without live maps, exact coordinates, precise measured distances, or location history shared with other users.";
+  "Meet people in real life with Mad Buddy. Connect with nearby Muddies, discover people through Linkr, and turn a connection into a scheduled Meetup—without live maps, exact coordinates, precise measured distances, or location history shared with other users.";
 
 export const metadata: Metadata = {
   title: "When your Muddies are close, they glow",

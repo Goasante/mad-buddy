@@ -14,24 +14,19 @@ const features = [
     icon: Radio
   },
   {
-    title: "UpFor",
-    description: "Share what you are open to doing right now and turn a passing intention into something other people can join.",
+    title: "Meet Up",
+    description: "Invite Muddies you already know or meet new people nearby, then agree a time and move into one shared Meetup journey.",
     icon: Hand
   },
   {
-    title: "Plans & Events",
-    description: "Move from intention to an actual time, place, RSVP, and shared experience.",
+    title: "Events",
+    description: "Discover shared experiences and coordinate around the ones that matter.",
     icon: CalendarDays
   },
   {
     title: "Messages & Stories",
     description: "Keep conversations and 12-hour private Stories attached to the Muddies who matter.",
     icon: MessageCircle
-  },
-  {
-    title: "Safe Arrival",
-    description: "A safety-focused arrival experience designed to help chosen people know whether you got there without turning them into live trackers.",
-    icon: ShieldCheck
   },
   {
     title: "Profile & media",

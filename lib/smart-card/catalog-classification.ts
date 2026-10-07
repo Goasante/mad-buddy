@@ -37,7 +37,10 @@ export type SmartCardClassification = {
 };
 
 export const SMART_CARD_STATE_OWNERSHIP: Record<string, SmartCardClassification> = {
-  core_fallback: { ownership: "CARD_B_WIRED", reason: "An available core action replaces the UpFor fallback only while UpFor is locked." },
+  core_fallback: { ownership: "LOW_VALUE_DUPLICATE", reason: "Retained only as a catalog fallback; the wired default is now Meet Up." },
+  meetup_starting: { ownership: "CARD_B_WIRED", reason: "An agreed Meetup is starting soon and already belongs to the viewer." },
+  meetup_upcoming: { ownership: "CARD_B_WIRED", reason: "An agreed Meetup is coming up within the next day." },
+  meetup_fallback: { ownership: "CARD_B_WIRED", reason: "The default real-world action when nothing more specific is true." },
   // ---- Tier 0: safety / truth -------------------------------------------
   safe_arrival_overdue: {
     ownership: "CARD_B_WIRED",
@@ -188,7 +191,7 @@ export const SMART_CARD_STATE_OWNERSHIP: Record<string, SmartCardClassification>
     ownership: "CARD_A_OWNED",
     reason: "Excluded at engine selection: ActivationCard owns cold-start people discovery."
   },
-  upfor_fallback: { ownership: "CARD_B_WIRED", reason: "The default question when nothing truer is available." }
+  upfor_fallback: { ownership: "PRODUCT_PAUSED", reason: "Retired with UpFor/App4; Meet Up now owns the fallback." }
 };
 
 /** Counts by ownership, for the closeout report. */

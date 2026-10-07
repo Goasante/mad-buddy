@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, Hand, LockKeyhole, MessageCircle, Users, type LucideIcon } from "lucide-react";
+import { Compass, LockKeyhole, MessageCircle, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BrandNavigationIcon } from "@/components/brand/brand-navigation-icon";
 import type { BrandNavigationIconName } from "@/lib/brand/assets";
@@ -55,14 +55,14 @@ export type MobileTab = {
  * Plans and Profile were removed rather than demoted: Plans already has a
  * section on Home, and Profile is reachable from the account sheet the header
  * menu opens — so both were paying for a permanent tab they did not need.
- * Linkr and UpFor have no other persistent entry point, which is what earns
+ * Linkr and Meet Up have no other persistent entry point, which is what earns
  * them the slot.
  */
 export const MOBILE_TABS = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
-  { href: "/hangout-mode", label: "UpFor", icon: Hand, brandIcon: "upfor" }
+  { href: "/meet-up", label: "Meet Up", icon: Users, brandIcon: "meetup" }
   // `satisfies` checks the shape WITHOUT widening href to string, so each
   // literal path survives for Next to narrow to a Route.
 ] satisfies MobileTab[];
@@ -119,7 +119,7 @@ export function MobileNav({
    *
    * Omitted on web, where every tab's destination exists -- so web renders
    * exactly as before. The native shell passes `isBuiltForMobile`, which
-   * reports Linkr and UpFor as absent; those tabs keep their slot (the
+   * reports Linkr and Meet Up as absent; those tabs keep their slot (the
    * four-tab layout around the Orb stays identical on both platforms) but are
    * dimmed and cannot navigate.
    *
@@ -292,7 +292,7 @@ function MobileNavTab({
    *
    * A flex item defaults to `min-width: auto`, which refuses to shrink below
    * its content -- so at 200% text the five tabs demanded 390px inside a 360px
-   * bar and "UpFor" sat thirty pixels past the edge of a nav that does not
+   * bar and "Meet Up" sat thirty pixels past the edge of a nav that does not
    * scroll. Capping the <ul> did nothing because the OVERFLOW IS IN THE
    * CHILDREN. `min-w-0` lets each tab shrink; the label truncates and the icon
    * target is unaffected. */
@@ -315,7 +315,7 @@ function MobileNavTab({
         {/* A FIXED 40px TARGET, not 2.5rem (MB-GOD-047).
             `h-10 w-10` is rem-based, so at 200% text this circle became 80px
             and five of them demanded 390px inside a 360px bar -- pushing
-            "UpFor" off a nav that does not scroll. An icon is not text:
+            "Meet Up" off a nav that does not scroll. An icon is not text:
             scaling text up should not scale the chrome around it, and 40px
             keeps the row's proportions identical at every text size while the
             56px row height preserves the touch target. */}

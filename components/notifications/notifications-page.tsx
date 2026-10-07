@@ -182,13 +182,13 @@ function categoryForType(type: string): Exclude<PulseCategory, "all"> | "system"
   ) {
     return "social";
   }
-  if (base === "plan" || base === "event") return "plans";
-  if (base === "safe_arrival" || base === "system_alert") return "safety";
+  if (base === "plan" || base === "hangout" || base === "safe_arrival" || base === "meetup" || base === "meetup_discovery" || base === "event") return "plans";
+  if (base === "system_alert") return "safety";
   return "system";
 }
 
 function categoryLabel(category: Exclude<PulseCategory, "all">): string {
-  return category === "nearby" ? "nearby" : category === "social" ? "social" : category === "plans" ? "plans" : "safety";
+  return category === "nearby" ? "nearby" : category === "social" ? "social" : category === "plans" ? "meetups" : "safety";
 }
 
 function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
@@ -198,9 +198,9 @@ function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
     case "social":
       return "Waves, requests and Moments will show up here.";
     case "plans":
-      return "Plan invites and reminders will show up here.";
+      return "Meetup invitations and updates will show up here.";
     case "safety":
-      return "Safe Arrival and safety updates will show up here.";
+      return "Safety updates will show up here.";
   }
 }
 
@@ -773,8 +773,8 @@ export function NotificationsPageContent({
                 />
                 <PrivacyToggle
                   icon={CalendarCheck2}
-                  title="Plan alerts"
-                  description="Get updates about plans and invitations."
+                  title="Meetup alerts"
+                  description="Get updates about Meetups and invitations."
                   checked={planAlerts}
                   onCheckedChange={(checked) => {
                     setPlanAlerts(checked);

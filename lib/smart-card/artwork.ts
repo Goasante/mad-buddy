@@ -4,30 +4,17 @@ import type { SmartCard } from "./smart-card";
 /** Stable catalog numbers for review; illustration families are mapped separately. */
 export const SMART_CARD_SCENES = {
   core_fallback: 1,
-  safe_arrival_overdue: 2,
-  safe_arrival_action: 3,
   failed_action: 4,
-  plan_rsvp: 5,
-  plan_decision: 6,
-  plan_changed: 7,
-  upfor_requests: 8,
-  safe_arrival_watcher_request: 9,
+  meetup_starting: 13,
+  meetup_upcoming: 37,
+  meetup_fallback: 58,
   event_invitation: 10,
   muddy_request: 11,
   notification_action_bundle: 12,
-  plan_starting: 13,
-  upfor_active_muddy: 14,
-  upfor_opportunity: 15,
-  upfor_momentum: 16,
-  upfor_accepted: 17,
-  upfor_plan_chat_ready: 18,
-  owned_upfor_live: 19,
-  owned_upfor_starting: 20,
   nearby_muddy: 21,
   nearby_muddies: 22,
   event_live: 23,
   event_linkr_ready: 24,
-  plan_chat_decision: 25,
   linkr_mutual_event: 26,
   linkr_mutual: 27,
   first_muddy: 28,
@@ -39,12 +26,9 @@ export const SMART_CARD_SCENES = {
   event_starting: 34,
   event_saved: 35,
   linkr_opportunity: 36,
-  plan_upcoming: 37,
-  upfor_scheduled: 38,
   group_invitation: 39,
   message_context: 40,
   returning_user: 41,
-  weekend_plans: 42,
   profile_blocking: 43,
   profile_completion: 44,
   notification_permission: 45,
@@ -60,37 +44,23 @@ export const SMART_CARD_SCENES = {
   offline_status: 55,
   access_status: 56,
   suggestions: 57,
-  upfor_fallback: 58,
 } as const satisfies Record<ApprovedSmartCardStateId, number>;
 
 /** Reviewed transparent scenes. Characters illustrate general social moments;
  * role-specific cards use activities and objects instead of invented people. */
 export const SMART_CARD_ARTWORK_FILES = {
   core_fallback: "01-core-fallback.webp",
-  safe_arrival_overdue: "02-safe-arrival-overdue.webp",
-  safe_arrival_action: "03-safe-arrival-action.webp",
   failed_action: "04-failed-action.webp",
-  plan_rsvp: "05-plan-rsvp.webp",
-  plan_decision: "06-plan-decision.webp",
-  plan_changed: "07-plan-changed.webp",
-  upfor_requests: "08-upfor-requests.webp",
-  safe_arrival_watcher_request: "09-watcher-invitation.webp",
+  meetup_starting: "13-plan-starting.webp",
+  meetup_upcoming: "37-upcoming-plan.webp",
+  meetup_fallback: "58-upfor-fallback.webp",
   event_invitation: "10-event-invitation.webp",
   muddy_request: "11-muddy-request.webp",
   notification_action_bundle: "12-needs-attention.webp",
-  plan_starting: "13-plan-starting.webp",
-  upfor_active_muddy: "14-waiting-to-join.webp",
-  upfor_opportunity: "15-join-a-muddy.webp",
-  upfor_momentum: "16-gathering-interest.webp",
-  upfor_accepted: "17-request-accepted.webp",
-  upfor_plan_chat_ready: "18-plan-chat-ready.webp",
-  owned_upfor_live: "19-your-upfor-live.webp",
-  owned_upfor_starting: "20-your-upfor-starting.webp",
   nearby_muddy: "21-muddy-nearby.webp",
   nearby_muddies: "22-muddies-nearby.webp",
   event_live: "23-event-live.webp",
   event_linkr_ready: "24-meet-at-event.webp",
-  plan_chat_decision: "25-decide-in-chat.webp",
   linkr_mutual_event: "26-event-connection.webp",
   linkr_mutual: "27-mutual-connection.webp",
   first_muddy: "28-first-muddy.webp",
@@ -102,12 +72,9 @@ export const SMART_CARD_ARTWORK_FILES = {
   event_starting: "34-interested-event-starting.webp",
   event_saved: "35-saved-event.webp",
   linkr_opportunity: "36-shared-interest.webp",
-  plan_upcoming: "37-upcoming-plan.webp",
-  upfor_scheduled: "38-scheduled-upfor.webp",
   group_invitation: "39-group-invitation.webp",
   message_context: "40-message-context.webp",
   returning_user: "41-welcome-back.webp",
-  weekend_plans: "42-weekend-plans.webp",
   profile_blocking: "43-complete-to-continue.webp",
   profile_completion: "44-your-profile.webp",
   notification_permission: "45-notification-permission.webp",
@@ -123,21 +90,17 @@ export const SMART_CARD_ARTWORK_FILES = {
   offline_status: "55-waiting-for-connection.webp",
   access_status: "56-your-access.webp",
   suggestions: "57-people-to-connect.webp",
-  upfor_fallback: "58-upfor-fallback.webp",
 } as const satisfies Record<ApprovedSmartCardStateId, string>;
 
 type ArtworkCard = { id: SmartCard["id"] | ApprovedSmartCardStateId; eyebrow?: string };
 
 export function smartCardSceneNumber(card: ArtworkCard): number {
-  if (card.id === "safe_arrival") return card.eyebrow?.includes("CHECK IN") ? 2 : 3;
   return SMART_CARD_SCENES[card.id as ApprovedSmartCardStateId] ?? SMART_CARD_SCENES.core_fallback;
 }
 
 export function smartCardArtwork(card: ArtworkCard) {
   const scene = smartCardSceneNumber(card);
-  const state = card.id === "safe_arrival"
-    ? (scene === 2 ? "safe_arrival_overdue" : "safe_arrival_action")
-    : card.id as ApprovedSmartCardStateId;
+  const state = card.id as ApprovedSmartCardStateId;
   const file = SMART_CARD_ARTWORK_FILES[state] ?? SMART_CARD_ARTWORK_FILES.core_fallback;
   return { scene, src: `/illustrations/smart-card/scenes-v2/${file}` };
 }

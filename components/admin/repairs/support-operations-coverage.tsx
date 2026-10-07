@@ -53,8 +53,11 @@ const ICON_BY_AREA: Record<string, LucideIcon> = {
   "privacy-account-ops": FileKey2
 };
 
+const RETIRED_SUPPORT_SURFACES = new Set(["plan-chat", "plans", "upfor", "safe-arrival"]);
+
 export function SupportOperationsCoverage() {
   const counts = supportCoverageCounts();
+  const visibleCatalog = SUPPORT_OPERATIONS_CATALOG.filter((item) => !RETIRED_SUPPORT_SURFACES.has(item.id));
 
   return (
     <div className="space-y-5">

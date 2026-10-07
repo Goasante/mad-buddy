@@ -372,7 +372,7 @@ function AccountDoctorPanel({
   return (
     <AdminSection
       title="Account Doctor"
-      description="Checks lifecycle metadata only — never message bodies, exact location, private media, payment credentials, push tokens, raw DOB, or Safe Arrival details."
+      description="Checks lifecycle metadata only — never message bodies, exact location, private media, payment credentials, push tokens, raw DOB, or retired journey details."
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium">
@@ -458,15 +458,15 @@ const AREA_FOR_CATALOG_ID: Record<string, string> = {
   "muddies-requests": "Relationships",
   "blocks-refriend": "Relationships",
   "direct-messaging": "Messaging",
-  "plan-chat": "Plans",
-  plans: "Plans",
-  upfor: "UpFor",
+  "plan-chat": "Meet Up",
+  plans: "Meet Up",
+  upfor: "Meet Up",
   linkr: "Relationships",
   presence: "Presence",
   notifications: "Notifications",
   push: "Notifications",
-  events: "Plans",
-  "safe-arrival": "Account",
+  events: "Events",
+  "safe-arrival": "Meet Up",
   "access-billing": "Access",
   "features-tours": "Access",
   journey: "Account",

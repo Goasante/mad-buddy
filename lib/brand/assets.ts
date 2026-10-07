@@ -43,7 +43,7 @@ export const brandSymbol = {
   dark: { src: "/brand/mad-buddy-mark-dark.png", width: 512, height: 512 }
 } as const satisfies Record<string, BrandAsset>;
 
-export type BrandNavigationIconName = "linkr" | "upfor";
+export type BrandNavigationIconName = "linkr" | "meetup" | "upfor";
 
 /** Approved state-specific navigation artwork. Never tinted or filtered. */
 export const brandNavigationIcons = {
@@ -51,7 +51,13 @@ export const brandNavigationIcons = {
     active: { src: "/icons/navigation/linkr-active.png", width: 64, height: 64 },
     inactive: { src: "/icons/navigation/linkr-inactive.png", width: 62, height: 58 }
   },
+  meetup: {
+    // Product retirement: Meet Up inherits the approved UpFor/App4 navigation mark.
+    active: { src: "/icons/navigation/upfor-active.png", width: 64, height: 64 },
+    inactive: { src: "/icons/navigation/upfor-inactive.png", width: 61, height: 62 }
+  },
   upfor: {
+    // Legacy alias retained only for old technical callers while UpFor data is drained.
     active: { src: "/icons/navigation/upfor-active.png", width: 64, height: 64 },
     inactive: { src: "/icons/navigation/upfor-inactive.png", width: 61, height: 62 }
   }

@@ -15,7 +15,7 @@ export type RepairRisk = "low" | "medium" | "high";
 
 export type RepairCategory =
   | "Messaging & coordination"
-  | "Plans & UpFor"
+  | "Legacy social data"
   | "Visibility & presence";
 
 export type RepairDefinition = {
@@ -87,9 +87,9 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   },
   {
     id: "reconcile_plan_chats",
-    label: "Reconcile Plan Chats",
-    description: "Runs the canonical Plan Chat membership reconciler for this user's active Going/Maybe Plans.",
-    effect: "Plan Chat membership is rebuilt from the Plan lifecycle authority. It does not add arbitrary people or create direct-message permission.",
+    label: "Reconcile legacy coordination chats",
+    description: "Runs the historical coordination-chat membership reconciler for this user's retained records.",
+    effect: "Historical coordination-chat membership is rebuilt from its original lifecycle authority. It does not add arbitrary people or create direct-message permission.",
     category: "Messaging & coordination",
     risk: "medium",
     permission: "admin.support.manage",
@@ -98,12 +98,12 @@ export const REPAIR_CATALOG: readonly RepairDefinition[] = [
   },
   {
     id: "settle_stranded_upfor_requests",
-    label: "Settle requests on a closed UpFor",
+    label: "Settle requests on retired discovery",
     description:
-      "Declines requests still pending on the account's own UpFors that have expired, been cancelled or already become a Plan.",
+      "Declines requests still pending on retired discovery records that have expired, been cancelled or already converted.",
     effect:
-      "People waiting on a session that is over stop waiting. Nobody is added to anything, and no live UpFor is touched.",
-    category: "Plans & UpFor",
+      "People waiting on a retired session that is over stop waiting. Nobody is added to anything, and current Meetups are untouched.",
+    category: "Legacy social data",
     risk: "low",
     permission: "admin.support.manage",
     requiresReason: false,
@@ -136,7 +136,7 @@ export function repairRiskTone(risk: RepairRisk): "default" | "warning" | "dange
 
 export const REPAIR_CATEGORY_ORDER: readonly RepairCategory[] = [
   "Messaging & coordination",
-  "Plans & UpFor",
+  "Legacy social data",
   "Visibility & presence"
 ];
 

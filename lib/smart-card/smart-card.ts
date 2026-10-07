@@ -28,6 +28,9 @@ export const SMART_CARD_IDS = [
      because a Plan and an UpFor both carry a time pressure a friend request
      does not -- but still above everything that is merely happening. */
   "muddy_request",
+  // Current Meet Up states. Legacy ids below remain type-compatible only.
+  "meetup_starting",
+  "meetup_upcoming",
   "plan_starting",
   /* Tier 2. Somebody saying yes to an UpFor is existing coordination the
      viewer has already been waiting on, so it beats a NEW Event Linkr opt-in
@@ -94,6 +97,7 @@ export const SMART_CARD_IDS = [
   "journey",
   "buddy_progress",
   "upfor_fallback",
+  "meetup_fallback",
   "core_fallback"
 ] as const;
 
@@ -291,9 +295,9 @@ export function resolveSmartCard(
      * a non-dismissible live fact must still render.
      */
     if (card.dismissible && acknowledged.has(acknowledgementKey)) continue;
-    // The UpFor fallback is not permanently dismissible. A recent impression
+    // The Meet Up fallback is not permanently dismissible. A recent impression
     // suppresses it only for the service-level cooldown window.
-    if (card.id === "upfor_fallback" && acknowledged.has("upfor_fallback")) continue;
+    if (card.id === "meetup_fallback" && acknowledged.has("meetup_fallback")) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;
     return { ...card, priority: SMART_CARD_PRIORITY[card.id] };
   }

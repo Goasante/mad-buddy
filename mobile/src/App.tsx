@@ -9,7 +9,6 @@ import { PrivacyScreen, TermsScreen } from "./screens/LegalScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { MuddiesScreen } from "./screens/MuddiesScreen";
-import { PlansScreen } from "./screens/PlansScreen";
 import { NotificationsScreen } from "./screens/NotificationsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { MoreScreen } from "./screens/MoreScreen";
@@ -23,7 +22,6 @@ import { NotificationPreferencesScreen } from "./screens/NotificationPreferences
 import { EventsScreen } from "./screens/EventsScreen";
 import { UserProfileScreen } from "./screens/UserProfileScreen";
 import { UnavailableScreen } from "./screens/UnavailableScreen";
-import { SafetyScreen } from "./screens/SafetyScreen";
 import { MeetupScreen } from "./screens/MeetupScreen";
 import { SubscriptionScreen } from "./screens/SubscriptionScreen";
 import { BuddyScoreScreen } from "./screens/BuddyScoreScreen";
@@ -97,7 +95,7 @@ export default function App() {
       >
         <Route path="/home" element={<HomeScreen />} />
         <Route path="/muddies" element={<MuddiesScreen />} />
-        <Route path="/plans" element={<PlansScreen />} />
+        <Route path="/plans" element={<Navigate to="/meet-up" replace />} />
         <Route path="/notifications" element={<NotificationsScreen />} />
         <Route path="/more" element={<MoreScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
@@ -107,7 +105,7 @@ export default function App() {
         <Route path="/pings" element={<MeetingPingsScreen />} />
         <Route path="/events" element={<MobileFeatureBoundary feature="events"><EventsScreen /></MobileFeatureBoundary>} />
         <Route path="/groups" element={<Navigate to="/messages?filter=groups" replace />} />
-        <Route path="/safety" element={<SafetyScreen />} />
+        <Route path="/safety" element={<Navigate to="/meet-up" replace />} />
         <Route path="/meet-up" element={<MobileFeatureBoundary feature="meet_up"><MeetupScreen /></MobileFeatureBoundary>} />
         <Route path="/subscription" element={<SubscriptionScreen />} />
         <Route path="/buddy-score" element={<BuddyScoreScreen />} />

@@ -15,7 +15,7 @@ import type { SmartCardId } from "@/lib/smart-card/smart-card";
  *
  * The old Home condition was `smartCard.id === "safe_arrival" ||
  * composition.showJourneyCard`. That admitted two of fourteen built states, so
- * Plan RSVP, live Events and the rest were computed on every load and thrown
+ * Meetup timing, live Events and the rest were computed on every load and thrown
  * away. Replacing it with a longer list of ids would have the same defect
  * later, one state at a time, so eligibility is decided by TIER instead:
  *
@@ -50,14 +50,7 @@ const HOME_OWNED_ELSEWHERE: Record<string, string> = {
  * the tier next to the provider where it could drift.
  */
 const TIER_ALIASES: Partial<Record<SmartCardId, string>> = {
-  nearby_muddies: "nearby_muddy",
-  /* The wired safety provider is one card covering the whole live-journey
-     state; the catalog splits the same ground into safe_arrival_overdue and
-     safe_arrival_action. Without this alias the id is unlisted and falls to the
-     unknown-state default, which would put a live Safe Arrival behind the
-     maturity gate -- survivable only because tier 0 short-circuits first, and
-     not something to leave resting on that. */
-  safe_arrival: "safe_arrival_action"
+  nearby_muddies: "nearby_muddy"
 };
 
 const TIER_BY_CATALOG_ID = new Map<string, SmartCardTier>(
@@ -100,7 +93,7 @@ export function shouldShowSmartCardOnHome(input: {
 }): HomeSmartCardGate {
   const tier = smartCardTier(input.id);
 
-  /* Safety is never deferred and never gated. A live journey somebody is on
+  /* Urgent truth is never deferred and never gated. A live journey somebody is on
      outranks every teaching moment Home could be having. */
   if (tier === 0) {
     return { eligible: true, deferred: false, tier };
