@@ -25,19 +25,19 @@ describe("CASE D — something is already arranged", () => {
   const plan = planActionsForMuddy(ctx({ hasSharedUpcomingPlan: true, isNearby: true }));
 
   it("continues the commitment instead of suggesting another", () => {
-    expect(plan.primary).toBe("view_plan");
+    expect(plan.primary).toBe("view_meetup");
     expect(plan.reason).toBe("shared_plan");
   });
 
   it("never proposes a second plan to someone you are already meeting", () => {
-    expect(plan.secondary).not.toBe("make_plan");
+    expect(plan.secondary).not.toBe("make_meetup");
   });
 
   it("outranks even a nearby wave", () => {
     const nearbyToo = planActionsForMuddy(
       ctx({ hasSharedUpcomingPlan: true, hasExistingConversation: true, conversationState: "established", isNearby: true })
     );
-    expect(nearbyToo.primary).toBe("view_plan");
+    expect(nearbyToo.primary).toBe("view_meetup");
   });
 });
 
@@ -50,7 +50,7 @@ describe("CASE A — new Muddy, never spoken", () => {
   });
 
   it("keeps a plan available as the quieter option", () => {
-    expect(plan.secondary).toBe("make_plan");
+    expect(plan.secondary).toBe("make_meetup");
   });
 
   it("does not wave at somebody who has never been messaged", () => {
@@ -77,7 +77,7 @@ describe("CASE C — established, not nearby", () => {
   const plan = planActionsForMuddy(ctx({ hasExistingConversation: true, conversationState: "established" }));
 
   it("is where proposing a plan finally makes sense", () => {
-    expect(plan.primary).toBe("make_plan");
+    expect(plan.primary).toBe("make_meetup");
     expect(plan.reason).toBe("established");
   });
 });
