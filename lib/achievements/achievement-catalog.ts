@@ -30,7 +30,7 @@ export type AchievementDefinition = {
   iconPath: string;
   category: AchievementCategory;
   criteria: AchievementCriteria;
-  notification: { title: string; body: string };
+  notification: { title: string; body: string };\n  /** Retired achievements remain addressable for historical rows but stay out of current earning UI. */\n  active?: boolean;
 };
 
 const BADGE_DIR = "/icons/features/navigation/badges";
@@ -101,7 +101,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     iconPath: `${BADGE_DIR}/First Plan.png`,
     category: "connection",
     criteria: { type: "first_time", threshold: 1 },
-    notification: unlocked("First Plan")
+    notification: unlocked("First Meetup")
   },
   {
     id: "plan_maker",
@@ -110,7 +110,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     iconPath: `${BADGE_DIR}/Plan Maker.png`,
     category: "connection",
     criteria: { type: "count", threshold: 5 },
-    notification: unlocked("Plan Maker")
+    notification: unlocked("Meetup Maker")
   },
   {
     id: "plan_regular",
@@ -119,7 +119,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     iconPath: `${BADGE_DIR}/Plan Regular.png`,
     category: "connection",
     criteria: { type: "count", threshold: 10 },
-    notification: unlocked("Plan Regular")
+    notification: unlocked("Meetup Regular")
   },
   {
     id: "open_to_plans",
@@ -128,7 +128,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     iconPath: `${BADGE_DIR}/Open to Plans.png`,
     category: "connection",
     criteria: { type: "first_time", threshold: 1 },
-    notification: unlocked("Open to Plans")
+    notification: unlocked("Open to Meetups")
   },
   {
     id: "first_moment",
@@ -232,7 +232,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "good_check_in",
     name: "Good Check-In",
-    description: "You completed a Safe Arrival.",
+    description: "You checked in at a Meetup."
     iconPath: `${BADGE_DIR}/Good Check-In.png`,
     category: "safety",
     criteria: { type: "first_time", threshold: 1 },
@@ -245,12 +245,12 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     iconPath: `${BADGE_DIR}/Trusted Contact.png`,
     category: "safety",
     criteria: { type: "first_time", threshold: 1 },
-    notification: unlocked("Trusted Contact")
+    notification: unlocked("Safety Contact"),\n    active: false
   },
   {
     id: "safe_traveller",
     name: "Safe Traveller",
-    description: "You completed 5 Safe Arrivals.",
+    description: "You checked in at 5 Meetups."
     iconPath: `${BADGE_DIR}/Safe Traveller.png`,
     category: "safety",
     criteria: { type: "count", threshold: 5 },
@@ -263,7 +263,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     iconPath: `${BADGE_DIR}/Reliable Watcher.png`,
     category: "safety",
     criteria: { type: "count", threshold: 5 },
-    notification: unlocked("Reliable Watcher")
+    notification: unlocked("Reliable Buddy"),\n    active: false
   }
 ];
 
