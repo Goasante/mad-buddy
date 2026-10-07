@@ -102,7 +102,7 @@ export function StructuredMessageCardV4({
     );
   }
 
-  const href = payload.refKind === "plan" ? "/plans" : `/events?event=${payload.refId}`;
+  const href = payload.refKind === "plan" ? "/meet-up" : `/events?event=${payload.refId}`;
   return (
     <div>
       <button type="button" onClick={() => router.push(href as Route)} className={cn(cardClass, "focus-ring block w-full transition active:scale-[.99]")}>
@@ -118,9 +118,9 @@ export function StructuredMessageCardV4({
         ) : null}
         <div className="flex items-start gap-3">
           <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl", mine ? "bg-white/12" : "bg-primary/10 text-primary")}><CalendarDays className="h-4.5 w-4.5" /></span>
-          <span className="min-w-0 flex-1"><span className="text-xs font-medium opacity-60">{payload.refKind === "plan" ? "Plan" : "Event"}</span><strong className="block truncate text-sm">{payload.title}</strong><span className="mt-0.5 block truncate text-xs opacity-65">{formatDate(payload.startsAt)}</span>{payload.locationLabel ? <span className="mt-1 flex items-center gap-1 truncate text-xs opacity-65"><MapPin className="h-3 w-3" />{payload.locationLabel}</span> : null}</span>
+          <span className="min-w-0 flex-1"><span className="text-xs font-medium opacity-60">{payload.refKind === "plan" ? "Meetup" : "Event"}</span><strong className="block truncate text-sm">{payload.title}</strong><span className="mt-0.5 block truncate text-xs opacity-65">{formatDate(payload.startsAt)}</span>{payload.locationLabel ? <span className="mt-1 flex items-center gap-1 truncate text-xs opacity-65"><MapPin className="h-3 w-3" />{payload.locationLabel}</span> : null}</span>
         </div>
-        <span className="mt-2 block text-xs font-semibold text-primary">Open {payload.refKind === "plan" ? "Plan" : "Event"}</span>
+        <span className="mt-2 block text-xs font-semibold text-primary">Open {payload.refKind === "plan" ? "Meetup" : "Event"}</span>
       </button>
       <MessageRetentionV4 conversationId={conversationId} messageId={messageId} mine={mine} />
     </div>
