@@ -32,13 +32,11 @@ function candidate(eventType: Candidate["event_type"], sourceReference: string):
 
 /** Reconciles trusted canonical records into the append-only ledger. */
 export async function reconcileBuddyScore(admin: Admin, userId: string, now = new Date()) {
-  const [profile, authUser, friendships, createdPlans, planParticipations, safeArrivals, achievements] = await Promise.all([
+  const [profile, authUser, friendships, meetupParticipations, achievements] = await Promise.all([
     admin.from("profiles").select("full_name, username, bio, avatar_url, created_at").eq("user_id", userId).maybeSingle(),
     admin.auth.admin.getUserById(userId),
     admin.from("friendships").select("id").or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
-    admin.from("plans").select("id").eq("creator_id", userId).eq("status", "completed"),
-    admin.from("plan_participants").select("plan_id").eq("user_id", userId).eq("rsvp_status", "going"),
-    admin.from("safe_arrival_sessions").select("id").eq("traveller_id", userId).eq("status", "completed"),
+    admin.from("meetup_participants").select("meetup_id").eq("user_id", userId).eq("response", "accepted"),
     admin.from("user_achievements").select("id").eq("user_id", userId)
   ]);
   const candidates: Candidate[] = [];
@@ -50,16 +48,11 @@ export async function reconcileBuddyScore(admin: Admin, userId: string, now = ne
     for (let index = 1; index <= quarters; index += 1) candidates.push(candidate("account_quarter", `account:quarter:${index}`));
   }
   for (const row of friendships.data ?? []) candidates.push(candidate("friendship_accepted", `friendship:${row.id}`));
-  const participatedPlanIds = [...new Set((planParticipations.data ?? []).map((row) => row.plan_id))];
-  const completedParticipations = participatedPlanIds.length
-    ? await admin.from("plans").select("id").in("id", participatedPlanIds).eq("status", "completed")
+  const meetupIds = [...new Set((meetupParticipations.data ?? []).map((row) => row.meetup_id))];
+  const completedMeetups = meetupIds.length
+    ? await admin.from("meetups").select("id").in("id", meetupIds).eq("status", "ended")
     : { data: [] };
-  const completedPlanIds = new Set([
-    ...(createdPlans.data ?? []).map((row) => row.id),
-    ...(completedParticipations.data ?? []).map((row) => row.id)
-  ]);
-  for (const planId of completedPlanIds) candidates.push(candidate("plan_completed", `plan:${planId}`));
-  for (const row of safeArrivals.data ?? []) candidates.push(candidate("safe_arrival_completed", `safe-arrival:${row.id}`));
+  for (const meetup of completedMeetups.data ?? []) candidates.push(candidate("meetup_completed", `meetup:${meetup.id}`));
   for (const row of achievements.data ?? []) candidates.push(candidate("achievement_earned", `achievement:${row.id}`));
   if (candidates.length === 0) return;
   await admin.from("buddy_score_ledger").upsert(
@@ -77,8 +70,8 @@ export async function loadBuddyScore(admin: Admin, userId: string): Promise<Budd
  * Read-only Buddy Score projection, for surfaces that DISPLAY the score.
  *
  * Identical output to loadBuddyScore(), minus the reconciliation. That
- * difference matters: reconcileBuddyScore() runs seven parallel queries, an
- * auth.admin.getUserById lookup, a conditional plans read AND a ledger UPSERT.
+ * difference matters: reconcileBuddyScore() runs several trusted-record reads,
+ * an auth.admin.getUserById lookup, a conditional Meetups read AND a ledger UPSERT.
  * Paying that on a presentation GET made /api/profile a write endpoint --
  * twice per request, because Identity and Journey each loaded the score
  * independently.
