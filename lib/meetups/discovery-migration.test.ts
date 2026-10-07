@@ -36,7 +36,7 @@ describe("Meet New People database boundary", () => {
   });
 
   it("does not allow a declined person to re-enter the same listing", () => {
-    const guard = read("20261007150500_meet_new_people_decline_guard.sql");
+    const guard = read("20261007144940_meet_new_people_decline_guard.sql");
     expect(guard).toContain("old.status='declined'");
     expect(guard).toContain("new.status='pending'");
     expect(guard).toContain("DISCOVERY_DECLINED");
