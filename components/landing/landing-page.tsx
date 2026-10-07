@@ -16,7 +16,8 @@ import {
   ShieldCheck,
   UsersRound
 } from "lucide-react";
-import { LandingNav } from "@/components/landing/landing-nav";\nimport { HangoutIcon } from "@/components/brand/brand-icons";
+import { LandingNav } from "@/components/landing/landing-nav";
+import { HangoutIcon } from "@/components/brand/brand-icons";
 import { PublicFooter } from "@/components/front-door/public-shell";
 
 const trustPoints = [
