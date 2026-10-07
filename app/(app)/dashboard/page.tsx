@@ -5,9 +5,7 @@ import { DashboardPageContent } from "@/components/dashboard/dashboard-page";
 import { loadActivationProjection } from "@/lib/activation/projection";
 import { loadFriendGlowColors } from "@/lib/glow/custom-colors-server";
 import { ensureProfileForUser } from "@/lib/profiles/ensure-profile";
-import { loadSafeArrivalJourneys } from "@/lib/safety/safe-arrival-service";
 import { loadClickedPeople } from "@/lib/linkr/collections-service";
-import { loadHomeUpForContext } from "@/lib/social/home-upfor-context";
 import { loadUpcomingAgenda } from "@/lib/social/upcoming-agenda";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserRecord } from "@/lib/supabase/auth";
@@ -34,7 +32,7 @@ export default async function DashboardPage() {
   const acknowledgedIdsPromise = user
     ? loadAcknowledgedSmartCardIds(admin, user.id)
     : Promise.resolve(new Set<string>());
-  const [profile, statusResult, agenda, profileDetailsResult, safeArrival, glowColorByFriendId, journey, incomingRequestCount, birthDetailsResult, buddyScore, topEvents, activation, upForContext, linkrMutuals, meetupItems] = user
+  const [profile, statusResult, agenda, profileDetailsResult, glowColorByFriendId, journey, incomingRequestCount, birthDetailsResult, buddyScore, topEvents, activation, linkrMutuals, meetupItems] = user
     ? await Promise.all([
         ensureProfileForUser(user),
         supabase
@@ -48,7 +46,6 @@ export default async function DashboardPage() {
           .select("username, avatar_url, bio, mood_status")
           .eq("user_id", user.id)
           .maybeSingle(),
-        loadSafeArrivalJourneys(admin, user.id),
         loadFriendGlowColors(admin, user.id),
         loadJourney(admin, user.id),
         countIncomingRequests(user.id),
@@ -56,11 +53,10 @@ export default async function DashboardPage() {
         loadBuddyScore(admin, user.id),
         availability.events ? getRankedUpcomingEvents(user.id, { limit: HOME_RANKED_EVENTS_LIMIT }) : Promise.resolve([]),
         loadActivationProjection(user.id),
-        availability.upfor ? loadHomeUpForContext(admin, user.id) : Promise.resolve(null),
         availability.linkr ? loadClickedPeople(user.id) : Promise.resolve([]),
         availability.meet_up ? loadMeetupHome(admin, user.id) : Promise.resolve([])
       ])
-    : [null, null, { items: [], hasMore: false }, null, null, {}, null, 0, null, null, [], null, null, [], []];
+    : [null, null, { items: [], hasMore: false }, null, {}, null, 0, null, null, [], null, [], []];
 
   const status = statusResult?.data;
   const hasActiveStatus = Boolean(status && isStatusActiveAtRequestTime(status.expires_at));
@@ -111,13 +107,9 @@ export default async function DashboardPage() {
   const smartCardProjection = user
     ? await loadHomeSmartCardProjection({
         userId: user.id,
-        planIds: decisionAgendaPlans.map((plan) => plan.id),
-        planTitleById: new Map(decisionAgendaPlans.map((plan) => [plan.id, plan.title])),
-        /* A Plan without an explicit end leaves the Home agenda at its start,
-           so startsAt is the honest hard boundary in that case. */
-        planEndById: new Map(
-          decisionAgendaPlans.map((plan) => [plan.id, plan.endsAt ?? plan.startsAt])
-        ),
+        planIds: [],
+        planTitleById: new Map(),
+        planEndById: new Map(),
         now
       })
     : null;
@@ -139,7 +131,6 @@ export default async function DashboardPage() {
         buddyScore,
         recentAchievement: smartCardProjection?.recentAchievement ?? null,
         suggestionCount: 0,
-        upFor: upForContext,
         /* Both are facts Home already owns: the request count feeds its header
            badge, and Linkr mutuals are only ever MUTUAL matches, so a card
            built from them reveals nothing one-sided. */
@@ -150,8 +141,6 @@ export default async function DashboardPage() {
            between what they are handed. */
         eventLinkrOffer: smartCardProjection?.eventLinkrOffer ?? null,
         muddyBirthdays: smartCardProjection?.muddyBirthdays ?? [],
-        planDecisions: smartCardProjection?.planDecisions ?? [],
-        planChatDecisions: smartCardProjection?.planChatDecisions ?? [],
         blockedFeature: smartCardProjection?.blockedFeature ?? null,
         meetups: meetupItems,
         /* NearbyHero owns the proximity payoff and the Activation card owns
@@ -190,8 +179,7 @@ export default async function DashboardPage() {
   return (
     <DashboardPageContent
       meetupItems={meetupItems}
-      watchUpForChanges={upForContext?.joined.some((session) => session.myStatus === "pending" || session.myStatus === "accepted") ?? false}
-      activationState={activationUnavailable ? null : activation?.state ?? null}
+      activationState={activationUnavailable || activation?.state === "upcoming_plan" ? null : activation?.state ?? null}
       firstMuddy={activation?.acknowledgeFirstMuddy ? activation.firstMuddy : null}
       firstMuddyNeedsLocation={activation ? !activation.locationGranted : false}
       activationMilestones={activation?.milestones ?? []}
@@ -218,10 +206,8 @@ export default async function DashboardPage() {
       hiddenQuickActionHrefs={[
         // Owner decision: Home keeps the focused three-card suggestion rail.
         // The old viewport gap-filler ("More to explore") is not part of Home.
-        "/plans?create=1",
         "/events",
         "/discover",
-        "/safe-arrival",
         "/groups",
         "/reminders",
         "/settings/engagement",
