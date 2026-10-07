@@ -31,12 +31,12 @@ const categoryIcons: Record<string, LucideIcon> = {
 };
 
 const recapRows: Array<{ key: string; label: string }> = [
-  { key: "plansCompleted", label: "Plans completed" },
-  { key: "plansCreated", label: "Plans created" },
+  { key: "meetupsCompleted", label: "Meetups completed" },
+  { key: "meetupsCreated", label: "Meetups arranged" },
+  { key: "meetupListings", label: "Meet New People listings" },
   { key: "muddiesInteractedWith", label: "Muddies you made time for" },
   { key: "newMuddies", label: "New Muddies" },
   { key: "wavesSent", label: "Waves sent" },
-  { key: "hangoutSessions", label: "UpFors hosted" },
   { key: "daysVisible", label: "Days with your glow on" }
 ];
 
