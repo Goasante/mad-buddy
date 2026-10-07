@@ -56,6 +56,7 @@ export function MeetupScreen() {
       muddies={data.muddies}
       focusedId={params.get("meetup") ?? undefined}
       openNewPeople={params.get("newPeople") === "1"}
+      focusedDiscoveryId={params.get("discovery") ?? undefined}
       discoveryHub={data.discoveryHub}
       discoveryAction={discoveryAction}
       saveAction={saveAction}
