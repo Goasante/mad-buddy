@@ -333,7 +333,6 @@ export function MuddyProfilePage({
                 asChild
                 className="shrink-0 border-white/30 bg-white/10 text-white hover:bg-white/20"
               >
-                {
                 <Link
                   href={`/meet-up?create=1&with=${encodeURIComponent(muddy.friendId)}` as Route}
                   aria-label={`Create a Meetup with ${muddy.displayName}`}
