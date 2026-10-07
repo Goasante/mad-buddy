@@ -310,7 +310,7 @@ describe("the viewer's own birthday changes state at the real boundary", () => {
 });
 
 describe("family 3 ranking against the states already proven", () => {
-  it("keeps Safe Arrival above every relationship state", () => {
+  it("does not revive retired Safe Arrival over active relationship states", () => {
     const card = pick({
       safeArrival: { travelling: true, watcherCount: 2 },
       eventLinkrOffer: {
@@ -322,7 +322,7 @@ describe("family 3 ranking against the states already proven", () => {
       linkrMutuals: [mutual({ eventName: "Acoustic Night" })],
       muddyBirthdays: [{ userId: "u9", displayName: "Ama" }]
     });
-    expect(card?.id).toBe("safe_arrival");
+    expect(card?.id).toBe("event_linkr_ready");
   });
 
   it("keeps a waiting Muddy request above a birthday", () => {
