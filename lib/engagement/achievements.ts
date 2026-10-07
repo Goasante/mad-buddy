@@ -147,125 +147,59 @@ export async function grantMomentAchievements(admin: Admin, userId: string): Pro
   }
 }
 
-export async function grantMeetupAchievements(admin: Admin, userId: string): Promise<void> {
-  try {
-    const { data: participations } = await admin
-      .from("meetup_participants")
-      .select("meetup_id")
-      .eq("user_id", userId)
-      .eq("response", "accepted");
-    const ids = [...new Set((participations ?? []).map((row) => row.meetup_id))];
-    if (ids.length === 0) return;
-    const { count } = await admin
-      .from("meetups")
-      .select("id", { count: "exact", head: true })
-      .in("id", ids)
-      .eq("status", "ended");
-    const completed = count ?? 0;
-    if (completed <= 0) return;
-    await Promise.all([
-      grantAchievement(admin, userId, "first_meetup"),
-      grantCountAchievement(admin, userId, "meetup_maker", completed),
-      grantCountAchievement(admin, userId, "meetup_regular", completed)
-    ]);
-  } catch {
-    // Best-effort by design.
-  }
-}
-
-/** Grant completed-Meetup badges to everyone who actually accepted this Meetup. */
-export async function grantEndedMeetupAchievements(admin: Admin, meetupId: string): Promise<void> {
-  try {
-    const { data: meetup } = await admin.from("meetups").select("status").eq("id", meetupId).maybeSingle();
-    if (meetup?.status !== "ended") return;
-    const { data: participants } = await admin
-      .from("meetup_participants")
-      .select("user_id")
-      .eq("meetup_id", meetupId)
-      .eq("response", "accepted");
-    const userIds = [...new Set((participants ?? []).map((row) => row.user_id))];
-    await Promise.all(userIds.map((userId) => grantMeetupAchievements(admin, userId)));
-  } catch {
-    // Best-effort by design.
-  }
-}
-
-/** Legacy Safe Arrival grants are retained only for already-running historical sessions. */
-export async function grantSafeTravellerAchievements(admin: Admin, userId: string): Promise<void> {
-  try {
-    const { count } = await admin
-      .from("safe_arrival_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("traveller_id", userId)
-      .eq("status", "completed");
-    await Promise.all([
-      grantAchievement(admin, userId, "good_check_in"),
-      grantCountAchievement(admin, userId, "safe_traveller", count ?? 0)
-    ]);
-  } catch {
-    // Best-effort by design.
-  }
-}
-
-export async function grantReliableWatcherAchievement(admin: Admin, userId: string): Promise<void> {
-  try {
-    const { count } = await admin
-      .from("safe_arrival_contacts")
-      .select("id", { count: "exact", head: true })
-      .eq("contact_user_id", userId)
-      .eq("acknowledgement_status", "watching");
-    await grantCountAchievement(admin, userId, "reliable_watcher", count ?? 0);
-  } catch {
-    // Best-effort by design.
-  }
-}
-
-
-/**
- * Current Meetup completion achievements reuse the stable historical database
- * codes so already-earned rows remain continuous while the product language
- * and earning source move to Meetups.
- */
 export async function grantMeetupCompletionAchievements(admin: Admin, meetupId: string): Promise<void> {
   try {
+    const { data: meetup } = await admin
+      .from("meetups")
+      .select("id,together_at")
+      .eq("id", meetupId)
+      .maybeSingle();
+    if (!meetup?.together_at) return;
+
     const { data: participants } = await admin
       .from("meetup_participants")
       .select("user_id")
       .eq("meetup_id", meetupId)
-      .eq("response", "accepted");
-
+      .not("met_at", "is", null);
     const userIds = [...new Set((participants ?? []).map((row) => row.user_id))];
+    if (userIds.length < 2) return;
+
+    const { recordMeetupCompletionScore } = await import("@/lib/engagement/buddy-score-service");
     for (const userId of userIds) {
+      await recordMeetupCompletionScore(admin, userId, meetupId);
       const { count } = await admin
-        .from("meetup_participants")
-        .select("id, meetups!inner(status)", { count: "exact", head: true })
+        .from("buddy_score_ledger")
+        .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
-        .eq("response", "accepted")
-        .eq("meetups.status", "ended");
+        .eq("event_type", "meetup_completed");
       await Promise.all([
         grantAchievement(admin, userId, "first_plan"),
         grantCountAchievement(admin, userId, "plan_maker", count ?? 0),
         grantCountAchievement(admin, userId, "plan_regular", count ?? 0)
       ]);
     }
+
+    const { meetupAttendancePairs } = await import("@/lib/life/plan-attendance");
+    const { emitLifeEvents } = await import("@/lib/life/emit");
+    await emitLifeEvents(
+      admin,
+      meetupAttendancePairs(userIds.map((userId) => ({ meetupId, userId })), meetup.together_at)
+    );
   } catch {
     // Best-effort by design.
   }
 }
 
-/** Meetup's integrated home check-in replaces standalone Safe Arrival progress. */
+/** Meetup home-arrival replaces the retired standalone Safe Arrival achievement. */
 export async function grantMeetupSafetyAchievements(admin: Admin, userId: string): Promise<void> {
-  try {
-    const { count } = await admin
-      .from("meetup_participants")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .not("home_arrived_at", "is", null);
-    await Promise.all([
-      grantAchievement(admin, userId, "good_check_in"),
-      grantCountAchievement(admin, userId, "safe_traveller", count ?? 0)
-    ]);
-  } catch {
-    // Best-effort by design.
-  }
+  await grantAchievement(admin, userId, "good_check_in");
+}
+
+/** Retired safety workflow: keep exports for late historical actions, but grant nothing new. */
+export async function grantSafeTravellerAchievements(_admin: Admin, _userId: string): Promise<void> {
+  return;
+}
+
+export async function grantReliableWatcherAchievement(_admin: Admin, _userId: string): Promise<void> {
+  return;
 }
