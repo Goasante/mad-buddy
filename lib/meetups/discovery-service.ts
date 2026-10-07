@@ -7,9 +7,11 @@ import { guardAction } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { deliverNotification } from "@/lib/notifications/server";
 import { isValidTimeZone } from "@/lib/time/timezone";
+import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import {
   meetupDiscoveryCommandSchema,
   meetupDiscoveryCreateSchema,
+  meetupDiscoveryHubSchema,
   type MeetupDiscoveryHub
 } from "@/lib/meetups/discovery";
 
@@ -43,16 +45,8 @@ function emptyHub(): MeetupDiscoveryHub {
 }
 
 function parseHub(value: unknown): MeetupDiscoveryHub {
-  if (!value || typeof value !== "object") return emptyHub();
-  const raw = value as Record<string, unknown>;
-  const nearby = Array.isArray(raw.nearby) ? raw.nearby : [];
-  const mine = Array.isArray(raw.mine) ? raw.mine : [];
-  return {
-    nearby: nearby as MeetupDiscoveryHub["nearby"],
-    mine: mine as MeetupDiscoveryHub["mine"],
-    activeSlots: typeof raw.activeSlots === "number" ? raw.activeSlots : 0,
-    maxActiveSlots: typeof raw.maxActiveSlots === "number" ? raw.maxActiveSlots : 3
-  };
+  const parsed = meetupDiscoveryHubSchema.safeParse(value);
+  return parsed.success ? parsed.data : emptyHub();
 }
 
 export async function loadMeetupDiscoveryHub(userId: string): Promise<MeetupDiscoveryHub> {
