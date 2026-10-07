@@ -176,7 +176,7 @@ export function EngagementPage({ initialSettings }: { initialSettings: Engagemen
             <ToggleCard
               icon={Ribbon}
               label="Friendship milestones"
-              hint="Factual moments such as plans together and Muddy anniversaries. No rankings or leaderboards."
+              hint="Factual moments such as Meetups together and Muddy anniversaries. No rankings or leaderboards."
               checked={settings.milestonesEnabled}
               disabled={isPending}
               onChange={(value) => save({
