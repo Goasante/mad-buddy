@@ -100,7 +100,7 @@ export const metadata: Metadata = {
     title: "Mad Buddy",
     description: "When your Muddies are close, they glow.",
     type: "website",
-    images: [{ url: "/brand/mad-buddy-social-share-v2.jpg", width: 1200, height: 630, alt: "Mad Buddy — Meet people. Make real plans. Your exact location stays private." }]
+    images: [{ url: "/brand/mad-buddy-social-share-v2.jpg", width: 1200, height: 630, alt: "Mad Buddy — Meet people. Make real Meetups. Your exact location stays private." }]
   },
   twitter: {
     card: "summary_large_image",
