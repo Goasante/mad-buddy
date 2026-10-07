@@ -128,15 +128,17 @@ export async function updateMeetupDiscovery(userId: string, input: unknown) {
   }
 
   if (parsed.data.action === "decide" && parsed.data.response === "accepted" && meetupId) {
+    const acceptedUserId = parsed.data.userId;
+    const discoveryId = parsed.data.id;
     after(async () => {
       await deliverNotification(client, {
-        userId: parsed.data.userId,
+        userId: acceptedUserId,
         type: `meetup:${meetupId}`,
         title: "You matched for a Meetup",
         message: "You’ve been accepted. Open the Meetup to coordinate.",
         priority: "high",
         senderId: userId,
-        dedupeKey: `meetup-discovery-accepted:${parsed.data.id}:${parsed.data.userId}`
+        dedupeKey: `meetup-discovery-accepted:${discoveryId}:${acceptedUserId}`
       });
     });
   }
