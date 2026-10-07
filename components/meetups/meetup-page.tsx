@@ -263,6 +263,7 @@ export function MeetupPage({
       <div className={creating ? "" : "grid grid-cols-[minmax(0,1fr)_auto] gap-2"}>
         <Button
           className="h-12 w-full min-w-0 rounded-2xl text-sm shadow-[0_10px_24px_hsl(var(--primary)/0.18)] sm:text-base"
+          disabled={!creating && discoveryHub.activeSlots >= discoveryHub.maxActiveSlots}
           onClick={() => setCreating((value) => !value)}
         >
           {creating ? <ArrowLeft className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
@@ -281,6 +282,11 @@ export function MeetupPage({
           </button>
         ) : null}
       </div>
+      {!creating && discoveryHub.activeSlots >= discoveryHub.maxActiveSlots ? (
+        <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
+          Three active Meetups or listings — end one to arrange another.
+        </p>
+      ) : null}
 
       {!creating && (
         <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
