@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { ACTIVE_ACHIEVEMENT_CATALOG, ACTIVE_ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
+import { ACTIVE_ACHIEVEMENT_CATALOG } from "@/lib/achievements/achievement-catalog";
 import {
   RECAP_REFLECTION_PROMPT,
   clampNotificationBudget,
@@ -202,23 +202,22 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
   ]);
 
   const earnedByCode = new Map((earnedRes.data ?? []).map((row) => [row.achievement_code, row.earned_at]));
-  // The local catalog is the display-safe fallback. A transient definitions
-  // read must not turn the whole page into the global error screen.
-  const definitions = definitionsRes.error
-    ? ACHIEVEMENT_CATALOG.map((definition) => ({
-        code: definition.id,
-        name: definition.name,
-        description: definition.description,
-        category: definition.category
-      }))
-    : definitionsRes.data ?? [];
+  // Product presentation comes from the current local catalog. The database
+  // still decides which definitions are enabled, but stale historical names
+  // can never leak back into the UI during a rollout or partial migration.
+  const databaseActiveCodes = definitionsRes.error
+    ? null
+    : new Set((definitionsRes.data ?? []).map((definition) => definition.code));
+  const definitions = databaseActiveCodes
+    ? ACTIVE_ACHIEVEMENT_CATALOG.filter((definition) => databaseActiveCodes.has(definition.id))
+    : ACTIVE_ACHIEVEMENT_CATALOG;
   const achievements = definitions.map((definition) => ({
-    code: definition.code,
+    code: definition.id,
     name: definition.name,
     description: definition.description,
     category: definition.category,
-    earned: earnedByCode.has(definition.code),
-    earnedAt: earnedByCode.get(definition.code) ?? null
+    earned: earnedByCode.has(definition.id),
+    earnedAt: earnedByCode.get(definition.id) ?? null
   }));
 
   const friendships = friendshipsRes.error ? [] : friendshipsRes.data ?? [];
