@@ -18,7 +18,7 @@ function currentServerTimeMs() {
 export default async function MeetupRoute({ searchParams }: { searchParams: Promise<{ meetup?: string; newPeople?: string; discovery?: string }> }) {
   const user = await getCurrentUserRecord();
   if (!user) redirect("/login");
-  if (!(await optionalFeatureEnabled("safe_arrival"))) return <LockedFeaturePreview feature="safe_arrival" />;
+  if (!(await optionalFeatureEnabled("meet_up"))) return <LockedFeaturePreview feature="meet_up" />;
   const admin = createSupabaseAdminClient();
   const guard = await guardAction(admin, { userId: user.id, surface: "plans" });
   if (!guard.allowed) return <p role="alert">{guard.message}</p>;
