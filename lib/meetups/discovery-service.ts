@@ -32,6 +32,7 @@ const ERROR_COPY: Record<string, string> = {
   DISCOVERY_REFRESH_LIMIT: "This listing has already been refreshed twice.",
   DISCOVERY_TITLE: "Keep the title short — five words or fewer.",
   DISCOVERY_CHANGED: "That response changed. Refresh and try again.",
+  DISCOVERY_DECLINED: "The creator has already passed on your request for this listing.",
   MEETUP_TIME: "Choose a future date and time."
 };
 
