@@ -29,4 +29,14 @@ describe("mobile form controls stay inside their cards", () => {
     expect(source).toContain("flex min-w-0 flex-wrap items-start justify-between");
     expect(source).toContain("min-w-0 max-w-full text-right");
   });
+  it("keeps native date and time controls shrinkable app-wide on WebKit", () => {
+    const source = read("app/globals.css");
+    expect(source).toContain('input[type="date"]');
+    expect(source).toContain('input[type="datetime-local"]');
+    expect(source).toContain('input[type="time"]');
+    expect(source).toContain("-webkit-min-logical-width: 0");
+    expect(source).toContain("::-webkit-date-and-time-value");
+    expect(source).toContain("::-webkit-datetime-edit");
+  });
+
 });
