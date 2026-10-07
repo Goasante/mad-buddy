@@ -40,8 +40,8 @@ const flowSteps = [
   },
   {
     title: "Make it real",
-    product: "Plan",
-    description: "Turn the moment into an actual commitment instead of another chat that goes nowhere.",
+    product: "Meetups",
+    description: "Invite Muddies or meet new people nearby, agree a time and place, and turn the moment into something real.",
     icon: CalendarCheck2
   }
 ];
@@ -83,8 +83,7 @@ const privacyNeverGet = [
 const momentumFlow = [
   { label: "Glow", icon: RadioTower },
   { label: "Wave", icon: Hand },
-  { label: "UpFor", icon: Coffee },
-  { label: "Plan", icon: CalendarCheck2 }
+  { label: "Meetup", icon: CalendarCheck2 }
 ];
 
 const supportingFeatures = [
@@ -109,9 +108,9 @@ const supportingFeatures = [
     icon: MessagesSquare
   },
   {
-    title: "Safe Arrival",
-    detail: "A safety-focused arrival experience without turning friends into trackers.",
-    icon: ShieldCheck
+    title: "Meet New People",
+    detail: "When you choose, discover people nearby who are also open to a Meetup.",
+    icon: UsersRound
   }
 ];
 
@@ -193,7 +192,7 @@ function Hero() {
           <div aria-hidden="true" className="pointer-events-none absolute bottom-[4%] left-1/2 h-12 w-[58%] -translate-x-1/2 rounded-[100%] bg-[#4E0401]/15 blur-2xl dark:bg-black/40" />
           <Image
             src="/brand/mad-buddy-hero-mockup-v2.png"
-            alt="Mad Buddy product screens showing privacy-safe proximity and social planning"
+            alt="Mad Buddy product screens showing privacy-safe proximity and Meetups"
             width={617}
             height={405}
             priority
@@ -210,9 +209,9 @@ function Hero() {
           </div>
 
           <div className="absolute -bottom-3 right-0 z-20 hidden max-w-[190px] rounded-2xl border border-[#4E0401]/10 bg-[#4E0401] p-3.5 text-white shadow-[0_20px_55px_rgba(78,4,1,0.25)] sm:block lg:right-3 dark:bg-[#F7E9DE] dark:text-[#3B1711]">
-            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#F2B16F] dark:text-[#A45A18]">UpFor now</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#F2B16F] dark:text-[#A45A18]">Meetup</p>
             <p className="mt-1 text-sm font-bold">Coffee after class?</p>
-            <p className="mt-1 text-[11px] text-white/70 dark:text-[#3B1711]/60">A quick intention can become a real plan.</p>
+            <p className="mt-1 text-[11px] text-white/70 dark:text-[#3B1711]/60">Agree a time, place and who&apos;s in.</p>
           </div>
         </div>
       </div>
@@ -325,7 +324,7 @@ function MomentumSection() {
           <SectionHeading
             eyebrow="From maybe to actually meeting"
             title="Proximity is only useful if something happens next."
-            description="UpFor captures the moment. Plans make it real. Everything around them helps the right people coordinate without turning Mad Buddy into another endless feed."
+            description="Meetups turn a social signal into a shared time and place. Invite Muddies directly, or use Meet New People when you are open to meeting someone nearby."
           />
           <div className="flex flex-wrap gap-2 lg:justify-end" aria-label="Typical connection flow">
             {momentumFlow.map(({ label, icon: Icon }) => (
@@ -339,7 +338,7 @@ function MomentumSection() {
         <div className="mt-10 grid gap-4 lg:grid-cols-2">
           <article className="rounded-[1.75rem] border border-[#E88C2B]/25 bg-[#FEFBF3] p-5 shadow-[0_20px_60px_rgba(78,4,1,0.07)] sm:p-7 dark:bg-[#180C09]">
             <div className="flex items-center justify-between gap-4">
-              <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A45A18]">UpFor · right now</p><h3 className="mt-1 text-xl font-bold text-[#4E0401] dark:text-[#FFF8F1]">What are you open to?</h3></div>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A45A18]">Meetup · your Muddies</p><h3 className="mt-1 text-xl font-bold text-[#4E0401] dark:text-[#FFF8F1]">Make the catch-up concrete.</h3></div>
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#E88C2B]/15 text-[#A45A18]"><Coffee className="h-5 w-5" aria-hidden="true" /></span>
             </div>
             <div className="mt-6 flex flex-wrap gap-2">
@@ -355,21 +354,21 @@ function MomentumSection() {
                 </span>
               ))}
             </div>
-            <p className="mt-5 text-sm leading-6 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">Temporary intent, with an audience and an expiry. It says “I could do something” without pretending it is already a commitment.</p>
+            <p className="mt-5 text-sm leading-6 text-[#4E0401]/60 dark:text-[#FFF8F1]/60">Choose the activity, invite the Muddies you want, and agree the time and place together. One Meetup owns the coordination from invitation to meeting.</p>
           </article>
 
           <article className="rounded-[1.75rem] bg-[#4E0401] p-5 text-white shadow-[0_24px_70px_rgba(78,4,1,0.18)] sm:p-7 dark:bg-[#F2E3D7] dark:text-[#3A1610]">
             <div className="flex items-center justify-between gap-4">
-              <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#F2B16F] dark:text-[#A45A18]">Plan · committed</p><h3 className="mt-1 text-xl font-bold">Coffee after class</h3></div>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#F2B16F] dark:text-[#A45A18]">Meet New People · nearby</p><h3 className="mt-1 text-xl font-bold">Open to coffee nearby</h3></div>
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-[#F2B16F] dark:bg-[#4E0401]/10 dark:text-[#8E4B12]"><CalendarCheck2 className="h-5 w-5" aria-hidden="true" /></span>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <PlanDetail label="When" value="Today · 5:30 PM" />
-              <PlanDetail label="Who" value="4 Muddies going" />
-              <PlanDetail label="Chat" value="Ready with the plan" />
-              <PlanDetail label="Next" value="Meet, then mark it done" />
+              <MeetupDetail label="Style" value="One-to-one or group" />
+              <MeetupDetail label="Area" value="People nearby" />
+              <MeetupDetail label="Match" value="Mutual interest first" />
+              <MeetupDetail label="Next" value="Agree time and place" />
             </div>
-            <p className="mt-5 text-sm leading-6 text-white/70 dark:text-[#3A1610]/60">A Plan becomes the shared commitment — with the people, context, and conversation needed to actually show up.</p>
+            <p className="mt-5 text-sm leading-6 text-white/70 dark:text-[#3A1610]/60">Once people match, the discovery becomes a real Meetup with its own private coordination and the same privacy-first arrival experience.</p>
           </article>
         </div>
 
@@ -493,7 +492,7 @@ function MuddyAvatar({ initials, name, className, intensity }: { initials: strin
   );
 }
 
-function PlanDetail({ label, value }: { label: string; value: string }) {
+function MeetupDetail({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-3.5 dark:border-[#4E0401]/10 dark:bg-white/40">
       <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/50 dark:text-[#3A1610]/50">{label}</p>
