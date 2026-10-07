@@ -12,6 +12,8 @@
  */
 
 export const SMART_CARD_IDS = [
+  "meetup_starting",
+  "meetup_upcoming",
   "safe_arrival",
   "plan_rsvp",
   /* Tier 1, immediately after the invitation itself: a Plan you have already
