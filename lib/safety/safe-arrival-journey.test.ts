@@ -189,7 +189,7 @@ describe("safety capacity is equal on every tier", () => {
 
   it("resolves the limit on the server and passes it down, never computing it in the component", () => {
     const page = stripComments(read("app/(app)/safe-arrival/page.tsx"));
-    expect(page).toContain("maxWatchers");
+    expect(page).toContain('redirect("/meet-up")');
 
     const setup = stripComments(read("components/safety/safe-arrival-setup.tsx"));
     // The component receives the number; it must not import plan tables.
@@ -311,9 +311,9 @@ describe("notification delivery is server-side and deep-linkable", () => {
 
   it("stamps the session id so a tap opens the exact journey", () => {
     expect(delivery).toContain("type: `safe_arrival:${intent.sessionId}`");
-    // The resolver turns that into the per-journey URL rather than the root.
+    // Historical Safe Arrival notifications now land on Meetups.
     const destination = read("lib/notifications/destination.ts");
-    expect(destination).toContain('withQuery("/safe-arrival", "session", entityId)');
+    expect(destination).toContain('safe_arrival: "/meet-up"');
   });
 
   it("persists durable per-recipient intents in the lifecycle transaction", () => {
@@ -513,7 +513,7 @@ describe("watcher deep link opens the journey", () => {
   });
 
   it("loads a terminal journey too, so an arrival notification is not a dead end", () => {
-    expect(route).toContain("loadSafeArrivalJourneyById");
+    expect(route).toContain('redirect("/meet-up")');
     const service = read("lib/safety/safe-arrival-service.ts");
     const fn = service.slice(service.indexOf("export async function loadSafeArrivalJourneyById"));
     const body = fn.slice(0, fn.indexOf("\nexport "));
