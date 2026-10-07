@@ -2,7 +2,7 @@
 
 import { Link } from "@/lib/platform";
 import type { Route } from "next";
-import { BellRing, CalendarClock, Hand, MapPin } from "lucide-react";
+import { BellRing, Hand, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { fetchWithTimeout } from "@/lib/network/resilience";
@@ -58,11 +58,8 @@ export function PulseSummary() {
   const stats: Stat[] = [
     { key: "nearby", icon: MapPin, count: summary.nearbyCount, href: "/friends" as Route, label: (n) => `${n} nearby` },
     { key: "waves", icon: Hand, count: summary.unreadWaves, href: "/notifications" as Route, label: (n) => `${n} ${n === 1 ? "wave" : "waves"}` },
-    /* A meeting ping is a nudge asking to meet -- it sits beside nearby,
-       waves and plans, each of which names its thing literally. BellRing is
-       the nudge; Sparkles said the row was somehow magical. */
-    { key: "pings", icon: BellRing, count: summary.pendingPings, href: "/notifications" as Route, label: (n) => `${n} ${n === 1 ? "ping" : "pings"}` },
-    { key: "plans", icon: CalendarClock, count: summary.pendingPlans, href: "/plans" as Route, label: (n) => `${n} ${n === 1 ? "plan needs a reply" : "plans need a reply"}` }
+    /* A meeting ping is a nudge asking to meet; it sits beside nearby and waves. */
+    { key: "pings", icon: BellRing, count: summary.pendingPings, href: "/notifications" as Route, label: (n) => `${n} ${n === 1 ? "ping" : "pings"}` }
   ];
   const active = stats.filter((stat) => stat.count > 0);
 
@@ -71,9 +68,7 @@ export function PulseSummary() {
       <section className="rounded-2xl border border-border/60 bg-card/55 p-4 dark:bg-white/[0.035]" aria-label="Your Pulse">
         <p className="text-sm font-medium">Your Pulse is quiet right now.</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          <Link href="/hangout-mode" className="text-primary underline-offset-2 hover:underline">Start an UpFor</Link>
-          {" or "}
-          <Link href="/plans?create=1" className="text-primary underline-offset-2 hover:underline">create a plan</Link>
+          <Link href="/meet-up?create=1" className="text-primary underline-offset-2 hover:underline">Create a Meetup</Link>
           {" to get things going."}
         </p>
       </section>
