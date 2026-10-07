@@ -62,7 +62,7 @@ const COPY: Record<Exclude<ActivationState, "activated">, Copy> = {
      * something about it -- and stops. Two sentences is the whole budget: the
      * card is an invitation, not an explanation page. */
     // One sentence. Names the action, the payoff, and what follows it.
-    body: "Add your first Muddy to see their Glow when they're close by — then say hi or make a plan.",
+    body: "Add your first Muddy to see their Glow when they're close by — then say hi or arrange a Meetup.",
     actionLabel: "Find your first Muddy",
     href: "/friends" as Route,
     icon: UserPlus,
@@ -87,7 +87,7 @@ const COPY: Record<Exclude<ActivationState, "activated">, Copy> = {
      * "Glow is ready" says the setup worked -- which it did -- so the last step
      * reads as a decision rather than another obstacle. New accounts start in
      * ghost, so this is the common path, and it stays an offer: declining
-     * leaves Messages, Muddies and Plans exactly as they were. */
+     * leaves Messages, Muddies and Meetups available. */
     headline: "Glow is ready",
     body: "Choose when your Muddies can see your Glow. You can turn it off again whenever you like.",
     actionLabel: "Turn on visibility",
@@ -139,8 +139,8 @@ const COPY: Record<Exclude<ActivationState, "activated">, Copy> = {
      * went wrong. No "nothing here", no "try again", no re-prompt. */
     headline: "Glow is on",
     body: "No Muddies are close by right now. Their Glow will appear here when someone's around.",
-    actionLabel: "Make a plan",
-    href: "/plans?create=1" as Route,
+    actionLabel: "Create a Meetup",
+    href: "/meet-up" as Route,
     icon: CalendarCheck2,
     secondary: { label: "Message a Muddy", href: "/messages" as Route }
   },
@@ -152,13 +152,13 @@ const COPY: Record<Exclude<ActivationState, "activated">, Copy> = {
     actionLabel: "Send a wave",
     href: "/discover" as Route,
     icon: Hand,
-    secondary: { label: "Make a plan instead", href: "/plans?create=1" as Route }
+    secondary: { label: "Create a Meetup instead", href: "/meet-up" as Route }
   },
   upcoming_plan: {
-    headline: "You've got something on",
-    body: "Your next plan is coming up. Everyone in it has a chat, so you can sort the details there.",
-    actionLabel: "Open your plan",
-    href: "/plans" as Route,
+    headline: "You've got a Meetup coming up",
+    body: "Open Meetups to check the time, place and coordination details.",
+    actionLabel: "Open Meetups",
+    href: "/meet-up" as Route,
     icon: CalendarCheck2
   }
 };
