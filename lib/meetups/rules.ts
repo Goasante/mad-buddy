@@ -77,6 +77,7 @@ export const meetupSchema = z.object({
   title: z.string().nullable().optional(),
   category: meetupDiscoveryCategorySchema.default("anything"),
   sourceDiscoveryId: z.string().uuid().nullable().optional(),
+  conversationId: z.string().uuid().nullable().optional(),
   startsAt: z.string(),
   expiresAt: z.string(),
   timezone: z.string(),
