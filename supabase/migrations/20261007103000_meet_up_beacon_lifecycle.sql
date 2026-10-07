@@ -115,7 +115,7 @@ begin
   from public.user_locations
   where user_id=p_actor_id;
 
-  if v_loc is null
+  if not found
     or v_loc.last_updated < now()-interval '2 minutes'
     or v_loc.last_updated > now()+interval '15 seconds' then
     return 0;
@@ -299,8 +299,7 @@ begin
     end if;
 
     if v_m.status<>'active' and p_action<>'home_arrived' then raise exception 'MEETUP_ENDED'; end if;
-    if v_m.status='active' and now()>=v_m.expires_at and p_action not in ('home_arrived') then
-      update public.meetups set status='ended' where id=v_m.id returning * into v_m;
+    if v_m.status='active' and now()>=v_m.expires_at and p_action<>'home_arrived' then
       raise exception 'MEETUP_ENDED';
     end if;
 
@@ -355,7 +354,7 @@ begin
 
       select latitude,longitude,last_updated into v_loc
       from public.user_locations where user_id=p_actor_id;
-      if v_loc is null
+      if not found
         or v_loc.last_updated<now()-interval '2 minutes'
         or v_loc.last_updated>now()+interval '15 seconds' then
         raise exception 'MEETUP_LOCATION_REQUIRED';
