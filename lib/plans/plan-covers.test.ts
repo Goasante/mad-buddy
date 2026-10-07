@@ -225,7 +225,7 @@ describe("plan cover data flow", () => {
 
   it("carries both cover fields on the Plans projection", () => {
     expect(read("lib/plans/service.ts")).toContain("category, cover_image_url");
-    expect(read("app/(app)/plans/page.tsx")).toContain("category, cover_image_url");
+    expect(read("app/(app)/plans/page.tsx")).toContain('redirect("/meet-up")');
   });
 
   it("validates the created category against the registry", () => {
