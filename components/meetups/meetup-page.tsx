@@ -35,6 +35,8 @@ import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
 import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
+import { MeetNewPeople, MeetNewPeopleSafety, type MeetupDiscoveryAction } from "@/components/meetups/meet-new-people";
+import type { MeetupDiscoveryHub } from "@/lib/meetups/discovery";
 
 export type MeetupSaveAction = (input: unknown, create?: boolean) => Promise<{ ok: boolean; message: string }>;
 
@@ -169,6 +171,9 @@ export function MeetupPage({
   meetups,
   muddies,
   focusedId,
+  openNewPeople = false,
+  discoveryHub,
+  discoveryAction,
   saveAction,
   reloadAction,
   initialNowMs
@@ -177,6 +182,9 @@ export function MeetupPage({
   meetups: Meetup[];
   muddies: { id: string; name: string }[];
   focusedId?: string;
+  openNewPeople?: boolean;
+  discoveryHub: MeetupDiscoveryHub;
+  discoveryAction: MeetupDiscoveryAction;
   saveAction: MeetupSaveAction;
   reloadAction?: () => Promise<void>;
   initialNowMs: number;
@@ -184,6 +192,8 @@ export function MeetupPage({
   const revalidate = useRevalidate();
   const focusedMeetup = focusedId ? meetups.find((meetup) => meetup.id === focusedId) : undefined;
   const [creating, setCreating] = useState(false);
+  const [newPeopleOpen, setNewPeopleOpen] = useState(openNewPeople);
+  const [newPeopleSafetyOpen, setNewPeopleSafetyOpen] = useState(false);
   const [clockNow, setClockNow] = useState(initialNowMs);
   const [tab, setTab] = useState<"active" | "mine">(() => {
     if (!focusedMeetup || focusedMeetup.status !== "active") return focusedMeetup ? "mine" : "active";
@@ -255,6 +265,17 @@ export function MeetupPage({
         {creating ? "Back to meetups" : "Arrange a Meet Up"}
       </Button>
 
+      {!creating ? (
+        <button
+          type="button"
+          onClick={() => setNewPeopleSafetyOpen(true)}
+          className="focus-ring mt-2.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-semibold transition hover:bg-secondary/70"
+        >
+          <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+          Meet New People
+        </button>
+      ) : null}
+
       {!creating && (
         <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-secondary/70 p-1">
           <button
@@ -282,8 +303,31 @@ export function MeetupPage({
     </div>
   );
 
+  if (newPeopleOpen) {
+    return (
+      <main className="mx-auto min-h-screen max-w-xl">
+        <MeetNewPeople
+          hub={discoveryHub}
+          nowMs={clockNow}
+          onBack={() => setNewPeopleOpen(false)}
+          action={discoveryAction}
+          onRefresh={refresh}
+        />
+      </main>
+    );
+  }
+
   return (
-    <main className="mx-auto min-h-screen max-w-xl pb-40">
+    <>
+      <MeetNewPeopleSafety
+        open={newPeopleSafetyOpen}
+        onOpenChange={setNewPeopleSafetyOpen}
+        onContinue={() => {
+          setNewPeopleSafetyOpen(false);
+          setNewPeopleOpen(true);
+        }}
+      />
+      <main className="mx-auto min-h-screen max-w-xl pb-40">
       {PLATFORM_KIND === "web" && (
         <header className="fixed inset-x-0 top-0 z-40 grid grid-cols-[44px_1fr_44px] items-center gap-2 bg-background px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] md:hidden">
           <Link
@@ -412,7 +456,8 @@ export function MeetupPage({
           </>
         )}
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 
