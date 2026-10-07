@@ -4,7 +4,6 @@ import { preflightResponse, withCors } from "@/lib/api/cors";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { loadMeetups, loadMeetupMuddies } from "@/lib/meetups/arrangements";
 import { saveMeetupCommand } from "@/lib/meetups/commands";
-import { addMeetupProximity } from "@/lib/meetups/proximity";
 import { guardAction } from "@/lib/admin/enforcement";
 import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 
@@ -21,8 +20,7 @@ export async function GET(request: Request) {
   const guard = await guardAction(admin, { userId: auth.user.id, surface: "plans" });
   if (!guard.allowed) return withCors(NextResponse.json({ error: guard.message }, { status: 403 }), request);
   const [meetups, muddies] = await Promise.all([loadMeetups(admin, auth.user.id), loadMeetupMuddies(admin, auth.user.id)]);
-  const projected = await addMeetupProximity(admin, auth.user.id, meetups);
-  return withCors(privateJson({ meetups: projected, muddies }), request);
+  return withCors(privateJson({ meetups, muddies }), request);
 }
 async function mutate(request: Request, create: boolean) {
   const auth = await resolveApiUser(request);
