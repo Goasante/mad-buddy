@@ -588,6 +588,11 @@ export function DashboardPageContent({
 
   function toggleVisibility() {
     const nextGhostMode = !ghostMode;
+    if (action === "view_meetup") {
+      router.push("/meet-up" as Route);
+      return;
+    }
+
     startTransition(async () => {
       const result = await updateVisibilityStatusAction(nextGhostMode ? "ghost" : "visible");
       setStatusMessage(result.ok ? "" : result.message);
@@ -672,7 +677,7 @@ export function DashboardPageContent({
   /* A STALE FIX BLOCKS PROXIMITY CLAIMS, NOT THE RELATIONSHIP.
    *
    * The recovery card replaced the whole relationship section, so somebody
-   * whose location had merely gone quiet lost Message and Make a Plan too --
+   * whose location had merely gone quiet lost Message and Create a Meetup too --
    * neither of which depends on knowing where anybody is. Refreshing stays the
    * primary action, because it is what unblocks Glow; the person they were
    * talking to returns as the quiet secondary rather than disappearing. */
@@ -698,15 +703,15 @@ export function DashboardPageContent({
   function runRelationshipAction(action: ActivationAction, muddyId: string) {
     if (isPending) return;
 
-    if (action === "make_plan") {
+    if (action === "make_meetup") {
       /* CARRIES THE PERSON, NOT A PLACE.
        *
        * The composer opened with nobody selected, so somebody who tapped
-       * "Make a Plan" on Kofi had to search for Kofi again -- the product
+       * "Create a Meetup" on Kofi had to search for Kofi again -- the product
        * forgetting what they had just done. Only the Muddy id travels: no
        * coordinates, no band, no proximity of any kind. Nearby is the social
        * context that led here, not a location payload. */
-      router.push("/meet-up" as Route);
+      router.push(`/meet-up?create=1&with=${encodeURIComponent(muddyId)}` as Route);
       return;
     }
 
