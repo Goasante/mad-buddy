@@ -142,12 +142,14 @@ function ListingCard({
 export function MeetNewPeople({
   hub,
   nowMs,
+  focusedId,
   onBack,
   action,
   onRefresh
 }: {
   hub: MeetupDiscoveryHub;
   nowMs: number;
+  focusedId?: string;
   onBack: () => void;
   action: MeetupDiscoveryAction;
   onRefresh: () => Promise<void>;
@@ -165,7 +167,12 @@ export function MeetNewPeople({
 
   const canCreate = hub.activeSlots < hub.maxActiveSlots;
   const wordCount = title.trim() ? title.trim().split(/\s+/).length : 0;
-  const myActive = useMemo(() => hub.mine.filter((item) => item.status === "active"), [hub.mine]);
+  const myActive = useMemo(
+    () => hub.mine
+      .filter((item) => item.status === "active")
+      .sort((a, b) => Number(b.id === focusedId) - Number(a.id === focusedId)),
+    [hub.mine, focusedId]
+  );
 
   function run(input: unknown) {
     startTransition(async () => {
@@ -248,7 +255,7 @@ export function MeetNewPeople({
             <span className="text-xs text-muted-foreground">{myActive.length} active</span>
           </div>
           {myActive.map((item) => (
-            <article key={item.id} className="rounded-[24px] border border-border bg-card p-4">
+            <article key={item.id} className={["rounded-[24px] border border-border bg-card p-4", item.id === focusedId ? "ring-2 ring-primary" : ""].join(" ")}>
               <div className="flex gap-3">
                 <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl"><DiscoveryArtwork category={item.category} /></div>
                 <div className="min-w-0 flex-1">
