@@ -1858,7 +1858,7 @@ const quickActions: QuickAction[] = [
  * The suggestions surfaced on the Home rail, in order. The rest stay
  * available through "More to explore" lower down.
  */
-const PRIMARY_ACTION_HREFS = ["/hangout-mode", "/invites", "/friends?tab=add"];
+const PRIMARY_ACTION_HREFS = ["/meet-up", "/invites", "/friends?tab=add"];
 
 /** How many suggestions the Home rail renders before the rest fall through. */
 const SUGGESTION_COUNT = 3;
@@ -2202,10 +2202,10 @@ function UpcomingMeetupEmpty() {
           <p className="mt-0.5 text-[0.8125rem] leading-5 text-muted-foreground">
             {/* The canonical creation route, same as every other Create entry. */}
             <Link
-              href="/plans?create=1"
+              href="/meet-up"
               className="focus-ring rounded font-medium text-[var(--color-brand-orange)] hover:underline"
             >
-              Create a Plan
+              Create a Meetup
             </Link>{" "}
             with your Muddies.
           </p>
