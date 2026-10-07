@@ -5299,6 +5299,8 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       list_meetups_server: { Args: { p_actor_id: string }; Returns: Json };
+      expire_meetups_server: { Args: Record<string, never>; Returns: number };
+      refresh_meetup_proximity_server: { Args: { p_actor_id: string }; Returns: number };
       meetup_command_server: { Args: { p_actor_id: string; p_action: string; p_input: Json }; Returns: Json };
       claim_meetup_notifications: { Args: { p_limit?: number }; Returns: Json };
       meetup_notification_allowed: { Args: { p_id: string; p_lease_id: string }; Returns: boolean };
