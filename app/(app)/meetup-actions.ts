@@ -21,3 +21,10 @@ export async function updateMeetupDiscoveryAction(input: unknown) {
   if (!user) return { ok: false, message: "Sign in to update this listing." };
   return updateMeetupDiscovery(user.id, input);
 }
+
+
+export async function saveMeetupDiscoveryAction(input: unknown, create = false) {
+  const user = await getCurrentUserRecord();
+  if (!user) return { ok: false, message: "Sign in to use Meet New People." };
+  return create ? createMeetupDiscovery(user.id, input) : updateMeetupDiscovery(user.id, input);
+}
