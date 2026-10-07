@@ -34,7 +34,7 @@ export type HomeMaturityInputs = {
   milestones: ReadonlySet<string>;
   /** Direct conversations where BOTH people have written. */
   twoSidedConversationCount: number;
-  /** Plans this person is on, past or upcoming. Evidence of real use. */
+  /** Accepted Meetups this person has joined. Evidence of real use. */
   planParticipationCount: number;
   /** Live, mutual Muddies. Supporting evidence only, never sufficient alone. */
   muddyCount: number;
@@ -51,6 +51,7 @@ function reachedFirstValue(milestones: ReadonlySet<string>): boolean {
   return (
     milestones.has("first_wave_sent") ||
     milestones.has("first_message_sent") ||
+    milestones.has("first_meetup_created") ||
     milestones.has("first_plan_created") ||
     milestones.has("first_status_created")
   );
@@ -63,7 +64,7 @@ function reachedFirstValue(milestones: ReadonlySet<string>): boolean {
  *
  *   - A two-sided conversation means somebody replied. One person talking into
  *     silence is not a relationship yet, however many messages they send.
- *   - A Plan is the product's whole point: an arrangement to actually meet.
+ *   - A Meetup is the product's whole point: an arrangement to actually meet.
  *   - A Wave plus a real conversation is proximity AND contact, which is the
  *     loop working end to end.
  *
@@ -81,7 +82,7 @@ function looksEstablished(input: HomeMaturityInputs): boolean {
 export function deriveHomeMaturity(input: HomeMaturityInputs): HomeMaturity {
   /* HISTORICAL ACCOUNTS FIRST, and deliberately before the milestone check.
    *
-   * Somebody who has been here for months has plans and replied-to
+   * Somebody who has been here for months has Meetups and replied-to
    * conversations but may have no `first_message_sent` at all -- the milestone
    * only exists from the day it was added. Requiring it would re-onboard the
    * product's most experienced users, which is exactly what the future
