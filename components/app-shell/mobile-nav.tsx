@@ -85,7 +85,7 @@ export function isNavigationItemActive(item: { href: string }, pathname: string)
  *    not the bar they had on day thirty. Position is now stable for life.
  *  - The centre is the Mad Buddy Orb, and the Orb IS Home. It replaced the
  *    raised Create button: a "+" that opened a menu duplicated actions that
- *    already have homes (a plan starts on /plans, a Moment on /moments, a
+ *    already have homes (a Meetup starts on /meet-up, a Moment on /moments, a
  *    ping in a conversation), so the menu was a second route to places the
  *    app already had. Home moved into it because Home is the centre of the
  *    experience, not one tab among five.
