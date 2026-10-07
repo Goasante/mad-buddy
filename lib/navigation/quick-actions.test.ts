@@ -30,8 +30,6 @@ describe("the launcher appears throughout the app", () => {
       "/dashboard",
       "/friends",
       "/discover",
-      "/hangout-mode",
-      "/plans",
       "/events",
       "/moments",
       "/messages",
@@ -49,6 +47,7 @@ describe("the launcher appears throughout the app", () => {
     // /safe-arrival is a safety surface; nothing floats over check-in controls.
     expect(showsQuickActions("/scan")).toBe(false);
     expect(showsQuickActions("/safe-arrival")).toBe(false);
+    expect(showsQuickActions("/meet-up")).toBe(false);
     expect(showsQuickActions("/linkr")).toBe(false);
     expect(showsQuickActions("/conference")).toBe(false);
     expect(showsQuickActions("/conference/123")).toBe(false);
@@ -63,7 +62,6 @@ describe("the launcher appears throughout the app", () => {
     for (const path of [
       "/friends/ama",
       "/messages/abc123",
-      "/plans/123",
       "/events/789"
     ]) {
       expect(showsQuickActions(path), `${path} should NOT show quick actions`).toBe(false);
@@ -71,7 +69,7 @@ describe("the launcher appears throughout the app", () => {
   });
 
   it("ignores query strings and hashes", () => {
-    expect(showsQuickActions("/plans?create=1")).toBe(true);
+    expect(showsQuickActions("/meet-up?create=1")).toBe(false);
     expect(showsQuickActions("/friends?tab=all")).toBe(true);
     expect(showsQuickActions("/scan?mode=qr")).toBe(false);
   });
@@ -103,9 +101,7 @@ describe("the launcher appears throughout the app", () => {
 describe("every action opens its canonical route", () => {
   it("carries only features that are actually live", () => {
     expect(QUICK_ACTIONS.map((action) => action.id)).toEqual([
-      "plans",
       "events",
-      "safe_arrival",
       "conference"
     ]);
   });
@@ -123,10 +119,10 @@ describe("every action opens its canonical route", () => {
 
   it("points at the real feature pages, never a duplicate", () => {
     const routes = Object.fromEntries(QUICK_ACTIONS.map((action) => [action.id, action.href]));
-    expect(routes.plans).toBe("/plans");
     expect(routes.events).toBe("/events");
-    expect(routes.safe_arrival).toBe("/meet-up");
     expect(routes.conference).toBe("/conference");
+    expect(routes.plans).toBeUndefined();
+    expect(routes.safe_arrival).toBeUndefined();
     expect(routes.focus).toBeUndefined();
   });
 
