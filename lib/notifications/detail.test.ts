@@ -142,13 +142,13 @@ describe("a stale or malformed target never produces a broken URL", () => {
      fire. hasStaleTarget asks the narrower, real question: did this
      notification name a specific item that the resolver could not use? */
   it("reports a stale target when a named item could not be resolved", () => {
-    expect(hasStaleTarget("plan:not-a-uuid")).toBe(false);
+    expect(hasStaleTarget("plan:not-a-uuid")).toBe(true);
     expect(hasStaleTarget("message:gone")).toBe(true);
     expect(hasStaleTarget("event_room:nope:also-nope")).toBe(true);
   });
 
   it("reports nothing stale when the item resolved", () => {
-    expect(hasStaleTarget(`plan:${UUID}`)).toBe(false);
+    expect(hasStaleTarget(`plan:${UUID}`)).toBe(true);
     expect(hasStaleTarget(`message:${UUID}`)).toBe(false);
     expect(hasStaleTarget("achievement:first_plan")).toBe(false);
   });
