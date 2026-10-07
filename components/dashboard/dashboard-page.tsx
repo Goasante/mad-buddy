@@ -1827,6 +1827,7 @@ const SUGGESTION_TONE: Record<
  * filtered by the same Owner feature flags — no new recommendation logic.
  */
 const quickActions: QuickAction[] = [
+  { href: "/meet-up", label: "Meetups", description: "Invite Muddies or meet new people nearby.", suggestion: "Turn a connection into time together.", tone: "orange", icon: Hand, featureIcon: "meetups", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
