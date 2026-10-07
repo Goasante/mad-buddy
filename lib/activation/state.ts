@@ -413,7 +413,8 @@ export function hasReachedFirstValue(milestones: ReadonlySet<string>): boolean {
      * things that counted were a Wave, a Meetup or a status. Recorded at the
      * canonical send boundary for DIRECT messages only. */
     milestones.has("first_message_sent") ||
-    milestones.has("first_meetup_created") ||\n    milestones.has("first_plan_created") ||
+    milestones.has("first_meetup_created") ||
+    milestones.has("first_plan_created") ||
     /* Kept, with a reservation recorded rather than acted on.
      *
      * A status is broadcast -- expression rather than interaction with a
