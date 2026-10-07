@@ -172,65 +172,43 @@ export function streakSummaryLabel(weeks: number, friendName: string): string {
  * enforced rather than remembered.
  */
 export type RecapSummary = {
-  meetupsCreated: number;
   meetupsCompleted: number;
-  meetupListings: number;
-  /** Historical fields kept so older stored recaps still deserialize safely. */
-  plansCreated: number;
-  plansCompleted: number;
   muddiesInteractedWith: number;
   newMuddies: number;
   circlesActive: number;
   wavesSent: number;
   wavesReturned: number;
-  hangoutSessions: number;
-  mostCommonActivity: string | null;
   daysVisible: number;
   ghostModeUsed: number;
 };
 
 export const RECAP_ALLOWED_FIELDS: ReadonlyArray<keyof RecapSummary> = [
-  "meetupsCreated",
   "meetupsCompleted",
-  "meetupListings",
-  "plansCreated",
-  "plansCompleted",
   "muddiesInteractedWith",
   "newMuddies",
   "circlesActive",
   "wavesSent",
   "wavesReturned",
-  "hangoutSessions",
-  "mostCommonActivity",
   "daysVisible",
   "ghostModeUsed"
 ];
 
 /**
- * Strips anything not explicitly allowed. Defence in depth for §4: even if an
- * aggregation query accidentally selects message text or a place name, it
- * cannot reach the stored summary.
+ * Strips anything not explicitly allowed. Retired Plan/UpFor recap fields are
+ * intentionally ignored even when an older stored recap still contains them.
  */
 export function sanitizeRecapSummary(raw: Record<string, unknown>): RecapSummary {
   const output = {} as RecapSummary;
   for (const field of RECAP_ALLOWED_FIELDS) {
     const value = raw[field];
-    if (field === "mostCommonActivity") {
-      output.mostCommonActivity = typeof value === "string" ? value : null;
-    } else {
-      (output as Record<string, unknown>)[field] = typeof value === "number" && Number.isFinite(value) ? value : 0;
-    }
+    output[field] = typeof value === "number" && Number.isFinite(value) ? value : 0;
   }
   return output;
 }
 
-/**
- * Warm, neutral framing (spec §6). Never comparative ("you only met 2"), never
- * shaming, the copy states what happened and stops.
- */
+/** Warm, neutral framing. Never comparative or shaming. */
 export function recapHeadline(summary: RecapSummary): string {
   if (summary.muddiesInteractedWith === 0 && summary.meetupsCompleted === 0) {
-    // Empty period must not read as failure (spec §12 edge case).
     return "A quiet month. Your Muddies are here whenever you are.";
   }
   if (summary.muddiesInteractedWith > 0) {
@@ -240,7 +218,6 @@ export function recapHeadline(summary: RecapSummary): string {
   }
   return `You completed ${summary.meetupsCompleted} ${summary.meetupsCompleted === 1 ? "Meetup" : "Meetups"} this month.`;
 }
-
 export const RECAP_REFLECTION_PROMPT = "Which friendship do you want to make more time for next month?";
 
 // ---------------------------------------------------------------------------
