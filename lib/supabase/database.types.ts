@@ -8942,6 +8942,10 @@ export type Database = {
           matched: boolean
         }[]
       }
+      list_meetup_discoveries_server: {
+        Args: { p_actor_id: string }
+        Returns: Json
+      }
       list_meetups_server: { Args: { p_actor_id: string }; Returns: Json }
       location_confidence_for_accuracy: {
         Args: { location_accuracy: number }
