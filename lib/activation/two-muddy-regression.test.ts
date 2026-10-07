@@ -131,7 +131,7 @@ describe("who Home talks about", () => {
     // Existing hierarchy: shared Plan -> unspoken -> recent -> newest.
     expect(focus?.muddy.id).toBe("kofi");
     expect(focus?.plan.primary).toBe("say_hi");
-    expect(focus?.plan.secondary).toBe("make_plan");
+    expect(focus?.plan.secondary).toBe("make_meetup");
   });
 
   it("offers no second unspoken person to process", () => {
