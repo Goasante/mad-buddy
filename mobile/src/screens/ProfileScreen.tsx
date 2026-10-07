@@ -205,8 +205,7 @@ export function ProfileScreen() {
           <h3 className="text-base font-semibold">Activity</h3>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <ActivityStat icon={Users} label="Muddies" value={identity.activity.muddyCount} />
-            <ActivityStat icon={CalendarCheck2} label="Plans completed" value={identity.activity.completedPlanCount} />
-            <ActivityStat icon={ShieldCheck} label="Safe Arrivals" value={identity.activity.completedSafeArrivalCount} />
+            <ActivityStat icon={CalendarCheck2} label="Meetups completed" value={identity.activity.completedMeetupCount} />
           </div>
         </section>
       ) : null}
