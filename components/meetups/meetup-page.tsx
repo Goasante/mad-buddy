@@ -765,6 +765,10 @@ function CreateMeetup({
               </div>
             </div>
 
+            <p className="rounded-2xl bg-primary/8 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+              Sending this meetup also activates temporary Meetup Proximity for you during its live window. Invited Muddies get the same explanation before they accept.
+            </p>
+
             <div>
               <h3 className="mb-2 text-sm font-bold">Invited ({selectedMuddies.length})</h3>
               <div className="flex flex-wrap gap-2">
@@ -1050,7 +1054,9 @@ function MeetupCard({
             {!creator && open && mine?.response === "invited" && (
               <section className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
                 <p className="text-sm font-bold">{"You're invited"}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Accept to join the meetup and receive updates.</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Accept to join. During the live meetup window, temporary Meetup Proximity turns on automatically so the group can see coarse Glow states like getting closer, nearby and here. No map, exact location, route or distance is shown.
+                </p>
                 <fieldset disabled={pending} className="mt-4 grid grid-cols-2 gap-2">
                   <Button className="rounded-2xl" onClick={() => update({ action: "respond", response: "accepted" })}>
                     <Check className="h-4 w-4" />
