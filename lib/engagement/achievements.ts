@@ -154,12 +154,13 @@ export async function grantMeetupAchievements(admin: Admin, userId: string): Pro
       .select("meetup_id,met_at")
       .eq("user_id", userId)
       .eq("response", "accepted");
-    const rows = participations ?? [];
+    const rows = (participations ?? []) as Array<{ meetup_id: string; met_at: string | null }>;
     const meetupIds = [...new Set(rows.map((row) => row.meetup_id))];
     const { data: completed } = meetupIds.length
       ? await admin.from("meetups").select("id,together_at").in("id", meetupIds).not("together_at", "is", null)
       : { data: [] };
-    const completedCount = completed?.length ?? 0;
+    const completedRows = (completed ?? []) as Array<{ id: string; together_at: string | null }>;
+    const completedCount = completedRows.length;
     const safetyCheckInCount = rows.filter((row) => Boolean(row.met_at)).length;
 
     await Promise.all([
@@ -180,14 +181,16 @@ export async function grantMeetupCompletionAchievements(admin: Admin, meetupId: 
       .select("id,together_at")
       .eq("id", meetupId)
       .maybeSingle();
-    if (!meetup?.together_at) return;
+    const meetupRow = meetup as { id: string; together_at: string | null } | null;
+    if (!meetupRow?.together_at) return;
 
     const { data: participants } = await admin
       .from("meetup_participants")
       .select("user_id")
       .eq("meetup_id", meetupId)
       .not("met_at", "is", null);
-    const userIds = [...new Set((participants ?? []).map((row) => row.user_id))];
+    const participantRows = (participants ?? []) as Array<{ user_id: string }>;
+    const userIds = [...new Set(participantRows.map((row) => row.user_id))];
     if (userIds.length < 2) return;
 
     const { recordMeetupCompletionScore } = await import("@/lib/engagement/buddy-score-service");
@@ -209,7 +212,7 @@ export async function grantMeetupCompletionAchievements(admin: Admin, meetupId: 
     const { emitLifeEvents } = await import("@/lib/life/emit");
     await emitLifeEvents(
       admin,
-      meetupAttendancePairs(userIds.map((userId) => ({ meetupId, userId })), meetup.together_at)
+      meetupAttendancePairs(userIds.map((userId) => ({ meetupId, userId })), meetupRow.together_at)
     );
   } catch {
     // Best-effort by design.
