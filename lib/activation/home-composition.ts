@@ -411,7 +411,7 @@ export function composeHome(input: HomeCompositionInputs): HomeComposition {
 /**
  * Meetups become more useful after the first real social signal.
  *
- * "Let your Muddies know you are free right now" only means something once
+ * "Turn a connection into a Meetup" is most useful once
  * somebody can actually see you -- teaching it before the first Glow explains
  * a feature whose value depends on the step still being asked for. Invite and
  * Find Muddies stay: both grow the circle, which is the same direction.
@@ -423,8 +423,8 @@ export function earlyActivationHiddenActionHrefs(input: HomeCompositionInputs): 
   return isEarlyActivation(input) ? [MEETUPS_HREF] : [];
 }
 
-/** The canonical UpFor entry point, as the first-time rail links to it. */
-const UPFOR_HREF = "/hangout-mode";
+/** The canonical Meetups entry point used by Home suggestions. */
+const MEETUPS_HREF = "/meet-up";
 
 /**
  * Should a REAL commitment still show?
