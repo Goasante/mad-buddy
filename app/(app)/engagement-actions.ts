@@ -175,8 +175,7 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
   const [definitionsRes, earnedRes, friendshipsRes, recapRes, preferencesRes, milestonesAvailable] = await Promise.all([
     admin
       .from("achievement_definitions")
-      .select("code, name, description, category")
-      .eq("is_active", true)
+      .select("code, name, description, category, is_active")
       .order("category"),
     admin.from("user_achievements").select("achievement_code, earned_at").eq("user_id", userId),
     admin
@@ -209,10 +208,12 @@ export async function getEngagementOverviewAction(): Promise<EngagementOverview>
         code: definition.id,
         name: definition.name,
         description: definition.description,
-        category: definition.category
+        category: definition.category,
+        is_active: true
       }))
     : definitionsRes.data ?? [];
-  const achievements = definitions.map((definition) => ({
+  const visibleDefinitions = definitions.filter((definition) => definition.is_active || earnedByCode.has(definition.code));
+  const achievements = visibleDefinitions.map((definition) => ({
     code: definition.code,
     name: definition.name,
     description: definition.description,
