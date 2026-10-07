@@ -43,8 +43,25 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
   const limit = await consumeRateLimit({ action: create ? "meetups.create" : "meetups.update", userId: actorId });
   if (!limit.allowed) return { ok: false, message: rateLimitMessage(limit.resetAt) };
   const action = "action" in value ? value.action : "create";
-  const { error } = await admin.rpc("meetup_command_server", { p_actor_id: actorId, p_action: action, p_input: value });
+  const { data, error } = await admin.rpc("meetup_command_server", { p_actor_id: actorId, p_action: action, p_input: value });
   if (error) return { ok: false, message: ERRORS[error.message] ?? "Could not save the meetup. Refresh and try again." };
+
+  if (create && "category" in value) {
+    const meetupId =
+      data && typeof data === "object" && !Array.isArray(data) && "id" in data && typeof data.id === "string"
+        ? data.id
+        : null;
+    if (meetupId) {
+      const categoryUpdate = await admin
+        .from("meetups")
+        .update({ category: value.category })
+        .eq("id", meetupId)
+        .eq("creator_id", actorId);
+      if (categoryUpdate.error) {
+        return { ok: false, message: "Meetup scheduled, but its activity could not be saved. Try again." };
+      }
+    }
+  }
   revalidatePath("/meet-up");
   revalidatePath("/dashboard");
   after(async () => {
