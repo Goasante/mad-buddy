@@ -144,7 +144,8 @@ describe("event contract", () => {
   });
 
   it("lets both parties see what they both did", () => {
-    expect(LIFE_EVENT_CLASSIFICATION["plan.attended_together"].visibility).toBe("shared");\n    expect(LIFE_EVENT_CLASSIFICATION["meetup.attended_together"].visibility).toBe("shared");
+    expect(LIFE_EVENT_CLASSIFICATION["plan.attended_together"].visibility).toBe("shared");
+    expect(LIFE_EVENT_CLASSIFICATION["meetup.attended_together"].visibility).toBe("shared");
     expect(LIFE_EVENT_CLASSIFICATION["relationship.created"].visibility).toBe("shared");
   });
 });
