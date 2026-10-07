@@ -804,6 +804,7 @@ function MeetupCard({
   const retry = useRef<{ signature: string; key: string } | null>(null);
   const [expanded, setExpanded] = useState(initialExpanded);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [homePromptOpen, setHomePromptOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const [date, setDate] = useState("");
@@ -826,6 +827,11 @@ function MeetupCard({
   const open = m.status === "active";
   const ready = now !== null && canUpdateArrival(m, viewerId, now);
   const confirmed = m.members.filter((person) => person.metAt).length;
+  const acceptedMembers = m.members.filter((person) => person.response === "accepted");
+  const hereCount = acceptedMembers.filter((person) => person.arrival === "here" || person.journeyState === "here" || person.journeyState === "at_spot").length;
+  const nearbyCount = acceptedMembers.filter((person) => person.journeyState === "nearby").length;
+  const approachingCount = acceptedMembers.filter((person) => person.journeyState === "approaching").length;
+  const onWayCount = acceptedMembers.filter((person) => person.arrival === "on_my_way" || person.arrival === "late").length;
   const status = meetupStatus(m, viewerId);
 
   function update(command: Record<string, unknown>) {
