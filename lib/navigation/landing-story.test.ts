@@ -55,9 +55,9 @@ describe("the landing page preserves the product connection model", () => {
     ]);
   });
 
-  it("keeps UpFor as a first-class named product capability", () => {
-    expect(momentumFlow).toMatch(/label:\s*"UpFor"/);
-    expect(momentumSection).toMatch(/\bUpFor\b/);
+  it("keeps Meetups as the real-life momentum step", () => {
+    expect(momentumFlow).toMatch(/label:\s*"Meetup"/);
+    expect(momentumSection).toMatch(/\bMeetups?\b/);
   });
 });
 
