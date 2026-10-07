@@ -13,10 +13,8 @@ export const TOUR_ROUTES: TourRouteOption[] = [
   { path: "/friends", label: "Muddies" },
   { path: "/notifications", label: "Pulse" },
   { path: "/messages", label: "Messages" },
-  { path: "/plans", label: "Plans" },
-  { path: "/hangout-mode", label: "Hangout Mode" },
   { path: "/discover", label: "Linkr" },
-  { path: "/safe-arrival", label: "Safe Arrival" },
+  { path: "/meet-up", label: "Meetups" },
   { path: "/moments", label: "Moments and Air" },
   { path: "/events", label: "Events" },
   { path: "/profile", label: "Profile" },
@@ -176,24 +174,12 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.MESSAGES_QUICK_REPLIES, "Quick replies", "/messages", "Existing quick reply choices."),
   target(TOUR_TARGET_IDS.MESSAGES_COMPOSER, "Message composer", "/messages", "The real message input and Send control."),
 
-  target(TOUR_TARGET_IDS.HANGOUT_TOGGLE, "Hangout control", "/hangout-mode", "Turns Hangout Mode on or opens its setup."),
-  target(TOUR_TARGET_IDS.HANGOUT_ACTIVE, "Active Hangout", "/hangout-mode", "The current Hangout state and controls."),
-  target(TOUR_TARGET_IDS.HANGOUT_DISCOVERY, "Active UpFors", "/hangout-mode", "UpFors available to the viewer."),
 
   target(TOUR_TARGET_IDS.SOCIALIZE_ACTIVATION, "Socialize activation", "/discover", "Turns Socialize on or opens its controls."),
   target(TOUR_TARGET_IDS.SOCIALIZE_FEED, "Socialize feed", "/discover", "Nearby opted-in people, with approximate distance only."),
   target(TOUR_TARGET_IDS.SOCIALIZE_REACH, "Linkr reach", "/discover", "How far you are discoverable while Linkr is on."),
 
-  target(TOUR_TARGET_IDS.SAFE_ARRIVAL_OVERVIEW, "Safe Arrival", "/safe-arrival", "The Safe Arrival landing or current journey."),
-  target(TOUR_TARGET_IDS.SAFE_ARRIVAL_START, "Start Safe Arrival", "/safe-arrival", "Starts the real Safe Arrival setup."),
-  target(TOUR_TARGET_IDS.SAFE_ARRIVAL_ACTIVE, "Active journey", "/safe-arrival", "Traveller status and check-in actions."),
-  target(TOUR_TARGET_IDS.SAFE_ARRIVAL_WATCHER_REQUEST, "Watcher request", "/safe-arrival", "Accept or decline a Safe Arrival request."),
-  target(TOUR_TARGET_IDS.SAFE_ARRIVAL_WATCHERS, "Accepted watchers", "/safe-arrival", "Muddies who accepted and are watching."),
 
-  target(TOUR_TARGET_IDS.PLANS_CREATE, "Create a plan", "/plans", "Starts a social plan, not a subscription."),
-  target(TOUR_TARGET_IDS.PLANS_TABS, "Plan filters", "/plans", "Upcoming, past, and invitation views."),
-  target(TOUR_TARGET_IDS.PLANS_LIST, "Plans list", "/plans", "Current plan cards or the genuine empty state."),
-  target(TOUR_TARGET_IDS.PLANS_RSVP, "RSVP", "/plans", "Existing RSVP controls inside plan details."),
 
   target(TOUR_TARGET_IDS.EVENTS_CREATE, "Create an event", "/events", "Starts the current event form."),
   target(TOUR_TARGET_IDS.EVENTS_TABS, "Event filters", "/events", "Discover and hosted event views."),
@@ -245,16 +231,14 @@ export const TOUR_TARGETS: TourTargetOption[] = [
   target(TOUR_TARGET_IDS.GROUPS_INVITES, "Group conversations", "/messages", "Group conversations live in Messages."),
 
 
-  // The mobile bottom bar's five slots: Messages, Muddies, the Orb, Plans,
-  // Me. The Orb is the centre AND Home, so nav-dashboard now targets it; the
+  // The mobile bottom bar keeps Messages, Muddies, the Orb, Linkr and Meetups. The Orb is the centre AND Home, so nav-dashboard now targets it; the
   // old nav-create ("+") no longer exists, and a tour step cannot spotlight a
   // control that is gone.
   { id: "nav-messages", label: "Messages tab", route: "/messages", description: "App navigation: Messages." },
   { id: "nav-dashboard", label: "Mad Buddy Orb (Home)", route: "/dashboard", description: "App navigation: the centre Orb, which is Home." },
   { id: "nav-friends", label: "Muddies tab", route: "/friends", description: "App navigation: Muddies." },
-  { id: "nav-plans", label: "Plans tab", route: "/plans", description: "App navigation: Plans." },
   { id: "nav-profile", label: "Me tab", route: "/profile", description: "App navigation: Me." },
-  { id: "nav-hangout-mode", label: "Hangout tab", route: "/hangout-mode", description: "App navigation: Hangout Mode." },
+  { id: "nav-meet-up", label: "Meetups tab", route: "/meet-up", description: "App navigation: Meetups." },
   { id: "nav-discover", label: "Socialize tab", route: "/discover", description: "App navigation: Socialize." },
   { id: "nav-moments", label: "Moments tab", route: "/moments", description: "App navigation: Moments." }
 ];
@@ -263,7 +247,7 @@ export const FEATURE_GUIDE_GROUPS = [
   { id: "getting-started", label: "Getting started" },
   { id: "connect", label: "Connect" },
   { id: "share", label: "Share" },
-  { id: "plan-safety", label: "Plan and safety" },
+  { id: "plan-safety", label: "Meetups and events" },
   { id: "your-account", label: "Your account" }
 ] as const;
 
@@ -283,13 +267,11 @@ export const FEATURE_GUIDES: FeatureGuideDefinition[] = [
   { slug: "muddies-guide", label: "Muddies", group: "getting-started", entryRoute: "/friends" },
   { slug: "glow-visibility-guide", label: "Glow and visibility", group: "getting-started", entryRoute: "/settings/glow-visibility" },
   { slug: "messages-guide", label: "Messages", group: "connect", entryRoute: "/messages" },
-  { slug: "hangout-guide", label: "Hangout", group: "connect", entryRoute: "/hangout-mode" },
   { slug: "socialize-guide", label: "Linkr", group: "connect", entryRoute: "/discover" },
   { slug: "moments-guide", label: "Moments", group: "share", entryRoute: "/moments" },
   { slug: "air-guide", label: "Air", group: "share", entryRoute: "/moments", activeTargetId: TOUR_TARGET_IDS.MOMENTS_AIR_TAB },
-  { slug: "plans-guide", label: "Plans", group: "plan-safety", entryRoute: "/plans" },
+  { slug: "meetups-guide", label: "Meetups", group: "plan-safety", entryRoute: "/meet-up" },
   { slug: "events-guide", label: "Events", group: "plan-safety", entryRoute: "/events" },
-  { slug: "safe-arrival-guide", label: "Safe Arrival", group: "plan-safety", entryRoute: "/safe-arrival" },
   { slug: "profile-guide", label: "Profile", group: "your-account", entryRoute: "/profile" },
   { slug: "privacy-safety-guide", label: "Privacy and safety", group: "your-account", entryRoute: "/settings/privacy" },
   { slug: "pulse-guide", label: "Pulse", group: "your-account", entryRoute: "/notifications" },
