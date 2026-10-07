@@ -75,7 +75,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 revoke all on function public.record_meetup_score_from_meetup() from public, anon, authenticated;
 grant execute on function public.record_meetup_score_from_meetup() to service_role;
 
@@ -111,7 +111,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 revoke all on function public.record_meetup_score_from_participant() from public, anon, authenticated;
 grant execute on function public.record_meetup_score_from_participant() to service_role;
 
