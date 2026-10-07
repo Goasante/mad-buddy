@@ -136,7 +136,7 @@ describe("location permission (spec §41-§48)", () => {
   });
 
   it("uses non-shaming denial copy that points at what still works", () => {
-    expect(PERMISSION_DENIED_MESSAGE).toMatch(/still message, create plans/);
+    expect(PERMISSION_DENIED_MESSAGE).toMatch(/still message, create Meetups/);
     expect(PERMISSION_DENIED_MESSAGE).not.toMatch(/must|required|need to/i);
   });
 });
