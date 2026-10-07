@@ -154,13 +154,13 @@ type OverlayDismissHook = (active: boolean, onDismiss: () => void) => void;
 /** A no-op for callers that do not manage back behaviour. */
 const noOverlayDismiss: OverlayDismissHook = () => {};
 
-type PulseCategory = "all" | "nearby" | "social" | "plans" | "safety";
+type PulseCategory = "all" | "nearby" | "social" | "meetups" | "safety";
 
 const PULSE_CATEGORIES: Array<{ value: PulseCategory; label: string; icon: LucideIcon | null }> = [
   { value: "all", label: "All", icon: null },
   { value: "nearby", label: "Nearby", icon: MapPin },
   { value: "social", label: "Social", icon: UsersRound },
-  { value: "plans", label: "Plans", icon: CalendarCheck2 },
+  { value: "meetups", label: "Meetups", icon: CalendarCheck2 },
   { value: "safety", label: "Safety", icon: ShieldCheck }
 ];
 
@@ -173,7 +173,6 @@ function categoryForType(type: string): Exclude<PulseCategory, "all"> | "system"
     base === "wave" ||
     base === "friend_request_received" ||
     base === "friend_request_accepted" ||
-    base === "meetup_request" ||
     base === "meeting_ping" ||
     base === "hangout" ||
     base === "moment" ||
@@ -182,13 +181,13 @@ function categoryForType(type: string): Exclude<PulseCategory, "all"> | "system"
   ) {
     return "social";
   }
-  if (base === "plan" || base === "event") return "plans";
+  if (base === "plan" || base === "event" || base === "meetup" || base === "meetup_discovery" || base === "meetup_request") return "meetups";
   if (base === "safe_arrival" || base === "system_alert") return "safety";
   return "system";
 }
 
 function categoryLabel(category: Exclude<PulseCategory, "all">): string {
-  return category === "nearby" ? "nearby" : category === "social" ? "social" : category === "plans" ? "plans" : "safety";
+  return category === "nearby" ? "nearby" : category === "social" ? "social" : category === "meetups" ? "meetups" : "safety";
 }
 
 function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
@@ -197,10 +196,10 @@ function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
       return "Muddies glowing nearby will show up here.";
     case "social":
       return "Waves, requests and Moments will show up here.";
-    case "plans":
-      return "Plan invites and reminders will show up here.";
+    case "meetups":
+      return "Meetup invitations, updates and Event reminders will show up here.";
     case "safety":
-      return "Safe Arrival and safety updates will show up here.";
+      return "Safety and account-protection updates will show up here.";
   }
 }
 
@@ -209,7 +208,7 @@ function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
  * Was lavender/purple for "social" -- the one hue nowhere else in the app's
  * identity, which made Pulse read as a different product mid-navigation.
  * Every category now sits in the brand family: primary orange for the two
- * proximity-and-plans categories, the deeper brand ember for social (warm,
+ * proximity-and-Meetups categories, the deeper brand ember for social (warm,
  * not purple, and visually distinct from orange at this size), and a
  * restrained cool sky only for Safety -- the one category where a
  * non-brand-warm signal is deliberate. Small icon-only accents, not large
@@ -217,7 +216,7 @@ function categoryEmptyHint(category: Exclude<PulseCategory, "all">): string {
 function categoryIconClass(category: ReturnType<typeof categoryForType>): string {
   switch (category) {
     case "nearby":
-    case "plans":
+    case "meetups":
       return "bg-primary/10 text-primary";
     case "social":
       return "bg-[color-mix(in_srgb,var(--color-brand-ember)_14%,transparent)] text-[var(--color-brand-ember)] dark:text-[var(--color-brand-amber)]";
@@ -773,8 +772,8 @@ export function NotificationsPageContent({
                 />
                 <PrivacyToggle
                   icon={CalendarCheck2}
-                  title="Plan alerts"
-                  description="Get updates about plans and invitations."
+                  title="Meetup alerts"
+                  description="Get updates about Meetups, Events, and invitations."
                   checked={planAlerts}
                   onCheckedChange={(checked) => {
                     setPlanAlerts(checked);
@@ -832,7 +831,7 @@ export function NotificationsPageContent({
             </Button>
           </div>
         ) : (
-          // Category chips (All / Nearby / Social / Plans / Safety), scrollable.
+          // Category chips (All / Nearby / Social / Meetups / Safety), scrollable.
           // `.muddies-filter` / `.muddies-pills` are the canonical scrollable
           // chip-rail classes from the Muddies tabs (44px targets, full labels
           // that never truncate, the last pill kept clear of the edge) --
