@@ -21,6 +21,7 @@ import { Link, PLATFORM_KIND, syncCurrentLocation } from "@/lib/platform";
 import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { isFutureMeetupTime } from "@/lib/meetups/scheduling";
+import { listingsAwaitingReview } from "@/lib/meetups/discovery-review";
 import {
   MEETUP_DISCOVERY_CATEGORY_OPTIONS,
   discoveryCategoryLabel,
@@ -173,7 +174,7 @@ export function MeetNewPeople({
     setLocalUpdates({});
   }
   const nearby = hub.nearby.map((item) => ({ ...item, ...localUpdates[item.id] }));
-  const selected = nearby.find((item) => item.id === selectedId) ?? null;
+  const selected = [...nearby, ...(hub.requests ?? [])].find((item) => item.id === selectedId) ?? null;
   const [message, setMessage] = useState("");
   const locationSynced = useRef(false);
   const inFlight = useRef(false);
@@ -207,12 +208,11 @@ export function MeetNewPeople({
     })();
     return () => { cancelled = true; };
   }, [onRefresh]);
-  const myActive = useMemo(
-    () => hub.mine
-      .filter((item) => item.status === "active")
-      .sort((a, b) => Number(b.id === focusedId) - Number(a.id === focusedId)),
-    [hub.mine, focusedId]
-  );
+  const myActive = useMemo(() => {
+    const reviewIds = new Set(listingsAwaitingReview(hub, nowMs).map((item) => item.id));
+    return hub.mine.filter((item) => item.status === "active" || reviewIds.has(item.id))
+      .sort((a, b) => Number(b.id === focusedId) - Number(a.id === focusedId));
+  }, [hub, nowMs, focusedId]);
 
   async function refreshAfterSave(successMessage: string) {
     try {
@@ -360,7 +360,7 @@ export function MeetNewPeople({
         <section className="mb-6 space-y-3" aria-labelledby="my-discovery-heading">
           <div className="flex items-center justify-between">
             <h2 id="my-discovery-heading" className="text-sm font-semibold">Your listings</h2>
-            <span className="text-xs text-muted-foreground">{myActive.length} active</span>
+            <span className="text-xs text-muted-foreground">{myActive.length} listings</span>
           </div>
           {myActive.map((item) => (
             <article key={item.id} className={["rounded-[24px] border border-border bg-card p-4", item.id === focusedId ? "ring-2 ring-primary" : ""].join(" ")}>
@@ -368,7 +368,7 @@ export function MeetNewPeople({
                 <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl"><DiscoveryArtwork category={item.category} /></div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{item.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.interestCount} of {item.interestLimit} responses · {discoveryTimeLeft(item.listingExpiresAt, nowMs)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.interestCount} of {item.interestLimit} responses · {Date.parse(item.listingExpiresAt) <= nowMs ? "Posting ended · review requests" : discoveryTimeLeft(item.listingExpiresAt, nowMs)}</p>
                 </div>
               </div>
 
@@ -385,7 +385,7 @@ export function MeetNewPeople({
                           </span>
                         </span>
                       </Link>
-                      {person.status === "pending" ? (
+                      {person.status === "pending" && Date.parse(item.startsAt) > nowMs ? (
                         <div className="flex gap-1.5">
                           <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "declined" })}>
                             <X className="h-4 w-4" aria-hidden="true" />
