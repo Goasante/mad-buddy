@@ -42,6 +42,10 @@ export type MeetupDiscoveryAction = (
 const inputClass =
   "box-border w-full min-w-0 max-w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
 
+function discoveryProfileHref(username: string): ReturnType<typeof conversationHref> {
+  return `/friends/${username}` as ReturnType<typeof conversationHref>;
+}
+
 function localDateTimeValue(date: Date) {
   const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return shifted.toISOString().slice(0, 16);
@@ -310,7 +314,7 @@ export function MeetNewPeople({
                 <div className="mt-4 space-y-2">
                   {item.interestedPeople.map((person) => (
                     <div key={person.userId} className="flex items-center gap-2.5 rounded-xl bg-secondary/60 p-2.5">
-                      <Link href={"/friends/" + person.username} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-lg">
+                      <Link href={discoveryProfileHref(person.username)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-lg">
                         <UserAvatar src={person.avatarUrl} name={person.name} size="xs" decorative />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{person.name}</span>
