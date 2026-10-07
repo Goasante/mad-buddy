@@ -50,6 +50,13 @@ export function resolveMobileNotificationDestination(
     }
   }
 
+  /* Meet Up now reads its own query parameters on both web and mobile.
+     Preserve them so a matched Meetup or Meet New People interest opens the
+     exact surface instead of dropping the user at the generic Meet Up list. */
+  if (rawPath === "/meet-up") {
+    return { type: "internal", href: destination.href };
+  }
+
   /* A group notification names a specific group, and Android has only the
      list. Opening the list would answer a different question from the one the
      notification asked, so the row does not navigate at all. */

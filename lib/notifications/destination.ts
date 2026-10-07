@@ -36,6 +36,7 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   hangout: "/hangout-mode" as Route,
   safe_arrival: "/safe-arrival" as Route,
   meetup: "/meet-up" as Route,
+  meetup_discovery: "/meet-up?newPeople=1" as Route,
   event: "/events" as Route,
   // An Event Room notification lands on its Event, and with both ids on the
   // Room itself. Never on generic Events Home.
@@ -123,6 +124,10 @@ export function resolveNotificationDestination(type: string): NotificationDestin
         return { type: "internal", href: withQuery("/safe-arrival", "session", entityId) };
       case "meetup":
         return { type: "internal", href: withQuery("/meet-up", "meetup", entityId) };
+      case "meetup_discovery": {
+        const params = new URLSearchParams({ newPeople: "1", discovery: entityId });
+        return { type: "internal", href: `/meet-up?${params.toString()}` as Route };
+      }
       case "linkr_connection":
         // Deliberately NOT a frozen destination. `/linkr?connection=<id>`
         // re-resolves at open time: blocks and eligibility are re-checked, and

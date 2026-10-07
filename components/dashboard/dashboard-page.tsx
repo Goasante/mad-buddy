@@ -31,7 +31,7 @@ import { updateVisibilityStatusAction } from "@/app/(app)/settings-actions";
 import { MobilePageHeader } from "@/components/app-shell/mobile-page-header";
 import { useRouter } from "next/navigation";
 import { PageSectionHeader } from "@/components/app-shell/page-section-header";
-import { PlanStack } from "@/components/socialize/plan-stack";
+import { PlanStack, type ComingUpMeetupItem } from "@/components/socialize/plan-stack";
 import { rsvpAction } from "@/app/(app)/plans-actions";
 import { sendWaveV2Action } from "@/app/(app)/social-actions";
 import { useUnreadNotifications } from "@/hooks/unread-notification-context";
@@ -54,7 +54,7 @@ import {
   TravellerJourneyHomeCard
 } from "@/components/safety/safe-arrival-home-cards";
 import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
-import { MEETUP_TITLES, type MeetupHomeItem } from "@/lib/meetups/rules";
+import type { MeetupHomeItem } from "@/lib/meetups/rules";
 import { StatusComposer } from "@/components/social/status-composer";
 import { FeatureIcon } from "@/components/ui/feature-icon";
 import type { FeatureIconKey } from "@/lib/icons/feature-icons";
@@ -372,6 +372,20 @@ export function DashboardPageContent({
 
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const router = useRouter();
+  const comingUpItems = useMemo(
+    () =>
+      [
+        ...agendaItems,
+        ...meetupItems.map(
+          (item): ComingUpMeetupItem => ({
+            ...item,
+            kind: "meetup",
+            href: `/meet-up?meetup=${item.id}` as Route
+          })
+        )
+      ].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
+    [agendaItems, meetupItems]
+  );
   useEffect(() => {
     if (!watchUpForChanges) return;
     let lastRefresh = Date.now();
@@ -863,7 +877,7 @@ export function DashboardPageContent({
       acknowledgingFirstMuddy: firstMuddy !== null,
       milestones: new Set(activationMilestones),
       hasSafetyCard: hasSafeArrival,
-      upcomingPlanCount: agendaItems.length,
+      upcomingPlanCount: comingUpItems.length,
       twoSidedConversationCount,
       unreadConversationCount,
       planParticipationCount,
@@ -877,7 +891,7 @@ export function DashboardPageContent({
       firstMuddy,
       activationMilestones,
       hasSafeArrival,
-      agendaItems.length,
+      comingUpItems.length,
       twoSidedConversationCount,
       unreadConversationCount,
       planParticipationCount,
@@ -1203,15 +1217,13 @@ export function DashboardPageContent({
             that looks different depending on which screen you found it on is
             a plan you have to re-read. "See all" stays here only — Linkr IS
             the discovery page, so it has nowhere to send you. */}
-        {agendaItems.length > 0 ? (
+        {comingUpItems.length > 0 ? (
           <section aria-labelledby="home-plans-heading" data-tour-id={TOUR_TARGET_IDS.HOME_UPCOMING_PLAN}>
             <PageSectionHeader
               id="home-plans-heading"
               title="Coming Up"
-              href="/plans"
-              actionAriaLabel="See all plans"
             />
-            <PlanStack plans={agendaItems} onJoin={joinPlan} pending={isPending} />
+            <PlanStack plans={comingUpItems} onJoin={joinPlan} pending={isPending} />
           </section>
         ) : composition.showPlansEmpty ? (
           /* REAL PLANS ALWAYS SHOW; only the placeholder yields.
@@ -1259,15 +1271,6 @@ export function DashboardPageContent({
         {profileReminder && composition.showProfileReminder ? (
           <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
         ) : null}
-
-        {meetupItems.length > 0 ? <section aria-labelledby="home-meetup-heading" className="space-y-2.5">
-          <div className="flex items-center justify-between gap-3"><h2 id="home-meetup-heading" className="text-sm font-semibold">Meet Up</h2><Link href="/meet-up" prefetch={false} className="text-xs font-medium text-primary">Open</Link></div>
-          {meetupItems.map((item) => <Link key={item.id} href={`/meet-up?meetup=${item.id}` as Route} prefetch={false} className="block rounded-2xl border border-border bg-card p-3 space-y-1">
-            <p className="text-sm font-semibold">{MEETUP_TITLES[item.mode]} · {item.placeLabel}</p>
-            <p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { timeZone: item.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(item.startsAt))} · {item.timezone}</p>
-            <p className="text-xs text-primary">{item.response === "invited" ? "Invitation · respond" : "You accepted · view updates"}</p>
-          </Link>)}
-        </section> : null}
 
         {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
             invitation still awaiting my answer. Absent entirely when there is

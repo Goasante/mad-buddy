@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseBrowserEnv, getSupabaseServerEnv } from "@/lib/supabase/env";
 import { resolveApiUser } from "@/lib/api/auth";
 import { preflightResponse, withCors } from "@/lib/api/cors";
+import { refreshMeetupProximity } from "@/lib/meetups/proximity";
 
 const responseSchema = z.object({
   received: z.boolean(),
@@ -113,6 +114,20 @@ export async function POST(request: Request) {
       NextResponse.json({ error: "Could not update your private proximity signal." }, { status: 500 }),
       request
     );
+  }
+
+  try {
+    await refreshMeetupProximity(admin, user.id);
+  } catch (meetupError) {
+    // Location ingestion is still successful even if the optional Meet Up
+    // projection cannot refresh. The Meet Up screen keeps its poll fallback.
+    logBackendEvent("warn", {
+      requestId,
+      route,
+      userId: user.id,
+      action: "meetups.proximity_refresh",
+      errorType: errorType(meetupError)
+    });
   }
 
   const response = responseSchema.parse({

@@ -62,7 +62,7 @@ describe("section headers", () => {
 
   it("renders one personal agenda section", () => {
     expect(home).not.toContain('title="My Upcoming"');
-    expect(home).toContain("<PlanStack plans={agendaItems}");
+    expect(home).toContain("<PlanStack plans={comingUpItems}");
   });
 
   it("hides the action when there is nothing to see", () => {
@@ -319,7 +319,7 @@ describe("Trending sits above My Plans", () => {
    */
   it("renders Top Events before the plan stack", () => {
     const trendingAt = home.indexOf("<TopEventsHome events={topEvents} />");
-    const plansAt = home.indexOf("<PlanStack plans={agendaItems}");
+    const plansAt = home.indexOf("<PlanStack plans={comingUpItems}");
     expect(trendingAt).toBeGreaterThan(-1);
     expect(plansAt).toBeGreaterThan(-1);
     expect(trendingAt).toBeLessThan(plansAt);

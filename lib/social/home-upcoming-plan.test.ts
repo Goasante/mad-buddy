@@ -35,13 +35,13 @@ describe("Home plan selection", () => {
 
   it("shows the whole stack rather than only the soonest plan", () => {
     // Home loads three; rendering one hid two the user already paid for.
-    expect(home).toContain("<PlanStack plans={agendaItems}");
+    expect(home).toContain("<PlanStack plans={comingUpItems}");
     expect(home).not.toContain("const plan = agendaItems[0];");
   });
 
   it("renders the empty state instead of hiding the section", () => {
     expect(home).toContain("<UpcomingPlanEmpty />");
-    expect(home).toContain("agendaItems.length > 0 ?");
+    expect(home).toContain("comingUpItems.length > 0 ?");
   });
 
   it("sits directly after Near and above Quick Actions", () => {
@@ -59,21 +59,23 @@ describe("Home plan selection", () => {
   });
 });
 
-describe("Upcoming Plans header", () => {
+describe("Coming Up header", () => {
   it("uses the same pattern as Near", () => {
     expect(home).toContain("<PageSectionHeader");
     expect(home).toContain('id="home-plans-heading"');
+    expect(home).toContain('title="Coming Up"');
   });
 
-  it("points See all at the canonical Plans page", () => {
-    expect(home).toContain('href="/plans"');
-    expect(home).toContain('actionAriaLabel="See all plans"');
+  it("does not send a mixed Plans/Events/Meetups stack to a Plans-only See all link", () => {
+    const section = home.slice(home.indexOf('aria-labelledby="home-plans-heading"'), home.indexOf("<UpcomingPlanEmpty />"));
+    expect(section).not.toContain('href="/plans"');
+    expect(section).not.toContain('actionAriaLabel="See all plans"');
   });
 });
 
 describe("one plan presentation, shared with Linkr", () => {
   it("renders the shared stack rather than a second Home-only card", () => {
-    expect(home).toContain('import { PlanStack } from "@/components/socialize/plan-stack"');
+    expect(home).toContain('import { PlanStack, type ComingUpMeetupItem } from "@/components/socialize/plan-stack"');
     expect(home).not.toContain("function UpcomingPlanRow");
   });
 
@@ -87,9 +89,7 @@ describe("one plan presentation, shared with Linkr", () => {
     expect(join.slice(0, 600)).toContain("router.refresh()");
   });
 
-  it("keeps See all on Home only", () => {
-    // Linkr IS the discovery page, so a "See all" there has nowhere to send
-    // anyone. The stack itself carries no header.
+  it("keeps the shared stack headerless so Home can name the mixed Coming Up section", () => {
     expect(stack).not.toContain("See all");
     expect(stack).not.toContain("PageSectionHeader");
   });

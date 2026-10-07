@@ -62,7 +62,7 @@ export const LIFE_FLAGS = [
 ] as const;
 
 export const MANAGED_FEATURES = [
-  ...([ ["upfor", "UpFor"], ["events", "Events"], ["safe_arrival", "Safe Arrival"] ] as const).map(([key, title]) => ({ key, title, category: "Launch controls", description: `Release ${title} when it is ready for members.`, enabledImpact: `${title} becomes available across the app and eligible SmartCard suggestions return.`, disabledImpact: `${title} shows a locked preview. New activity and recommendations stop. Existing Safe Arrival journeys can finish.` })),
+  ...([ ["upfor", "UpFor"], ["events", "Events"], ["meet_up", "Meet Up"], ["safe_arrival", "Safe Arrival"] ] as const).map(([key, title]) => ({ key, title, category: "Launch controls", description: `Release ${title} when it is ready for members.`, enabledImpact: `${title} becomes available across the app and eligible SmartCard suggestions return.`, disabledImpact: `${title} shows a locked preview. New activity and recommendations stop. Existing Safe Arrival journeys can finish.` })),
   {
     key: ADS_ENABLED_FLAG,
     title: "Advertising",

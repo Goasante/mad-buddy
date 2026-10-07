@@ -1,11 +1,13 @@
 import "server-only";
 import { z } from "zod";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { meetupSchema, type MeetupHomeItem } from "@/lib/meetups/rules";
+import { meetupReadyForHome, meetupSchema, type MeetupHomeItem } from "@/lib/meetups/rules";
 import { batchEligibleMuddyIds } from "@/lib/social/permissions";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 export async function loadMeetups(admin: Admin, actorId: string) {
+  const expiry = await admin.rpc("expire_meetups_server");
+  if (expiry.error) throw expiry.error;
   const { data, error } = await admin.rpc("list_meetups_server", { p_actor_id: actorId });
   if (error) throw error;
   return z.array(meetupSchema).parse(data);
@@ -15,9 +17,19 @@ export async function loadMeetupHome(admin: Admin, actorId: string): Promise<Mee
   const meetups = await loadMeetups(admin, actorId);
   return meetups.flatMap((m) => {
     const response = m.members.find((p) => p.userId === actorId)?.response;
-    return m.status === "active" && Date.parse(m.startsAt) > Date.now() - 2 * 60 * 60_000 && (response === "accepted" || response === "invited")
-      ? [{ id: m.id, mode: m.mode, startsAt: m.startsAt, timezone: m.timezone, placeLabel: m.placeLabel, response }] : [];
-  }).slice(0, 3);
+    if (response !== "accepted" || !meetupReadyForHome(m, actorId, Date.now())) return [];
+    return [{
+      id: m.id,
+      mode: m.mode,
+      startsAt: m.startsAt,
+      timezone: m.timezone,
+      placeLabel: m.placeLabel,
+      title: m.title,
+      category: m.category,
+      sourceDiscoveryId: m.sourceDiscoveryId,
+      response
+    }];
+  }).slice(0, 8);
 }
 
 export async function loadMeetupMuddies(admin: Admin, actorId: string) {

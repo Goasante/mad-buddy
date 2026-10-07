@@ -5,19 +5,22 @@ import { smartCardProviders, type SmartCardInput } from "@/lib/smart-card/provid
 import { resolveSmartCard, type SmartCard } from "@/lib/smart-card/smart-card";
 const now = new Date("2026-10-05T12:00:00Z");
 const base: SmartCardInput = { now, journey: null, safeArrival: null, birthday: null, agenda: [], weekendPlanCount: 0, nearbyFriends: [], locationFreshForProximity: true, muddyCount: 2, buddyScore: null, recentAchievement: null, suggestionCount: 0 };
-const allOn = { upfor: true, linkr: true, events: true, conference: true, safe_arrival: true };
+const allOn = { upfor: true, linkr: true, events: true, conference: true, meet_up: true, safe_arrival: true };
 const select = (availability = LOCKED_FEATURES, extra: Partial<SmartCardInput> = {}, acknowledgedIds = new Set<string>()) => resolveSmartCard(smartCardProviders({ ...base, ...extra, availability }), { now: now.getTime(), acknowledgedIds });
 describe("optional feature launch controls", () => {
   it("maps deep links and aliases without touching core routes", () => {
     expect(featureForHref("/events/top?event=x")).toBe("events");
     expect(featureForHref("/discover?eventId=x")).toBe("linkr");
     expect(featureForHref("/conference/topic")).toBe("conference");
+    expect(featureForHref("/meet-up")).toBe("meet_up");
+    expect(featureForHref("/safe-arrival")).toBe("safe_arrival");
     for (const path of ["/plans", "/messages", "/friends", "/settings/privacy", "/dashboard", "/events-other", "https://example.com/events"]) expect(featureForHref(path)).toBeNull();
   });
   it("suppresses promotion but preserves existing safety and Plans delivery", () => {
     expect(featureForNotification("hangout:x")).toBe("upfor");
     expect(featureForNotification("event_room:x")).toBe("events");
     expect(featureForNotification("conference_reply:x")).toBe("conference");
+    expect(featureForNotification("meetup:x")).toBe("meet_up");
     expect(featureForNotification("safe_arrival:x")).toBeNull();
     expect(featureForNotification("plan:x")).toBeNull();
   });

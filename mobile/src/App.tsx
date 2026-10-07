@@ -108,7 +108,7 @@ export default function App() {
         <Route path="/events" element={<MobileFeatureBoundary feature="events"><EventsScreen /></MobileFeatureBoundary>} />
         <Route path="/groups" element={<Navigate to="/messages?filter=groups" replace />} />
         <Route path="/safety" element={<SafetyScreen />} />
-        <Route path="/meet-up" element={<MobileFeatureBoundary feature="safe_arrival"><MeetupScreen /></MobileFeatureBoundary>} />
+        <Route path="/meet-up" element={<MobileFeatureBoundary feature="meet_up"><MeetupScreen /></MobileFeatureBoundary>} />
         <Route path="/subscription" element={<SubscriptionScreen />} />
         <Route path="/buddy-score" element={<BuddyScoreScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />

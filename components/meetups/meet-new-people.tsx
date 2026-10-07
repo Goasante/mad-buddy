@@ -1,0 +1,525 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  ArrowLeft,
+  Check,
+  Clock3,
+  MessageCircle,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  UserRound,
+  Users,
+  X
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { Link, syncCurrentLocation } from "@/lib/platform";
+import { resolveUpForActivityArtwork } from "@/lib/visuals/upfor-art";
+import { conversationHref } from "@/lib/messaging/open-conversation";
+import {
+  MEETUP_DISCOVERY_CATEGORY_OPTIONS,
+  discoveryCategoryLabel,
+  discoveryTimeLeft,
+  type MeetupDiscoveryCategory,
+  type MeetupDiscoveryHub,
+  type MeetupDiscoveryItem
+} from "@/lib/meetups/discovery";
+
+export type MeetupDiscoveryAction = (
+  input: unknown,
+  create?: boolean
+) => Promise<{
+  ok: boolean;
+  message: string;
+  discoveryId?: string;
+  meetupId?: string;
+  conversationId?: string;
+}>;
+
+const inputClass =
+  "box-border w-full min-w-0 max-w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+
+function discoveryProfileHref(username: string): ReturnType<typeof conversationHref> {
+  return `/friends/${username}` as ReturnType<typeof conversationHref>;
+}
+
+function localDateTimeValue(date: Date) {
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
+
+function DiscoveryArtwork({ category }: { category: MeetupDiscoveryCategory }) {
+  const art = resolveUpForActivityArtwork(category);
+  if (!art) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/20 via-secondary to-background">
+        <span className="text-4xl" aria-hidden="true">
+          {MEETUP_DISCOVERY_CATEGORY_OPTIONS.find((item) => item.id === category)?.emoji ?? "✨"}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="h-full w-full bg-cover bg-center"
+      style={{ backgroundImage: `url("${art.asset.path}")`, backgroundPosition: art.objectPosition }}
+      aria-hidden="true"
+    />
+  );
+}
+
+function ListingCard({
+  item,
+  nowMs,
+  pending,
+  onInterest,
+  onWithdraw,
+  onOpen
+}: {
+  item: MeetupDiscoveryItem;
+  nowMs: number;
+  pending: boolean;
+  onInterest: () => void;
+  onWithdraw: () => void;
+  onOpen: () => void;
+}) {
+  const remaining = Math.max(0, item.interestLimit - item.interestCount);
+  return (
+    <article className="overflow-hidden rounded-[26px] border border-border/80 bg-card shadow-[0_10px_30px_hsl(var(--shadow)/0.08)]">
+      <button type="button" onClick={onOpen} className="block w-full text-left">
+        <div className="relative h-32 overflow-hidden">
+          <DiscoveryArtwork category={item.category} />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
+          <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3 text-white">
+            <div className="min-w-0">
+              <p className="truncate text-lg font-semibold">{item.title}</p>
+              <p className="text-xs text-white/85">{discoveryCategoryLabel(item.category)} · Nearby</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm">
+              {item.style === "group" ? "Group" : "1-to-1"}
+            </span>
+          </div>
+        </div>
+      </button>
+
+      <div className="space-y-3 p-4">
+        <div className="flex items-center gap-2.5">
+          <UserAvatar src={item.creatorAvatarUrl} name={item.creatorName} size="xs" decorative />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{item.creatorName}</p>
+            <p className="text-xs text-muted-foreground">
+              {new Intl.DateTimeFormat("en", {
+                timeZone: item.timezone,
+                dateStyle: "medium",
+                timeStyle: "short"
+              }).format(new Date(item.startsAt))}
+            </p>
+          </div>
+          <span className="text-xs font-medium text-primary">{discoveryTimeLeft(item.listingExpiresAt, nowMs)}</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>{item.interestCount} interested</span>
+          <span>{remaining > 0 ? `${remaining} response slots` : "Responses full"}</span>
+        </div>
+
+        {item.myInterestStatus === "accepted" && item.meetupId ? (
+          <Link href={`/meet-up?meetup=${item.meetupId}`} className="focus-ring inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">
+            Open Meetup
+          </Link>
+        ) : item.myInterestStatus === "pending" ? (
+          <Button type="button" variant="outline" className="w-full" disabled={pending} onClick={onWithdraw}>
+            Withdraw interest
+          </Button>
+        ) : (
+          <Button type="button" className="w-full" disabled={pending || remaining === 0} onClick={onInterest}>
+            Interested
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+export function MeetNewPeople({
+  hub,
+  nowMs,
+  focusedId,
+  onBack,
+  action,
+  onRefresh
+}: {
+  hub: MeetupDiscoveryHub;
+  nowMs: number;
+  focusedId?: string;
+  onBack: () => void;
+  action: MeetupDiscoveryAction;
+  onRefresh: () => Promise<void>;
+}) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selected, setSelected] = useState<MeetupDiscoveryItem | null>(null);
+  const [message, setMessage] = useState("");
+  const locationSynced = useRef(false);
+  const [pending, startTransition] = useTransition();
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<MeetupDiscoveryCategory>("coffee");
+  const [style, setStyle] = useState<"one_to_one" | "group">("one_to_one");
+  const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 2 * 60 * 60_000)));
+  const [duration, setDuration] = useState<30 | 60 | 120 | 240>(60);
+  const [minStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 60_000)));
+
+  const canCreate = hub.activeSlots < hub.maxActiveSlots;
+  const wordCount = title.trim() ? title.trim().split(/\s+/).length : 0;
+
+  useEffect(() => {
+    if (locationSynced.current) return;
+    locationSynced.current = true;
+    void (async () => {
+      const location = await syncCurrentLocation();
+      if (!location.ok) {
+        setMessage(location.message ?? "Turn on location to see people nearby.");
+        return;
+      }
+      await onRefresh();
+    })();
+  }, [onRefresh]);
+  const myActive = useMemo(
+    () => hub.mine
+      .filter((item) => item.status === "active")
+      .sort((a, b) => Number(b.id === focusedId) - Number(a.id === focusedId)),
+    [hub.mine, focusedId]
+  );
+
+  function run(input: unknown) {
+    startTransition(async () => {
+      const result = await action(input, false);
+      setMessage(result.message);
+      if (result.ok) {
+        const command =
+          input && typeof input === "object" && "action" in input && typeof input.action === "string"
+            ? input.action
+            : null;
+        if (selected) {
+          setSelected((current) => {
+            if (!current) return current;
+            if (command === "interest") {
+              return {
+                ...current,
+                myInterestStatus: "pending",
+                interestCount: Math.min(current.interestLimit, current.interestCount + 1)
+              };
+            }
+            if (command === "withdraw") {
+              return {
+                ...current,
+                myInterestStatus: null,
+                interestCount: Math.max(0, current.interestCount - 1)
+              };
+            }
+            return {
+              ...current,
+              conversationId: result.conversationId ?? current.conversationId,
+              meetupId: result.meetupId ?? current.meetupId
+            };
+          });
+        }
+        await onRefresh();
+      }
+    });
+  }
+
+  function create() {
+    if (!title.trim() || wordCount > 5) return;
+    const date = new Date(startsAt);
+    startTransition(async () => {
+      const location = await syncCurrentLocation();
+      if (!location.ok) {
+        setMessage(location.message ?? "Turn on Glow so this listing can be shown nearby.");
+        return;
+      }
+      const result = await action({
+        title: title.trim(),
+        category,
+        style,
+        startsAt: date.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        durationMinutes: duration,
+        requestKey: crypto.randomUUID()
+      }, true);
+      setMessage(result.message);
+      if (result.ok) {
+        setCreateOpen(false);
+        setTitle("");
+        await onRefresh();
+      }
+    });
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-xl px-3 pb-24 pt-2 sm:px-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <button type="button" onClick={onBack} className="focus-ring -ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-medium">
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          Meet Up
+        </button>
+        <span className="rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold">
+          {hub.activeSlots} of {hub.maxActiveSlots} active
+        </span>
+      </div>
+
+      <div className="mb-5 rounded-[28px] border border-border/80 bg-card p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Nearby discovery</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">Meet New People</h1>
+            <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+              Find people nearby who are open to the same thing. Exact locations stay private until you all agree to meet.
+            </p>
+          </div>
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+            <UserRound className="h-6 w-6" aria-hidden="true" />
+          </div>
+        </div>
+        <Button className="mt-4 w-full" disabled={!canCreate} onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+          Start a nearby listing
+        </Button>
+        {!canCreate ? (
+          <p className="mt-2 text-xs text-muted-foreground">You have used all three active Meetup slots.</p>
+        ) : null}
+      </div>
+
+      {message ? <p role="status" className="mb-4 rounded-xl bg-secondary px-3 py-2 text-sm">{message}</p> : null}
+
+      {myActive.length > 0 ? (
+        <section className="mb-6 space-y-3" aria-labelledby="my-discovery-heading">
+          <div className="flex items-center justify-between">
+            <h2 id="my-discovery-heading" className="text-sm font-semibold">Your listings</h2>
+            <span className="text-xs text-muted-foreground">{myActive.length} active</span>
+          </div>
+          {myActive.map((item) => (
+            <article key={item.id} className={["rounded-[24px] border border-border bg-card p-4", item.id === focusedId ? "ring-2 ring-primary" : ""].join(" ")}>
+              <div className="flex gap-3">
+                <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl"><DiscoveryArtwork category={item.category} /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{item.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.interestCount} of {item.interestLimit} responses · {discoveryTimeLeft(item.listingExpiresAt, nowMs)}</p>
+                </div>
+              </div>
+
+              {item.interestedPeople.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  {item.interestedPeople.map((person) => (
+                    <div key={person.userId} className="flex items-center gap-2.5 rounded-xl bg-secondary/60 p-2.5">
+                      <Link href={discoveryProfileHref(person.username)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-lg">
+                        <UserAvatar src={person.avatarUrl} name={person.name} size="xs" decorative />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{person.name}</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {person.status === "accepted" ? "Accepted · view profile" : "Interested · view profile"}
+                          </span>
+                        </span>
+                      </Link>
+                      {person.status === "pending" ? (
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "declined" })}>
+                            <X className="h-4 w-4" aria-hidden="true" />
+                            <span className="sr-only">Pass</span>
+                          </Button>
+                          <Button size="sm" disabled={pending} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "accepted" })}>
+                            <Check className="h-4 w-4" aria-hidden="true" />
+                            <span className="sr-only">Accept</span>
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-xs text-muted-foreground">No responses yet.</p>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {item.conversationId ? (
+                  <Link href={conversationHref(item.conversationId)} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
+                    <MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat
+                  </Link>
+                ) : null}
+                {item.refreshCount < 2 ? (
+                  <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "refresh", id: item.id })}>
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Refresh
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="ghost" disabled={pending} onClick={() => run({ action: "close", id: item.id })}>
+                  End listing
+                </Button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      <section className="space-y-3" aria-labelledby="nearby-discovery-heading">
+        <div className="flex items-center justify-between">
+          <h2 id="nearby-discovery-heading" className="text-sm font-semibold">Nearby</h2>
+          <span className="text-xs text-muted-foreground">{hub.nearby.length} open</span>
+        </div>
+        {hub.nearby.length === 0 ? (
+          <div className="rounded-[24px] border border-dashed border-border p-6 text-center">
+            <Users className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-2 text-sm font-medium">Nothing nearby right now</p>
+            <p className="mt-1 text-xs text-muted-foreground">Start something and give nearby people a reason to join.</p>
+          </div>
+        ) : hub.nearby.map((item) => (
+          <ListingCard
+            key={item.id}
+            item={item}
+            nowMs={nowMs}
+            pending={pending}
+            onOpen={() => setSelected(item)}
+            onInterest={() => run({ action: "interest", id: item.id })}
+            onWithdraw={() => run({ action: "withdraw", id: item.id })}
+          />
+        ))}
+      </section>
+
+      <Modal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        variant="sheet"
+        title="Start a nearby listing"
+        description="Short, clear and easy to scan."
+        footer={<Button type="button" onClick={create} disabled={pending || !title.trim() || wordCount > 5}>Publish nearby</Button>}
+      >
+        <div className="space-y-5">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium">Short title</span>
+            <input className={inputClass} value={title} maxLength={40} onChange={(event) => setTitle(event.target.value)} placeholder="Coffee and conversation" />
+            <span className={`text-xs ${wordCount > 5 ? "text-destructive" : "text-muted-foreground"}`}>{wordCount}/5 words</span>
+          </label>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">Who are you hoping to meet?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setStyle("one_to_one")} className={`rounded-2xl border p-3 text-left text-sm ${style === "one_to_one" ? "border-primary bg-primary/8" : "border-border"}`}>
+                <UserRound className="mb-2 h-5 w-5" aria-hidden="true" />
+                <span className="font-semibold">One person</span>
+                <span className="mt-1 block text-xs text-muted-foreground">A simple 1-to-1 meetup</span>
+              </button>
+              <button type="button" onClick={() => setStyle("group")} className={`rounded-2xl border p-3 text-left text-sm ${style === "group" ? "border-primary bg-primary/8" : "border-border"}`}>
+                <Users className="mb-2 h-5 w-5" aria-hidden="true" />
+                <span className="font-semibold">Small group</span>
+                <span className="mt-1 block text-xs text-muted-foreground">Up to six people total</span>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">Interest</p>
+            <div className="flex flex-wrap gap-2">
+              {MEETUP_DISCOVERY_CATEGORY_OPTIONS.map((option) => (
+                <button key={option.id} type="button" onClick={() => setCategory(option.id)} className={`rounded-full border px-3 py-2 text-xs font-medium ${category === option.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}>
+                  {option.emoji} {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="block min-w-0 space-y-1.5 overflow-hidden">
+            <span className="text-sm font-medium">When are you hoping to meet?</span>
+            <input className={inputClass} type="datetime-local" min={minStartsAt} value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+          </label>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">Keep this listing open for</p>
+            <div className="grid grid-cols-4 gap-2">
+              {([30,60,120,240] as const).map((minutes) => (
+                <button key={minutes} type="button" onClick={() => setDuration(minutes)} className={`rounded-xl border px-2 py-2 text-xs font-semibold ${duration === minutes ? "border-primary bg-primary/8 text-primary" : "border-border"}`}>
+                  {minutes < 60 ? "30m" : `${minutes / 60}h`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-secondary/70 p-3 text-xs leading-5 text-muted-foreground">
+            <Clock3 className="mr-1 inline h-4 w-4" aria-hidden="true" />
+            The listing can receive up to six live responses. When someone is accepted, Mad Buddy creates the scheduled Meetup and private chat.
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={selected !== null}
+        onOpenChange={(open) => { if (!open) setSelected(null); }}
+        variant="sheet"
+        title={selected?.title ?? "Meetup"}
+        description={selected ? `${discoveryCategoryLabel(selected.category)} · Nearby` : undefined}
+      >
+        {selected ? (
+          <div className="space-y-4">
+            <div className="h-44 overflow-hidden rounded-2xl"><DiscoveryArtwork category={selected.category} /></div>
+            <div className="flex items-center gap-3">
+              <UserAvatar src={selected.creatorAvatarUrl} name={selected.creatorName} size="sm" decorative />
+              <div>
+                <p className="font-semibold">{selected.creatorName}</p>
+                <p className="text-xs text-muted-foreground">{selected.style === "group" ? "Small group meetup" : "One-to-one meetup"}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-secondary/60 p-3 text-sm">
+              {new Intl.DateTimeFormat("en", { timeZone: selected.timezone, dateStyle: "full", timeStyle: "short" }).format(new Date(selected.startsAt))}
+            </div>
+            <p className="text-xs leading-5 text-muted-foreground">
+              The exact meetup point is agreed only after people match. Your live location is never shown on this discovery card.
+            </p>
+            {selected.myInterestStatus === "accepted" && selected.meetupId ? (
+              <Link href={`/meet-up?meetup=${selected.meetupId}`} className="focus-ring inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">Open Meetup</Link>
+            ) : selected.myInterestStatus === "pending" ? (
+              <Button variant="outline" className="w-full" disabled={pending} onClick={() => run({ action: "withdraw", id: selected.id })}>Withdraw interest</Button>
+            ) : (
+              <Button className="w-full" disabled={pending || selected.interestCount >= selected.interestLimit} onClick={() => run({ action: "interest", id: selected.id })}>Interested</Button>
+            )}
+          </div>
+        ) : null}
+      </Modal>
+    </div>
+  );
+}
+
+export function MeetNewPeopleSafety({
+  open,
+  onOpenChange,
+  onContinue
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onContinue: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      onOpenChange={onOpenChange}
+      variant="sheet"
+      title="Meeting someone new"
+      description="A quick safety reminder before you browse."
+      footer={<Button type="button" onClick={onContinue}>I understand · continue</Button>}
+    >
+      <div className="space-y-3">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-500/12 text-amber-700 dark:text-amber-300">
+          <ShieldCheck className="h-6 w-6" aria-hidden="true" />
+        </div>
+        <p className="text-sm leading-6">
+          People in this section may be strangers. Meet in a public place when possible and trust your judgement.
+        </p>
+        <ul className="space-y-2 text-sm text-muted-foreground">
+          <li>• Don’t share your home address or sensitive personal details too early.</li>
+          <li>• Tell someone you trust where you’re going.</li>
+          <li>• Use block or report if anything feels wrong.</li>
+          <li>• Mad Buddy helps you coordinate; it cannot guarantee another person’s behaviour.</li>
+        </ul>
+      </div>
+    </Modal>
+  );
+}
