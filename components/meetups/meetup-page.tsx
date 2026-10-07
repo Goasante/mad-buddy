@@ -200,7 +200,7 @@ export function MeetupPage({
     else revalidate();
   }, [reloadAction, revalidate]);
 
-  useFeedRefresh(refresh);
+  useFeedRefresh(refresh, { intervalMs: PLATFORM_KIND === "mobile" ? 5_000 : 15_000 });
 
   const safeHome = meetups.filter((meetup) => {
     const mine = meetup.members.find((person) => person.userId === viewerId);
