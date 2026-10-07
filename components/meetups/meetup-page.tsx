@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  ARRIVAL_LABELS,
   JOURNEY_LABELS,
   MEETUP_TITLES,
   canUpdateArrival,
@@ -207,15 +206,18 @@ export function MeetupPage({
     const mine = meetup.members.find((person) => person.userId === viewerId);
     return mine?.homeStartedAt && !mine.homeArrivedAt;
   });
+  const safeHomeWatching = meetups.filter((meetup) =>
+    meetup.members.some((person) => person.userId !== viewerId && person.homeStartedAt && !person.homeArrivedAt)
+  );
   const normalMeetups = meetups.filter((meetup) => meetup.status === "active");
   // "Active" is the two-hour arrival/check-in window. Future arrangements stay
   // under Your Meetups until that window opens; finished meetups disappear.
   const active = normalMeetups.filter((meetup) => {
     const mine = meetup.members.find((person) => person.userId === viewerId);
-    return mine?.response !== "declined" && meetupPhase(meetup, clockNow) !== "upcoming";
+    const phase = meetupPhase(meetup, clockNow);
+    return mine?.response !== "declined" && (phase === "active" || phase === "unconfirmed");
   });
-  const activeIds = new Set(active.map((meetup) => meetup.id));
-  const upcoming = normalMeetups.filter((meetup) => !activeIds.has(meetup.id));
+  const upcoming = normalMeetups.filter((meetup) => meetupPhase(meetup, clockNow) === "upcoming");
   const yourMeetupsCount = upcoming.length;
 
   useMeetupRealtime({
@@ -323,6 +325,14 @@ export function MeetupPage({
             viewerId={viewerId}
             saveAction={saveAction}
             refreshAction={refresh}
+          />
+        ))}
+
+        {!creating && safeHomeWatching.map((meetup) => (
+          <SafeHomeWatchCard
+            key={`watch-home-${meetup.id}`}
+            meetup={meetup}
+            viewerId={viewerId}
           />
         ))}
 
@@ -784,6 +794,28 @@ function CreateMeetup({
               {pending ? "Sending…" : "Send invitation"}
             </Button>
           )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SafeHomeWatchCard({ meetup, viewerId }: { meetup: Meetup; viewerId: string }) {
+  const headingHome = meetup.members.filter(
+    (person) => person.userId !== viewerId && person.homeStartedAt && !person.homeArrivedAt
+  );
+  if (!headingHome.length) return null;
+  return (
+    <section className={panelClass + " mb-3 p-4"}>
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+          <House className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">Safe Home check-in</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {headingHome.map((person) => person.name).join(", ")} {headingHome.length === 1 ? "is" : "are"} heading home. You'll get an update when they check in.
+          </p>
         </div>
       </div>
     </section>
@@ -1275,6 +1307,20 @@ function MeetupCard({
                             </Button>
                           </div>
                         ))}
+
+                    {(creator || m.hostId === viewerId) && m.beaconStatus !== "unset" && confirmed === 0 && (
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-2xl"
+                        onClick={() => {
+                          if (window.confirm("Reset the Meetup Glow point? People will wait for a new meetup spot.")) {
+                            update({ action: "reset_beacon" });
+                          }
+                        }}
+                      >
+                        Reset Meetup Glow point
+                      </Button>
+                    )}
 
                     {(creator || m.hostId === viewerId) && (
                       <Button
