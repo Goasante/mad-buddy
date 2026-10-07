@@ -31,12 +31,9 @@ const categoryIcons: Record<string, LucideIcon> = {
 };
 
 const recapRows: Array<{ key: string; label: string }> = [
-  { key: "plansCompleted", label: "Plans completed" },
-  { key: "plansCreated", label: "Plans created" },
   { key: "muddiesInteractedWith", label: "Muddies you made time for" },
   { key: "newMuddies", label: "New Muddies" },
   { key: "wavesSent", label: "Waves sent" },
-  { key: "hangoutSessions", label: "UpFors hosted" },
   { key: "daysVisible", label: "Days with your glow on" }
 ];
 
@@ -163,7 +160,7 @@ export function BadgesPageContent({ overview }: { overview: EngagementOverview }
             </p>
           ) : overview.milestones.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No milestones yet. Factual moments such as a first plan together or a Muddy anniversary will appear here.
+              No milestones yet. Factual moments such as a first Meetup together or a Muddy anniversary will appear here.
             </p>
           ) : (
             overview.milestones.map((milestone) => (
