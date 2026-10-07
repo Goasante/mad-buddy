@@ -225,7 +225,7 @@ export function canActivateVisibility(input: {
 
 /** Non-shaming copy for a denial (spec §43). */
 export const PERMISSION_DENIED_MESSAGE =
-  "Location access was not granted. You can still message, create plans and use other features.";
+  "Location access was not granted. You can still message, create Meetups and use other features.";
 
 export const PERMISSION_REVOKED_MESSAGE = "Your glow is off because location access is unavailable.";
 
@@ -249,13 +249,15 @@ export type Milestone =
   | "first_status_created"
   | "first_wave_sent"
   | "first_glow_enabled"
-  | "first_plan_created";
+  | "first_plan_created"
+  | "first_meetup_created";
 
 const MEANINGFUL_ACTIONS: ReadonlySet<Milestone> = new Set<Milestone>([
   "first_status_created",
   "first_wave_sent",
   "first_glow_enabled",
-  "first_plan_created"
+  "first_plan_created",
+  "first_meetup_created"
 ]);
 
 /**
@@ -296,7 +298,7 @@ export function recommendNextAction(input: {
   if (!input.milestones.has("first_glow_enabled")) {
     return { id: "enable_glow", label: "Turn on your glow for an hour", requiresLocation: true };
   }
-  return { id: "create_plan", label: "Create a plan", requiresLocation: false };
+  return { id: "create_meetup", label: "Create a Meetup", requiresLocation: false };
 }
 
 /** Things to do while waiting for a first request to be accepted (spec §53). */
