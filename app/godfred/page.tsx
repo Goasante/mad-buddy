@@ -82,7 +82,7 @@ export default function GodfredPortfolio() {
             </div>
             <div className={styles.madBuddyVisual}>
               <div className={styles.orbit} aria-hidden="true" />
-              <Image src="/brand/mad-buddy-hero-mockup-v2.png" alt="Mad Buddy app preview showing nearby friends, UpFor and Linkr" width={1179} height={1024} sizes="(max-width: 700px) 90vw, 650px" />
+              <Image src="/brand/mad-buddy-hero-mockup-v2.png" alt="Mad Buddy app preview showing nearby friends, Meetups and Linkr" width={1179} height={1024} sizes="(max-width: 700px) 90vw, 650px" />
               <span className={styles.visualCaption}>Made for the people you actually want to see.</span>
             </div>
           </article>
