@@ -36,7 +36,7 @@ export async function reconcileBuddyScore(admin: Admin, userId: string, now = ne
     admin.from("profiles").select("full_name, username, bio, avatar_url, created_at").eq("user_id", userId).maybeSingle(),
     admin.auth.admin.getUserById(userId),
     admin.from("friendships").select("id").or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
-    admin.from("meetup_participants").select("meetup_id").eq("user_id", userId).eq("response", "accepted"),
+    admin.from("meetup_participants").select("meetup_id").eq("user_id", userId).not("met_at", "is", null),
     admin.from("user_achievements").select("id").eq("user_id", userId)
   ]);
   const candidates: Candidate[] = [];
@@ -50,7 +50,7 @@ export async function reconcileBuddyScore(admin: Admin, userId: string, now = ne
   for (const row of friendships.data ?? []) candidates.push(candidate("friendship_accepted", `friendship:${row.id}`));
   const meetupIds = [...new Set((meetupParticipations.data ?? []).map((row) => row.meetup_id))];
   const completedMeetups = meetupIds.length
-    ? await admin.from("meetups").select("id").in("id", meetupIds).eq("status", "ended")
+    ? await admin.from("meetups").select("id").in("id", meetupIds).not("together_at", "is", null)
     : { data: [] };
   for (const meetup of completedMeetups.data ?? []) candidates.push(candidate("meetup_completed", `meetup:${meetup.id}`));
   for (const row of achievements.data ?? []) candidates.push(candidate("achievement_earned", `achievement:${row.id}`));
