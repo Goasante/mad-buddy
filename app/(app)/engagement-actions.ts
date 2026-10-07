@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { ACHIEVEMENT_CATALOG } from "@/lib/achievements/achievement-catalog";
+import { ACTIVE_ACHIEVEMENT_CATALOG, ACTIVE_ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
 import {
   RECAP_REFLECTION_PROMPT,
   clampNotificationBudget,
