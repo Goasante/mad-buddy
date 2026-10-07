@@ -146,30 +146,37 @@ export async function grantMomentAchievements(admin: Admin, userId: string): Pro
   }
 }
 
-export async function grantSafeTravellerAchievements(admin: Admin, userId: string): Promise<void> {
-  try {
-    const { count } = await admin
-      .from("safe_arrival_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("traveller_id", userId)
-      .eq("status", "completed");
-    await Promise.all([
-      grantAchievement(admin, userId, "good_check_in"),
-      grantCountAchievement(admin, userId, "safe_traveller", count ?? 0)
-    ]);
-  } catch {
-    // Best-effort by design.
-  }
-}
+/** Retired Safe Arrival hooks remain callable by historical lifecycle code but
+ * no longer mint new achievements. */
+export async function grantSafeTravellerAchievements(_admin: Admin, _userId: string): Promise<void> {}
+export async function grantReliableWatcherAchievement(_admin: Admin, _userId: string): Promise<void> {}
 
-export async function grantReliableWatcherAchievement(admin: Admin, userId: string): Promise<void> {
+/** Award the current social achievement family from an ended Meetup. */
+export async function grantMeetupAchievementsForMeetup(admin: Admin, meetupId: string): Promise<void> {
   try {
-    const { count } = await admin
-      .from("safe_arrival_contacts")
-      .select("id", { count: "exact", head: true })
-      .eq("contact_user_id", userId)
-      .eq("acknowledgement_status", "watching");
-    await grantCountAchievement(admin, userId, "reliable_watcher", count ?? 0);
+    const { data: meetup } = await admin.from("meetups").select("id,status").eq("id", meetupId).maybeSingle();
+    if (!meetup || meetup.status !== "ended") return;
+
+    const { data: participants } = await admin
+      .from("meetup_participants")
+      .select("user_id")
+      .eq("meetup_id", meetupId)
+      .eq("response", "accepted");
+
+    for (const userId of [...new Set((participants ?? []).map((row) => row.user_id))]) {
+      const { count } = await admin
+        .from("meetup_participants")
+        .select("meetup_id, meetups!inner(status)", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("response", "accepted")
+        .eq("meetups.status", "ended");
+
+      await Promise.all([
+        grantAchievement(admin, userId, "first_meetup"),
+        grantCountAchievement(admin, userId, "meetup_maker", count ?? 0),
+        grantCountAchievement(admin, userId, "meetup_regular", count ?? 0)
+      ]);
+    }
   } catch {
     // Best-effort by design.
   }
