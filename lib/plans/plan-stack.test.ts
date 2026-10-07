@@ -78,8 +78,8 @@ describe("the stack replaces the rail without hiding plans", () => {
   });
 
   it("keeps every plan reachable without a gesture", () => {
-    expect(stack).toContain('aria-label="Previous plan"');
-    expect(stack).toContain('aria-label="Next plan"');
+    expect(stack).toContain('aria-label="Previous item"');
+    expect(stack).toContain('aria-label="Next item"');
   });
 
   it("announces the position for screen readers", () => {

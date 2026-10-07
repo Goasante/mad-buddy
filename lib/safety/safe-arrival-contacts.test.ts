@@ -392,16 +392,17 @@ describe("home safe arrival cards", () => {
     }
   });
 
-  it("is wired to the canonical loader with accepted and invited split apart", () => {
+  it("no longer loads retired Safe Arrival journeys on Home", () => {
     const route = stripComments(read("app/(app)/dashboard/page.tsx"));
-    expect(route).toContain("loadSafeArrivalJourneys");
-    expect(route).toContain('journey.myAcknowledgement === "accepted"');
-    expect(route).toContain('journey.myAcknowledgement === "invited"');
+    expect(route).not.toContain("loadSafeArrivalJourneys");
+    expect(route).not.toContain("safeArrival=");
+    expect(route).toContain("meetupItems={meetupItems}");
   });
 
-  it("renders nothing on Home when there is no live journey", () => {
+  it("keeps retired Safe Arrival cards off Home", () => {
     const dashboard = stripComments(read("components/dashboard/dashboard-page.tsx"));
-    expect(dashboard).toContain("safeArrival.travelling.length > 0");
-    expect(dashboard).toContain("safeArrival.invitations.length > 0");
+    expect(dashboard).not.toContain("safeArrival.travelling");
+    expect(dashboard).not.toContain("safeArrival.invitations");
+    expect(dashboard).not.toContain("home-safe-arrival-heading");
   });
 });

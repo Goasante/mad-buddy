@@ -164,9 +164,8 @@ describe("Home still works around the hero", () => {
     expect(eventsIndex).toBeGreaterThan(heroIndex);
   });
 
-  it("does not bury Safe Arrival behind discovery", () => {
-    // Safe Arrival can be the hero itself (highest priority) and also has its
-    // own Home section. Neither was removed by this change.
-    expect(home).toContain("home-safe-arrival-heading");
+  it("keeps Meetup commitments visible without retired Safe Arrival sections", () => {
+    expect(home).toContain("<PlanStack plans={comingUpItems}");
+    expect(home).not.toContain("home-safe-arrival-heading");
   });
 });

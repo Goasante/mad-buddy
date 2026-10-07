@@ -40,7 +40,7 @@ describe("Home plan selection", () => {
   });
 
   it("renders the empty state instead of hiding the section", () => {
-    expect(home).toContain("<UpcomingPlanEmpty />");
+    expect(home).toContain("<UpcomingMeetupEmpty />");
     expect(home).toContain("comingUpItems.length > 0 ?");
   });
 

@@ -60,7 +60,7 @@ describe("the server hands over the people, not a number", () => {
   it("never forwards an unavailable projection's state as a real answer", () => {
     const route = stripComments(readFileSync("app/(app)/dashboard/page.tsx", "utf8"));
     expect(route).toContain('activation?.status === "unavailable"');
-    expect(route).toContain("activationState={activationUnavailable ? null : activation?.state ?? null}");
+    expect(route).toContain('activationState={activationUnavailable || activation?.state === "upcoming_plan" ? null : activation?.state ?? null}');
     // The literal old line must be gone, not merely joined by a new one.
     expect(route).not.toContain("activationState={activation?.state ?? null}");
   });

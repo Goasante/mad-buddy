@@ -78,19 +78,19 @@ describe("unrelated navigation is untouched", () => {
     expect(appShell).toContain("BrandMark");
   });
 
-  it("keeps every route and label as it was", () => {
+  it("keeps core navigation while replacing UpFor with Meetups", () => {
     // Linkr 2.0 moved the Linkr destination from /discover to /linkr: the old
     // route now redirects, and the nav points at the rebuilt product. The
     // label and brand artwork are what this test is actually guarding, and
     // both are unchanged.
     expect(appShell).toContain('{ href: "/linkr", label: "Linkr"');
-    expect(appShell).toContain('{ href: "/hangout-mode", label: "UpFor"');
-    expect(appShell).toContain('{ href: "/friends", label: "Muddies", icon: Users }');
+    expect(appShell).toContain('{ href: "/meet-up", label: "Meetups"');
+    expect(appShell).toContain('{ href: "/friends", label: "Muddies", icon: UsersRound }');
     expect(appShell).toContain('{ href: "/messages", label: "Messages", icon: MessageCircle }');
   });
 
   it("keeps the supplied raster out of unrelated tabs", () => {
-    expect(appShell).toContain('{ href: "/friends", label: "Muddies", icon: Users }');
+    expect(appShell).toContain('{ href: "/friends", label: "Muddies", icon: UsersRound }');
     expect(appShell).toContain('{ href: "/messages", label: "Messages", icon: MessageCircle }');
     expect(appShell).not.toContain('{ href: "/friends", label: "Muddies", icon: Users, brandIcon:');
     expect(appShell).not.toContain('{ href: "/messages", label: "Messages", icon: MessageCircle, brandIcon:');

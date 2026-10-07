@@ -34,10 +34,12 @@ describe("Buddy Score ledger security", () => {
     expect(service).toContain('ledgerTotal === rpcTotal');
   });
 
-  it("rewards completed Plan participation without duplicating a creator event", () => {
-    expect(service).toContain('from("plan_participants")');
-    expect(service).toContain('rsvp_status", "going"');
+  it("rewards confirmed Meetup participation without duplicate completion events", () => {
+    expect(service).toContain('from("meetup_participants")');
+    expect(service).toContain('.not("met_at", "is", null)');
+    expect(service).toContain('.not("together_at", "is", null)');
     expect(service).toContain("new Set(");
+    expect(service).toContain('candidate("meetup_completed", `meetup:${meetup.id}`)');
     expect(service).toContain('source_reference: sourceReference');
   });
 

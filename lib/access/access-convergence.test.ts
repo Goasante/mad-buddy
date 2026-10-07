@@ -9,7 +9,7 @@ describe("Mad Buddy Access convergence source contract",()=>{
     expect(p).toContain("Mad Buddy Access");
     expect(p).toContain("GHS 4.99");
     expect(p).toContain("Mad Buddy is free to use. Access removes the ads.");
-    expect(p).toContain("Do Linkr or UpFor require Access?");
+    expect(p).toContain("Do Linkr or Meetups require Access?");
     expect(p).toContain("No card is required");
     expect(p).not.toMatch(/expanding it is paid|Linkr and UpFor expansion|UpFor expansion/i);
     expect(p).not.toMatch(/Buddy Plus|Buddy Pro|Upgrade to Pro|Choose the plan that fits/i);

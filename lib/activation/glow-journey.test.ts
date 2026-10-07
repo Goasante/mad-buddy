@@ -226,12 +226,13 @@ describe("configuring Glow is not first value", () => {
     expect(composeHome(arrived).showProfileReminder).toBe(false);
   });
 
-  it("keeps real commitments and safety visible throughout", () => {
+  it("keeps real commitments visible after Safe Arrival retirement", () => {
     const withPlan = { ...brandNew, upcomingPlanCount: 1, hasSafetyCard: true };
     expect(composeHome(withPlan).showPlansEmpty).toBe(false);
-    // A real plan renders from its own branch, and safety from its own gate.
+    // Existing commitments stay visible; the retired safety section stays absent.
     expect(home).toContain("comingUpItems.length > 0");
-    expect(home).toContain("{hasSafeArrivalSection ?");
+    expect(home).toContain("<PlanStack plans={comingUpItems}");
+    expect(home).not.toContain("hasSafeArrivalSection");
   });
 });
 

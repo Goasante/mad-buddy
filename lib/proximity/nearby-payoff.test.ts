@@ -148,7 +148,7 @@ describe("actions arrive at the payoff", () => {
 
   it("guards against a double tap", () => {
     const handler = home.slice(home.indexOf("function waveAtMuddy"), home.indexOf("RSVP from the Home"));
-    expect(handler).toContain("if (isPending) return;");
+    expect(handler).toContain("if (isPending || wavingMuddyId) return;");
   });
 });
 

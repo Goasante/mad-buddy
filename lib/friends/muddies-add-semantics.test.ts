@@ -118,18 +118,18 @@ describe("card actions are reachable without a pointer", () => {
   });
 });
 
-describe("Plan creation keeps the person it started from", () => {
+describe("Meetup creation keeps the person it started from", () => {
   const profile = read("components/friends/muddy-profile-page.tsx");
 
   it("passes the Muddy to the canonical create sheet", () => {
-    /* The Plans page has read `?with=` and seeded the invitee from it all
-       along; this link simply never sent it, so "Create a plan" on somebody's
+    /* The Meetups page reads `?with=` and seeded the invitee from it all
+       along; this link simply never sent it, so "Create a Meetup" on somebody's
        profile opened an empty form with no trace of them. */
     expect(profile).toContain("create=1&with=");
     expect(profile).toContain("muddy.friendId");
   });
 
-  it("routes to the canonical Plans surface rather than a second composer", () => {
-    expect(profile).toContain("/plans?create=1");
+  it("routes to the canonical Meetups surface rather than a second composer", () => {
+    expect(profile).toContain("/meet-up?create=1");
   });
 });

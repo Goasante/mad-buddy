@@ -120,11 +120,10 @@ describe("the page describes the product as it is now", () => {
   it("covers the features the product actually has", () => {
     for (const feature of [
       "Muddies",
-      "Plans & Events",
-      "UpFor",
+      "Meetups",
+      "Events",
       "Linkr",
-      "Messages & Stories",
-      "Safe Arrival"
+      "Messages & Stories"
     ]) {
       expect(about, `About must mention ${feature}`).toContain(feature);
     }

@@ -45,7 +45,7 @@ describe("section headers", () => {
   });
 
   it("carries the approved titles", () => {
-    for (const title of ["Near", "My Plans", "Suggestions for you"]) {
+    for (const title of ["Near", "Meetups", "Suggestions for you"]) {
       expect(home, `missing section: ${title}`).toContain(`title="${title}"`);
     }
     expect(moments).toContain('title="Moments"');
@@ -67,7 +67,7 @@ describe("section headers", () => {
 
   it("hides the action when there is nothing to see", () => {
     // Empty Plans and the first-time Suggestions set render title-only.
-    expect(home).toContain('<PageSectionHeader id="home-plan-heading" title="My Plans" />');
+    expect(home).toContain('<PageSectionHeader id="home-plan-heading" title="Meetups" />');
     expect(home).toContain('<PageSectionHeader id="home-actions-heading" title="Suggestions for you" />');
   });
 
@@ -190,9 +190,9 @@ describe("loading states", () => {
 // ---------------------------------------------------------------------------
 
 describe("empty states", () => {
-  it("keeps Near and Plans inline and lightweight", () => {
+  it("keeps Near and Meetups inline and lightweight", () => {
     expect(home).toContain("No trusted Muddies nearby.");
-    expect(home).toContain("No upcoming Plans.");
+    expect(home).toContain("No upcoming Meetups.");
     // No glass-panel cards or tall padding in either.
     const nearEmpty = home.slice(home.indexOf("No trusted Muddies nearby"));
     expect(nearEmpty.slice(0, 600)).not.toContain("glass-panel");

@@ -58,12 +58,12 @@ describe("Say hi uses the canonical conversation entry", () => {
   });
 });
 
-describe("Make a Plan uses the canonical entry", () => {
-  it("routes to the existing Plan creation screen", () => {
-    /* Now carries the Muddy: tapping "Make a Plan" on Kofi and then being
+describe("Create a Meetup uses the canonical entry", () => {
+  it("routes to the existing Meetup creation screen", () => {
+    /* Now carries the Muddy: tapping "Create a Meetup" on Kofi and then being
      * asked who it is with was the product forgetting the tap. Same canonical
      * screen and same action -- only the person travels with it. */
-    expect(home).toContain("/plans?create=1&with=${encodeURIComponent(muddyId)}");
+    expect(home).toContain("/meet-up?create=1&with=${encodeURIComponent(muddyId)}");
   });
 
   it("writes no plan of its own", () => {
@@ -134,11 +134,11 @@ describe("the projection loads only what it needs", () => {
     expect(projection).toContain('.gte("sent_at"');
   });
 
-  it("counts only upcoming, uncancelled shared Plans", () => {
-    /* plan_participants carries no time, so membership alone would treat last
-     * month's dinner as a reason not to suggest a plan. */
-    expect(projection).toContain('.is("plans.cancelled_at", null)');
-    expect(projection).toContain('.gte("plans.start_at"');
+  it("counts only accepted, active upcoming shared Meetups", () => {
+    expect(projection).toContain('from("meetup_participants")');
+    expect(projection).toContain('.eq("response", "accepted")');
+    expect(projection).toContain('.eq("status", "active")');
+    expect(projection).toContain('.gte("starts_at", new Date(nowMs).toISOString())');
   });
 
   it("skips the lookup entirely when the card will not render", () => {

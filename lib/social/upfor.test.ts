@@ -196,7 +196,7 @@ describe("plans sit where an UpFor ends up", () => {
   });
 });
 
-describe("the rename is UI-only", () => {
+describe("retired UpFor navigation", () => {
   it("keeps the route, table and action names untouched", () => {
     expect(page).toContain("requestHangoutAction");
     expect(page).toContain("startHangoutAction");
@@ -204,15 +204,12 @@ describe("the rename is UI-only", () => {
     expect(actions).toContain('from("hangout_requests")');
   });
 
-  it("says UpFor everywhere a person reads it", () => {
-    /* The mobile bottom bar now lives in components/app-shell/mobile-nav.tsx so
-   the Capacitor SPA can render the SAME navigation. The shell source is read
-   as both files together: these assertions are unchanged, only the bar's
-   home moved. */
-const shell = stripComments(read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx"));
-    expect(shell).toContain('label: "UpFor"');
-    expect(page).toContain("UpFor");
-    // The old product name must not survive in visible copy.
-    expect(page).not.toContain("Hangout Mode");
+  it("uses Meetups in navigation while preserving the approved UpFor artwork", () => {
+    const shell = stripComments(read("components/app-shell/app-shell.tsx") + read("components/app-shell/mobile-nav.tsx"));
+    expect(shell).toContain('label: "Meetups"');
+    expect(shell).toContain('href: "/meet-up"');
+    expect(shell).toContain('brandIcon: "upfor"');
+    expect(shell).not.toContain('label: "UpFor"');
+    expect(read("app/(app)/hangout-mode/page.tsx")).toContain('redirect("/meet-up")');
   });
 });

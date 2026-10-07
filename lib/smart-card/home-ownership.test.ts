@@ -10,11 +10,11 @@ const providers = readFileSync(join(__dirname, "providers.ts"), "utf8");
 const gate = readFileSync(join(__dirname, "home-gate.ts"), "utf8");
 
 describe("Home heartbeat ownership boundaries", () => {
-  it("does not repeat the traveller Safe Arrival when the Smart Card already owns it", () => {
-    expect(home).toContain('smartCard?.id === "safe_arrival"');
-    expect(home).toContain("safeArrival?.travelling.slice(1) ?? []");
-    expect(home).toContain("safeArrivalTravellingForSection.map");
-    expect(home).toContain("hasSafeArrivalSection");
+  it("removes retired Safe Arrival ownership from Home", () => {
+    expect(home).not.toContain('smartCard?.id === "safe_arrival"');
+    expect(home).not.toContain("safeArrivalTravellingForSection");
+    expect(home).not.toContain("hasSafeArrivalSection");
+    expect(home).toContain("<SmartCardHeroV2 card={smartCard}");
   });
 
   it("keeps Nearby out of the Home Smart Card while retaining the provider for other surfaces", () => {

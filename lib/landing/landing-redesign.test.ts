@@ -90,8 +90,9 @@ describe("landing product story", () => {
     expect(landing).toContain("When your Muddies are close");
     expect(landing).toContain("Muddies");
     expect(landing).toContain("Linkr");
-    expect(landing).toContain("UpFor");
-    expect(landing).toContain("Safe Arrival");
+    expect(landing).toContain("Meetups");
+    expect(landing).not.toContain("UpFor");
+    expect(landing).not.toContain("Safe Arrival");
   });
 
   it("states the privacy boundary as a product capability", () => {
