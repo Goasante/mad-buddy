@@ -115,7 +115,6 @@ export const SMART_CARD_APPROVED_STATES = [
   { id: "access_status", tier: 5, family: "access", purpose: "Access state only when monetization gating is active again." },
 
   { id: "suggestions", tier: 6, family: "growth", purpose: "Cold-start people suggestions when available." },
-  { id: "upfor_fallback", tier: 6, family: "upfor", purpose: "Default: ask what the viewer is UpFor today." }
 ] as const satisfies readonly SmartCardStateSpec[];
 
 export type ApprovedSmartCardStateId = (typeof SMART_CARD_APPROVED_STATES)[number]["id"];
