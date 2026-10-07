@@ -41,7 +41,7 @@ describe("weekly periods (spec §15)", () => {
 
 describe("streak qualification (spec §14, §17)", () => {
   it("counts friendship actions, not app usage", () => {
-    expect(isMeaningfulMutualInteraction("plan_completed")).toBe(true);
+    expect(isMeaningfulMutualInteraction("meetup_completed")).toBe(true);
     expect(isMeaningfulMutualInteraction("wave_exchanged")).toBe(true);
 
     // The whole point: usage signals must never build a streak.
@@ -55,7 +55,7 @@ describe("streak qualification (spec §14, §17)", () => {
       events: [
         { actorId: "ama", eventType: "wave_exchanged" },
         { actorId: "ama", eventType: "wave_exchanged" },
-        { actorId: "ama", eventType: "shared_plan" }
+        { actorId: "ama", eventType: "meetup_completed" }
       ],
       userOneId: "ama",
       userTwoId: "kojo"
