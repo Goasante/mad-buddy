@@ -12,8 +12,10 @@ export const BUDDY_SCORE_RULES = {
   profile_completed: { points: 50, category: "Account trust", label: "Completed profile" },
   account_quarter: { points: 25, category: "Account trust", label: "Account history" },
   friendship_accepted: { points: 20, category: "Connections", label: "Approved Muddy" },
-  plan_completed: { points: 40, category: "Plans", label: "Completed plan" },
-  safe_arrival_completed: { points: 30, category: "Safety", label: "Safe Arrival completed" },
+  meetup_completed: { points: 40, category: "Meetups", label: "Completed Meetup" },
+  // Historical ledger event types stay readable so nobody loses earned score.
+  plan_completed: { points: 40, category: "Meetups", label: "Completed meetup" },
+  safe_arrival_completed: { points: 30, category: "Safety", label: "Safety check-in completed" },
   achievement_earned: { points: 25, category: "Achievements", label: "Achievement earned" }
 } as const;
 
