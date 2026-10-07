@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function PlanCompatibilityPage() {
-  redirect("/plans");
+export default function RetiredPlanDetailRoute() {
+  redirect("/meet-up");
 }
