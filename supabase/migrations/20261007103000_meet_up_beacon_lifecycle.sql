@@ -211,7 +211,15 @@ language sql stable security invoker set search_path = '' as $$
       and (m.host_id is null or public.meetup_pair_allowed(p_actor_id,m.host_id))
       and (
         (m.status='active' and now()<m.expires_at)
-        or (mine.home_started_at is not null and mine.home_arrived_at is null and m.expires_at>now()-interval '12 hours')
+        or (
+          m.expires_at>now()-interval '12 hours'
+          and exists(
+            select 1 from public.meetup_participants home
+            where home.meetup_id=m.id
+              and home.home_started_at is not null
+              and home.home_arrived_at is null
+          )
+        )
       )
     order by m.starts_at
     limit 100
