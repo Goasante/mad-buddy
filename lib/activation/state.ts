@@ -198,8 +198,8 @@ export type ActivationAction =
   /** Open the real conversation and let them type. Never auto-send. */
   | "say_hi"
   | "message"
-  | "make_plan"
-  | "view_plan";
+  | "make_meetup"
+  | "view_meetup";
 
 export function primaryActionFor(state: ActivationState): ActivationAction {
   switch (state) {
