@@ -37,6 +37,7 @@ const meetup: Meetup = {
   mode: "coming_to",
   placeLabel: "Your place",
   note: "",
+  category: "anything",
   startsAt: "2026-10-06T15:00:00Z",
   expiresAt: "2026-10-06T21:00:00Z",
   timezone: "Africa/Accra",
