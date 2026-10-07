@@ -42,7 +42,7 @@ const flowSteps = [
     title: "Make it real",
     product: "Meetups",
     description: "Invite Muddies or meet new people nearby, agree a time and place, and turn the moment into something real.",
-    icon: CalendarCheck2
+    icon: HangoutIcon
   }
 ];
 
@@ -104,7 +104,7 @@ const supportingFeatures = [
   },
   {
     title: "Messaging",
-    detail: "Keep the conversation attached to the people and plans that matter.",
+    detail: "Keep the conversation attached to the people and Meetups that matter.",
     icon: MessagesSquare
   },
   {
