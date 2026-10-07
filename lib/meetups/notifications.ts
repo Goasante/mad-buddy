@@ -9,7 +9,7 @@ import { optionalFeatureEnabled } from "@/lib/features/availability-server";
 const rowSchema = z.object({ id: z.string().uuid(), lease_id: z.string().uuid(), meetup_id: z.string().uuid(),
   recipient_id: z.string().uuid(), sender_id: z.string().uuid(), event: z.string(), dedupe_key: z.string() });
 export async function processMeetupNotifications(admin: ReturnType<typeof createSupabaseAdminClient>) {
-  if (!(await optionalFeatureEnabled("safe_arrival"))) return 0;
+  if (!(await optionalFeatureEnabled("meet_up"))) return 0;
   const claimed = await admin.rpc("claim_meetup_notifications", { p_limit: 100 });
   if (claimed.error) throw claimed.error;
   const rows = z.array(rowSchema).parse(claimed.data);
