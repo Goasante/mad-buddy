@@ -1182,7 +1182,7 @@ export function DashboardPageContent({
 
 
         {/* ONE next step, not a feature catalogue.
-            "Suggestions for you" showed UpFor, Invite Friends and Find Muddies
+            "Suggestions for you" shows Meetups, Invite Friends and Find Muddies
             at equal weight, which reads as "here are three features" rather
             than "here is what would help". While somebody is still finding
             their feet, exactly one appears — and null is a legitimate answer:
@@ -1190,13 +1190,13 @@ export function DashboardPageContent({
         {nextStep ? <NextForYou step={nextStep} /> : null}
         {/* Quick actions: first-time activation set, or the returning-user set.
 
-            The first-time set (UpFor, Invite, Find Muddies) is KEPT during
+            The first-time set (Meetups, Invite, Find Muddies) is KEPT during
             activation -- it points at the same goal the card does, so it
             reinforces rather than competes. Only the generic returning-user
             rail stands down, because "Suggestions for you" alongside a single
             clear next step is the screen offering two answers at once. */}
         {isFirstTimeUser && !hasSafeArrival ? (
-          /* UpFor is filtered out until Glow has happened -- it describes
+          /* Meetups is filtered out until Glow has happened -- it describes
              letting Muddies know you are free, which needs somebody able to
              see you. Invite and Find Muddies remain: they grow the circle,
              which points the same way as the card above. */
@@ -1843,14 +1843,12 @@ const SUGGESTION_TONE: Record<
  * filtered by the same Owner feature flags — no new recommendation logic.
  */
 const quickActions: QuickAction[] = [
-  { href: "/meet-up", label: "Meetups", description: "Let your Muddies know you’re free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/meet-up", label: "Meetups", description: "Invite Muddies or meet new people nearby.", suggestion: "Turn a connection into time together.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" },
-  { href: "/meet-up", label: "Create a Meetup", description: "Invite Muddies or meet someone new.", suggestion: "Turn a connection into time together.", tone: "green", icon: CalendarDays, featureIcon: "safeArrival", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/discover", label: "Linkr", description: "Find people who are open to connecting.", suggestion: "Meet people open to connecting.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
-  { href: "/meet-up", label: "Meet Up", description: "Invite Muddies, agree a time, and meet.", suggestion: "Make it happen, together.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
-  { href: "/reminders", label: "Reminders", description: "Reminders for plans and connections.", suggestion: "Stay on top of what’s next.", tone: "orange", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
+  { href: "/reminders", label: "Reminders", description: "Stay on top of what’s next.", suggestion: "Keep important social moments in view.", tone: "orange", icon: Bell, featureIcon: "reminders", accent: "text-amber-500 dark:text-amber-400" },
   { href: "/settings/engagement", label: "Focus", description: "Manage Focus Mode and notification limits.", suggestion: "Quieten things down for a while.", tone: "blush", icon: Moon, featureIcon: "focus", accent: "text-pink-500 dark:text-pink-400" }
 ];
 
