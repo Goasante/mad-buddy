@@ -46,7 +46,7 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
   if ("startsAt" in value && !value.startsAt) return { ok: false, message: ERRORS.MEETUP_TIME };
   // The transaction validates future times after checking its idempotency ledger.
   // A retry after the chosen time has passed must acknowledge the saved intent.
-  if (!(await optionalFeatureEnabled("safe_arrival"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+  if (!(await optionalFeatureEnabled("meet_up"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
   const admin = createSupabaseAdminClient();
   const guard = await guardAction(admin, { userId: actorId, surface: "plans" });
   if (!guard.allowed) return { ok: false, message: guard.message };
