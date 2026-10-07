@@ -26,8 +26,6 @@ export type ProfileIdentitySummary = {
   activity: {
     muddyCount: number;
     momentCount: number;
-    completedPlanCount: number;
-    completedSafeArrivalCount: number;
     completedMeetupCount: number;
   } | null;
 };
