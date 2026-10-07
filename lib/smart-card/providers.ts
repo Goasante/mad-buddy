@@ -27,6 +27,7 @@ import { MAX_ACTIVE_UPFORS } from "@/lib/social/upfor-limits";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { JourneyData } from "@/lib/journey/journey";
 import type { UpcomingAgendaItem } from "@/lib/social/upcoming-agenda-projection";
+import type { MeetupHomeItem } from "@/lib/meetups/rules";
 import {
   isWeekendPlanningWindow,
   smartCardProgress,
@@ -66,8 +67,10 @@ export type SmartCardInput = {
       }
     | null;
   birthday: { birthdayToday: boolean; birthdayTomorrow: boolean } | null;
-  /** Canonical Home agenda — Plans + Events, already permission-filtered. */
+  /** Canonical Home agenda — Events only after Plans retirement. */
   agenda: readonly UpcomingAgendaItem[];
+  /** Materialized Meetups already accepted by the viewer. */
+  meetups?: readonly MeetupHomeItem[];
   /**
    * UpFor facts from the one batched Home read (lib/social/home-upfor-context).
    * Optional so every existing caller and test keeps compiling; absent means
@@ -546,6 +549,74 @@ function eventStartingProvider(input: SmartCardInput): SmartCard | null {
   };
 }
 
+
+function meetupStartingProvider(input: SmartCardInput): SmartCard | null {
+  const nowMs = input.now.getTime();
+  const meetup = (input.meetups ?? []).find((item) => {
+    const delta = Date.parse(item.startsAt) - nowMs;
+    return Number.isFinite(delta) && delta >= 0 && delta <= THREE_HOURS_MS;
+  });
+  if (!meetup) return null;
+  const minutes = minutesUntil(meetup.startsAt, input.now);
+  const title = meetup.title?.trim() || "Your Meetup";
+  return {
+    id: "meetup_starting",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "MEETUP SOON",
+    title,
+    subtitle: minutes === null ? "Your Meetup is starting soon." : soonLabel(minutes),
+    meta: meetup.placeLabel || undefined,
+    metaKind: meetup.placeLabel ? "location" : undefined,
+    socialProof: meetup.sourceDiscoveryId ? "Meet New People · confirmed" : "Muddies · confirmed",
+    cta: "Open Meetup",
+    destination: `/meet-up?meetup=${encodeURIComponent(meetup.id)}`,
+    expiresAt: expiresAt(meetup.startsAt)
+  };
+}
+
+function meetupUpcomingProvider(input: SmartCardInput): SmartCard | null {
+  const nowMs = input.now.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const meetup = (input.meetups ?? []).find((item) => {
+    const delta = Date.parse(item.startsAt) - nowMs;
+    return Number.isFinite(delta) && delta > THREE_HOURS_MS && delta <= dayMs;
+  });
+  if (!meetup) return null;
+  const title = meetup.title?.trim() || "Your Meetup";
+  return {
+    id: "meetup_upcoming",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "COMING UP",
+    title,
+    subtitle: meetup.sourceDiscoveryId
+      ? "You matched with new people. The Meetup is agreed and ready."
+      : "Your Meetup with your Muddies is agreed and ready.",
+    meta: startsInLabel(meetup.startsAt, input.now) ?? meetup.placeLabel ?? undefined,
+    metaKind: "time",
+    cta: "Open Meetup",
+    destination: `/meet-up?meetup=${encodeURIComponent(meetup.id)}`,
+    expiresAt: expiresAt(meetup.startsAt)
+  };
+}
+
+function meetupFallbackProvider(input: SmartCardInput): SmartCard {
+  const newPeopleFirst = input.muddyCount === 0;
+  return {
+    id: "meetup_fallback",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "MEET UP",
+    title: newPeopleFirst ? "Meet someone new nearby" : "Make something happen in real life",
+    subtitle: newPeopleFirst
+      ? "Create a short nearby listing. Mutual interest becomes a private, scheduled Meetup."
+      : "Invite a Muddy you know or meet someone new nearby. Once you agree, one Meetup carries the time, chat and Glow.",
+    cta: newPeopleFirst ? "Meet New People" : "Open Meet Up",
+    destination: newPeopleFirst ? "/meet-up?newPeople=1" : "/meet-up"
+  };
+}
+
 function birthdayProvider(input: SmartCardInput): SmartCard | null {
   if (!input.birthday) return null;
   const { birthdayToday, birthdayTomorrow } = input.birthday;
@@ -571,8 +642,8 @@ function birthdayProvider(input: SmartCardInput): SmartCard | null {
     eyebrow: birthdayToday ? "YOUR DAY" : "TOMORROW",
     title: birthdayToday ? "Happy birthday!" : "Your birthday is tomorrow",
     subtitle: birthdayToday ? "Make the day yours with the people who matter." : "Want to put something together?",
-    cta: birthdayToday ? "See Your Profile" : "Make a Plan",
-    destination: birthdayToday ? "/profile" : "/plans?create=1",
+    cta: birthdayToday ? "See Your Profile" : "Start a Meetup",
+    destination: birthdayToday ? "/profile" : "/meet-up",
     expiresAt: expiry.getTime()
   };
 }
@@ -1292,40 +1363,29 @@ function profileBlockingProvider(input: SmartCardInput): SmartCard | null {
 
 export function smartCardProviders(input: SmartCardInput): readonly SmartCardProvider[] {
   const providers: SmartCardProvider[] = [
-    { id: "safe_arrival", build: () => safeArrivalProvider(input) },
-    { id: "plan_rsvp", build: () => planRsvpProvider(input) },
-    { id: "plan_decision", build: () => planDecisionProvider(input) },
-    { id: "upfor_requests", build: () => upForRequestsProvider(input) },
     { id: "muddy_request", build: () => muddyRequestProvider(input) },
-    { id: "plan_starting", build: () => planStartingProvider(input) },
+    { id: "meetup_starting", build: () => meetupStartingProvider(input) },
     { id: "event_live", build: () => eventLiveProvider(input) },
     { id: "event_commitment_starting", build: () => eventCommitmentStartingProvider(input) },
-    { id: "plan_chat_decision", build: () => planChatDecisionProvider(input) },
     { id: "event_linkr_ready", build: () => eventLinkrReadyProvider(input) },
-    { id: "upfor_active_muddy", build: () => upForActiveMuddyProvider(input) },
-    { id: "upfor_opportunity", build: () => upForOpportunityProvider(input) },
-    { id: "upfor_momentum", build: () => upForMomentumProvider(input) },
-    { id: "upfor_accepted", build: () => upForAcceptedProvider(input) },
-    { id: "upfor_plan_chat_ready", build: () => upForPlanChatReadyProvider(input) },
-    { id: "owned_upfor_live", build: () => ownedUpForLiveProvider(input) },
-    { id: "owned_upfor_starting", build: () => ownedUpForStartingProvider(input) },
     { id: "nearby_muddies", build: () => nearbyMuddiesProvider(input) },
+    { id: "meetup_upcoming", build: () => meetupUpcomingProvider(input) },
     { id: "event_starting", build: () => eventStartingProvider(input) },
     { id: "linkr_mutual_event", build: () => linkrMutualEventProvider(input) },
     { id: "linkr_mutual", build: () => linkrMutualProvider(input) },
     { id: "muddy_birthday", build: () => muddyBirthdayProvider(input) },
     { id: "birthday", build: () => birthdayProvider(input) },
-    { id: "weekend_plans", build: () => weekendPlansProvider(input) },
-    { id: "upfor_scheduled", build: () => upForScheduledProvider(input) },
     { id: "journey", build: () => journeyProvider(input) },
     { id: "journey_complete", build: () => journeyCompleteProvider(input) },
     { id: "buddy_progress", build: () => buddyProgressProvider(input) },
     { id: "achievement", build: () => achievementProvider(input) },
     { id: "suggestions", build: () => suggestionsProvider(input) },
     { id: "profile_blocking", build: () => profileBlockingProvider(input) },
-    { id: "upfor_fallback", build: () => upForFallbackProvider() },
-    ...(input.availability && !input.availability.upfor ? [{ id: "core_fallback" as const, build: (): SmartCard => ({ id: "core_fallback", priority: 0, illustration: "people", eyebrow: "YOUR MUDDIES", title: "Make room for a real connection", subtitle: "Say hello to a Muddy or make a Plan to catch up.", cta: "Open Muddies", destination: "/friends" }) }] : [])
+    { id: "meetup_fallback", build: () => meetupFallbackProvider(input) }
   ];
   if (!input.availability) return providers;
-  return providers.map(provider => ({ ...provider, build: () => availableSmartCard(provider.build(), input.availability!) }));
+  return providers.map((provider) => ({
+    ...provider,
+    build: () => availableSmartCard(provider.build(), input.availability!)
+  }));
 }
