@@ -1041,6 +1041,7 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
       .select("user_one_id, user_two_id")
       .gte("created_at", startIso)
       .lt("created_at", endIso)
+      .is("ended_at", null)
       .limit(10000),
     admin
       .from("visibility_sessions")
