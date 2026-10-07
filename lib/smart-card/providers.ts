@@ -22,7 +22,7 @@ import type {
   RecentAchievementForCard
 } from "@/lib/smart-card/home-context";
 import { conversationHref } from "@/lib/messaging/open-conversation";
-import { upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
+import { meetupActivitySmartCardMedia, upForActivitySmartCardMedia } from "@/lib/smart-card/visuals";
 import { MAX_ACTIVE_UPFORS } from "@/lib/social/upfor-limits";
 import type { BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 import type { MeetupHomeItem } from "@/lib/meetups/rules";
@@ -1321,6 +1321,7 @@ function meetupProvider(input: SmartCardInput): SmartCard | null {
     destination: `/meet-up?meetup=${encodeURIComponent(meetup.id)}`,
     meta: when ?? undefined,
     metaKind: when ? "time" : undefined,
+    media: meetupActivitySmartCardMedia(meetup.category, title),
     expiresAt: startMs + 2 * 60 * 60_000
   };
 }
