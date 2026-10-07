@@ -4176,7 +4176,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
+          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "meetup_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
           points_delta: number;
           source_reference: string;
           rule_version: number;
@@ -4186,7 +4186,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
-          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
+          event_type: "email_verified" | "profile_completed" | "account_quarter" | "friendship_accepted" | "plan_completed" | "safe_arrival_completed" | "meetup_completed" | "achievement_earned" | "admin_correction" | "moderation_penalty";
           points_delta: number;
           source_reference: string;
           rule_version: number;
