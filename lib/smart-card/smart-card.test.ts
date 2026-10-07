@@ -70,7 +70,7 @@ describe("Home Smart Card convergence after Meetups retirement", () => {
       startsAt: "2026-10-07T11:00:00.000Z",
       endsAt: "2026-10-07T14:00:00.000Z",
       locationLabel: "Osu",
-      href: "/events?event=22222222-2222-4222-8222-222222222222",
+      href: "/events?event=22222222-2222-4222-8222-222222222222" as const,
       isHost: false,
       myRsvp: "going" as const,
       hostName: "Nana",
