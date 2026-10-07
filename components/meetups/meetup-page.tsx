@@ -35,6 +35,7 @@ import {
 import { useFeedRefresh } from "@/hooks/use-feed-refresh";
 import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
+import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
 
 export type MeetupSaveAction = (input: unknown, create?: boolean) => Promise<{ ok: boolean; message: string }>;
 
@@ -222,6 +223,10 @@ export function MeetupPage({
     enabled: normalMeetups.length > 0,
     onChange: refresh
   });
+
+  useMeetupLocationSync(
+    active.some((meetup) => canUpdateArrival(meetup, viewerId, clockNow))
+  );
 
   const controls = (
     <div className="mx-auto w-full max-w-xl px-3 pb-3 pt-2 sm:px-4">
