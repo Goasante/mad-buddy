@@ -20,7 +20,7 @@ export async function loadJourney(
     activity?: SharedActivityCounts;
   } = {}
 ): Promise<JourneyData> {
-  const [profileResult, friendships, milestones, waves, messages, plans, safeArrivals, score, tours] = await Promise.all([
+  const [profileResult, friendships, milestones, waves, messages, meetups, score, tours] = await Promise.all([
     context.profileCompletion ? Promise.resolve({ data: null }) : admin.from("profiles").select("avatar_url,bio,mood_status").eq("user_id", userId).maybeSingle(),
     context.activity?.muddyCount !== undefined
       ? Promise.resolve({ count: context.activity.muddyCount })
@@ -28,10 +28,7 @@ export async function loadJourney(
     admin.from("activation_milestones").select("milestone").eq("user_id", userId),
     admin.from("waves").select("id", { count: "exact", head: true }).eq("sender_id", userId),
     admin.from("messages").select("id", { count: "exact", head: true }).eq("sender_id", userId).in("status", ["sent", "delivered", "read"]),
-    admin.from("plans").select("id", { count: "exact", head: true }).eq("creator_id", userId).neq("status", "draft"),
-    context.activity?.completedSafeArrivalCount !== undefined
-      ? Promise.resolve({ count: context.activity.completedSafeArrivalCount })
-      : admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
+    admin.from("meetups").select("id", { count: "exact", head: true }).eq("creator_id", userId).neq("status", "cancelled"),
     context.score ? Promise.resolve(context.score) : loadBuddyScore(admin, userId),
     getReplayableTourRefs(userId)
   ]);
@@ -45,8 +42,7 @@ export async function loadJourney(
     turn_on_visibility: reached.has("first_glow_enabled"),
     send_first_wave: (waves.count ?? 0) > 0,
     start_first_conversation: (messages.count ?? 0) > 0,
-    create_first_plan: (plans.count ?? 0) > 0,
-    complete_first_safe_arrival: (safeArrivals.count ?? 0) > 0,
+    create_first_meetup: (meetups.count ?? 0) > 0,
     reach_trusted_buddy: score.total >= 200
   };
 
