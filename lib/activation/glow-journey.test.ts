@@ -230,7 +230,7 @@ describe("configuring Glow is not first value", () => {
     const withPlan = { ...brandNew, upcomingPlanCount: 1, hasSafetyCard: true };
     expect(composeHome(withPlan).showPlansEmpty).toBe(false);
     // A real plan renders from its own branch, and safety from its own gate.
-    expect(home).toContain("agendaItems.length > 0");
+    expect(home).toContain("comingUpItems.length > 0");
     expect(home).toContain("{hasSafeArrivalSection ?");
   });
 });
