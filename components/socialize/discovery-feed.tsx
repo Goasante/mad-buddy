@@ -14,7 +14,7 @@ import {
 } from "@/lib/social/discovery-filters";
 import type { SocializePerson } from "@/lib/social/socialize-mobile";
 import type { HomeUpcomingPlan } from "@/lib/social/upcoming-plans";
-import { PeopleRail, PlansRail } from "@/components/socialize/discovery-rails";
+import { PeopleRail } from "@/components/socialize/discovery-rails";
 import { TOUR_TARGET_IDS } from "@/lib/tours/registry";
 
 /**
@@ -242,18 +242,7 @@ export function DiscoveryFeed({
       ) : null}
 
       <div className="pt-1">{hero}</div>
-
-      {/* Linkr discovers people. Upcoming Plans remain useful context, but
-          Groups no longer participate in discovery. */}
-      <PeopleRail
-        people={visible}
-        onWave={onWave}
-        onPass={onPass}
-        onUndoPass={onUndoPass}
-        onOpenSkipped={onOpenSkipped}
-        pending={pending}
-      />
-      <PlansRail plans={plans} onJoin={onJoinPlan ?? (() => {})} pending={pending} />
+      {/* Linkr owns people discovery. Meetups now owns coordination and upcoming social commitments. */}
 
       {/* The people rail IS the feed. When it has nothing to show, the
           caller's contextual empty state takes its place. */}
