@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app-shell/page-header";
 
 const safetyTools = [
-  { title: "Meetup safety", description: "Use Meetup coordination and arrival updates to keep chosen people in the loop without live tracking.", icon: MapPin, href: "/meet-up" as const },
+  { title: "Meetup safety", description: "Use Meetup coordination and arrival updates to keep chosen people in the loop without live tracking.", icon: Hand, href: "/meet-up" as const },
   { title: "Block & report", description: "Block an account or report behaviour that breaks the rules.", icon: Ban, href: "/friends?tab=blocked" as const },
   { title: "Buddy Score", description: "Review your private activity summary and earned achievements.", icon: ShieldCheck, href: "/buddy-score" as const }
 ];
