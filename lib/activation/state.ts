@@ -265,7 +265,7 @@ export type MuddyContext = {
 };
 
 export function actionForMuddy(context: MuddyContext): ActivationAction {
-  if (context.hasSharedUpcomingMeetup) return "view_meetup";
+  if (context.hasSharedUpcomingPlan) return "view_meetup";
   if (!context.hasExistingConversation) return "say_hi";
   if (context.isNearby) return "wave";
   return "message";
@@ -333,7 +333,7 @@ export type MuddyActionPlan = {
 export function planActionsForMuddy(context: MuddyActionContext): MuddyActionPlan {
   // Something already arranged beats anything the app could suggest, and
   // proposing a second plan to somebody you are already meeting is noise.
-  if (context.hasSharedUpcomingMeetup) {
+  if (context.hasSharedUpcomingPlan) {
     return { primary: "view_meetup", secondary: "message", reason: "shared_plan" };
   }
 
@@ -510,6 +510,7 @@ export function hasCompletedFirstSocialAct(milestones: ReadonlySet<string>): boo
   return (
     milestones.has("first_message_sent") ||
     milestones.has("first_wave_sent") ||
+    milestones.has("first_meetup_created") ||
     milestones.has("first_plan_created")
   );
 }
