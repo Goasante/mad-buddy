@@ -12,89 +12,25 @@
  */
 
 export const SMART_CARD_IDS = [
-  "safe_arrival",
-  "plan_rsvp",
-  /* Tier 1, immediately after the invitation itself: a Plan you have already
-     joined asking which venue -- an answer only you can give, and one the rest
-     of the group is blocked on. It sits below plan_rsvp because answering
-     whether you are coming comes before helping decide the details. */
-  "plan_decision",
-  /* Tier 1 alongside plan_rsvp: people are waiting on the owner's answer, and
-     an unanswered join request is the same shape of obligation as an
-     unanswered Plan invitation. It sits second because a Plan has a time
-     attached and a request does not. */
-  "upfor_requests",
-  /* Tier 1: somebody asked to connect and is waiting. Last of the tier-1 group
-     because a Plan and an UpFor both carry a time pressure a friend request
-     does not -- but still above everything that is merely happening. */
   "muddy_request",
-  "plan_starting",
-  /* Tier 2. Somebody saying yes to an UpFor is existing coordination the
-     viewer has already been waiting on, so it beats a NEW Event Linkr opt-in
-     offer happening at the same time. */
-  "upfor_accepted",
-  "upfor_plan_chat_ready",
-  /* A checked-in Event Linkr decision is more specific than the generic
-     "this Event is live" card. If event_live wins first, the offer is
-     unreachable for the entire check-in window and expires without ever
-     getting a chance to surface. */
-  "event_linkr_ready",
+  "meetup_starting",
   "event_live",
-  "upfor_momentum",
-  "owned_upfor_live",
-  "owned_upfor_starting",
-  "upfor_active_muddy",
-  /* Tier 2, and LAST of the UpFor group deliberately. Something you have
-     already asked to join, or been accepted into, outranks something you might
-     join -- an existing commitment before a new opportunity. */
-  "upfor_opportunity",
-  /* Hosting or going, starting soon: a commitment with a time attached, so it
-     ranks with the other tier-2 states rather than with Events the viewer only
-     bookmarked. */
   "event_commitment_starting",
-  /* Tier 2. A decision inside a Plan Chat is coordination happening NOW, and
-     unlike plan_decision it has no deadline of its own -- it ranks here because
-     the conversation is live, not because a clock is running. */
-  "plan_chat_decision",
+  "event_linkr_ready",
   "nearby_muddies",
-  /* Tier 3: relationship momentum. All are about a specific person, which is
-     why they outrank the tier-4 opportunities below.
-     The Event variant leads: a shared Event gives the pair something to open
-     with, so it is strictly more useful than the same card without one. */
+  "meetup_upcoming",
+  "event_starting",
   "linkr_mutual_event",
   "linkr_mutual",
-  /* Someone else's birthday before the viewer's own: a moment that needs an
-     action from them outranks one that simply belongs to them. */
   "muddy_birthday",
   "birthday",
-  "event_starting",
-  "weekend_plans",
-  "upfor_scheduled",
-  /* Cold-start people help outranks Journey deliberately.
-     For a viewer with no Muddies these two ask for the same thing -- Journey's
-     current step IS "Add your first Muddy" -- but suggestions name real people
-     already on Mad Buddy while Journey offers generic progression. Naming
-     someone you might know is relationship help (tier 3); a progress meter is
-     growth (tier 5). The provider yields as soon as muddyCount > 0, so this
-     ordering only ever applies to a genuinely empty circle. */
   "suggestions",
-  /* Tier 5, and ahead of Journey deliberately. Both are progression, but this
-     one names a feature the viewer has already SWITCHED ON and cannot use --
-     a door they opened that will not let them through -- whereas Journey
-     offers the next generic step. A specific broken thing beats a general
-     suggestion. */
   "profile_blocking",
-  /* Completing the Journey is itself a one-off milestone and keeps first
-     priority inside progression. After that, a newly earned badge is a bounded
-     moment while the next Journey step and score meter are evergreen. The
-     moment gets one chance before those static prompts so it can actually
-     function as part of the heartbeat. */
   "journey_complete",
   "achievement",
   "journey",
   "buddy_progress",
-  "upfor_fallback",
-  "core_fallback"
+  "meetup_fallback"
 ] as const;
 
 export type SmartCardId = (typeof SMART_CARD_IDS)[number];
@@ -291,9 +227,9 @@ export function resolveSmartCard(
      * a non-dismissible live fact must still render.
      */
     if (card.dismissible && acknowledged.has(acknowledgementKey)) continue;
-    // The UpFor fallback is not permanently dismissible. A recent impression
+    // The Meet Up fallback is not permanently dismissible. A recent impression
     // suppresses it only for the service-level cooldown window.
-    if (card.id === "upfor_fallback" && acknowledged.has("upfor_fallback")) continue;
+    if (card.id === "meetup_fallback" && acknowledged.has("meetup_fallback")) continue;
     if (card.expiresAt !== undefined && card.expiresAt <= options.now) continue;
     return { ...card, priority: SMART_CARD_PRIORITY[card.id] };
   }
