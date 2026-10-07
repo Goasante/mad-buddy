@@ -695,19 +695,34 @@ function suggestionsProvider(input: SmartCardInput): SmartCard | null {
 }
 
 /**
- * Guaranteed fallback: UpFor is available to everyone.
- * The last provider always returns a card so Home never blanks.
+ * Meetups owns the social fallback when it is available. It is broad enough to
+ * serve both existing Muddies and deliberate nearby discovery without reviving
+ * the retired UpFor product.
  */
-function upForFallbackProvider(): SmartCard {
+function meetupFallbackProvider(): SmartCard {
   return {
-    id: "upfor_fallback",
+    id: "meetup_fallback",
     priority: 0,
     illustration: "people",
-    eyebrow: "UPFOR",
-    title: "What are you UpFor today?",
-    subtitle: "Let your Muddies know what you feel like doing and see who wants in.",
-    cta: "Open UpFor",
-    destination: "/hangout-mode"
+    eyebrow: "MAKE IT REAL",
+    title: "Turn a connection into a Meetup",
+    subtitle: "Invite a Muddy, or meet someone new nearby when you're open to it.",
+    cta: "Open Meetups",
+    destination: "/meet-up"
+  };
+}
+
+/** Neutral fallback used when Meetups is locked by Owner controls. */
+function coreFallbackProvider(): SmartCard {
+  return {
+    id: "core_fallback",
+    priority: 0,
+    illustration: "people",
+    eyebrow: "YOUR MUDDIES",
+    title: "Keep a real connection moving",
+    subtitle: "Say hello to a Muddy or find someone you already know on Mad Buddy.",
+    cta: "Open Muddies",
+    destination: "/friends"
   };
 }
 
