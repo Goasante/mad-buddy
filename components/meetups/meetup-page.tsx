@@ -173,6 +173,8 @@ export function MeetupPage({
   meetups,
   muddies,
   focusedId,
+  openCreate = false,
+  initialMuddyId,
   openNewPeople = false,
   focusedDiscoveryId,
   discoveryHub,
@@ -185,6 +187,8 @@ export function MeetupPage({
   meetups: Meetup[];
   muddies: { id: string; name: string }[];
   focusedId?: string;
+  openCreate?: boolean;
+  initialMuddyId?: string;
   openNewPeople?: boolean;
   focusedDiscoveryId?: string;
   discoveryHub: MeetupDiscoveryHub;
@@ -195,7 +199,8 @@ export function MeetupPage({
 }) {
   const revalidate = useRevalidate();
   const focusedMeetup = focusedId ? meetups.find((meetup) => meetup.id === focusedId) : undefined;
-  const [creating, setCreating] = useState(false);
+  const contextualMuddyId = initialMuddyId && muddies.some((muddy) => muddy.id === initialMuddyId) ? initialMuddyId : undefined;
+  const [creating, setCreating] = useState(openCreate || Boolean(contextualMuddyId));
   const [newPeopleOpen, setNewPeopleOpen] = useState(false);
   const [newPeopleSafetyOpen, setNewPeopleSafetyOpen] = useState(openNewPeople);
   const [clockNow, setClockNow] = useState(initialNowMs);
@@ -397,6 +402,7 @@ export function MeetupPage({
         {creating ? (
           <CreateMeetup
             muddies={muddies}
+            initialMuddyId={contextualMuddyId}
             saveAction={saveAction}
             onCreated={(createdStart) => {
               setCreating(false);
@@ -503,16 +509,20 @@ function EmptyMeetups({
 
 function CreateMeetup({
   muddies,
+  initialMuddyId,
   onCreated,
   saveAction
 }: {
   muddies: { id: string; name: string }[];
+  initialMuddyId?: string;
   onCreated: (startsAtIso: string) => void;
   saveAction: MeetupSaveAction;
 }) {
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<MeetupMode>("come_over");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
+    initialMuddyId && muddies.some((muddy) => muddy.id === initialMuddyId) ? [initialMuddyId] : []
+  );
   const [place, setPlace] = useState("");
   const [category, setCategory] = useState<MeetupDiscoveryCategory>("anything");
   const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 30 * 60_000)));
