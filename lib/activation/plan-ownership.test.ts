@@ -145,19 +145,17 @@ describe("Plan heartbeat participation is a commitment, not mere membership", ()
 });
 
 describe("the Plan is still on Home, in the surfaces that own it", () => {
-  it("Card B still names the actual Plan when it needs an answer", () => {
+  it("retired Plan state no longer creates a Plan Smart Card", () => {
     const invited = cardB({
       agenda: [{ ...answeredPlan(60 * 26), myRsvp: "invited" }]
     });
-    expect(invited?.id).toBe("plan_rsvp");
-    expect(invited?.title).toContain("Friday Dinner");
-    expect(invited?.destination).toBe("/plans?plan=plan-1");
+    expect(invited?.id).toBe("meetup_fallback");
+    expect(invited?.destination).toBe("/meet-up");
   });
 
-  it("Card B still names it when it is starting soon", () => {
+  it("retired starting Plan state also falls through to Meetups", () => {
     const soon = cardB({ agenda: [answeredPlan(45)] });
-    expect(soon?.id).toBe("plan_starting");
-    expect(soon?.title).toContain("Friday Dinner");
+    expect(soon?.id).toBe("meetup_fallback");
   });
 
   /**
@@ -184,7 +182,7 @@ describe("Card A and Card B never say the same thing", () => {
     expect(state).toBe("activated");
 
     const card = cardB({ agenda: [answeredPlan(45)] });
-    expect(card?.id).toBe("plan_starting");
+    expect(card?.id).toBe("meetup_fallback");
   });
 
   it("an activation-stage viewer gets activation guidance, and Card B stays off Plans", () => {
