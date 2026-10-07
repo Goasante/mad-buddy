@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
+import { ACTIVE_ACHIEVEMENT_BY_CODE } from "@/lib/achievements/achievement-catalog";
 import { loadBuddyScore, type BuddyScoreData } from "@/lib/engagement/buddy-score-service";
 
 /**
@@ -60,7 +60,7 @@ export async function loadProfileIdentitySummary(
   const access = profileIdentityAccess(relationship);
   let achievementsQuery = admin
     .from("user_achievements")
-    .select("achievement_code, earned_at", { count: "exact" })
+    .select("achievement_code, earned_at")
     .eq("user_id", userId);
   if (relationship !== "self") achievementsQuery = achievementsQuery.eq("hidden", false);
 
@@ -71,7 +71,7 @@ export async function loadProfileIdentitySummary(
         : loadBuddyScore(admin, userId)
       : Promise.resolve(null),
     access.showAchievements
-      ? achievementsQuery.order("earned_at", { ascending: false }).limit(3)
+      ? achievementsQuery.order("earned_at", { ascending: false })
       : Promise.resolve(null),
     access.showActivity ? loadOwnActivity(admin, userId, context.activity) : Promise.resolve(null)
   ]);
@@ -88,18 +88,20 @@ export async function loadProfileIdentitySummary(
         }
       : null,
     achievements: achievementsResult
-      ? {
-          unlockedCount: achievementsResult.count ?? 0,
-          featured: (achievementsResult.data ?? []).map((row) => {
-            const definition = ACHIEVEMENT_BY_CODE.get(row.achievement_code);
-            return {
-              code: row.achievement_code,
-              name: definition?.name ?? "Achievement",
-              iconPath: definition?.iconPath ?? null,
-              earnedAt: row.earned_at
-            };
-          })
-        }
+      ? (() => {
+          const current = (achievementsResult.data ?? []).flatMap((row) => {
+            const definition = ACTIVE_ACHIEVEMENT_BY_CODE.get(row.achievement_code);
+            return definition
+              ? [{
+                  code: row.achievement_code,
+                  name: definition.name,
+                  iconPath: definition.iconPath,
+                  earnedAt: row.earned_at
+                }]
+              : [];
+          });
+          return { unlockedCount: current.length, featured: current.slice(0, 3) };
+        })()
       : null,
     activity
   };
