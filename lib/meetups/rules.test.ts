@@ -112,9 +112,9 @@ describe("Meet Up", () => {
   it("routes invitations without breaking the legacy Safe Arrival link", () => {
     expect(resolveNotificationDestination(`meetup:${a}`)?.href).toBe(`/meet-up?meetup=${a}`);
     expect(resolveNotificationDestination(`safe_arrival:${a}`)?.href).toBe(`/safe-arrival?session=${a}`);
-    expect(featureForHref("/meet-up")).toBe("safe_arrival");
+    expect(featureForHref("/meet-up")).toBe("meet_up");
     expect(featureForHref("/safe-arrival")).toBe("safe_arrival");
-    expect(featureForNotification(`meetup:${a}`)).toBe("safe_arrival");
+    expect(featureForNotification(`meetup:${a}`)).toBe("meet_up");
     expect(featureForNotification(`safe_arrival:${a}`)).toBe(null);
   });
 });
