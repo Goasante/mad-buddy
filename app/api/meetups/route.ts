@@ -6,6 +6,7 @@ import { loadMeetups, loadMeetupMuddies } from "@/lib/meetups/arrangements";
 import { saveMeetupCommand } from "@/lib/meetups/commands";
 import { guardAction } from "@/lib/admin/enforcement";
 import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
+import { loadMeetupDiscoveryHub } from "@/lib/meetups/discovery-service";
 
 function privateJson(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
@@ -19,8 +20,12 @@ export async function GET(request: Request) {
   const admin = createSupabaseAdminClient();
   const guard = await guardAction(admin, { userId: auth.user.id, surface: "plans" });
   if (!guard.allowed) return withCors(NextResponse.json({ error: guard.message }, { status: 403 }), request);
-  const [meetups, muddies] = await Promise.all([loadMeetups(admin, auth.user.id), loadMeetupMuddies(admin, auth.user.id)]);
-  return withCors(privateJson({ meetups, muddies }), request);
+  const [meetups, muddies, discoveryHub] = await Promise.all([
+    loadMeetups(admin, auth.user.id),
+    loadMeetupMuddies(admin, auth.user.id),
+    loadMeetupDiscoveryHub(auth.user.id)
+  ]);
+  return withCors(privateJson({ meetups, muddies, discoveryHub }), request);
 }
 async function mutate(request: Request, create: boolean) {
   const auth = await resolveApiUser(request);
