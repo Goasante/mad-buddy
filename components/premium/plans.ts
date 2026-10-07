@@ -56,12 +56,12 @@ export const pricingPlans: PricingPlan[] = [
     id: "free",
     name: "Free",
     price: planDisplayPrices.free,
-    description: "Everything you need to find your Muddies and make plans.",
+    description: "Everything you need to find your Muddies and arrange Meetups.",
     features: [
       "Nearby glow with approved Muddies",
       "Private Moments with your Muddies",
       "View Air",
-      "Safe Arrival check-ins",
+      "Meetups with Muddies or nearby people",
       "Ghost Mode"
     ],
     limits: limitLines("free")
@@ -97,7 +97,6 @@ const COMPARISON_CAPABILITIES: { key: BooleanEntitlementKey; feature: string }[]
   { key: "public_moments", feature: "Publish to Air" },
   { key: "custom_glow_styles", feature: "Custom glow styles" },
   { key: "advanced_visibility_schedules", feature: "Scheduled visibility" },
-  { key: "recurring_plans", feature: "Recurring plans" },
   { key: "event_circle_creation", feature: "Create event circles" },
   { key: "event_drops", feature: "Event Drops" },
   { key: "friendship_recaps", feature: "Friendship recaps" },
