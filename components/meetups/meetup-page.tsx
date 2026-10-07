@@ -966,25 +966,33 @@ function MeetupCard({
 
               <ul className="divide-y divide-border/60 rounded-2xl bg-secondary/40 px-3">
                 {m.members.map((person) => {
-                  const nearby =
-                    person.nearby &&
-                    person.observedAt &&
-                    now !== null &&
-                    isMeetupHintFresh(person.observedAt, now);
+                  const fresh = now !== null && isMeetupHintFresh(person.observedAt, now);
+                  const automaticJourney =
+                    fresh && ["approaching", "nearby", "at_spot"].includes(person.journeyState)
+                      ? JOURNEY_LABELS[person.journeyState]
+                      : null;
 
                   const personStatus = person.metAt
-                    ? "Confirmed"
+                    ? "Together"
                     : person.response !== "accepted"
                       ? responseLabel(person.response)
-                      : person.arrival === "not_started"
-                        ? "Going"
-                        : person.delayMinutes
-                          ? ARRIVAL_LABELS[person.arrival] + " · " + person.delayMinutes + " min"
-                          : ARRIVAL_LABELS[person.arrival];
+                      : person.arrival === "left"
+                        ? "Left"
+                        : person.arrival === "here"
+                          ? "Here"
+                          : person.delayMinutes
+                            ? `Running late · ${person.delayMinutes} min`
+                            : automaticJourney
+                              ?? (person.arrival === "on_my_way" ? JOURNEY_LABELS[person.journeyState] : "Going");
 
                   return (
                     <li key={person.key} className="flex items-center gap-3 py-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-xs font-bold">
+                      <span
+                        className={[
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-xs font-bold transition",
+                          journeyGlowClass(person.journeyState, fresh)
+                        ].join(" ")}
+                      >
                         {initials(person.userId === viewerId ? "You" : person.name)}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -992,9 +1000,13 @@ function MeetupCard({
                           {person.userId === viewerId ? "You" : person.name}
                           {person.userId === m.hostId ? " · Host" : ""}
                         </span>
-                        {nearby && <span className="block text-[11px] font-medium text-primary">Nearby now</span>}
+                        {automaticJourney && (
+                          <span className="block text-[11px] font-medium text-primary">{automaticJourney}</span>
+                        )}
                       </span>
-                      <span className="text-[11px] font-semibold text-muted-foreground">{personStatus}</span>
+                      <span className="max-w-[8rem] text-right text-[11px] font-semibold text-muted-foreground">
+                        {personStatus}
+                      </span>
                     </li>
                   );
                 })}
@@ -1003,40 +1015,45 @@ function MeetupCard({
 
             {open && (
               <fieldset disabled={pending} className="space-y-3">
-                {mine?.response === "accepted" && (
-                  <section className="flex items-center gap-3 rounded-2xl border border-border bg-background px-3 py-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-                      <Navigation className="h-5 w-5" />
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <span className="block text-sm font-bold">Allow nearby hint</span>
-                      <span className="block text-xs text-muted-foreground">No exact location shared.</span>
-                    </button>
-                    <span title="Ghost Mode and Privacy Zones still apply.">
-                      <Info className="h-4 w-4 text-muted-foreground" />
-                    </span>
-                    <button
-                      type="button"
-                      aria-pressed={mine.proximityEnabled}
-                      aria-label="Allow nearby hint for this meetup"
-                      onClick={() => update({ action: "proximity", enabled: !mine.proximityEnabled })}
-                      className={[
-                        "relative h-7 w-12 shrink-0 rounded-full transition",
-                        mine.proximityEnabled ? "bg-primary" : "bg-secondary"
-                      ].join(" ")}
-                    >
-                      <span
-                        className={[
-                          "absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition",
-                          mine.proximityEnabled ? "left-6" : "left-1"
-                        ].join(" ")}
-                      />
-                    </button>
+                {mine?.response === "accepted" && ready && m.beaconStatus !== "locked" && (
+                  <section className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                        <Navigation className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold">
+                          {m.beaconStatus === "unset" ? "Set the Meetup Glow point" : "Confirm the Meetup Glow point"}
+                        </span>
+                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                          {m.mode === "meet_somewhere"
+                            ? m.beaconStatus === "unset"
+                              ? "The first person at the agreed spot can set it. Another arrival at the same spot confirms it."
+                              : "Someone has set the spot. If you're there too, confirm it."
+                            : m.hostId === viewerId
+                              ? "You're the host. Set the fixed meetup point when you're at the agreed place."
+                              : "The host will set the fixed meetup point. Exact locations are never shown to participants."}
+                        </span>
+                      </span>
+                    </div>
+                    {(m.mode === "meet_somewhere" || m.hostId === viewerId || m.beaconStatus === "provisional") && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3 w-full rounded-2xl"
+                        onClick={() => update({ action: "beacon" })}
+                      >
+                        <MapPin className="h-4 w-4" />
+                        {"I'm at the meetup spot"}
+                      </Button>
+                    )}
                   </section>
+                )}
+
+                {mine?.response === "accepted" && (
+                  <p className="rounded-2xl bg-secondary/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+                    Accepting a meetup activates temporary Meetup Proximity during its live window. Mad Buddy uses it only for coarse Glow states; no exact location, route, or distance is shown.
+                  </p>
                 )}
 
                 {!creator && mine?.response === "accepted" && (
