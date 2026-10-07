@@ -13,7 +13,7 @@ import {
   Moon,
   RefreshCcw,
   Settings as SettingsIcon,
-  ShieldCheck,
+  Hand,
   Sun,
   TrendingUp,
   UserRound,
