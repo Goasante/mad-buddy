@@ -48,12 +48,6 @@ import { MuddyProfileModal } from "@/components/glow/muddy-profile-modal";
 import { VerifiedAccountMark } from "@/components/trust/verified-account-mark";
 import { PendingInvitePrompt } from "@/components/discovery/pending-invite-prompt";
 import { ProfileCompletionReminder } from "@/components/profile/profile-completion-reminder";
-import {
-  ContactInvitationHomeCard,
-  ContactJourneyHomeCard,
-  TravellerJourneyHomeCard
-} from "@/components/safety/safe-arrival-home-cards";
-import type { SafeArrivalJourney } from "@/lib/safety/safe-arrival-service";
 import type { MeetupHomeItem } from "@/lib/meetups/rules";
 import { StatusComposer } from "@/components/social/status-composer";
 import { FeatureIcon } from "@/components/ui/feature-icon";
@@ -128,8 +122,6 @@ type NearbyFriendApiItem = {
 };
 
 type DashboardPageContentProps = {
-  /** Keep a visible participant's UpFor outcome current while the owner acts. */
-  watchUpForChanges?: boolean;
   initialVisibilityStatus?: "visible" | "ghost" | "app_open_only";
   displayName?: string;
   hasActiveStatus?: boolean;
@@ -142,16 +134,6 @@ type DashboardPageContentProps = {
   profileReminder?: {
     userId: string;
     missingItems: string[];
-  } | null;
-  /**
-   * Canonical Safe Arrival journeys for this viewer, already privacy-filtered by
-   * the server. Passed whole rather than flattened so the cards read real
-   * per-contact state instead of re-deriving counts from an avatar list.
-   */
-  safeArrival?: {
-    travelling: SafeArrivalJourney[];
-    checkingOn: SafeArrivalJourney[];
-    invitations: SafeArrivalJourney[];
   } | null;
   meetupItems?: MeetupHomeItem[];
   hiddenQuickActionHrefs?: string[];
@@ -297,7 +279,6 @@ function firstName(name: string): string {
 }
 
 export function DashboardPageContent({
-  watchUpForChanges = false,
   initialVisibilityStatus = "visible",
   displayName = "",
   hasActiveStatus = false,
@@ -307,7 +288,6 @@ export function DashboardPageContent({
   agendaItems = [],
   glowColorByFriendId = {},
   profileReminder = null,
-  safeArrival = null,
   meetupItems = [],
   hiddenQuickActionHrefs = [],
   smartCard = null,
@@ -375,7 +355,7 @@ export function DashboardPageContent({
   const comingUpItems = useMemo(
     () =>
       [
-        ...agendaItems,
+        ...agendaItems.filter((item) => item.kind === "event"),
         ...meetupItems.map(
           (item): ComingUpMeetupItem => ({
             ...item,
@@ -386,23 +366,6 @@ export function DashboardPageContent({
       ].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
     [agendaItems, meetupItems]
   );
-  useEffect(() => {
-    if (!watchUpForChanges) return;
-    let lastRefresh = Date.now();
-    const refresh = () => {
-      if (document.visibilityState !== "visible" || Date.now() - lastRefresh < 15000) return;
-      lastRefresh = Date.now();
-      router.refresh();
-    };
-    const timer = window.setInterval(refresh, 15000);
-    document.addEventListener("visibilitychange", refresh);
-    window.addEventListener("focus", refresh);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-      window.removeEventListener("focus", refresh);
-    };
-  }, [watchUpForChanges, router]);
   const [quickControlsOpen, setQuickControlsOpen] = useState(false);
   // The app-wide menu sheet lives in AppShell; Home just asks it to open.
   const openAppMenu = useAppMenu();
@@ -695,8 +658,8 @@ export function DashboardPageContent({
     say_hi: "Say hi",
     message: "Message",
     wave: "Wave",
-    make_plan: "Make a Plan",
-    view_plan: "Open Plan",
+    make_plan: "Create Meetup",
+    view_plan: "Open Meetup",
     find_muddies: "Find Muddies",
     enable_location: "Turn on Glow",
     refresh_location: "Refresh Glow",
@@ -747,7 +710,7 @@ export function DashboardPageContent({
        * forgetting what they had just done. Only the Muddy id travels: no
        * coordinates, no band, no proximity of any kind. Nearby is the social
        * context that led here, not a location payload. */
-      router.push(`/plans?create=1&with=${encodeURIComponent(muddyId)}` as Route);
+      router.push("/meet-up" as Route);
       return;
     }
 
@@ -844,26 +807,7 @@ export function DashboardPageContent({
     [hiddenQuickActionHrefs]
   );
 
-  const hasSafeArrival =
-    safeArrival !== null &&
-    (safeArrival.travelling.length > 0 || safeArrival.checkingOn.length > 0 || safeArrival.invitations.length > 0);
-
-  /*
-   * ONE OWNER PER FACT. When Card B is already the live traveller's Safe
-   * Arrival heartbeat, repeating the same journey again in the lower Safe
-   * Arrival section makes Home say the same thing twice. The section still
-   * owns contact invitations and journeys the viewer is checking on; it also
-   * keeps traveller cards whenever another Smart Card is winning.
-   */
-  const safeArrivalTravellingForSection =
-    smartCard?.id === "safe_arrival"
-      ? safeArrival?.travelling.slice(1) ?? []
-      : safeArrival?.travelling ?? [];
-  const hasSafeArrivalSection =
-    safeArrival !== null &&
-    (safeArrivalTravellingForSection.length > 0 ||
-      safeArrival.checkingOn.length > 0 ||
-      safeArrival.invitations.length > 0);
+  const hasSafeArrival = false;
 
   /* WHO OWNS THE SCREEN. Decided once, from state, so no section has to guess.
    *
@@ -1199,9 +1143,9 @@ export function DashboardPageContent({
 
             Renders nothing when the ranking is empty. */}
 
-        {/* Trending Events sit ABOVE My Plans. What the wider community is
+        {/* Trending Events sit ABOVE Meetups. What the wider community is
             doing is discovery -- it earns the higher slot because it is the
-            thing you do not already know about. My Plans is a reminder of
+            thing you do not already know about. Meetups is a reminder of
             commitments you made yourself, so it reads better after. */}
         {/* Discovery does not outrank a first relationship. Somebody who has
             just added their first Muddy is pointed at the core loop, not at
@@ -1233,7 +1177,7 @@ export function DashboardPageContent({
            * to tidy a screen would destroy information somebody is relying on.
            * "No plans yet" is an absence dressed as a module, and it has no
            * business competing with the one thing activation is asking for. */
-          <UpcomingPlanEmpty />
+          <UpcomingMeetupEmpty />
         ) : null}
 
 
@@ -1270,31 +1214,6 @@ export function DashboardPageContent({
             screen changing its mind. */}
         {profileReminder && composition.showProfileReminder ? (
           <ProfileCompletionReminder userId={profileReminder.userId} missingItems={profileReminder.missingItems} />
-        ) : null}
-
-        {/* Safe Arrival on Home: my live journey, journeys I've accepted, and any
-            invitation still awaiting my answer. Absent entirely when there is
-            nothing live, so Home never carries an empty placeholder. */}
-        {hasSafeArrivalSection ? (
-          <section aria-labelledby="home-safe-arrival-heading" className="space-y-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="home-safe-arrival-heading" className="text-sm font-semibold">
-                Safe Arrival
-              </h2>
-              <Link href="/safe-arrival" prefetch={false} className="text-xs font-medium text-primary hover:underline">
-                Open
-              </Link>
-            </div>
-            {safeArrival!.invitations.map((journey) => (
-              <ContactInvitationHomeCard key={journey.id} journey={journey} />
-            ))}
-            {safeArrivalTravellingForSection.map((journey) => (
-              <TravellerJourneyHomeCard key={journey.id} journey={journey} />
-            ))}
-            {safeArrival!.checkingOn.map((journey) => (
-              <ContactJourneyHomeCard key={journey.id} journey={journey} />
-            ))}
-          </section>
         ) : null}
 
         {/* Fills leftover space above the bottom nav with secondary shortcuts.
@@ -1821,7 +1740,7 @@ function NearbyHero({
  * systems — only the recommendations differ.
  */
 const FIRST_TIME_ACTIONS: QuickAction[] = [
-  { href: "/hangout-mode", label: "UpFor", description: "Let your Muddies know you are free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/meet-up", label: "Meetups", description: "Let your Muddies know you are free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Invite people you already know.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" }
 ];
@@ -1924,10 +1843,10 @@ const SUGGESTION_TONE: Record<
  * filtered by the same Owner feature flags — no new recommendation logic.
  */
 const quickActions: QuickAction[] = [
-  { href: "/hangout-mode", label: "UpFor", description: "Let your Muddies know you’re free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
+  { href: "/meet-up", label: "Meetups", description: "Let your Muddies know you’re free right now.", suggestion: "See who is up for something.", tone: "orange", icon: Hand, featureIcon: "hangout", accent: "text-primary" },
   { href: "/invites", label: "Invite Friends", description: "Review and send invitations.", suggestion: "Grow your trusted circle.", tone: "lavender", icon: UserPlus, featureIcon: "invites", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/friends?tab=add", label: "Find Muddies", description: "Search for people on Mad Buddy.", suggestion: "Find people you already know.", tone: "blue", icon: Search, featureIcon: "socialize", accent: "text-sky-500 dark:text-sky-400" },
-  { href: "/plans?create=1", label: "Complete a Plan", description: "Create a plan and bring people together.", suggestion: "Bring people together.", tone: "green", icon: CalendarDays, featureIcon: "plans", accent: "text-emerald-500 dark:text-emerald-400" },
+  { href: "/meet-up", label: "Create a Meetup", description: "Invite Muddies or meet someone new.", suggestion: "Turn a connection into time together.", tone: "green", icon: CalendarDays, featureIcon: "safeArrival", accent: "text-emerald-500 dark:text-emerald-400" },
   { href: "/events", label: "Discover Events", description: "See what’s coming up.", suggestion: "See what’s happening nearby.", tone: "blue", icon: PartyPopper, featureIcon: "events", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/discover", label: "Linkr", description: "Find people who are open to connecting.", suggestion: "Meet people open to connecting.", tone: "lavender", icon: Compass, featureIcon: "socialize", accent: "text-violet-500 dark:text-violet-400" },
   { href: "/meet-up", label: "Meet Up", description: "Invite Muddies, agree a time, and meet.", suggestion: "Make it happen, together.", tone: "blue", icon: ShieldCheck, featureIcon: "safeArrival", accent: "text-sky-500 dark:text-sky-400" },
@@ -2269,17 +2188,17 @@ function HomeGapFillerActions({ pool }: { pool: QuickAction[] }) {
  * light invitation rather than an empty card, matching the Near section's
  * treatment.
  */
-function UpcomingPlanEmpty() {
+function UpcomingMeetupEmpty() {
   return (
     <section aria-labelledby="home-plan-heading">
       {/* No action: with nothing upcoming there is nothing to see all of. */}
-      <PageSectionHeader id="home-plan-heading" title="My Plans" />
+      <PageSectionHeader id="home-plan-heading" title="Meetups" />
       <div className="flex items-center gap-3.5 py-1">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border/60 text-muted-foreground">
           <CalendarDays className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold">No upcoming Plans.</p>
+          <p className="text-sm font-semibold">No upcoming Meetups.</p>
           <p className="mt-0.5 text-[0.8125rem] leading-5 text-muted-foreground">
             {/* The canonical creation route, same as every other Create entry. */}
             <Link
