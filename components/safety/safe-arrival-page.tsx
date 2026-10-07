@@ -269,7 +269,7 @@ export function SafeArrivalPage({
       ) : null}
 
       <SafeArrivalSetup
-        open={setupOpen && availability?.safe_arrival !== false}
+        open={setupOpen && availability?.meet_up !== false}
         watcherOptions={watcherOptions}
         maxWatchers={maxWatchers}
         pending={isPending}
