@@ -250,7 +250,7 @@ export function SafeArrivalPage({
           }
         />
       ) : (
-        availability && !availability.safe_arrival ? <LockedFeaturePreview feature="safe_arrival" /> : <SafeArrivalHome onStart={() => router.push("/meet-up")} />
+        availability && !availability.meet_up ? <LockedFeaturePreview feature="meet_up" /> : <SafeArrivalHome onStart={() => router.push("/meet-up")} />
       )}
 
       {otherWatching.length > 0 ? (
