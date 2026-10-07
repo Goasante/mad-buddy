@@ -119,7 +119,7 @@ export function PlanStack({
         // without seeing the offsets.
         role="group"
         aria-roledescription="stack"
-        aria-label={`Your plans, showing ${top + 1} of ${count}`}
+        aria-label={`Coming up, showing ${top + 1} of ${count}`}
       >
         {/* Painted back-to-front so the live card sits on top naturally. */}
         {visible
@@ -169,7 +169,7 @@ export function PlanStack({
           type="button"
           onClick={rewind}
           className="plan-stack-nav"
-          aria-label="Previous plan"
+          aria-label="Previous item"
         >
           <span aria-hidden="true">‹</span>
         </button>
@@ -180,7 +180,7 @@ export function PlanStack({
           {top === 0 ? "Soonest" : `${top + 1} of ${count}`}
         </span>
 
-        <button type="button" onClick={advance} className="plan-stack-nav" aria-label="Next plan">
+        <button type="button" onClick={advance} className="plan-stack-nav" aria-label="Next item">
           <span aria-hidden="true">›</span>
         </button>
       </div>
