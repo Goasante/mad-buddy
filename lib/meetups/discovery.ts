@@ -60,43 +60,47 @@ export const meetupDiscoveryCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("refresh"), id: z.string().uuid() }).strict()
 ]);
 
-export type MeetupDiscoveryPerson = {
-  userId: string;
-  name: string;
-  username: string;
-  avatarUrl: string | null;
-  status: "pending" | "accepted" | "declined" | "withdrawn";
-};
+export const meetupDiscoveryPersonSchema = z.object({
+  userId: z.string().uuid(),
+  name: z.string(),
+  username: z.string(),
+  avatarUrl: z.string().nullable(),
+  status: z.enum(["pending", "accepted", "declined", "withdrawn"])
+});
 
-export type MeetupDiscoveryItem = {
-  id: string;
-  creatorId: string;
-  creatorName: string;
-  creatorUsername: string;
-  creatorAvatarUrl: string | null;
-  title: string;
-  category: MeetupDiscoveryCategory;
-  style: MeetupDiscoveryStyle;
-  startsAt: string;
-  timezone: string;
-  listingExpiresAt: string;
-  listingDurationMinutes: number;
-  status: "active" | "matched" | "expired" | "cancelled";
-  maxAttendees: number;
-  interestLimit: number;
-  interestCount: number;
-  myInterestStatus: "pending" | "accepted" | "declined" | "withdrawn" | null;
-  meetupId: string | null;
-  conversationId: string | null;
-  interestedPeople: MeetupDiscoveryPerson[];
-};
+export const meetupDiscoveryItemSchema = z.object({
+  id: z.string().uuid(),
+  creatorId: z.string().uuid(),
+  creatorName: z.string(),
+  creatorUsername: z.string(),
+  creatorAvatarUrl: z.string().nullable(),
+  title: z.string(),
+  category: meetupDiscoveryCategorySchema,
+  style: meetupDiscoveryStyleSchema,
+  startsAt: z.string(),
+  timezone: z.string(),
+  listingExpiresAt: z.string(),
+  listingDurationMinutes: z.number().int(),
+  status: z.enum(["active", "matched", "expired", "cancelled"]),
+  maxAttendees: z.number().int(),
+  interestLimit: z.number().int(),
+  interestCount: z.number().int(),
+  myInterestStatus: z.enum(["pending", "accepted", "declined", "withdrawn"]).nullable(),
+  meetupId: z.string().uuid().nullable(),
+  conversationId: z.string().uuid().nullable(),
+  interestedPeople: z.array(meetupDiscoveryPersonSchema)
+});
 
-export type MeetupDiscoveryHub = {
-  nearby: MeetupDiscoveryItem[];
-  mine: MeetupDiscoveryItem[];
-  activeSlots: number;
-  maxActiveSlots: number;
-};
+export const meetupDiscoveryHubSchema = z.object({
+  nearby: z.array(meetupDiscoveryItemSchema),
+  mine: z.array(meetupDiscoveryItemSchema),
+  activeSlots: z.number().int().min(0),
+  maxActiveSlots: z.number().int().positive()
+});
+
+export type MeetupDiscoveryPerson = z.infer<typeof meetupDiscoveryPersonSchema>;
+export type MeetupDiscoveryItem = z.infer<typeof meetupDiscoveryItemSchema>;
+export type MeetupDiscoveryHub = z.infer<typeof meetupDiscoveryHubSchema>;
 
 export function discoveryTimeLeft(expiresAt: string, nowMs: number): string {
   const minutes = Math.max(0, Math.ceil((Date.parse(expiresAt) - nowMs) / 60_000));
