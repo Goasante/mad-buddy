@@ -35,8 +35,8 @@ function prominentIds(): SmartCardId[] {
 describe("which states are allowed to take space", () => {
   const prominent = prominentIds();
 
-  it("treats Safe Arrival and the active Journey as prominent", () => {
-    expect(prominent).toContain("safe_arrival");
+  it("treats a starting Meetup and the active Journey as prominent", () => {
+    expect(prominent).toContain("meetup_starting");
     expect(prominent).toContain("journey");
   });
 
@@ -63,10 +63,9 @@ describe("which states are allowed to take space", () => {
     expect(component).toContain("const prominent = PROMINENT_CARD_IDS.has(card.id)");
   });
 
-  it("leaves Safe Arrival the highest-priority card it already was", () => {
-    // Compaction must not have reordered which card wins Home.
-    expect(SMART_CARD_IDS[0]).toBe("safe_arrival");
-    expect(SMART_CARD_PRIORITY.safe_arrival).toBeLessThan(SMART_CARD_PRIORITY.suggestions);
+  it("keeps a starting Meetup ahead of routine fallback cards", () => {
+    expect(SMART_CARD_IDS[0]).toBe("meetup_starting");
+    expect(SMART_CARD_PRIORITY.meetup_starting).toBeLessThan(SMART_CARD_PRIORITY.suggestions);
   });
 });
 
@@ -93,7 +92,7 @@ describe("nothing was removed to save height", () => {
 
 describe("the card can still grow", () => {
   it("puts no fixed or maximum height on the card itself", () => {
-    // A hard height is what would clip a long Safe Arrival subtitle. The
+    // A hard height is what would clip a long Meetup subtitle. The
     // illustration inside is legitimately sized; this checks the card.
     const rootClass = component.slice(
       component.indexOf("focus-ring safe-motion group"),
