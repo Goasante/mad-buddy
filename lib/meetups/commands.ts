@@ -56,11 +56,12 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
   const { data, error } = await admin.rpc("meetup_command_server", { p_actor_id: actorId, p_action: action, p_input: value });
   if (error) return { ok: false, message: ERRORS[error.message] ?? "Could not save the meetup. Refresh and try again." };
 
+  const meetupId =
+    data && typeof data === "object" && !Array.isArray(data) && "id" in data && typeof data.id === "string"
+      ? data.id
+      : null;
+
   if (create && "category" in value) {
-    const meetupId =
-      data && typeof data === "object" && !Array.isArray(data) && "id" in data && typeof data.id === "string"
-        ? data.id
-        : null;
     if (meetupId) {
       const categoryUpdate = await (admin as unknown as MeetupCategoryWriter)
         .from("meetups")
@@ -77,6 +78,11 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
   after(async () => {
     try { await processMeetupNotifications(admin); }
     catch { logBackendEvent("error", { action: "meetups.notification_delivery", errorType: "DeliveryFailed" }); }
+
+    if (!create && meetupId && ["end", "home_start", "arrival"].includes(action)) {
+      const { grantMeetupAchievementsForMeetup } = await import("@/lib/engagement/achievements");
+      await grantMeetupAchievementsForMeetup(admin, meetupId);
+    }
   });
   const successMessage = create ? "Meetup scheduled and invitations sent." : (() => {
     if (!("action" in value)) return "Meetup updated.";
