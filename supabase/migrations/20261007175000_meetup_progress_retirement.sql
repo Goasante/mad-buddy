@@ -75,7 +75,9 @@ begin
   end if;
   return new;
 end;
-$$;
+$;
+revoke all on function public.record_meetup_score_from_meetup() from public, anon, authenticated;
+grant execute on function public.record_meetup_score_from_meetup() to service_role;
 
 drop trigger if exists meetup_score_on_together on public.meetups;
 create trigger meetup_score_on_together
@@ -109,7 +111,9 @@ begin
   end if;
   return new;
 end;
-$$;
+$;
+revoke all on function public.record_meetup_score_from_participant() from public, anon, authenticated;
+grant execute on function public.record_meetup_score_from_participant() to service_role;
 
 drop trigger if exists meetup_score_on_participant_met on public.meetup_participants;
 create trigger meetup_score_on_participant_met
