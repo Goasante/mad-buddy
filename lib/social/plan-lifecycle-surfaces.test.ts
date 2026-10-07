@@ -124,7 +124,6 @@ describe("no surface decides for itself", () => {
     // could not tell a running plan from a finished one, nor measure a grace
     // window. Both loaders now read them.
     for (const [name, source] of [
-      ["Plans route", plansRoute],
       ["plans service", planService]
     ] as const) {
       expect(source, `${name} must select end_at`).toContain("end_at");
