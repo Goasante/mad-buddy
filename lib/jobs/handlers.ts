@@ -1007,12 +1007,19 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
 
   // Pull the month's activity once and aggregate in memory. Bounded reads,
   // at current scale these are small; revisit with keyset pagination later.
-  const [wavesRes, meetupScoresRes, meetupLifeRes, friendshipsRes, sessionsRes] = await Promise.all([
+  const [wavesRes, meetupCreatedRes, meetupScoresRes, meetupLifeRes, friendshipsRes, sessionsRes] = await Promise.all([
     admin
       .from("waves")
       .select("sender_id, recipient_id, reply_to_wave_id")
       .gte("sent_at", startIso)
       .lt("sent_at", endIso)
+      .limit(10000),
+    admin
+      .from("meetups")
+      .select("creator_id")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .neq("status", "cancelled")
       .limit(10000),
     admin
       .from("buddy_score_ledger")
@@ -1042,7 +1049,7 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
       .lt("starts_at", endIso)
       .limit(10000)
   ]);
-  for (const res of [wavesRes, meetupScoresRes, meetupLifeRes, friendshipsRes, sessionsRes]) {
+  for (const res of [wavesRes, meetupCreatedRes, meetupScoresRes, meetupLifeRes, friendshipsRes, sessionsRes]) {
     if (res.error) throw new JobError("DATABASE_TIMEOUT", res.error.message);
   }
 
@@ -1065,6 +1072,10 @@ export const handleGenerateMonthlyRecaps: JobHandler = async (admin) => {
     forUser(wave.sender_id)._interacted.add(wave.recipient_id);
     forUser(wave.recipient_id)._interacted.add(wave.sender_id);
     if (wave.reply_to_wave_id) bump(wave.recipient_id, "wavesReturned");
+  }
+
+  for (const meetup of meetupCreatedRes.data ?? []) {
+    bump(meetup.creator_id, "meetupsCreated");
   }
 
   for (const score of meetupScoresRes.data ?? []) {
