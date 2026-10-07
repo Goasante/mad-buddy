@@ -1602,7 +1602,7 @@ function MeetupCard({
           >
             <h3 className="text-xl font-bold">Heading home?</h3>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              End your part of the meetup, or let ${m.sourceDiscoveryId ? "the people in this Meetup" : "your Muddies"} know when you get home.
+              End your part of the meetup, or let {m.sourceDiscoveryId ? "the people in this Meetup" : "your Muddies"} know when you get home.
             </p>
             <div className="mt-5 grid gap-2">
               <Button
