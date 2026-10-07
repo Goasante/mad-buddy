@@ -155,7 +155,7 @@ export type TimelineFacts = {
 };
 
 /** Event types that count as a real, shared interaction. */
-const INTERACTION_EVENTS: LifeEventType[] = ["plan.attended_together", "reconnect.completed"];
+const INTERACTION_EVENTS: LifeEventType[] = ["plan.attended_together", "meetup.attended_together", "reconnect.completed"];
 
 export function timelineFacts(entries: readonly TimelineEntry[]): TimelineFacts {
   let createdAtMs: number | null = null;
@@ -177,7 +177,7 @@ export function timelineFacts(entries: readonly TimelineEntry[]): TimelineFacts 
       reactivatedAtMs =
         reactivatedAtMs === null ? entry.occurredAtMs : Math.max(reactivatedAtMs, entry.occurredAtMs);
     }
-    if (entry.eventType === "plan.attended_together") plansAttendedTogether += 1;
+    if (entry.eventType === "plan.attended_together" || entry.eventType === "meetup.attended_together") plansAttendedTogether += 1;
     if (entry.eventType === "reconnect.completed") reconnectsCompleted += 1;
 
     if (INTERACTION_EVENTS.includes(entry.eventType)) {
