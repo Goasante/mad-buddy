@@ -36,7 +36,9 @@ export type QuickAction = {
 };
 
 /**
- * The launcher's contents, in display order.
+ * The launcher's contents, in display order. Plans and Safe Arrival are retired,
+ * and Meetups now owns a permanent navigation slot, so those shortcuts are
+ * intentionally absent. The empty capacity is reserved for a future action.
  *
  * Ordered top-to-bottom as they appear when expanded. Groups deliberately
  * does not live here: group conversations are owned by Messages. Conference
