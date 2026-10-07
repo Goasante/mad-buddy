@@ -32,9 +32,9 @@ const DESTINATION_BY_BASE: Record<string, Route> = {
   wave: "/friends" as Route,
   // Feature records addressed by the id suffix
   meeting_ping: "/meeting-pings" as Route,
-  plan: "/plans" as Route,
-  hangout: "/hangout-mode" as Route,
-  safe_arrival: "/safe-arrival" as Route,
+  plan: "/meet-up" as Route,
+  hangout: "/meet-up" as Route,
+  safe_arrival: "/meet-up" as Route,
   meetup: "/meet-up" as Route,
   meetup_discovery: "/meet-up?newPeople=1" as Route,
   event: "/events" as Route,
@@ -113,15 +113,13 @@ export function resolveNotificationDestination(type: string): NotificationDestin
       case "group_message":
         return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
       case "hangout":
-        return { type: "internal", href: withQuery("/hangout-mode", "hangout", entityId) };
       case "plan":
-        return { type: "internal", href: withQuery("/plans", "plan", entityId) };
+      case "safe_arrival":
+        return { type: "internal", href: "/meet-up" as Route };
       case "event":
         return { type: "internal", href: withQuery("/events", "event", entityId) };
       case "group":
         return { type: "internal", href: withQuery("/messages", "conversation", entityId) };
-      case "safe_arrival":
-        return { type: "internal", href: withQuery("/safe-arrival", "session", entityId) };
       case "meetup":
         return { type: "internal", href: withQuery("/meet-up", "meetup", entityId) };
       case "meetup_discovery": {
