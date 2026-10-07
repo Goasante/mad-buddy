@@ -26,7 +26,7 @@ describe("A — nothing said yet", () => {
   });
 
   it("keeps a Plan second", () => {
-    expect(planActionsForMuddy(ctx()).secondary).toBe("make_plan");
+    expect(planActionsForMuddy(ctx()).secondary).toBe("make_meetup");
   });
 
   it("treats an empty thread as nothing said", () => {
@@ -46,7 +46,7 @@ describe("B — talking has just begun", () => {
   });
 
   it("keeps a Plan available, but second", () => {
-    expect(planActionsForMuddy(started).secondary).toBe("make_plan");
+    expect(planActionsForMuddy(started).secondary).toBe("make_meetup");
   });
 
   it("says why", () => {
@@ -55,7 +55,7 @@ describe("B — talking has just begun", () => {
 
   it("does not promote a Plan on one message", () => {
     // The specific regression: under-promote Plans rather than push commitment.
-    expect(planActionsForMuddy(started).primary).not.toBe("make_plan");
+    expect(planActionsForMuddy(started).primary).not.toBe("make_meetup");
   });
 });
 
@@ -63,7 +63,7 @@ describe("C — an established relationship", () => {
   const established = ctx({ hasExistingConversation: true, conversationState: "established" });
 
   it("finally suggests a Plan", () => {
-    expect(planActionsForMuddy(established).primary).toBe("make_plan");
+    expect(planActionsForMuddy(established).primary).toBe("make_meetup");
     expect(planActionsForMuddy(established).secondary).toBe("message");
     expect(planActionsForMuddy(established).reason).toBe("established");
   });
@@ -100,8 +100,8 @@ describe("the stronger rules still win", () => {
       const plan = planActionsForMuddy(
         ctx({ hasSharedUpcomingPlan: true, hasExistingConversation: true, conversationState })
       );
-      expect(plan.primary).toBe("view_plan");
-      expect(plan.secondary).not.toBe("make_plan");
+      expect(plan.primary).toBe("view_meetup");
+      expect(plan.secondary).not.toBe("make_meetup");
     }
   });
 
@@ -141,6 +141,6 @@ describe("the engine stays one deterministic function", () => {
   it("has no second implementation", () => {
     const focus = stripComments(readFileSync("lib/activation/relationship-focus.ts", "utf8"));
     expect(focus).toContain("planActionsForMuddy");
-    expect(focus).not.toContain('"make_plan"');
+    expect(focus).not.toContain('"make_meetup"');
   });
 });
