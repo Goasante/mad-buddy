@@ -10,13 +10,13 @@ import type { FeatureIconKey } from "@/lib/icons/feature-icons";
  * launcher costs essentially nothing to render and its behaviour can be tested
  * without mounting the app.
  *
- * The four actions each open the feature's CANONICAL route. There are no
+ * The two actions each open the feature's CANONICAL route. There are no
  * context-dependent destinations: Plans opens Plans everywhere. An icon that
  * quietly means something different per screen is a thing users have to learn
  * page by page, and the first version should not ask that.
  */
 
-export type QuickActionId = "moments" | "plans" | "events" | "safe_arrival" | "conference";
+export type QuickActionId = "moments" | "events" | "conference";
 
 export type QuickAction = {
   id: QuickActionId;
@@ -58,15 +58,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
    *
    * The route itself is untouched and the feature can return here the day it
    * is unpaused; what is removed is the promise that it works today. */
-  { id: "plans", label: "Plans", href: "/plans" as Route, featureIcon: "plans", toneClass: "qa-tone-plans" },
   { id: "events", label: "Events", href: "/events" as Route, featureIcon: "events", toneClass: "qa-tone-events" },
-  {
-    id: "safe_arrival",
-    label: "Meet Up",
-    href: "/meet-up" as Route,
-    featureIcon: "safeArrival",
-    toneClass: "qa-tone-safe-arrival"
-  },
   { id: "conference", label: "Conference", href: "/conference" as Route, featureIcon: "conference", toneClass: "qa-tone-conference" }
 ];
 
@@ -74,7 +66,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  * Where Quick Actions appears.
  *
  * EVERYWHERE IN THE APP, except surfaces that genuinely cannot carry it. The
- * launcher is a shortcut to four features, and a shortcut that only exists on
+ * launcher is a shortcut to two features, and a shortcut that only exists on
  * four screens is one people never learn is there.
  *
  * This is a DENY list, reversing the earlier allow list. The tradeoff is real:
@@ -106,7 +98,7 @@ export const QUICK_ACTIONS: readonly QuickAction[] = [
  *   /settings      Rows of toggles down the right edge -- exactly where the
  *                  pill sits. Reserving space at the FOOT of the page cannot
  *                  fix a control the user meets mid-scroll, and a shortcut to
- *                  five other features earns nothing on the screen where
+ *                  other features earns nothing on the screen where
  *                  somebody is deliberately configuring one thing.
  *
  * Mad Cam and the image editor need no entry: they render full-screen at
