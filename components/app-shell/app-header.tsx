@@ -3,7 +3,6 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Bell,
-  CalendarCheck2,
   CircleDollarSign,
   Gauge,
   Hand,
