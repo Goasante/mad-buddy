@@ -16,7 +16,7 @@ export function OPTIONS(request: Request) { return preflightResponse(request); }
 export async function GET(request: Request) {
   const auth = await resolveApiUser(request);
   if (!auth) return withCors(NextResponse.json({ error: "Authentication required." }, { status: 401 }), request);
-  if (!(await optionalFeatureEnabled("safe_arrival"))) return withCors(NextResponse.json({ error: FEATURE_LOCK_MESSAGE }, { status: 403 }), request);
+  if (!(await optionalFeatureEnabled("meet_up"))) return withCors(NextResponse.json({ error: FEATURE_LOCK_MESSAGE }, { status: 403 }), request);
   const admin = createSupabaseAdminClient();
   const guard = await guardAction(admin, { userId: auth.user.id, surface: "plans" });
   if (!guard.allowed) return withCors(NextResponse.json({ error: guard.message }, { status: 403 }), request);
