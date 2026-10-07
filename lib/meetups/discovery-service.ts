@@ -50,7 +50,7 @@ function parseHub(value: unknown): MeetupDiscoveryHub {
 }
 
 export async function loadMeetupDiscoveryHub(userId: string): Promise<MeetupDiscoveryHub> {
-  if (!(await optionalFeatureEnabled("safe_arrival"))) return emptyHub();
+  if (!(await optionalFeatureEnabled("meet_up"))) return emptyHub();
   const client = createSupabaseAdminClient();
   const rpc = asLooseRpc(client);
   await rpc.rpc("expire_meetup_discoveries_server");
@@ -60,7 +60,7 @@ export async function loadMeetupDiscoveryHub(userId: string): Promise<MeetupDisc
 }
 
 export async function createMeetupDiscovery(userId: string, input: unknown) {
-  if (!(await optionalFeatureEnabled("safe_arrival"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+  if (!(await optionalFeatureEnabled("meet_up"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
   const parsed = meetupDiscoveryCreateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the listing details." };
@@ -88,7 +88,7 @@ export async function createMeetupDiscovery(userId: string, input: unknown) {
 }
 
 export async function updateMeetupDiscovery(userId: string, input: unknown) {
-  if (!(await optionalFeatureEnabled("safe_arrival"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
+  if (!(await optionalFeatureEnabled("meet_up"))) return { ok: false, message: FEATURE_LOCK_MESSAGE };
   const parsed = meetupDiscoveryCommandSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "That listing update could not be read." };
 
