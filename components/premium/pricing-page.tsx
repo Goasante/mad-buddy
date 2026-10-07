@@ -8,8 +8,8 @@ const FREE_APP = [
   "Home, Profile and Muddies",
   "Glow and privacy-safe proximity",
   "Linkr discovery and connections",
-  "UpFor, Plans, Plan Chat and Events",
-  "Messages, Safe Arrival, Notifications, Circles and Groups"
+  "Meetups, Meet New People and Events",
+  "Messages, Notifications, Circles and Groups"
 ];
 
 const ACCESS_BENEFITS = [
@@ -30,7 +30,7 @@ export function PricingPageContent() {
             Mad Buddy is free to use. Access removes the ads.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-7 text-[#4E0401]/65 dark:text-[#D8CCC5] sm:text-lg">
-            Linkr, UpFor, Muddies, Messages, Plans, Events and the rest of the core app stay available without a subscription. Free accounts may see light advertising; Mad Buddy Access gives you the same experience without ads.
+            Linkr, Meetups, Muddies, Messages, Events and the rest of the core app stay available without a subscription. Free accounts may see light advertising; Mad Buddy Access gives you the same experience without ads.
           </p>
         </section>
 
@@ -113,7 +113,7 @@ export function PricingPageContent() {
           {[
             ["Do I need a card for Welcome Access?", "No."],
             ["Will I be charged after 14 days?", "No. There is no automatic renewal."],
-            ["Do Linkr or UpFor require Access?", "No. Core Mad Buddy features remain available on the free app."],
+            ["Do Linkr or Meetups require Access?", "No. Core Mad Buddy features remain available on the free app."],
             ["Can I remove ads later?", "Yes. Mad Buddy Access is GHS 4.99 per month for the ad-free experience."]
           ].map(([question, answer]) => (
             <article key={question} className="rounded-2xl border border-[#4E0401]/10 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.04]">
