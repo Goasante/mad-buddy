@@ -120,7 +120,7 @@ const FILTERS = [
   { id: "unread", label: "Unread" },
   { id: "favorites", label: "Favorites" },
   { id: "groups", label: "Groups" },
-  { id: "plans", label: "Plans" },
+  { id: "plans", label: "Meetups & Events" },
   { id: "archived", label: "Archived" }
 ] as const;
 
@@ -1578,7 +1578,7 @@ export function MessagesPageV4({
                 }}
               >
                 {loadingMessages && messages.length === 0 && pendingMessages.length === 0 ? <div className="space-y-3 px-1 py-6" role="status" aria-label="Loading recent messages"><div className="h-14 w-2/3 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /><div className="ml-auto h-11 w-1/2 animate-pulse rounded-[21px] rounded-br-[7px] bg-primary/12" /><div className="h-20 w-3/4 animate-pulse rounded-[21px] rounded-bl-[7px] bg-muted/55" /></div> : messages.length === 0 && pendingMessages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center px-8 text-center animate-in fade-in zoom-in-95"><UserAvatar name={selected.title} src={selected.avatarUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p>{isGroup ? <div className="mt-4 flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setPollOpen(true)}><BarChart3 className="h-4 w-4" />Create poll</Button><Button size="sm" variant="outline" onClick={() => router.push("/plans" as Route)}>Make a Plan</Button></div> : null}</div>
+                  <div className="flex h-full flex-col items-center justify-center px-8 text-center animate-in fade-in zoom-in-95"><UserAvatar name={selected.title} src={selected.avatarUrl} size="lg" decorative className="border-2 border-background shadow-[inset_0_0_0_1px_hsl(var(--border)),0_8px_24px_hsl(var(--shadow)/0.16)]" /><h2 className="mt-4 text-lg font-semibold">{selected.title}</h2><p className="mt-1 text-sm text-muted-foreground">Say hello and start the chat.</p>{isGroup ? <div className="mt-4 flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setPollOpen(true)}><BarChart3 className="h-4 w-4" />Create poll</Button><Button size="sm" variant="outline" onClick={() => router.push("/meet-up?create=1" as Route)}>Create Meetup</Button></div> : null}</div>
                 ) : (
                   messages.map((message, index) => {
                     const previous = messages[index - 1];
