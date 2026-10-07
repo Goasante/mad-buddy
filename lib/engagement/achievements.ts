@@ -147,6 +147,32 @@ export async function grantMomentAchievements(admin: Admin, userId: string): Pro
   }
 }
 
+export async function grantMeetupAchievements(admin: Admin, userId: string): Promise<void> {
+  try {
+    const { data: participations } = await admin
+      .from("meetup_participants")
+      .select("meetup_id,met_at")
+      .eq("user_id", userId)
+      .eq("response", "accepted");
+    const rows = participations ?? [];
+    const meetupIds = [...new Set(rows.map((row) => row.meetup_id))];
+    const { data: completed } = meetupIds.length
+      ? await admin.from("meetups").select("id,together_at").in("id", meetupIds).not("together_at", "is", null)
+      : { data: [] };
+    const completedCount = completed?.length ?? 0;
+    const safetyCheckInCount = rows.filter((row) => Boolean(row.met_at)).length;
+
+    await Promise.all([
+      completedCount > 0 ? grantAchievement(admin, userId, "first_plan") : Promise.resolve(),
+      grantCountAchievement(admin, userId, "plan_maker", completedCount),
+      grantCountAchievement(admin, userId, "plan_regular", completedCount),
+      safetyCheckInCount > 0 ? grantAchievement(admin, userId, "good_check_in") : Promise.resolve(),
+      grantCountAchievement(admin, userId, "safe_traveller", safetyCheckInCount)
+    ]);
+  } catch {
+    // Best-effort by design.
+  }
+}
 export async function grantMeetupCompletionAchievements(admin: Admin, meetupId: string): Promise<void> {
   try {
     const { data: meetup } = await admin
