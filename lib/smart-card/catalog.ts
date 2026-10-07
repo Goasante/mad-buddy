@@ -46,7 +46,8 @@ export type SmartCardStateSpec = {
 export const SMART_CARD_APPROVED_STATES = [
   { id: "meetup_starting", tier: 2, family: "meetups", purpose: "A confirmed Meetup is starting soon and coordination matters now." },
   { id: "meetup_upcoming", tier: 4, family: "meetups", purpose: "A confirmed upcoming Meetup is worth keeping visible." },
-  { id: "meetup_fallback", tier: 6, family: "meetups", purpose: "Default social action when Meetups is available and no stronger state wins." },\n  { id: "core_fallback", tier: 6, family: "muddies", purpose: "Neutral fallback when optional social features are unavailable." },
+  { id: "meetup_fallback", tier: 6, family: "meetups", purpose: "Default social action when Meetups is available and no stronger state wins." },
+  { id: "core_fallback", tier: 6, family: "muddies", purpose: "Neutral fallback when optional social features are unavailable." },
   { id: "safe_arrival_overdue", tier: 0, family: "safety", purpose: "A Safe Arrival check-in is overdue." },
   { id: "safe_arrival_action", tier: 0, family: "safety", purpose: "A live Safe Arrival needs the traveller's action." },
   { id: "failed_action", tier: 0, family: "system", purpose: "A consequential action failed and needs recovery." },
