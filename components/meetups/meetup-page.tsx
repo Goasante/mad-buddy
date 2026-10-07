@@ -385,10 +385,13 @@ export function MeetupPage({
       <main className="mx-auto w-full min-w-0 max-w-xl pb-24">
       <MeetupMobileHeader />
 
+      {/* The shell reserves the fixed mobile header's space. Keep web controls
+          in normal flow so a second sticky inset cannot leave a gap or cover
+          the first card on mobile Safari. */}
       <div
         className={
           PLATFORM_KIND === "web"
-            ? "sticky top-[var(--mobile-header-height)] z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl md:top-0 md:border-0 md:bg-transparent md:backdrop-blur-none"
+            ? "relative border-b border-border/50 bg-background md:border-0 md:bg-transparent"
             : "sticky top-0 z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl"
         }
       >
