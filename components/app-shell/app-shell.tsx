@@ -108,7 +108,7 @@ const navigationItems: Array<{
     | "/friends"
     | "/notifications"
     | "/messages"
-    | "/plans"
+    | "/meet-up"
     | "/events"
     | "/discover"
     // Linkr 2.0. `/discover` stays in this union: the old route still exists
@@ -131,7 +131,7 @@ const navigationItems: Array<{
   { href: "/friends", label: "Muddies", icon: UsersRound },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/messages", label: "Messages", icon: MessagesSquare },
-  { href: "/plans", label: "Plans", icon: CalendarCheck2, featureIcon: "plans" },
+  { href: "/meet-up", label: "Meetups", icon: Hand, brandIcon: "upfor" },
   { href: "/events", label: "Events", icon: PartyPopper, featureIcon: "events" },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
   { href: "/profile", label: "Profile", icon: UserRound },
@@ -145,7 +145,7 @@ const navigationItems: Array<{
 ];
 
 const PRIMARY_HREFS = ["/dashboard", "/friends", "/notifications", "/messages"] as const;
-const SECONDARY_HREFS = ["/plans", "/events", "/linkr"] as const;
+const SECONDARY_HREFS = ["/meet-up", "/events", "/linkr"] as const;
 
 /**
  * Routes that render their own in-page title instead of the shared AppHeader
