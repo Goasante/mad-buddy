@@ -53,7 +53,7 @@ where code in (
 create or replace function public.record_meetup_score_from_meetup()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
 begin
@@ -87,7 +87,7 @@ for each row execute function public.record_meetup_score_from_meetup();
 create or replace function public.record_meetup_score_from_participant()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
 begin
