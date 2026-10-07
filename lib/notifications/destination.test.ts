@@ -11,7 +11,9 @@ describe("record-specific notification destinations", () => {
     [`event:${ID}`, `/events?event=${ID}`],
     [`group_message:${ID}`, `/messages?conversation=${ID}`],
     [`group:${ID}`, `/messages?conversation=${ID}`],
-    [`safe_arrival:${ID}`, `/safe-arrival?session=${ID}`]
+    [`safe_arrival:${ID}`, `/safe-arrival?session=${ID}`],
+    [`meetup:${ID}`, `/meet-up?meetup=${ID}`],
+    [`meetup_discovery:${ID}`, `/meet-up?newPeople=1&discovery=${ID}`]
   ])("resolves %s", (type, href) => {
     expect(resolveNotificationDestination(type)).toEqual({ type: "internal", href });
   });
