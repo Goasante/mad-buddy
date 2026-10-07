@@ -35,6 +35,13 @@ describe("Meet New People database boundary", () => {
     expect(refreshProjection).toContain("'refreshCount',d.refresh_count");
   });
 
+  it("does not allow a declined person to re-enter the same listing", () => {
+    const guard = read("20261007150500_meet_new_people_decline_guard.sql");
+    expect(guard).toContain("old.status='declined'");
+    expect(guard).toContain("new.status='pending'");
+    expect(guard).toContain("DISCOVERY_DECLINED");
+  });
+
   it("does not count a discovery and its materialized Meetup as two slots", () => {
     expect(lifecycle).toContain("not exists(");
     expect(lifecycle).toContain("m.source_discovery_id=d.id");
