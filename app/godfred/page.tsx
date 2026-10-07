@@ -76,7 +76,7 @@ export default function GodfredPortfolio() {
               <p className={styles.projectType}>01 — Product / Founder</p>
               <h3>Mad Buddy</h3>
               <p className={styles.projectSubtitle}>Less scrolling.<br />More showing up.</p>
-              <p>A social app built around real-life connection. Privacy-safe proximity, deliberate discovery, and shared plans help a digital hello become time together.</p>
+              <p>A social app built around real-life connection. Privacy-safe proximity, deliberate discovery, and Meetups help a digital hello become time together.</p>
               <div className={styles.tags}><span>Product thinking</span><span>Web & mobile</span><span>Privacy by design</span></div>
               <Link href="/about" className={styles.lightLink}>Discover Mad Buddy <ArrowUpRight aria-hidden="true" /></Link>
             </div>
