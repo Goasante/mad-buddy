@@ -4,7 +4,7 @@ import { curatedPlanSmartCardMedia, smartCardVisualTreatment } from "@/lib/smart
 
 function card(overrides: Partial<SmartCard> = {}): SmartCard {
   return {
-    id: "upfor_fallback",
+    id: "meetup_fallback",
     priority: 0,
     illustration: "people",
     title: "What are you UpFor today?",
