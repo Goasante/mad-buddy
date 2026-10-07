@@ -5,15 +5,10 @@ import { loadProfileIdentitySummary } from "@/lib/profile/identity-service";
 /**
  * Shared activity evidence on a Profile GET.
  *
- * Identity and Journey each counted friendships, moments and completed safe
- * arrivals with byte-identical filters, so one Profile request asked the same
- * three questions twice. Measured route fan-out: 22 downstream calls before,
- * 19 after.
- *
- * Plans are deliberately NOT shared -- Identity counts COMPLETED plans while
- * Journey counts NON-DRAFT ones. Same table, different fact. These tests hold
- * that distinction, because collapsing it would silently change the numbers
- * shown on a profile.
+ * Friendship and Moment counts are shared with Journey when their filters are
+ * identical. Completed Meetups are intentionally read from the durable Buddy
+ * Score ledger so Profile history survives the short operational Meetup
+ * retention window.
  *
  * Behavioural, not source-text: a fake client records which tables are queried.
  */
@@ -60,51 +55,44 @@ const score = {
 } as never;
 
 describe("Identity reuses shared activity counts", () => {
-  it("does not re-query friendships, moments or safe arrivals when supplied", async () => {
+  it("does not re-query friendships or moments when supplied", async () => {
     const recorded: Recorded[] = [];
-    await loadProfileIdentitySummary(fakeAdmin(recorded), "user-1", "self", {
+    await loadProfileIdentitySummary(fakeAdmin(recorded, { buddy_score_ledger: 2 }), "user-1", "self", {
       score,
-      activity: { muddyCount: 4, momentCount: 2, completedSafeArrivalCount: 1 }
+      activity: { muddyCount: 4, momentCount: 2 }
     });
 
     const tables = recorded.map((r) => r.table);
     expect(tables).not.toContain("friendships");
     expect(tables).not.toContain("moments");
+    expect(tables).toContain("buddy_score_ledger");
+    expect(tables).not.toContain("plans");
     expect(tables).not.toContain("safe_arrival_sessions");
   });
 
-  it("still queries plans itself, because that fact is NOT shared", async () => {
-    // Identity wants completed plans; Journey wants non-draft. Sharing these
-    // would change the reported completed-plan count.
-    const recorded: Recorded[] = [];
-    await loadProfileIdentitySummary(fakeAdmin(recorded), "user-1", "self", {
-      score,
-      activity: { muddyCount: 4, momentCount: 2, completedSafeArrivalCount: 1 }
-    });
-
-    expect(recorded.map((r) => r.table)).toContain("plans");
-  });
-
-  it("uses the supplied counts verbatim in the response", async () => {
-    const summary = await loadProfileIdentitySummary(fakeAdmin([]), "user-1", "self", {
-      score,
-      activity: { muddyCount: 7, momentCount: 3, completedSafeArrivalCount: 5 }
-    });
+  it("uses supplied shared counts and durable Meetup history", async () => {
+    const summary = await loadProfileIdentitySummary(
+      fakeAdmin([], { buddy_score_ledger: 5 }),
+      "user-1",
+      "self",
+      { score, activity: { muddyCount: 7, momentCount: 3 } }
+    );
 
     expect(summary.activity?.muddyCount).toBe(7);
     expect(summary.activity?.momentCount).toBe(3);
-    expect(summary.activity?.completedSafeArrivalCount).toBe(5);
+    expect(summary.activity?.completedMeetupCount).toBe(5);
   });
 
-  it("falls back to its own queries when no counts are supplied", async () => {
-    // Backward compatibility: other callers must keep working unchanged.
+  it("falls back to its own current queries when shared counts are absent", async () => {
     const recorded: Recorded[] = [];
-    await loadProfileIdentitySummary(fakeAdmin(recorded), "user-1", "self", { score });
+    await loadProfileIdentitySummary(fakeAdmin(recorded, { buddy_score_ledger: 1 }), "user-1", "self", { score });
 
     const tables = recorded.map((r) => r.table);
     expect(tables).toContain("friendships");
     expect(tables).toContain("moments");
-    expect(tables).toContain("safe_arrival_sessions");
+    expect(tables).toContain("buddy_score_ledger");
+    expect(tables).not.toContain("plans");
+    expect(tables).not.toContain("safe_arrival_sessions");
   });
 });
 
