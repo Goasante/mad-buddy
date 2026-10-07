@@ -48,11 +48,13 @@ export async function reconcileBuddyScore(admin: Admin, userId: string, now = ne
     for (let index = 1; index <= quarters; index += 1) candidates.push(candidate("account_quarter", `account:quarter:${index}`));
   }
   for (const row of friendships.data ?? []) candidates.push(candidate("friendship_accepted", `friendship:${row.id}`));
-  const meetupIds = [...new Set((meetupParticipations.data ?? []).map((row) => row.meetup_id))];
+  const meetupRows = (meetupParticipations.data ?? []) as Array<{ meetup_id: string }>;
+  const meetupIds = [...new Set(meetupRows.map((row) => row.meetup_id))];
   const completedMeetups = meetupIds.length
     ? await admin.from("meetups").select("id").in("id", meetupIds).not("together_at", "is", null)
     : { data: [] };
-  for (const meetup of completedMeetups.data ?? []) candidates.push(candidate("meetup_completed", `meetup:${meetup.id}`));
+  const completedMeetupRows = (completedMeetups.data ?? []) as Array<{ id: string }>;
+  for (const meetup of completedMeetupRows) candidates.push(candidate("meetup_completed", `meetup:${meetup.id}`));
   for (const row of achievements.data ?? []) candidates.push(candidate("achievement_earned", `achievement:${row.id}`));
   if (candidates.length === 0) return;
   await admin.from("buddy_score_ledger").upsert(
