@@ -206,7 +206,7 @@ export function MuddyProfileVNext({
                   <Hand className="h-4 w-4" aria-hidden="true" /> {waveSent ? "Sent" : "Wave"}
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link href="/meet-up?create=1"><CalendarPlus className="h-4 w-4" aria-hidden="true" /> Meetup</Link>
+                  <Link href={`/meet-up?create=1&with=${encodeURIComponent(muddy.friendId)}`}><CalendarPlus className="h-4 w-4" aria-hidden="true" /> Meetup</Link>
                 </Button>
               </>
             ) : (
