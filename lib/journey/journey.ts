@@ -4,8 +4,7 @@ export const JOURNEY_STEP_IDS = [
   "turn_on_visibility",
   "send_first_wave",
   "start_first_conversation",
-  "create_first_plan",
-  "complete_first_safe_arrival",
+  "create_first_meetup",
   "reach_trusted_buddy"
 ] as const;
 
@@ -46,8 +45,7 @@ export const JOURNEY_DEFINITIONS: readonly StepDefinition[] = [
   { id: "turn_on_visibility", title: "Turn On Visibility", description: "Choose when Muddies can see you're nearby.", unlockCondition: "Turn on Glow visibility for the first time.", destination: "/settings/glow-visibility", guideSlug: "glow-visibility-guide" },
   { id: "send_first_wave", title: "Send First Wave", description: "Say hello, no pressure.", unlockCondition: "Send your first Wave.", destination: "/friends", guideSlug: null },
   { id: "start_first_conversation", title: "Start First Conversation", description: "Take a Muddy from nearby to talking.", unlockCondition: "Send your first conversation message.", destination: "/messages", guideSlug: "messages-guide" },
-  { id: "create_first_plan", title: "Create First Plan", description: "Turn a connection into real plans.", unlockCondition: "Create your first non-draft Plan.", destination: "/plans", guideSlug: "plans-guide" },
-  { id: "complete_first_safe_arrival", title: "Complete First Safe Arrival", description: "Let your circle know you got there safely.", unlockCondition: "Confirm your first Safe Arrival.", destination: "/safe-arrival", guideSlug: "safe-arrival-guide" },
+  { id: "create_first_meetup", title: "Create First Meetup", description: "Turn a connection into time together.", unlockCondition: "Arrange your first Meetup.", destination: "/meet-up?create=1", guideSlug: "meetups-guide" },
   { id: "reach_trusted_buddy", title: "Become a Trusted Buddy", description: "Show friends you're ready for safer meetups.", unlockCondition: "Reach the Trusted Buddy reputation level.", destination: "/buddy-score", guideSlug: "buddy-score-guide" }
 ] as const;
 
