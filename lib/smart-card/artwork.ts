@@ -3,6 +3,8 @@ import type { SmartCard } from "./smart-card";
 
 /** Stable catalog numbers for review; illustration families are mapped separately. */
 export const SMART_CARD_SCENES = {
+  meetup_starting: 13,
+  meetup_upcoming: 37,
   core_fallback: 1,
   safe_arrival_overdue: 2,
   safe_arrival_action: 3,
@@ -66,6 +68,8 @@ export const SMART_CARD_SCENES = {
 /** Reviewed transparent scenes. Characters illustrate general social moments;
  * role-specific cards use activities and objects instead of invented people. */
 export const SMART_CARD_ARTWORK_FILES = {
+  meetup_starting: "13-plan-starting.webp",
+  meetup_upcoming: "37-upcoming-plan.webp",
   core_fallback: "01-core-fallback.webp",
   safe_arrival_overdue: "02-safe-arrival-overdue.webp",
   safe_arrival_action: "03-safe-arrival-action.webp",
