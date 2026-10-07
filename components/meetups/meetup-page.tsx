@@ -818,7 +818,7 @@ function SafeHomeWatchCard({ meetup, viewerId }: { meetup: Meetup; viewerId: str
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">Safe Home check-in</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {headingHome.map((person) => person.name).join(", ")} {headingHome.length === 1 ? "is" : "are"} heading home. You'll get an update when they check in.
+            {headingHome.map((person) => person.name).join(", ")} {headingHome.length === 1 ? "is" : "are"} heading home. You’ll get an update when they check in.
           </p>
         </div>
       </div>
@@ -874,7 +874,7 @@ function SafeHomeCard({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">Heading home from {meetup.placeLabel}</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Your meetup itself is finished. This small check-in stays only until you say you're home.
+            Your meetup itself is finished. This small check-in stays only until you say you’re home.
           </p>
         </div>
       </div>
@@ -1529,7 +1529,7 @@ function MeetupCard({
                   update({ action: "home_start" });
                 }}
               >
-                Let my Muddies know when I'm home
+                Let my Muddies know when I’m home
               </Button>
             </div>
           </section>
