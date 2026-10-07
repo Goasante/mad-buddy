@@ -441,6 +441,7 @@ function CreateMeetup({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [place, setPlace] = useState("");
   const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 30 * 60_000)));
+  const [minStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 60_000)));
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -646,7 +647,7 @@ function CreateMeetup({
               <input
                 type="datetime-local"
                 value={startsAt}
-                min={localDateTimeValue(new Date(Date.now() + 60_000))}
+                min={minStartsAt}
                 onChange={(event) => {
                   resetRequestKey();
                   setStartsAt(event.target.value);
