@@ -334,13 +334,13 @@ describe("Hangout icon", () => {
     // No component hardcodes a glyph for Hangout; it goes through the key.
     const dashboard = read("components/dashboard/dashboard-page.tsx");
     expect(dashboard).not.toContain("hangout-linkup");
-    expect(dashboard).toContain('featureIcon: "hangout"');
+    expect(dashboard).toContain('featureIcon: "meetups"');
   });
 
   it("resolves to a Lucide component, not a raster asset", () => {
     // The former /icons/features/*.png|svg assets are gone; the mapping now
     // returns a component, so there is no file path to assert against.
     expect(FEATURE_ICON_SOURCES.hangout.icon).toBeDefined();
-    expect(FEATURE_ICON_SOURCES.hangout.label).toBe("Hangout");
+    expect(FEATURE_ICON_SOURCES.hangout.label).toBe("Meetups");
   });
 });
