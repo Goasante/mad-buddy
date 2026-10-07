@@ -7,7 +7,6 @@ import { guardAction } from "@/lib/admin/enforcement";
 import { consumeRateLimit, rateLimitMessage } from "@/lib/security/rate-limit";
 import { deliverNotification } from "@/lib/notifications/server";
 import { isValidTimeZone } from "@/lib/time/timezone";
-import { optionalFeatureEnabled, FEATURE_LOCK_MESSAGE } from "@/lib/features/availability-server";
 import {
   meetupDiscoveryCommandSchema,
   meetupDiscoveryCreateSchema,
