@@ -1238,7 +1238,7 @@ function MeetupCard({
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-bold">Update my status</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Let your Muddies know where you are.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Keep the shared meetup journey in sync.</p>
               </div>
               <button
                 type="button"
@@ -1272,7 +1272,7 @@ function MeetupCard({
                 type="button"
                 onClick={() => {
                   setStatusOpen(false);
-                  update({ action: "arrival", arrival: "here" });
+                  update(m.beaconStatus === "locked" ? { action: "arrival", arrival: "here" } : { action: "beacon" });
                 }}
                 className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
               >
@@ -1281,7 +1281,9 @@ function MeetupCard({
                 </span>
                 <span>
                   <span className="block text-sm font-bold">{"I'm here"}</span>
-                  <span className="block text-xs text-muted-foreground">{"I've arrived at the agreed place"}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {m.beaconStatus === "locked" ? "Confirm you've reached the meetup point" : "Set or confirm the Meetup Glow point"}
+                  </span>
                 </span>
               </button>
 
@@ -1322,7 +1324,7 @@ function MeetupCard({
                 type="button"
                 onClick={() => {
                   setStatusOpen(false);
-                  update({ action: "arrival", arrival: "left" });
+                  setHomePromptOpen(true);
                 }}
                 className="flex w-full items-center gap-3 rounded-2xl bg-secondary/55 p-4 text-left"
               >
@@ -1334,6 +1336,44 @@ function MeetupCard({
                   <span className="block text-xs text-muted-foreground">{"I'm leaving now"}</span>
                 </span>
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {homePromptOpen && (
+        <div
+          className="fixed inset-0 z-[82] flex items-end justify-center bg-black/55 px-2"
+          onClick={() => setHomePromptOpen(false)}
+        >
+          <section
+            className="w-full max-w-xl rounded-t-[28px] border border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold">Heading home?</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              End your part of the meetup, or let your Muddies know when you get home.
+            </p>
+            <div className="mt-5 grid gap-2">
+              <Button
+                variant="outline"
+                className="h-12 rounded-2xl"
+                onClick={() => {
+                  setHomePromptOpen(false);
+                  update({ action: "arrival", arrival: "left" });
+                }}
+              >
+                I'm good
+              </Button>
+              <Button
+                className="h-12 rounded-2xl"
+                onClick={() => {
+                  setHomePromptOpen(false);
+                  update({ action: "home_start" });
+                }}
+              >
+                Let my Muddies know when I'm home
+              </Button>
             </div>
           </section>
         </div>
