@@ -16,7 +16,7 @@ const composer = plans.slice(plans.indexOf("function CreatePlanModal"), plans.in
 
 describe("the person travels with the tap", () => {
   it("carries the Muddy in the link", () => {
-    expect(home).toContain("`/plans?create=1&with=${encodeURIComponent(muddyId)}`");
+    expect(home).toContain("`/meet-up?create=1&with=${encodeURIComponent(muddyId)}`");
   });
 
   it("reads it back in the composer", () => {
@@ -53,12 +53,12 @@ describe("the person travels with the tap", () => {
 
 describe("nearby context is a person, never a location", () => {
   it("passes only the Muddy id", () => {
-    /* Scoped to the make_plan BRANCH. A wider slice ran into the nearby hero
+    /* Scoped to the make_meetup BRANCH. A wider slice ran into the nearby hero
      * markup, where proximityLevel is legitimately rendered -- flagging it
      * would have forced unrelated UI to rename a prop for a privacy rule. */
     const branch = home.slice(
-      home.indexOf('if (action === "make_plan")'),
-      home.indexOf("startTransition(async () => {", home.indexOf('if (action === "make_plan")'))
+      home.indexOf('if (action === "make_meetup")'),
+      home.indexOf("startTransition(async () => {", home.indexOf('if (action === "make_meetup")'))
     );
     for (const leak of ["proximityLevel", "glowStrength", "latitude", "longitude", "distance"]) {
       expect(branch).not.toContain(leak);
