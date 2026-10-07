@@ -11,7 +11,6 @@ import { loadBuddyScore, type BuddyScoreData } from "@/lib/engagement/buddy-scor
 export type SharedActivityCounts = {
   muddyCount?: number;
   momentCount?: number;
-  completedSafeArrivalCount?: number;
 };
 import { profileIdentityAccess, type ProfileIdentitySummary } from "@/lib/profile/identity";
 import type { ViewerRelationship } from "@/lib/profile/rules";
@@ -24,32 +23,16 @@ async function loadOwnActivity(
   userId: string,
   shared: SharedActivityCounts = {}
 ): Promise<NonNullable<ProfileIdentitySummary["activity"]>> {
-  // Three of these counts are the SAME fact Journey already counts, with
-  // byte-identical filters, so on a Profile request they are resolved once and
-  // passed in. Plans are deliberately NOT shared: Identity counts completed
-  // plans while Journey counts non-draft ones -- same table, different fact.
-  const [friendships, moments, createdPlans, participations, safeArrivals, meetupParticipations] = await Promise.all([
+  // Friendship and Moment counts may already be loaded by the Profile route.
+  // Meetup completion is resolved from current Meetup participant + lifecycle records.
+  const [friendships, moments, meetupParticipations] = await Promise.all([
     shared.muddyCount !== undefined
       ? Promise.resolve({ count: shared.muddyCount })
       : admin.from("friendships").select("id", { count: "exact", head: true }).or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
     shared.momentCount !== undefined
       ? Promise.resolve({ count: shared.momentCount })
       : admin.from("moments").select("id", { count: "exact", head: true }).eq("author_id", userId).in("status", ["active", "expired"]),
-    admin.from("plans").select("id").eq("creator_id", userId).eq("status", "completed"),
-    admin.from("plan_participants").select("plan_id").eq("user_id", userId).eq("rsvp_status", "going"),
-    shared.completedSafeArrivalCount !== undefined
-      ? Promise.resolve({ count: shared.completedSafeArrivalCount })
-      : admin.from("safe_arrival_sessions").select("id", { count: "exact", head: true }).eq("traveller_id", userId).eq("status", "completed"),
     admin.from("meetup_participants").select("meetup_id").eq("user_id", userId).eq("response", "accepted")
-  ]);
-
-  const participatingPlanIds = [...new Set((participations.data ?? []).map((row) => row.plan_id))];
-  const completedParticipating = participatingPlanIds.length
-    ? await admin.from("plans").select("id").in("id", participatingPlanIds).eq("status", "completed")
-    : { data: [] };
-  const completedPlanIds = new Set([
-    ...(createdPlans.data ?? []).map((row) => row.id),
-    ...(completedParticipating.data ?? []).map((row) => row.id)
   ]);
 
   const participatingMeetupIds = [...new Set((meetupParticipations.data ?? []).map((row) => row.meetup_id))];
@@ -61,8 +44,6 @@ async function loadOwnActivity(
   return {
     muddyCount: friendships.count ?? 0,
     momentCount: moments.count ?? 0,
-    completedPlanCount: completedPlanIds.size,
-    completedSafeArrivalCount: safeArrivals.count ?? 0,
     completedMeetupCount: completedMeetupIds.size
   };
 }
