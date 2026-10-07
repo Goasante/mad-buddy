@@ -36,7 +36,7 @@ import { useCountdownResume } from "@/hooks/use-countdown-clock";
 import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
 import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
 import { MeetNewPeople, MeetNewPeopleSafety, type MeetupDiscoveryAction } from "@/components/meetups/meet-new-people";
-import type { MeetupDiscoveryHub } from "@/lib/meetups/discovery";
+import { MEETUP_DISCOVERY_CATEGORY_OPTIONS, discoveryCategoryLabel, type MeetupDiscoveryCategory, type MeetupDiscoveryHub } from "@/lib/meetups/discovery";
 
 export type MeetupSaveAction = (input: unknown, create?: boolean) => Promise<{ ok: boolean; message: string }>;
 
@@ -500,6 +500,7 @@ function CreateMeetup({
   const [mode, setMode] = useState<MeetupMode>("come_over");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [place, setPlace] = useState("");
+  const [category, setCategory] = useState<MeetupDiscoveryCategory>("anything");
   const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 30 * 60_000)));
   const [minStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 60_000)));
   const [note, setNote] = useState("");
@@ -568,6 +569,7 @@ function CreateMeetup({
       participantIds: selectedIds,
       placeLabel: place,
       note,
+      category,
       startsAt: new Date(startsAt).toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       requestKey: requestKey.current
@@ -703,6 +705,33 @@ function CreateMeetup({
             </div>
 
             <div>
+              <label className="mb-2 block text-sm font-bold">Interest</label>
+              <div className="flex flex-wrap gap-2">
+                {MEETUP_DISCOVERY_CATEGORY_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      resetRequestKey();
+                      setCategory(option.id);
+                    }}
+                    className={[
+                      "rounded-full border px-3 py-2 text-xs font-semibold transition",
+                      category === option.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-muted-foreground"
+                    ].join(" ")}
+                  >
+                    {option.emoji} {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                This stays subtle in the Meetup itself and gives its Home card the right artwork.
+              </p>
+            </div>
+
+            <div>
               <label className="mb-2 block text-sm font-bold">Date & time</label>
               <input
                 type="datetime-local"
@@ -801,6 +830,10 @@ function CreateMeetup({
                 <p className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-primary" />
                   {place}
+                </p>
+                <p className="flex items-center gap-2 text-muted-foreground">
+                  <Users className="h-4 w-4 text-primary" />
+                  ${discoveryCategoryLabel(category)}
                 </p>
                 <p className="flex items-center gap-2">
                   <CalendarClock className="h-4 w-4 text-primary" />
