@@ -76,6 +76,8 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
       }
     }
   }
+  if (create) await recordMilestone(admin, actorId, "first_meetup_created");
+
   revalidatePath("/meet-up");
   revalidatePath("/dashboard");
   revalidatePath("/buddy-score");
