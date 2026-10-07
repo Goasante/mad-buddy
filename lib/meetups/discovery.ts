@@ -22,10 +22,13 @@ export const MEETUP_DISCOVERY_CATEGORY_OPTIONS: ReadonlyArray<{
   { id: "food", label: "Food", emoji: "🍽️" },
   { id: "sports", label: "Sports", emoji: "⚽" },
   { id: "football", label: "Football", emoji: "🥅" },
+  { id: "gym", label: "Gym", emoji: "🏋️" },
   { id: "walk", label: "Outdoors", emoji: "🌿" },
   { id: "gaming", label: "Gaming", emoji: "🎮" },
   { id: "study", label: "Study", emoji: "📚" },
   { id: "movie", label: "Movies", emoji: "🎬" },
+  { id: "drinks", label: "Drinks", emoji: "🥤" },
+  { id: "drive", label: "Drive", emoji: "🚗" },
   { id: "party", label: "Social", emoji: "🎉" },
   { id: "chill", label: "Chill", emoji: "✨" },
   { id: "anything", label: "Other", emoji: "•••" }
