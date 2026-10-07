@@ -11,6 +11,16 @@ import { isValidTimeZone } from "@/lib/time/timezone";
 import { processMeetupNotifications } from "@/lib/meetups/notifications";
 import { logBackendEvent } from "@/lib/observability/logger";
 
+type MeetupCategoryWriter = {
+  from: (table: "meetups") => {
+    update: (values: { category: string }) => {
+      eq: (column: "id", value: string) => {
+        eq: (column: "creator_id", value: string) => Promise<{ error: { message?: string } | null }>;
+      };
+    };
+  };
+};
+
 const ERRORS: Record<string, string> = {
   MEETUP_CHANGED: "The time has changed. Refresh and review the new invitation.",
   MEETUP_NOT_MUDDIES: "Choose current Muddies who can receive your invitation.",
@@ -52,7 +62,7 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
         ? data.id
         : null;
     if (meetupId) {
-      const categoryUpdate = await admin
+      const categoryUpdate = await (admin as unknown as MeetupCategoryWriter)
         .from("meetups")
         .update({ category: value.category })
         .eq("id", meetupId)
