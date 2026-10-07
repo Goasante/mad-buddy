@@ -17,14 +17,14 @@ export function useMeetupLocationSync(enabled: boolean) {
   const inFlight = useRef(false);
 
   const refresh = useCallback(() => {
-    if (PLATFORM_KIND !== "web" || !enabled || inFlight.current || document.visibilityState !== "visible") return;
+    if (!enabled || inFlight.current || document.visibilityState !== "visible") return;
     inFlight.current = true;
     void syncCurrentLocation().finally(() => {
       inFlight.current = false;
     });
   }, [enabled]);
   useEffect(() => {
-    if (PLATFORM_KIND !== "web" || !enabled) return;
+    if (!enabled) return;
     const initial = window.setTimeout(refresh, 0);
     const interval = window.setInterval(refresh, REFRESH_MS);
     const onVisible = () => {
