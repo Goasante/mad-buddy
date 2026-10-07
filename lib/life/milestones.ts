@@ -65,9 +65,9 @@ function completedAnniversaryYears(createdAtMs: number, nowMs: number): number {
 }
 
 export function milestoneLabel(code: MilestoneCode): string {
-  if (code === "first_plan_together") return "First plan together";
-  if (code === "five_plans_together") return "Five plans together";
-  if (code === "ten_plans_together") return "Ten plans together";
+  if (code === "first_plan_together") return "First Meetup together";
+  if (code === "five_plans_together") return "Five Meetups together";
+  if (code === "ten_plans_together") return "Ten Meetups together";
   if (code === "first_reconnect") return "Reconnected";
   const year = Number(code.slice("anniversary_year_".length));
   return year === 1 ? "One year as Muddies" : `${year} years as Muddies`;
@@ -113,7 +113,7 @@ export function upcomingMilestoneReminders(facts: MilestoneFacts, nowMs: number)
 export function milestoneReminderCopy(reminder: UpcomingMilestoneReminder, friendName: string) {
   const name = friendName.trim() || "your Muddy";
   if (reminder.kind === "plan_threshold") {
-    return { title: "One plan from a milestone", body: `One more completed plan with ${name} reaches ${reminder.label.toLowerCase()}.` };
+    return { title: "One Meetup from a milestone", body: `One more completed Meetup with ${name} reaches ${reminder.label.toLowerCase()}.` };
   }
   const days = reminder.daysRemaining ?? 1;
   return {
