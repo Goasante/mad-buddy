@@ -49,7 +49,8 @@ const MILESTONE_LABELS: Partial<Record<MilestoneName, string>> = {
   first_muddy_added: "First Muddy added",
   first_status_created: "First status shared",
   first_wave_sent: "First Wave sent",
-  first_glow_enabled: "Glow used for the first time"
+  first_glow_enabled: "Glow used for the first time",
+  first_meetup_created: "First Meetup created"
 };
 
 export function completedProgressMilestones(
