@@ -173,7 +173,7 @@ export const MANAGED_FEATURES = [
     key: LIFE_MILESTONES_FLAG,
     title: "Friendship milestones",
     category: "Life",
-    description: "Factual milestones such as a first plan together or a friendship anniversary.",
+    description: "Factual milestones such as a first Meetup together or a friendship anniversary.",
     enabledImpact: "Milestones appear in the timeline. They state facts and never imply relationship quality.",
     disabledImpact: "Milestones are hidden. The underlying events remain and can be shown later."
   }
