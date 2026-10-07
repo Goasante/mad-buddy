@@ -30,11 +30,9 @@ export async function GET(request: Request) {
   // reconciles.
   const score = await readBuddyScoreSnapshot(admin, auth.user.id);
 
-  // Identity and Journey each counted the same three facts with byte-identical
-  // filters, so a Profile GET issued them twice. Resolve them once here and
-  // pass them to both. Plans are NOT shared: Identity wants completed plans,
-  // Journey wants non-draft ones -- same table, different question.
-  const [muddyResult, momentResult, safeArrivalResult] = await Promise.all([
+  // Resolve shared lightweight profile facts once. Current Meetup activity is
+  // loaded from the Meetup authority by Identity/Journey for their distinct questions.
+  const [muddyResult, momentResult] = await Promise.all([
     admin
       .from("friendships")
       .select("id", { count: "exact", head: true })
@@ -44,17 +42,11 @@ export async function GET(request: Request) {
       .from("moments")
       .select("id", { count: "exact", head: true })
       .eq("author_id", auth.user.id)
-      .in("status", ["active", "expired"]),
-    admin
-      .from("safe_arrival_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("traveller_id", auth.user.id)
-      .eq("status", "completed")
+      .in("status", ["active", "expired"])
   ]);
   const activity = {
     muddyCount: muddyResult.count ?? 0,
-    momentCount: momentResult.count ?? 0,
-    completedSafeArrivalCount: safeArrivalResult.count ?? 0
+    momentCount: momentResult.count ?? 0
   };
 
   const [{ data: birthDetails }, { data: privacy }, plan, identity, journey] = await Promise.all([
