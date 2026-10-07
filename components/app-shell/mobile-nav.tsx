@@ -52,17 +52,13 @@ export type MobileTab = {
 /**
  * The four bottom-bar destinations, split two either side of the Orb.
  *
- * Plans and Profile were removed rather than demoted: Plans already has a
- * section on Home, and Profile is reachable from the account sheet the header
- * menu opens — so both were paying for a permanent tab they did not need.
- * Linkr and UpFor have no other persistent entry point, which is what earns
- * them the slot.
+ * Plans and Profile were removed rather than demoted. Meetups now owns the former UpFor slot and deliberately keeps the established UpFor brand icon, so the navigation position and visual memory stay stable while the product itself converges on Meetups.
  */
 export const MOBILE_TABS = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
   { href: "/linkr", label: "Linkr", icon: Compass, brandIcon: "linkr" },
-  { href: "/hangout-mode", label: "UpFor", icon: Hand, brandIcon: "upfor" }
+  { href: "/meet-up", label: "Meetups", icon: Hand, brandIcon: "upfor" }
   // `satisfies` checks the shape WITHOUT widening href to string, so each
   // literal path survives for Next to narrow to a Route.
 ] satisfies MobileTab[];
@@ -119,7 +115,7 @@ export function MobileNav({
    *
    * Omitted on web, where every tab's destination exists -- so web renders
    * exactly as before. The native shell passes `isBuiltForMobile`, which
-   * reports Linkr and UpFor as absent; those tabs keep their slot (the
+   * reports Linkr and Meetups as absent; those tabs keep their slot (the
    * four-tab layout around the Orb stays identical on both platforms) but are
    * dimmed and cannot navigate.
    *
