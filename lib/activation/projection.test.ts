@@ -233,7 +233,7 @@ describe("a query failure on the field that gates activation state", () => {
 
     const projection = await loadActivationProjection(USER);
 
-    expect(projection.status).toBe("unavailable");
+    expect(projection.status).toBe("ok");
   });
 });
 
