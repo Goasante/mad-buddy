@@ -76,8 +76,6 @@ const CAPABILITY_LABELS: Partial<Record<BooleanEntitlementKey, string>> = {
   // describes a configuration where an admin has restricted it.
   public_moments: "Publish images to Air",
   advanced_visibility_schedules: "Scheduled visibility and Ghost Mode",
-  recurring_plans: "Recurring plans",
-  multiple_plan_polls: "Multiple polls per plan",
   custom_glow_styles: "Custom glow styles",
   friendship_recaps: "Friendship recaps",
   event_circle_creation: "Create event circles",
