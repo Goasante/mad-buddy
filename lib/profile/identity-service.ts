@@ -24,27 +24,22 @@ async function loadOwnActivity(
   shared: SharedActivityCounts = {}
 ): Promise<NonNullable<ProfileIdentitySummary["activity"]>> {
   // Friendship and Moment counts may already be loaded by the Profile route.
-  // Meetup completion is resolved from current Meetup participant + lifecycle records.
-  const [friendships, moments, meetupParticipations] = await Promise.all([
+  // Completed Meetups come from the durable score ledger because operational
+  // Meetup rows are intentionally cleaned up after their short retention.
+  const [friendships, moments, completedMeetups] = await Promise.all([
     shared.muddyCount !== undefined
       ? Promise.resolve({ count: shared.muddyCount })
       : admin.from("friendships").select("id", { count: "exact", head: true }).or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`).is("ended_at", null),
     shared.momentCount !== undefined
       ? Promise.resolve({ count: shared.momentCount })
       : admin.from("moments").select("id", { count: "exact", head: true }).eq("author_id", userId).in("status", ["active", "expired"]),
-    admin.from("meetup_participants").select("meetup_id").eq("user_id", userId).eq("response", "accepted")
+    admin.from("buddy_score_ledger").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("event_type", "meetup_completed")
   ]);
-
-  const participatingMeetupIds = [...new Set((meetupParticipations.data ?? []).map((row) => row.meetup_id))];
-  const endedMeetups = participatingMeetupIds.length
-    ? await admin.from("meetups").select("id").in("id", participatingMeetupIds).eq("status", "ended")
-    : { data: [] };
-  const completedMeetupIds = new Set((endedMeetups.data ?? []).map((row) => row.id));
 
   return {
     muddyCount: friendships.count ?? 0,
     momentCount: moments.count ?? 0,
-    completedMeetupCount: completedMeetupIds.size
+    completedMeetupCount: completedMeetups.count ?? 0
   };
 }
 
