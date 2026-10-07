@@ -81,7 +81,7 @@ const tabs: Array<{ id: "all" | "unread" | "groups" | "plans"; label: string; ic
   { id: "all", label: "All", icon: null },
   { id: "unread", label: "Unread", icon: null },
   { id: "groups", label: "Groups", icon: UsersRound },
-  { id: "plans", label: "Plans", icon: CalendarCheck2 }
+  { id: "plans", label: "Meetups & Events", icon: CalendarCheck2 }
 ];
 
 type TabId = (typeof tabs)[number]["id"];
@@ -970,7 +970,7 @@ export function MessagesPageContent({
               promise the group rooms below it do not keep. It now names what
               is actually here. */}
           <p className="mt-1 text-sm text-muted-foreground">
-            Your conversations with Muddies, Groups and Plans.
+            Your conversations with Muddies, Groups, Meetups and Events.
           </p>
         </div>
         <Button
