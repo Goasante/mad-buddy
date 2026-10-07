@@ -209,6 +209,6 @@ describe("the wired set stays inside the approved vocabulary", () => {
     }
     /* The fallback is the only state that may legitimately sit at tier 6. */
     const atFallbackTier = SMART_CARD_IDS.filter((id) => smartCardTier(id) === 6);
-    expect(atFallbackTier).toEqual(["suggestions", "upfor_fallback", "meetup_fallback", "core_fallback"]);
+    expect(atFallbackTier).toEqual(["suggestions", "meetup_fallback", "core_fallback"]);
   });
 });
