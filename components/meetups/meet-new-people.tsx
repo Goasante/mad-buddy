@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ArrowLeft,
   Check,
@@ -157,6 +157,7 @@ export function MeetNewPeople({
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<MeetupDiscoveryItem | null>(null);
   const [message, setMessage] = useState("");
+  const locationSynced = useRef(false);
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<MeetupDiscoveryCategory>("coffee");
@@ -167,6 +168,19 @@ export function MeetNewPeople({
 
   const canCreate = hub.activeSlots < hub.maxActiveSlots;
   const wordCount = title.trim() ? title.trim().split(/\s+/).length : 0;
+
+  useEffect(() => {
+    if (locationSynced.current) return;
+    locationSynced.current = true;
+    void (async () => {
+      const location = await syncCurrentLocation();
+      if (!location.ok) {
+        setMessage(location.message ?? "Turn on location to see people nearby.");
+        return;
+      }
+      await onRefresh();
+    })();
+  }, [onRefresh]);
   const myActive = useMemo(
     () => hub.mine
       .filter((item) => item.status === "active")
