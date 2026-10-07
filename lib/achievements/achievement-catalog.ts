@@ -95,40 +95,40 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
     notification: unlocked("Friendly Five")
   },
   {
-    id: "first_plan",
-    name: "First Plan",
-    description: "You completed your first Plan.",
+    id: "first_meetup",
+    name: "First Meetup",
+    description: "You completed your first Meetup.",
     iconPath: `${BADGE_DIR}/First Plan.png`,
     category: "connection",
     criteria: { type: "first_time", threshold: 1 },
-    notification: unlocked("First Plan")
+    notification: unlocked("First Meetup")
   },
   {
-    id: "plan_maker",
-    name: "Plan Maker",
-    description: "You completed 5 Plans.",
+    id: "meetup_maker",
+    name: "Meetup Maker",
+    description: "You completed 5 Meetups.",
     iconPath: `${BADGE_DIR}/Plan Maker.png`,
     category: "connection",
     criteria: { type: "count", threshold: 5 },
-    notification: unlocked("Plan Maker")
+    notification: unlocked("Meetup Maker")
   },
   {
-    id: "plan_regular",
-    name: "Plan Regular",
-    description: "You completed 10 Plans.",
+    id: "meetup_regular",
+    name: "Meetup Regular",
+    description: "You completed 10 Meetups.",
     iconPath: `${BADGE_DIR}/Plan Regular.png`,
     category: "connection",
     criteria: { type: "count", threshold: 10 },
-    notification: unlocked("Plan Regular")
+    notification: unlocked("Meetup Regular")
   },
   {
     id: "open_to_plans",
-    name: "Open to Plans",
-    description: "You turned on Socialize for the first time.",
+    name: "Open to Connect",
+    description: "You turned on Linkr for the first time.",
     iconPath: `${BADGE_DIR}/Open to Plans.png`,
     category: "connection",
     criteria: { type: "first_time", threshold: 1 },
-    notification: unlocked("Open to Plans")
+    notification: unlocked("Open to Connect")
   },
   {
     id: "first_moment",
@@ -232,7 +232,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "good_check_in",
     name: "Good Check-In",
-    description: "You completed a Safe Arrival.",
+    description: "You completed a travel safety check-in.",
     iconPath: `${BADGE_DIR}/Good Check-In.png`,
     category: "safety",
     criteria: { type: "first_time", threshold: 1 },
@@ -241,7 +241,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "trusted_contact",
     name: "Trusted Contact",
-    description: "You added a trusted Safe Arrival contact.",
+    description: "You added someone you trust for a travel safety check-in.",
     iconPath: `${BADGE_DIR}/Trusted Contact.png`,
     category: "safety",
     criteria: { type: "first_time", threshold: 1 },
@@ -250,7 +250,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "safe_traveller",
     name: "Safe Traveller",
-    description: "You completed 5 Safe Arrivals.",
+    description: "You completed 5 travel safety check-ins.",
     iconPath: `${BADGE_DIR}/Safe Traveller.png`,
     category: "safety",
     criteria: { type: "count", threshold: 5 },
@@ -259,7 +259,7 @@ export const ACHIEVEMENT_CATALOG: readonly AchievementDefinition[] = [
   {
     id: "reliable_watcher",
     name: "Reliable Watcher",
-    description: "You watched over 5 Safe Arrival journeys.",
+    description: "You supported 5 travel safety check-in journeys.",
     iconPath: `${BADGE_DIR}/Reliable Watcher.png`,
     category: "safety",
     criteria: { type: "count", threshold: 5 },
