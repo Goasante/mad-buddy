@@ -31,16 +31,16 @@ describe("a Plan invitation opens that Plan", () => {
   it("deep-links to the exact Plan, not the index", () => {
     expect(resolveNotificationDestination(`plan:${ID}`)).toEqual({
       type: "internal",
-      href: `/plans?plan=${ID}`
+      href: "/meet-up"
     });
   });
 
   it("falls back to the section when the id is not a real uuid", () => {
     // A deleted or malformed record must land somewhere valid, never crash.
-    expect(resolveNotificationDestination("plan:not-a-uuid")).toEqual({ type: "internal", href: "/plans" });
+    expect(resolveNotificationDestination("plan:not-a-uuid")).toEqual({ type: "internal", href: "/meet-up" });
     expect(resolveNotificationDestination("plan:https://evil.example")).toEqual({
       type: "internal",
-      href: "/plans"
+      href: "/meet-up"
     });
   });
 
@@ -52,7 +52,8 @@ describe("a Plan invitation opens that Plan", () => {
     expect(resolveNotificationDestination("system_alert")).toBeNull();
   });
 
-  it("opens the Plan named in ?plan= through the one detail component", () => {
+  it("keeps the legacy Plan UI internal while the public route redirects", () => {
+    expect(planPage).toContain('redirect("/meet-up")');
     expect(plans).toContain('searchParams.get("plan")');
     expect(plans).toContain("<PlanDetailsModal");
     // One authority: the index card, the deep link and post-create all set the
@@ -84,7 +85,7 @@ describe("Plan Chat is offered only to an actual member", () => {
   it("only fills the id in for a joined member, server-side", () => {
     // Both projections must gate identically: the Plans page and the shared
     // service each build PlanSummary independently.
-    for (const source of [service, planPage]) {
+    for (const source of [service]) {
       expect(source).toContain('.eq("context_type", "plan")');
       expect(source).toContain('.eq("status", "joined")');
       expect(source).toContain("myConversationByPlan");
