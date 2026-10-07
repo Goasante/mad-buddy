@@ -92,7 +92,7 @@ describe("a waiting Muddy request is an obligation", () => {
         } as unknown as SmartCardInput["agenda"][number]
       ]
     });
-    expect(card?.id).toBe("plan_rsvp");
+    expect(card?.id).toBe("muddy_request");
   });
 });
 
