@@ -76,7 +76,7 @@ export function PlanStack({
   plans: readonly ComingUpRenderItem[];
   /** Clock for countdown labels; supplied by the surface that already ticks. */
   nowMs?: number;
-  onJoin: (plan: HomeUpcomingPlan) => void;
+  onJoin?: (plan: HomeUpcomingPlan) => void;
   pending?: boolean;
 }) {
   const reducedMotion = useReducedMotion();
@@ -203,14 +203,14 @@ function AgendaCard({
   pending
 }: {
   item: ComingUpRenderItem;
-  onJoin: (plan: HomeUpcomingPlan) => void;
+  onJoin?: (plan: HomeUpcomingPlan) => void;
   nowMs: number;
   pending: boolean;
 }) {
   if ("kind" in item && item.kind === "upfor") return <UpForAgendaCard upfor={item} nowMs={nowMs} />;
   if (isMeetupAgendaItem(item)) return <MeetupAgendaCard meetup={item} />;
   if (isEventAgendaItem(item)) return <EventAgendaCard event={item} />;
-  return <SocializePlanCard plan={item} onJoin={onJoin} pending={pending} />;
+  return onJoin ? <SocializePlanCard plan={item} onJoin={onJoin} pending={pending} /> : null;
 }
 
 function MeetupAgendaCard({ meetup }: { meetup: ComingUpMeetupItem }) {
