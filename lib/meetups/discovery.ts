@@ -43,7 +43,7 @@ export const meetupDiscoveryCreateSchema = z.object({
   style: meetupDiscoveryStyleSchema,
   startsAt: z.string().datetime({ offset: true }),
   timezone: z.string().min(1).max(60),
-  durationMinutes: z.union([z.literal(30), z.literal(60), z.literal(120), z.literal(240)]),
+  durationMinutes: z.union([z.literal(0), z.literal(30), z.literal(60), z.literal(120), z.literal(240)]),
   requestKey: z.string().uuid()
 }).strict();
 
@@ -62,7 +62,8 @@ export const meetupDiscoveryCommandSchema = z.discriminatedUnion("action", [
     response: z.enum(["accepted","declined"])
   }).strict(),
   z.object({ action: z.literal("close"), id: z.string().uuid() }).strict(),
-  z.object({ action: z.literal("refresh"), id: z.string().uuid() }).strict()
+  z.object({ action: z.literal("refresh"), id: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("delete"), id: z.string().uuid() }).strict()
 ]);
 
 export const meetupDiscoveryPersonSchema = z.object({
@@ -91,6 +92,9 @@ export const meetupDiscoveryItemSchema = z.object({
   interestLimit: z.number().int(),
   interestCount: z.number().int(),
   refreshCount: z.number().int().min(0).max(2),
+  attendeeCount: z.number().int().default(0),
+  renewable: z.boolean().default(false),
+  meetupStatus: z.enum(["active", "ended", "cancelled"]).nullable().optional(),
   myInterestStatus: z.enum(["pending", "accepted", "declined", "withdrawn"]).nullable(),
   meetupId: z.string().uuid().nullable(),
   conversationId: z.string().uuid().nullable(),
@@ -100,6 +104,7 @@ export const meetupDiscoveryItemSchema = z.object({
 export const meetupDiscoveryHubSchema = z.object({
   nearby: z.array(meetupDiscoveryItemSchema),
   mine: z.array(meetupDiscoveryItemSchema),
+  requests: z.array(meetupDiscoveryItemSchema).default([]),
   activeSlots: z.number().int().min(0),
   maxActiveSlots: z.number().int().positive()
 });

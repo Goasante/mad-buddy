@@ -4,6 +4,7 @@ import {
   meetupUpdateSchema,
   canUpdateArrival,
   meetupPhase,
+  meetupTimeState,
   isMeetupHintFresh,
   meetupReadyForHome,
   type Meetup
@@ -107,6 +108,27 @@ describe("Meet Up", () => {
     expect(meetupReadyForHome({ ...meetup, members: [member(a), { ...member(b), response: "invited" }] }, a, now)).toBe(false);
     expect(meetupReadyForHome({ ...meetup, members: [member(a), { ...member(b), response: "declined" }] }, a, now)).toBe(false);
     expect(meetupReadyForHome(meetup, "10000000-0000-4000-8000-000000000003", now)).toBe(false);
+  });
+
+  it("keeps a confirmed group on Home while other invitations await a reply", () => {
+    const c = "10000000-0000-4000-8000-000000000003";
+    expect(meetupReadyForHome({ ...meetup, members: [member(a), member(b), { ...member(c), response: "invited" }] }, a, now)).toBe(true);
+  });
+
+  it("labels the arrival window as coming up until the scheduled start", () => {
+    const start = Date.parse(meetup.startsAt);
+    expect(meetupTimeState(meetup, start - 3 * 60 * 60_000)).toBe("Upcoming");
+    expect(meetupTimeState(meetup, start - 2 * 60 * 60_000)).toBe("Coming up · arrival updates open");
+    expect(meetupTimeState(meetup, start - 1)).toBe("Coming up · arrival updates open");
+    expect(meetupTimeState(meetup, start)).toBe("Happening now");
+    expect(meetupTimeState({ ...meetup, status: "ended", endReason: "expired" }, start)).toBe("Expired");
+  });
+
+  it("accepts an agreed-place update without accepting client coordinates or owner ids", () => {
+    const input = { action: "place", id: a, revision: 1, requestKey: b, placeLabel: "Cafe" };
+    expect(meetupUpdateSchema.safeParse(input).success).toBe(true);
+    expect(meetupUpdateSchema.safeParse({ ...input, placeLabel: " " }).success).toBe(false);
+    expect(meetupUpdateSchema.safeParse({ ...input, latitude: 0 }).success).toBe(false);
   });
 
   it("routes Meetups and retired coordination links into Meetups", () => {

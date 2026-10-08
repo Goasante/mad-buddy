@@ -24,6 +24,7 @@ describe("Meet New People product rules", () => {
       requestKey: "11111111-1111-4111-8111-111111111111"
     } as const;
     expect(meetupDiscoveryCreateSchema.safeParse({ ...base, title: "Coffee and conversation" }).success).toBe(true);
+    expect(meetupDiscoveryCreateSchema.safeParse({ ...base, title: "Coffee", durationMinutes: 0 }).success).toBe(true);
     expect(meetupDiscoveryCreateSchema.safeParse({ ...base, title: "One two three four five six" }).success).toBe(false);
   });
 

@@ -27,7 +27,7 @@ type MeetupCategoryWriter = {
 };
 
 const ERRORS: Record<string, string> = {
-  MEETUP_CHANGED: "The time has changed. Refresh and review the new invitation.",
+  MEETUP_CHANGED: "The meetup details changed. Refresh and review the latest arrangement.",
   MEETUP_NOT_MUDDIES: "Choose current Muddies who can receive your invitation.",
   MEETUP_ACCESS: "This meetup is no longer available to you.",
   MEETUP_ACCEPT_FIRST: "Wait until you and another participant have accepted, including the host.",
@@ -35,10 +35,12 @@ const ERRORS: Record<string, string> = {
   MEETUP_ENDED: "This meetup has ended.",
   MEETUP_LIMIT: "You have reached the active Meetup limit. End one before arranging another.",
   MEETUP_TIME: "Choose a future date and time.",
-  MEETUP_LOCATION_REQUIRED: "Mad Buddy needs a fresh location fix before setting the Meetup Glow point.",
-  MEETUP_HOST_BEACON: "The host needs to set the Meetup Glow point first.",
-  MEETUP_BEACON_MISMATCH: "You do not appear to be at the same meetup spot yet.",
-  MEETUP_BEACON_REQUIRED: "Set the Meetup Glow point before marking yourself here.",
+  MEETUP_LOCATION_REQUIRED: "Turn on location to confirm your arrival at the agreed place.",
+  MEETUP_HOST_BEACON: "The host needs to confirm they are at the agreed place first.",
+  MEETUP_BEACON_MISMATCH: "You appear to be at a different spot. Check the agreed place in Meetup Chat.",
+  MEETUP_BEACON_REQUIRED: "Confirm the arrival spot before marking yourself here.",
+  MEETUP_PLACE_REQUIRED: "Ask the organiser to save the agreed place before confirming arrival.",
+  MEETUP_PLACE_LOCKED: "The place cannot change after someone has confirmed meeting.",
   MEETUP_BEACON_LOCKED: "The meetup point cannot be reset after people confirm meeting."
 };
 
@@ -131,8 +133,9 @@ export async function saveMeetupCommand(actorId: string, input: unknown, create 
         if (value.arrival === "late") return `Everyone can see you're running about ${value.delayMinutes ?? 0} minutes late.`;
         if (value.arrival === "here") return "You're marked as here.";
         return "You've left the meetup.";
-      case "beacon": return "Meetup Glow point updated.";
-      case "reset_beacon": return "Meetup Glow point reset.";
+      case "place": return "Agreed place updated. Everyone has been notified.";
+      case "beacon": return "You’re marked as here.";
+      case "reset_beacon": return "Arrival spot reset.";
       case "met": return "You confirmed that you met.";
       case "suggest": return "New time suggested.";
       case "reschedule": return "Meetup moved. Everyone has been asked to confirm the new time.";

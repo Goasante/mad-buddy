@@ -36,6 +36,7 @@ export const meetupUpdateSchema = z.discriminatedUnion("action", [
   }).strict(),
   z.object({ ...commandFields, action: z.literal("suggest"), startsAt: z.string().datetime({ offset: true }) }).strict(),
   z.object({ ...commandFields, action: z.literal("reschedule"), startsAt: z.string().datetime({ offset: true }) }).strict(),
+  z.object({ ...commandFields, action: z.literal("place"), placeLabel: z.string().trim().min(1).max(120) }).strict(),
   z.object({ ...commandFields, action: z.literal("beacon") }).strict(),
   z.object({ ...commandFields, action: z.literal("reset_beacon") }).strict(),
   z.object({ ...commandFields, action: z.literal("home_start") }).strict(),
@@ -82,6 +83,8 @@ export const meetupSchema = z.object({
   expiresAt: z.string(),
   timezone: z.string(),
   status: z.enum(["active", "cancelled", "ended"]),
+  endedAt: z.string().nullable().optional(),
+  endReason: z.enum(["ended", "cancelled", "expired"]).nullable().optional(),
   revision: z.number().int(),
   beaconStatus: beaconStatusSchema,
   togetherAt: z.string().nullable(),
@@ -132,6 +135,16 @@ export function meetupPhase(meetup: Meetup, nowMs: number): "upcoming" | "active
   return "active";
 }
 
+export function meetupTimeState(meetup: Meetup, nowMs: number): string {
+  if (meetup.status === "cancelled") return "Cancelled";
+  if (meetup.status === "ended") return meetup.endReason === "expired" ? "Expired" : "Ended";
+  const start = Date.parse(meetup.startsAt);
+  if (nowMs >= Date.parse(meetup.expiresAt)) return "Expired";
+  if (nowMs < start) return nowMs >= start - 2 * 60 * 60_000
+    ? "Coming up · arrival updates open" : "Upcoming";
+  return "Happening now";
+}
+
 export function canUpdateArrival(meetup: Meetup, viewerId: string, nowMs: number): boolean {
   const mine = meetup.members.find((m) => m.userId === viewerId);
   const host = meetup.hostId ? meetup.members.find((m) => m.userId === meetup.hostId) : null;
@@ -150,11 +163,9 @@ export function canUpdateArrival(meetup: Meetup, viewerId: string, nowMs: number
 export function meetupReadyForHome(meetup: Meetup, viewerId: string, nowMs: number): boolean {
   const mine = meetup.members.find((member) => member.userId === viewerId);
   const accepted = meetup.members.filter((member) => member.response === "accepted").length;
-  const unresolved = meetup.members.some((member) => member.response === "invited");
   return meetup.status === "active"
     && mine?.response === "accepted"
     && accepted >= 2
-    && !unresolved
     && Date.parse(meetup.startsAt) > nowMs - 2 * 60 * 60_000;
 }
 
@@ -165,6 +176,7 @@ export function isMeetupHintFresh(observedAt: string | null | undefined, nowMs: 
 
 export const MEETUP_NOTIFICATION_COPY: Record<string, string> = {
   invited: "A Muddy invited you to meet. Open the invitation to respond.",
+  place_changed: "The agreed meetup place changed. Open the meetup to review it.",
   accepted: "A Muddy accepted your meetup invitation.",
   declined: "A Muddy cannot make this meetup.",
   suggested: "A Muddy suggested another time. Review their suggestion.",
