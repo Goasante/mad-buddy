@@ -2,7 +2,7 @@
 
 import { Compass, Hand, LockKeyhole, MessageCircle, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { BrandNavigationIcon } from "@/components/brand/brand-navigation-icon";
+import { NavigationGlyph, type NavigationGlyphName } from "@/components/app-shell/navigation-glyph";
 import type { BrandNavigationIconName } from "@/lib/brand/assets";
 import { MadBuddyOrb, ORB_HOME_HREF } from "@/components/app-shell/mad-buddy-orb";
 import { useFeatureAvailability } from "@/components/features/feature-availability-context";
@@ -49,11 +49,7 @@ export type MobileTab = {
   brandIcon?: BrandNavigationIconName;
 };
 
-/**
- * The four bottom-bar destinations, split two either side of the Orb.
- *
- * Plans and Profile were removed rather than demoted. Meetups now owns the former UpFor slot and deliberately keeps the established UpFor brand icon, so the navigation position and visual memory stay stable while the product itself converges on Meetups.
- */
+/** Four destinations split either side of Home; route metadata stays stable. */
 export const MOBILE_TABS = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
   { href: "/friends", label: "Muddies", icon: Users },
@@ -77,27 +73,10 @@ export function isNavigationItemActive(item: { href: string }, pathname: string)
 }
 
 /**
- * The app's single mobile bottom bar. Five fixed slots, identical for every
- * user — Messages, Muddies, the Mad Buddy Orb, Plans, Me:
- *
- *  - One nav, no variants. There used to be a separate "first-time" bar with
- *    a different tab set, which meant the bar a user learned on day one was
- *    not the bar they had on day thirty. Position is now stable for life.
- *  - The centre is the Mad Buddy Orb, and the Orb IS Home. It replaced the
- *    raised Create button: a "+" that opened a menu duplicated actions that
- *    already have homes (a Meetup starts on /meet-up, a Moment on /moments, a
- *    ping in a conversation), so the menu was a second route to places the
- *    app already had. Home moved into it because Home is the centre of the
- *    experience, not one tab among five.
- *  - Messages takes the left-most slot. It is where a conversation actually
- *    continues, and it is the destination people return to most.
- *  - "Me" is the personal hub entry. It points at the existing /profile
- *    route; no new or unsupported destination is introduced here.
- *
- * Lucide icons only, one size (26px) and one stroke weight, so the bar reads
- * as a single system. The active tab gets a filled pill plus its label; the
- * rest stay icon-only, which keeps the bar quiet and the current location
- * unmistakable. The Orb carries no glyph at all — see MadBuddyOrb.
+ * Shared five-slot navigation: Messages, Muddies, Home, Linkr, Meetups.
+ * The approved design uses equal slots, solid icons and permanent labels.
+ * The CSS owns the floating pill and inset active state; this component keeps
+ * route matching, feature gates, counts, tours and immersive hiding intact.
  */
 export function MobileNav({
   immersive = false,
@@ -226,7 +205,6 @@ function MobileNavTab({
   onUnavailable?: (label: string) => void;
 }) {
   const isActive = isNavigationItemActive({ href: tab.href }, pathname);
-  const Icon = tab.icon;
   const availability = useFeatureAvailability();
   const feature = featureForHref(tab.href);
   const locked = unavailable || Boolean(feature && availability && !availability[feature]);
@@ -244,11 +222,9 @@ function MobileNavTab({
     isActive ? "bg-primary/12 text-primary" : "text-muted-foreground"
   );
 
-  const iconNode = tab.brandIcon ? (
-    <BrandNavigationIcon name={tab.brandIcon} active={isActive} size={26} />
-  ) : (
-    <Icon className="h-[26px] w-[26px]" strokeWidth={isActive ? 2.25 : 1.75} aria-hidden="true" />
-  );
+  const glyph: NavigationGlyphName = tab.href === "/messages" ? "messages"
+    : tab.href === "/friends" ? "muddies" : tab.href === "/linkr" ? "linkr" : "meetups";
+  const iconNode = <NavigationGlyph name={glyph} className="h-[28px] w-[28px]" />;
 
   if (unavailable) {
     return (
@@ -279,6 +255,7 @@ function MobileNavTab({
           )}
         >
           <span className={iconWrapperClass}>{iconNode}{lockBadge}</span>
+          <span className="mobile-nav-label max-w-full truncate">{tab.label}</span>
         </button>
       </li>
     );
@@ -321,15 +298,10 @@ function MobileNavTab({
           {tab.href === "/messages" && messageUnreadCount > 0 ? <UnreadBadge count={messageUnreadCount} /> : null}
           {tab.href === "/friends" && muddyRequestCount > 0 ? <UnreadBadge count={muddyRequestCount} /> : null}
         </span>
-        {isActive ? (
-          // max-w-full + truncate: the label must be allowed to give way, or
-          // it re-imposes the width `min-w-0` just removed (MB-GOD-047). The
-          // accessible name is on the Link's aria-label, so a visually
-          // truncated label costs a screen-reader user nothing.
-          <span className="max-w-full truncate text-[10px] font-medium leading-none tracking-wide text-primary">
+        {/* Truncate only at enlarged text sizes; the accessible name stays complete. */}
+          <span className="mobile-nav-label max-w-full truncate">
             {tab.label}
           </span>
-        ) : null}
       </Link>
     </li>
   );
