@@ -26,7 +26,7 @@ function asLooseRpc(client: ReturnType<typeof createSupabaseAdminClient>): Loose
 }
 
 const ERROR_COPY: Record<string, string> = {
-  MEETUP_LIMIT: "You already have three active Meetups. Finish or end one before creating another.",
+  MEETUP_LIMIT: "You already have three open listings. Close one before creating another.",
   DISCOVERY_LOCATION_REQUIRED: "Turn on Glow and refresh your location before meeting new people nearby.",
   DISCOVERY_NOT_NEARBY: "This listing is no longer nearby or available to you.",
   DISCOVERY_FULL: "This listing has reached its response limit.",

@@ -324,7 +324,7 @@ export function MeetNewPeople({
           Meetups
         </button>
         <span className="ml-auto rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold">
-          {hub.activeSlots} of {hub.maxActiveSlots} active
+          {hub.activeSlots} of {hub.maxActiveSlots} open listings
         </span>
       </div>
 
@@ -350,7 +350,7 @@ export function MeetNewPeople({
           Start a listing
         </Button>
         {!canCreate ? (
-          <p className="mt-2 text-xs text-muted-foreground">You have used all {hub.maxActiveSlots} active Meetup slots.</p>
+          <p className="mt-2 text-xs text-muted-foreground">You have {hub.maxActiveSlots} open listings. Close one to create another.</p>
         ) : null}
       </div>
 
