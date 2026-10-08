@@ -27,6 +27,7 @@ function asLooseRpc(client: ReturnType<typeof createSupabaseAdminClient>): Loose
 
 const ERROR_COPY: Record<string, string> = {
   MEETUP_LIMIT: "You already have three open listings. Close one before creating another.",
+  DISCOVERY_CLOSE_FIRST: "Close this listing before deleting it.",
   DISCOVERY_LOCATION_REQUIRED: "Turn on Glow and refresh your location before meeting new people nearby.",
   DISCOVERY_NOT_NEARBY: "This listing is no longer nearby or available to you.",
   DISCOVERY_FULL: "This listing has reached its response limit.",
@@ -44,7 +45,7 @@ function commandError(message?: string) {
 }
 
 function emptyHub(): MeetupDiscoveryHub {
-  return { nearby: [], mine: [], activeSlots: 0, maxActiveSlots: 3 };
+  return { nearby: [], mine: [], requests: [], activeSlots: 0, maxActiveSlots: 3 };
 }
 
 function parseHub(value: unknown): MeetupDiscoveryHub {
@@ -181,8 +182,9 @@ export async function updateMeetupDiscovery(userId: string, input: unknown) {
     parsed.data.action === "edit" ? "Listing updated."
       : parsed.data.action === "interest" ? "Interested sent."
       : parsed.data.action === "withdraw" ? "Your interest was withdrawn."
-        : parsed.data.action === "refresh" ? "Listing refreshed."
-          : parsed.data.action === "close" ? "Listing closed."
+        : parsed.data.action === "refresh" ? "Listing renewed."
+          : parsed.data.action === "close" ? "Listing closed. Existing interest stays in your inbox."
+          : parsed.data.action === "delete" ? "Listing deleted. Your arranged Meetup and chat are unchanged."
             : parsed.data.response === "accepted" ? "Accepted. Your Meetup and chat are ready."
               : "Declined. A response slot is open again.";
 

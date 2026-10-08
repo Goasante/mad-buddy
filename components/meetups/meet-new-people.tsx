@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowLeft,
-  Check,
   Clock3,
   MessageCircle,
   Pencil,
@@ -12,7 +11,7 @@ import {
   ShieldCheck,
   UserRound,
   Users,
-  X
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -89,7 +88,8 @@ function ListingCard({
   onOpen: () => void;
 }) {
   const remaining = Math.max(0, item.interestLimit - item.interestCount);
-  const expired = item.status !== "active" || Date.parse(item.listingExpiresAt) <= nowMs;
+  const expired = item.status !== "active" || Date.parse(item.listingExpiresAt) <= nowMs || Date.parse(item.startsAt) <= nowMs;
+  const declined = item.myInterestStatus === "declined";
   return (
     <article className="overflow-hidden rounded-[26px] border border-border/80 bg-card shadow-[0_10px_30px_hsl(var(--shadow)/0.08)]">
       <button type="button" onClick={onOpen} aria-label={`View ${item.title}`} className="focus-ring block w-full text-left">
@@ -138,8 +138,8 @@ function ListingCard({
             Withdraw interest
           </Button>
         ) : (
-          <Button type="button" className="w-full" disabled={pending || expired || remaining === 0} onClick={onInterest}>
-            {expired ? "Listing ended" : remaining === 0 ? "Responses full" : "Interested"}
+          <Button type="button" className="w-full" disabled={pending || expired || declined || remaining === 0} onClick={onInterest}>
+            {declined ? "Not selected" : expired ? "Listing closed" : remaining === 0 ? "Responses full" : "Interested"}
           </Button>
         )}
       </div>
@@ -183,7 +183,7 @@ export function MeetNewPeople({
   const [category, setCategory] = useState<MeetupDiscoveryCategory>("coffee");
   const [style, setStyle] = useState<"one_to_one" | "group">("one_to_one");
   const [startsAt, setStartsAt] = useState(() => localDateTimeValue(new Date(Date.now() + 2 * 60 * 60_000)));
-  const [duration, setDuration] = useState<30 | 60 | 120 | 240>(60);
+  const [duration, setDuration] = useState<0 | 30 | 60 | 120 | 240>(0);
 
   const canCreate = hub.activeSlots < hub.maxActiveSlots;
   const wordCount = title.trim() ? title.trim().split(/\s+/).length : 0;
@@ -207,12 +207,11 @@ export function MeetNewPeople({
     })();
     return () => { cancelled = true; };
   }, [onRefresh]);
-  const myActive = useMemo(
-    () => hub.mine
-      .filter((item) => item.status === "active")
-      .sort((a, b) => Number(b.id === focusedId) - Number(a.id === focusedId)),
-    [hub.mine, focusedId]
-  );
+  const mine = [...hub.mine].sort((a, b) => Number(b.id === focusedId) - Number(a.id === focusedId));
+  const openListings = mine.filter((item) => item.status === "active" && Date.parse(item.listingExpiresAt) > nowMs && Date.parse(item.startsAt) > nowMs);
+  const closedListings = mine.filter((item) => !openListings.some((open) => open.id === item.id));
+  const inbox = mine.filter((item) => Date.parse(item.startsAt) > nowMs && item.interestedPeople.some((person) => person.status === "pending"));
+
 
   async function refreshAfterSave(successMessage: string) {
     try {
@@ -356,76 +355,87 @@ export function MeetNewPeople({
 
       {message ? <p role="status" className="mb-4 rounded-xl bg-secondary px-3 py-2 text-sm">{message}</p> : null}
 
-      {myActive.length > 0 ? (
-        <section className="mb-6 space-y-3" aria-labelledby="my-discovery-heading">
+      {inbox.length > 0 ? (
+        <section className="mb-6 space-y-3" aria-labelledby="interest-inbox-heading">
+          <h2 id="interest-inbox-heading" className="text-sm font-semibold">Interest inbox</h2>
+          <p className="text-xs leading-5 text-muted-foreground">Existing requests stay here when a listing closes. You can decide before its meetup time.</p>
+          {inbox.map((item) => (
+            <article key={item.id} className={`rounded-2xl border border-border bg-card p-4 ${item.id === focusedId ? "ring-2 ring-primary" : ""}`}>
+              <p className="font-semibold">{item.title}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { timeZone: item.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(item.startsAt))}</p>
+              <div className="mt-3 space-y-2">
+                {item.interestedPeople.filter((person) => person.status === "pending").map((person) => (
+                  <div key={person.userId} className="flex flex-wrap items-center gap-2 rounded-xl bg-secondary/60 p-2.5">
+                    <Link href={discoveryProfileHref(person.username)} className="focus-ring flex min-w-0 flex-1 items-center gap-2 rounded-lg">
+                      <UserAvatar src={person.avatarUrl} name={person.name} size="xs" decorative />
+                      <span className="truncate text-sm font-medium">{person.name}</span>
+                    </Link>
+                    <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "declined" })}>Pass</Button>
+                    <Button size="sm" disabled={pending || item.attendeeCount >= item.maxAttendees || (item.meetupStatus != null && item.meetupStatus !== "active")} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "accepted" })}>Accept</Button>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {[
+        { title: "Your listings", items: openListings },
+        { title: "Closed listings", items: closedListings }
+      ].filter((section) => section.items.length > 0).map((section) => (
+        <section key={section.title} className="mb-6 space-y-3" aria-label={section.title}>
           <div className="flex items-center justify-between">
-            <h2 id="my-discovery-heading" className="text-sm font-semibold">Your listings</h2>
-            <span className="text-xs text-muted-foreground">{myActive.length} active</span>
+            <h2 className="text-sm font-semibold">{section.title}</h2>
+            <span className="text-xs text-muted-foreground">{section.items.length}</span>
           </div>
-          {myActive.map((item) => (
-            <article key={item.id} className={["rounded-[24px] border border-border bg-card p-4", item.id === focusedId ? "ring-2 ring-primary" : ""].join(" ")}>
+          {section.items.map((item) => (
+            <article key={item.id} className={`rounded-[24px] border border-border bg-card p-4 ${item.id === focusedId ? "ring-2 ring-primary" : ""}`}>
               <div className="flex gap-3">
                 <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl"><DiscoveryArtwork category={item.category} /></div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{item.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.interestCount} of {item.interestLimit} responses · {discoveryTimeLeft(item.listingExpiresAt, nowMs)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{section.title === "Your listings" ? discoveryTimeLeft(item.listingExpiresAt, nowMs) : Date.parse(item.startsAt) <= nowMs ? "Meetup time passed" : item.status === "matched" ? "Matched · listing closed" : "Listing closed"}{item.attendeeCount > 0 ? ` · ${item.attendeeCount} going` : ""}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { timeZone: item.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(item.startsAt))}</p>
                 </div>
               </div>
-
-              {item.interestedPeople.length > 0 ? (
-                <div className="mt-4 space-y-2">
-                  {item.interestedPeople.map((person) => (
-                    <div key={person.userId} className="flex items-center gap-2.5 rounded-xl bg-secondary/60 p-2.5">
-                      <Link href={discoveryProfileHref(person.username)} className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-lg">
-                        <UserAvatar src={person.avatarUrl} name={person.name} size="xs" decorative />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{person.name}</span>
-                          <span className="block text-[11px] text-muted-foreground">
-                            {person.status === "accepted" ? "Accepted · view profile" : "Interested · view profile"}
-                          </span>
-                        </span>
-                      </Link>
-                      {person.status === "pending" ? (
-                        <div className="flex gap-1.5">
-                          <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "declined" })}>
-                            <X className="h-4 w-4" aria-hidden="true" />
-                            <span className="sr-only">Pass</span>
-                          </Button>
-                          <Button size="sm" disabled={pending} onClick={() => run({ action: "decide", id: item.id, userId: person.userId, response: "accepted" })}>
-                            <Check className="h-4 w-4" aria-hidden="true" />
-                            <span className="sr-only">Accept</span>
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 text-xs text-muted-foreground">No responses yet.</p>
-              )}
-
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" disabled={pending || Date.parse(item.listingExpiresAt) <= nowMs || Date.parse(item.startsAt) <= nowMs} onClick={() => {
-                  setEditing(item); setTitle(item.title); setCategory(item.category);
-                  setStyle(item.style); setDuration(item.listingDurationMinutes as 30 | 60 | 120 | 240);
-                  setStartsAt(localDateTimeValue(new Date(item.startsAt)));
-                  setMessage(""); setCreateOpen(true);
-                }}>
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Edit
-                </Button>
-                {item.conversationId ? (
-                  <Link href={conversationHref(item.conversationId)} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
-                    <MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat
-                  </Link>
+                {section.title === "Your listings" ? (
+                  <Button size="sm" variant="outline" disabled={pending} onClick={() => {
+                    setEditing(item); setTitle(item.title); setCategory(item.category);
+                    setStyle(item.style); setDuration(item.listingDurationMinutes as 0 | 30 | 60 | 120 | 240);
+                    setStartsAt(localDateTimeValue(new Date(item.startsAt))); setMessage(""); setCreateOpen(true);
+                  }}><Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Edit</Button>
                 ) : null}
-                {item.refreshCount < 2 ? (
-                  <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "refresh", id: item.id })}>
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Refresh
-                  </Button>
+                {item.meetupId ? <Link href={`/meet-up?meetup=${item.meetupId}`} className="focus-ring inline-flex min-h-10 items-center rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Open Meetup</Link> : null}
+                {item.conversationId ? <Link href={conversationHref(item.conversationId)} className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold"><MessageCircle className="h-4 w-4" aria-hidden="true" /> Chat</Link> : null}
+                {section.title === "Closed listings" && item.renewable ? (
+                  <Button size="sm" variant="outline" disabled={pending || !canCreate} onClick={() => run({ action: "refresh", id: item.id })}><RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Renew</Button>
                 ) : null}
-                <Button size="sm" variant="ghost" disabled={pending} onClick={() => run({ action: "close", id: item.id })}>
-                  End listing
-                </Button>
+                {section.title === "Your listings" ? (
+                  <Button size="sm" variant="ghost" disabled={pending} onClick={() => run({ action: "close", id: item.id })}>Close listing</Button>
+                ) : <Button size="sm" variant="ghost" disabled={pending} onClick={() => {
+                  if (window.confirm("Delete this listing and clear any unanswered requests? Its arranged Meetup and chat will stay.")) run({ action: "delete", id: item.id });
+                }}><Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Delete</Button>}
+              </div>
+              {section.title === "Closed listings" && Date.parse(item.startsAt) > nowMs && item.refreshCount >= 2 ? <p className="mt-2 text-xs text-muted-foreground">Renewed twice. Start a new listing if you want to invite more people.</p> : null}
+              {section.title === "Closed listings" && item.renewable && !canCreate ? <p className="mt-2 text-xs text-muted-foreground">Close an open listing to free a slot before renewing.</p> : null}
+            </article>
+          ))}
+        </section>
+      ))}
+
+      {hub.requests.length > 0 ? (
+        <section className="mb-6 space-y-3" aria-label="My interest requests">
+          <h2 className="text-sm font-semibold">My interest requests</h2>
+          {hub.requests.map((item) => (
+            <article key={item.id} className={`rounded-2xl border border-border bg-card p-4 ${item.id === focusedId ? "ring-2 ring-primary" : ""}`}>
+              <p className="font-semibold">{item.title}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{item.myInterestStatus === "accepted" ? "Accepted" : item.myInterestStatus === "declined" ? "Not selected" : item.myInterestStatus === "withdrawn" ? "Withdrawn" : Date.parse(item.startsAt) <= nowMs ? "Meetup time passed" : "Awaiting the creator’s response"}</p>
+              {item.myInterestStatus === "pending" && Date.parse(item.startsAt) > nowMs && Date.parse(item.listingExpiresAt) <= nowMs ? <p className="mt-1 text-xs text-muted-foreground">The listing closed. Your request can still be reviewed before the meetup starts.</p> : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {item.myInterestStatus === "pending" ? <Button size="sm" variant="outline" disabled={pending} onClick={() => run({ action: "withdraw", id: item.id })}>Withdraw interest</Button> : null}
+                {item.myInterestStatus === "accepted" && item.meetupId ? <Link href={`/meet-up?meetup=${item.meetupId}`} className="focus-ring inline-flex min-h-10 items-center rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Open Meetup</Link> : null}
               </div>
             </article>
           ))}
@@ -514,19 +524,19 @@ export function MeetNewPeople({
 
           <fieldset disabled={Boolean(editing) || pending}>
             <p className="mb-2 text-sm font-medium">Keep this listing open for</p>
-            <div className="grid grid-cols-4 gap-2">
-              {([30,60,120,240] as const).map((minutes) => (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {([0,30,60,120,240] as const).map((minutes) => (
                 <button key={minutes} type="button" onClick={() => setDuration(minutes)} aria-pressed={duration === minutes} className={`rounded-xl border px-2 py-2 text-xs font-semibold ${duration === minutes ? "border-primary bg-primary/8 text-primary" : "border-border"}`}>
-                  {minutes < 60 ? "30m" : `${minutes / 60}h`}
+                  {minutes === 0 ? "Until meetup starts" : minutes < 60 ? "30m" : `${minutes / 60}h`}
                 </button>
               ))}
             </div>
-            {editing ? <p className="mt-2 text-xs text-muted-foreground">Editing does not extend the listing. Use Refresh to reopen it.</p> : null}
+            {editing ? <p className="mt-2 text-xs text-muted-foreground">Editing does not extend the listing. Renew a closed listing to reopen it.</p> : null}
           </fieldset>
 
           <div className="rounded-2xl bg-secondary/70 p-3 text-xs leading-5 text-muted-foreground">
             <Clock3 className="mr-1 inline h-4 w-4" aria-hidden="true" />
-            The listing can receive up to six live responses. When someone is accepted, Mad Buddy creates the scheduled Meetup and private chat.
+            Up to six people can express interest at once. Closing the listing stops new requests; existing requests stay in your inbox until the meetup starts. When someone is accepted, Mad Buddy creates the scheduled Meetup and private chat.
           </div>
         </div>
       </Modal>
