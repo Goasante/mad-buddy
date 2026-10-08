@@ -36,6 +36,7 @@ const ERROR_COPY: Record<string, string> = {
   DISCOVERY_CHANGED: "That response changed. Refresh and try again.",
   DISCOVERY_DECLINED: "The creator has already passed on your request for this listing.",
   DISCOVERY_ACCESS: "Only the creator can edit this listing.",
+  DISCOVERY_REQUEST_EXPIRED: "The meetup has started or the host ended the listing. This request can no longer be accepted.",
   MEETUP_TIME: "Choose a time at least one minute from now. Later today is fine."
 };
 

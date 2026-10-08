@@ -38,6 +38,8 @@ import { useMeetupRealtime } from "@/hooks/use-meetup-realtime";
 import { useMeetupLocationSync } from "@/hooks/use-meetup-location-sync";
 import { conversationHref } from "@/lib/messaging/open-conversation";
 import { isFutureMeetupTime } from "@/lib/meetups/scheduling";
+import { pendingReviewCount } from "@/lib/meetups/discovery-review";
+import { DiscoveryRequests } from "@/components/meetups/discovery-requests";
 import { MeetNewPeople, MeetNewPeopleSafety, type MeetupDiscoveryAction } from "@/components/meetups/meet-new-people";
 import { MEETUP_DISCOVERY_CATEGORY_OPTIONS, discoveryCategoryLabel, type MeetupDiscoveryCategory, type MeetupDiscoveryHub } from "@/lib/meetups/discovery";
 
@@ -272,6 +274,7 @@ export function MeetupPage({
   });
   const upcoming = normalMeetups.filter((meetup) => meetupPhase(meetup, clockNow) === "upcoming");
   const yourMeetupsCount = upcoming.length;
+  const reviewCount = pendingReviewCount(discoveryHub, clockNow);
 
   useMeetupRealtime({
     meetupIds: normalMeetups.map((meetup) => meetup.id),
@@ -345,6 +348,7 @@ export function MeetupPage({
             ].join(" ")}
           >
             Your Meetups{yourMeetupsCount ? ` (${yourMeetupsCount})` : ""}
+            {reviewCount > 0 ? <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[11px] text-primary-foreground" aria-label={`${reviewCount} interest requests awaiting review`}>{reviewCount}</span> : null}
           </button>
         </div>
       )}
@@ -458,13 +462,14 @@ export function MeetupPage({
 
             {tab === "mine" && (
               <section className="space-y-6">
-                {!upcoming.length ? (
+                <DiscoveryRequests hub={discoveryHub} nowMs={clockNow} action={discoveryAction} onRefresh={refresh} />
+                {!upcoming.length && !reviewCount && !(discoveryHub.requests?.length) ? (
                   <EmptyMeetups
                     onArrange={() => setCreating(true)}
                     title="No upcoming meetups"
                     body="Finished and expired meetups leave this screen automatically."
                   />
-                ) : (
+                ) : upcoming.length ? (
                   <div>
                     <div className="mb-3 flex items-center justify-between px-1">
                       <h2 className="text-sm font-bold">Upcoming</h2>
@@ -484,7 +489,7 @@ export function MeetupPage({
                       ))}
                     </div>
                   </div>
-                )}
+                ) : null}
               </section>
             )}
           </>

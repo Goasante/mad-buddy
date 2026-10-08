@@ -70,7 +70,7 @@ export const meetupDiscoveryPersonSchema = z.object({
   name: z.string(),
   username: z.string(),
   avatarUrl: z.string().nullable(),
-  status: z.enum(["pending", "accepted", "declined", "withdrawn"])
+  status: z.enum(["pending", "accepted", "declined", "withdrawn", "expired"])
 });
 
 export const meetupDiscoveryItemSchema = z.object({
@@ -91,7 +91,7 @@ export const meetupDiscoveryItemSchema = z.object({
   interestLimit: z.number().int(),
   interestCount: z.number().int(),
   refreshCount: z.number().int().min(0).max(2),
-  myInterestStatus: z.enum(["pending", "accepted", "declined", "withdrawn"]).nullable(),
+  myInterestStatus: z.enum(["pending", "accepted", "declined", "withdrawn", "expired"]).nullable(),
   meetupId: z.string().uuid().nullable(),
   conversationId: z.string().uuid().nullable(),
   interestedPeople: z.array(meetupDiscoveryPersonSchema)
@@ -100,6 +100,7 @@ export const meetupDiscoveryItemSchema = z.object({
 export const meetupDiscoveryHubSchema = z.object({
   nearby: z.array(meetupDiscoveryItemSchema),
   mine: z.array(meetupDiscoveryItemSchema),
+  requests: z.array(meetupDiscoveryItemSchema).optional(),
   activeSlots: z.number().int().min(0),
   maxActiveSlots: z.number().int().positive()
 });
