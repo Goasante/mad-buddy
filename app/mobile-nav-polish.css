@@ -1,23 +1,10 @@
-/*
- * Mad Buddy mobile navigation — expanding floating dock.
- *
- * Interaction reference: the Pixpowder / Vlad P Dribbble mobile-menu shot.
- * We borrow the interaction grammar, not its icons/assets: inactive
- * destinations are icon-only; the current destination expands into a labelled
- * pill; switching routes contracts the previous item and expands the next.
- *
- * AppShell still owns destination order, route matching, unread badges,
- * guided-tour IDs, immersive hiding and the five-rem safe-area footprint.
- * This layer deliberately keeps --mobile-nav-height untouched so Quick Actions,
- * loading states and the scroll-clearance contract do not drift.
- *
- * The full-width nav element remains the geometry/safe-area frame. Its surface
- * is transparent and click-through; only the floating inner dock accepts
- * pointer input. That lets page content visually continue behind and around
- * the dock without making the last card impossible to reach.
- */
+/* Approved floating pill: equal tabs, solid icons, labels below every icon.
+ * This keeps --mobile-nav-height untouched: the shell owns safe-area
+ * clearance, immersive hiding, and space for the last page item. */
 @media (max-width: 767px) {
   nav[aria-label="Mobile navigation"] {
+    box-sizing: border-box;
+    height: var(--mobile-nav-height, 5rem);
     border-top-color: transparent !important;
     background: transparent !important;
     box-shadow: none !important;
@@ -27,27 +14,23 @@
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding-top: 0.35rem;
-    padding-inline: 0.55rem;
+    padding-top: 4px;
+    padding-inline: 10px;
   }
 
   nav[aria-label="Mobile navigation"] > ul {
+    --nav-icon-cutout: #fff;
     box-sizing: border-box;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     width: min(29rem, 100%);
-    height: 4rem;
+    height: 64px;
     margin: 0;
-    padding: 0.34rem 0.38rem;
-    border: 1px solid rgba(78, 4, 1, 0.10);
-    border-radius: 1.55rem;
-    background: rgba(254, 251, 243, 0.82);
-    box-shadow:
-      0 14px 36px rgba(78, 4, 1, 0.15),
-      0 3px 12px rgba(78, 4, 1, 0.07),
-      inset 0 1px 0 rgba(255, 255, 255, 0.82);
-    -webkit-backdrop-filter: blur(24px) saturate(1.18);
-    backdrop-filter: blur(24px) saturate(1.18);
+    padding: 4px;
+    border: 1px solid rgba(36, 36, 36, 0.06);
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 10px 28px rgba(36, 36, 36, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.9);
     pointer-events: auto;
     isolation: isolate;
   }
@@ -55,169 +38,94 @@
   nav[aria-label="Mobile navigation"] > ul > li {
     display: flex;
     min-width: 0;
-    flex: 0.86 1 0;
+    flex: 1 1 0;
     align-items: stretch;
     justify-content: center;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
-    transition: flex 320ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  /* The active destination receives more horizontal room, which is the core
-   * Dribbble interaction: icon-only neighbours make space while the selected
-   * control expands to reveal its title. :has() is supported by the current
-   * iOS/Android WebViews we target and avoids duplicating route state in DOM. */
-  nav[aria-label="Mobile navigation"] > ul > li:has(> a[aria-current="page"]) {
-    flex: 1.72 1 0;
-  }
-
-  nav[aria-label="Mobile navigation"] > ul > li > a {
+  nav[aria-label="Mobile navigation"] > ul > li > :is(a, button) {
     position: relative;
     display: flex;
-    min-height: 52px;
+    min-height: 54px;
     width: 100%;
     min-width: 0;
-    flex-direction: row !important;
+    flex-direction: column !important;
     align-items: center;
     justify-content: center;
-    gap: 0;
-    overflow: hidden;
-    padding: 0 0.22rem;
+    gap: 4px;
+    padding: 3px 2px;
     border: 0 !important;
-    border-radius: 1.18rem !important;
+    border-radius: 999px !important;
     background: transparent;
-    color: rgba(78, 4, 1, 0.52);
+    color: #242424;
     box-shadow: none;
     -webkit-tap-highlight-color: transparent;
-    transform: translateZ(0);
-    transition:
-      color 220ms ease,
-      background-color 260ms ease,
-      box-shadow 260ms ease,
-      transform 180ms ease,
-      padding 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
   }
 
-  /* AppShell's active-only text node is hidden so one animation model owns the
-   * title. ::after always contains the accessible aria-label, but inactive
-   * items collapse it to zero width and zero opacity. */
-  nav[aria-label="Mobile navigation"] > ul > li > a > span + span {
-    display: none !important;
-  }
-
-  nav[aria-label="Mobile navigation"] > ul > li > a::after {
-    content: attr(aria-label);
-    display: block;
-    min-width: 0;
-    max-width: 0;
-    overflow: hidden;
-    margin-left: 0;
-    opacity: 0;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-size: 0.72rem;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: -0.01em;
-    color: currentColor;
-    transform: translateX(-0.28rem);
-    transition:
-      max-width 320ms cubic-bezier(0.22, 1, 0.36, 1),
-      margin-left 320ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 180ms ease 40ms,
-      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  /* Keep every Mad Buddy icon exactly as supplied. The old Home square and
-   * per-tab icon backgrounds are neutralised here so all five icons participate
-   * in the same interaction without replacing any artwork. */
-  nav[aria-label="Mobile navigation"] > ul > li > a > span:first-child {
+  nav[aria-label="Mobile navigation"] > ul > li > :is(a, button) > span:first-child {
     display: grid;
-    width: 2.5rem !important;
-    height: 2.5rem !important;
-    min-width: 2.5rem;
-    flex: 0 0 2.5rem;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px;
+    flex: 0 0 28px;
     place-items: center;
-    border-radius: 9999px !important;
     background: transparent !important;
     color: inherit !important;
     box-shadow: none !important;
-    transform: scale(1);
-    transition:
-      color 220ms ease,
-      transform 260ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+    transform: none !important;
+  }
+
+  nav[aria-label="Mobile navigation"] .mobile-nav-label {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.6875rem;
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    color: inherit;
   }
 
   nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] {
-    padding-inline: 0.42rem 0.72rem;
-    background: #e88c2b;
-    color: #4e0401;
-    box-shadow:
-      0 7px 18px rgba(78, 4, 1, 0.16),
-      inset 0 1px 0 rgba(254, 251, 243, 0.30);
-  }
-
-  nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"]::after {
-    max-width: 6.5rem;
-    margin-left: 0.12rem;
-    opacity: 1;
-    transform: translateX(0);
-  }
-
-  nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] > span:first-child {
-    transform: scale(0.96);
+    --nav-icon-cutout: #f1efec;
+    background: #f1efec;
+    color: #f38b20;
   }
 
   nav[aria-label="Mobile navigation"] > ul > li > a:not([aria-current="page"]):active {
-    background: rgba(232, 140, 43, 0.10);
-    color: #4e0401;
-    transform: scale(0.91);
-  }
-
-  nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"]:active {
-    transform: scale(0.97);
-  }
-
-  /* Unread/request badges remain children of the icon surface, so their
-   * existing absolute positioning follows the icon through expansion. */
-  nav[aria-label="Mobile navigation"] > ul > li > a [data-unread-badge],
-  nav[aria-label="Mobile navigation"] > ul > li > a [aria-label$="unread"] {
-    pointer-events: none;
+    background: #f7f6f4;
   }
 
   .dark nav[aria-label="Mobile navigation"] > ul {
-    border-color: rgba(254, 251, 243, 0.10);
-    background: rgba(18, 18, 19, 0.84);
-    box-shadow:
-      0 16px 38px rgba(0, 0, 0, 0.42),
-      0 4px 14px rgba(0, 0, 0, 0.24),
-      inset 0 1px 0 rgba(254, 251, 243, 0.06);
+    --nav-icon-cutout: #18181b;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: #18181b;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
   }
 
-  .dark nav[aria-label="Mobile navigation"] > ul > li > a {
-    color: rgba(254, 251, 243, 0.57);
+  .dark nav[aria-label="Mobile navigation"] > ul > li > :is(a, button) {
+    color: #efefef;
   }
 
   .dark nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] {
-    background: #e88c2b;
-    color: #4e0401;
-    box-shadow:
-      0 8px 22px rgba(0, 0, 0, 0.28),
-      0 0 0 1px rgba(232, 140, 43, 0.22),
-      inset 0 1px 0 rgba(254, 251, 243, 0.24);
+    --nav-icon-cutout: #2c2c30;
+    background: #2c2c30;
+    color: #f38b20;
   }
 
   .dark nav[aria-label="Mobile navigation"] > ul > li > a:not([aria-current="page"]):active {
-    background: rgba(232, 140, 43, 0.10);
-    color: #fefbf3;
+    background: #252529;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  nav[aria-label="Mobile navigation"] > ul > li,
-  nav[aria-label="Mobile navigation"] > ul > li > a,
-  nav[aria-label="Mobile navigation"] > ul > li > a::after,
-  nav[aria-label="Mobile navigation"] > ul > li > a > span:first-child {
+  nav[aria-label="Mobile navigation"] > ul > li > :is(a, button) {
     transition: none !important;
   }
 }

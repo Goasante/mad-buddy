@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
-const shell = read("components/app-shell/app-shell.tsx");
 /* The mobile bottom bar and its tab list moved to their own module so the
    Capacitor SPA renders the SAME navigation. Assertions unchanged. */
 const navSource = read("components/app-shell/mobile-nav.tsx");
@@ -36,31 +35,12 @@ describe("bottom navigation order", () => {
 });
 
 describe("Home navigation visual", () => {
-  it("uses the selected Mad Buddy maroon rounded-square active treatment", () => {
-    expect(homeControl).toContain('bg-[#4E0401]');
-    expect(homeControl).toContain('text-[#FEFBF3]');
-    expect(homeControl).toContain('rounded-[14px]');
-    expect(homeControl).toContain('h-[46px] w-[46px]');
-  });
-
-  it("uses a clean outline house instead of the old custom Orb mark", () => {
-    expect(homeControl).toContain('import { Home } from "lucide-react"');
-    expect(homeControl).toContain('<Home');
-    expect(homeControl).toContain('className="h-[23px] w-[23px]"');
-    expect(homeControl).not.toContain("HomeMarkIcon");
-    expect(homeControl).not.toContain("mb-orb-core");
-  });
-
-  it("keeps inactive Home visually quiet like the neighbouring tabs", () => {
-    expect(homeControl).toContain('bg-transparent text-muted-foreground');
-    expect(homeControl).toContain('hover:bg-secondary hover:text-foreground');
-  });
-
-  it("keeps the active elevation subtle and brand-warm rather than turning neon", () => {
-    expect(homeControl).toContain('rgba(78,4,1,0.24)');
-    expect(homeControl).toContain('rgba(232,140,43,0.14)');
-    expect(homeControl).not.toContain("animate-");
-    expect(homeControl).not.toContain("blur-");
+  it("uses the approved solid house and always-visible label", () => {
+    expect(homeControl).toContain('<NavigationGlyph name="home"');
+    expect(homeControl).toContain('h-[28px] w-[28px]');
+    expect(homeControl).toContain('mobile-nav-label max-w-full truncate">Home');
+    expect(homeControl).not.toContain('bg-[#4E0401]');
+    expect(homeControl).not.toContain('import { Home } from "lucide-react"');
   });
 
   it("keeps activity as a small orange accent, never a count", () => {

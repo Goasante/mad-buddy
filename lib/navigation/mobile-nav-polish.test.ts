@@ -5,13 +5,13 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const css = read("app/mobile-nav-polish.css");
 const layout = read("app/layout.tsx");
-const shell = read("components/app-shell/app-shell.tsx");
+
 /* The tab list moved to its own module so mobile can share the same nav. */
 const navSource = read("components/app-shell/mobile-nav.tsx");
 
 const mobileTabs = navSource.slice(navSource.indexOf("export const MOBILE_TABS"), navSource.indexOf("export function MobileNav("));
 
-describe("Dribbble-inspired mobile navigation", () => {
+describe("Approved floating pill navigation", () => {
   it("loads after the safe-area geometry layer without redefining the canonical footprint", () => {
     expect(layout).toContain('import "./mobile-shell-stability.css";\nimport "./mobile-nav-polish.css";');
     expect(css).toContain('nav[aria-label="Mobile navigation"]');
@@ -37,32 +37,30 @@ describe("Dribbble-inspired mobile navigation", () => {
 
   it("renders the visible control as a compact floating glass dock", () => {
     expect(css).toContain("width: min(29rem, 100%)");
-    expect(css).toContain("height: 4rem");
-    expect(css).toContain("border-radius: 1.55rem");
-    expect(css).toContain("background: rgba(254, 251, 243, 0.82)");
-    expect(css).toContain("backdrop-filter: blur(24px) saturate(1.18)");
+    expect(css).toContain("height: 64px");
+    expect(css).toContain("border-radius: 999px");
+    expect(css).toContain("background: #fff");
+    expect(css).not.toContain("backdrop-filter: blur(");
     expect(css).toContain('.dark nav[aria-label="Mobile navigation"] > ul');
   });
 
-  it("keeps inactive destinations icon-only and expands the active destination", () => {
-    expect(css).toContain('li:has(> a[aria-current="page"])');
-    expect(css).toContain("flex: 1.72 1 0");
-    expect(css).toContain("content: attr(aria-label)");
-    expect(css).toContain("max-width: 0");
-    expect(css).toContain('a[aria-current="page"]::after');
-    expect(css).toContain("max-width: 6.5rem");
-    expect(css).toContain("opacity: 1");
+  it("keeps five equal slots and visible labels below their icons", () => {
+    expect(css).toContain("flex: 1 1 0");
+    expect(css).toContain("flex-direction: column !important");
+    expect(css).toContain(".mobile-nav-label");
+    expect(css).not.toContain("content: attr(aria-label)");
+    expect(navSource).toContain("mobile-nav-label max-w-full truncate");
   });
 
-  it("uses Mad Buddy orange and maroon for the selected pill without replacing nav icons", () => {
+  it("uses a soft grey inset with orange selected icons and labels", () => {
     expect(css).toContain('a[aria-current="page"]');
-    expect(css).toContain("background: #e88c2b");
-    expect(css).toContain("color: #4e0401");
-    expect(css).toContain("Keep every Mad Buddy icon exactly as supplied");
+    expect(css).toContain("background: #f1efec");
+    expect(css).toContain("color: #f38b20");
+    expect(navSource).toContain("<NavigationGlyph");
   });
 
-  it("uses spring-like expansion timing but honours reduced-motion users", () => {
-    expect(css).toContain("cubic-bezier(0.22, 1, 0.36, 1)");
+  it("honours reduced-motion users without changing tab widths", () => {
+    expect(css).toContain("background-color 160ms ease");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toContain("transition: none !important");
   });
