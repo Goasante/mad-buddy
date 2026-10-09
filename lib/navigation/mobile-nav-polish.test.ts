@@ -40,7 +40,9 @@ describe("Approved floating pill navigation", () => {
     expect(css).toContain("height: 64px");
     expect(css).toContain("border-radius: 999px");
     expect(css).toContain("background: #fff");
-    expect(css).not.toContain("backdrop-filter: blur(");
+    expect(css).toContain("backdrop-filter: blur(22px) saturate(145%)");
+    expect(css).toContain("@supports ((backdrop-filter:");
+    expect(css).toContain("prefers-reduced-transparency: reduce");
     expect(css).toContain('.dark nav[aria-label="Mobile navigation"] > ul');
   });
 

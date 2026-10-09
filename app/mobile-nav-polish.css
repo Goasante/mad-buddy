@@ -1,4 +1,4 @@
-/* Approved floating pill: equal tabs, solid icons, labels below every icon.
+/* Liquid Glass floating pill: equal tabs, solid icons, labels below every icon.
  * This keeps --mobile-nav-height untouched: the shell owns safe-area
  * clearance, immersive hiding, and space for the last page item. */
 @media (max-width: 767px) {
@@ -121,6 +121,54 @@
 
   .dark nav[aria-label="Mobile navigation"] > ul > li > a:not([aria-current="page"]):active {
     background: #252529;
+  }
+
+  /* Solid surfaces above remain the fallback when backdrop blur is unavailable.
+   * Blur only the small dock, not the full safe-area frame or each tab. */
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    nav[aria-label="Mobile navigation"] > ul {
+      border-color: rgba(255, 255, 255, 0.75);
+      background: linear-gradient(165deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.48));
+      -webkit-backdrop-filter: blur(22px) saturate(145%);
+      backdrop-filter: blur(22px) saturate(145%);
+      box-shadow: 0 8px 26px rgba(24, 24, 27, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.95), inset 0 -1px 2px rgba(255, 255, 255, 0.55);
+    }
+
+    nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] {
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.62), rgba(214, 209, 201, 0.42));
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9), inset 0 -1px 1px rgba(120, 112, 101, 0.12);
+    }
+
+    .dark nav[aria-label="Mobile navigation"] > ul {
+      border-color: rgba(255, 255, 255, 0.28);
+      background: linear-gradient(165deg, rgba(48, 48, 52, 0.76), rgba(24, 24, 27, 0.62));
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.38), inset 0 -1px 2px rgba(255, 255, 255, 0.12);
+    }
+
+    .dark nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] {
+      background: linear-gradient(155deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.08));
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.38), inset 0 -1px 1px rgba(255, 255, 255, 0.12);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    nav[aria-label="Mobile navigation"] > ul {
+      background: #fff;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+
+    nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] {
+      background: #f1efec;
+    }
+
+    .dark nav[aria-label="Mobile navigation"] > ul {
+      background: #18181b;
+    }
+
+    .dark nav[aria-label="Mobile navigation"] > ul > li > a[aria-current="page"] {
+      background: #2c2c30;
+    }
   }
 }
 
