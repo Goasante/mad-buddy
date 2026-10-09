@@ -17,7 +17,13 @@ export function NavigationGlyph({ name, ...props }: SVGProps<SVGSVGElement> & { 
         <circle cx="9" cy="7" r="4.5" /><circle cx="23" cy="7" r="4.5" />
         <defs><mask id={linkMask} maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
           <rect width="32" height="32" fill="white" />
-          <path d="m20 13-8 8a3 3 0 0 0 4 4l5-5a2.5 2.5 0 0 1 3.5 3.5l-7 7" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          {/* Two interlocking diagonal links cut through the silhouettes.
+              A true mask lets the glass show through in either theme. */}
+          <g fill="none" stroke="black" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 22-1.5 1.5a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0" />
+            <path d="m17 20 1.5-1.5a3.5 3.5 0 0 1 5 5l-4 4a3.5 3.5 0 0 1-5 0" />
+            <path d="m13 24 6-6" />
+          </g>
         </mask></defs>
         <g mask={`url(#${linkMask})`}><circle cx="9" cy="23" r="9" /><circle cx="23" cy="23" r="9" /></g>
       </> : null}
