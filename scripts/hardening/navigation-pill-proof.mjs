@@ -66,4 +66,36 @@ try {
   await page.getByRole('status').waitFor();assert.equal(await page.evaluate(()=>location.hash),'');
   console.log('PASS native unavailable destination remains non-navigating and announced');
   await page.close();
+  // Real scrolling content must remain visible through the dock, rather than
+  // a static grey surface passing only geometry checks.
+  for (const dark of [false,true]) {
+    const page=await browser.newPage({viewport:{width:390,height:844}});
+    await page.goto(`http://127.0.0.1:5187${prefix}/index.html`);
+    const dock=page.getByRole('navigation').locator('ul');await dock.waitFor();
+    await page.evaluate(dark=>{
+      document.documentElement.classList.toggle('dark',dark);
+      const main=document.querySelector('main');
+      main.style.minHeight='2200px';
+      main.style.background=dark
+        ? 'repeating-linear-gradient(0deg,#241c3e 0px,#241c3e 140px,#1d3540 140px,#1d3540 280px,#453020 280px,#453020 420px)'
+        : 'repeating-linear-gradient(0deg,#e7def6 0px,#e7def6 140px,#d7edf2 140px,#d7edf2 280px,#f6e5cc 280px,#f6e5cc 420px)';
+    },dark);
+    const glass=await dock.evaluate(el=>{const s=getComputedStyle(el);return {blur:s.backdropFilter,border:s.borderTopColor}});
+    assert.equal(glass.blur,'blur(8px) saturate(1.25)');
+    assert.equal(glass.border,dark?'rgba(255, 255, 255, 0.06)':'rgba(80, 75, 68, 0.08)');
+    const before=await dock.screenshot();
+    await page.evaluate(()=>window.scrollTo(0,170));
+    await page.waitForFunction(()=>window.scrollY===170);
+    const after=await dock.screenshot();
+    assert.ok(!before.equals(after),'scrolling content must change the glass surface');
+    await page.screenshot({path:`/tmp/navigation-glass-scroll-${dark?'dark':'light'}.png`});
+    const cdp=await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-transparency',value:'reduce'}]});
+    await page.waitForFunction(()=>matchMedia('(prefers-reduced-transparency: reduce)').matches);
+    const fallback=await dock.evaluate(el=>{const s=getComputedStyle(el);return {blur:s.backdropFilter,background:s.backgroundColor}});
+    assert.equal(fallback.blur,'none');
+    assert.equal(fallback.background,dark?'rgb(24, 24, 27)':'rgb(255, 255, 255)');
+    console.log('PASS',dark?'dark':'light','scroll-through glass, subtle edge, reduced-transparency fallback');
+    await page.close();
+  }
 } finally {await browser?.close();await server.close();await fs.rm(dir,{recursive:true,force:true});}
