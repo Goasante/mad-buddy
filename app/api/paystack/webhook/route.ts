@@ -20,6 +20,7 @@ import {
   type AccessPaystackEvent
 } from "@/lib/access/paystack";
 import { MAD_BUDDY_ACCESS } from "@/lib/access/product";
+import { handleBookWebhook } from "@/lib/books/service";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
 
@@ -39,6 +40,7 @@ type PaystackWebhookEvent = {
       plan?: "plus" | "pro";
       app_plan?: "buddy_plus" | "buddy_pro";
       product?: string;
+      book_order_id?: string;
       access_payment_mode?: string;
     };
     customer?: {
@@ -167,6 +169,8 @@ export async function POST(request: Request) {
 }
 
 async function handlePaystackEvent(event: PaystackWebhookEvent, eventId: string) {
+  // Book purchases are isolated from app subscription and Access entitlements.
+  if (await handleBookWebhook(event)) return;
   const admin = createSupabaseAdminClient();
   const data = event.data;
   const userId = data.metadata?.user_id;

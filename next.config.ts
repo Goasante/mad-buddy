@@ -92,6 +92,13 @@ const nextConfig: NextConfig = {
         // (e.g. /api/health's no-store) keep their own header.
         source: "/api/:path*",
         headers: [{ key: "Cache-Control", value: "private, no-store" }]
+      },
+      {
+        source: "/books/ma-prospecting-playbook/access",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+          { key: "Referrer-Policy", value: "no-referrer" }
+        ]
       }
     ];
   }

@@ -150,11 +150,13 @@ const themeScript = `
 
 export default async function RootLayout({ children }: RootLayoutProps) {
   const buildId = resolveBuildId(process.env);
+  const requestHeaders = await headers();
   const gaMeasurementId =
-    process.env.NODE_ENV === "production" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
+    process.env.NODE_ENV === "production" && requestHeaders.get("x-book-private-route") !== "1"
+      ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID : undefined;
   // The CSP nonce proxy.ts minted for this request. The theme bootstrap is an
   // inline script, so under the enforced nonce-based CSP it must carry it.
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   return (
     <html lang="en" suppressHydrationWarning>

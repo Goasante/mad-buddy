@@ -21,6 +21,11 @@ export type RateLimitAction =
   | "paystack.initialize"
   | "paystack.cancel"
   | "paystack.webhook"
+  | "books.checkout"
+  | "books.verify"
+  | "books.download"
+  | "books.recover"
+  | "books.recover.email"
   | "trials.start"
   | "waves.send"
   | "waves.send.daily"
@@ -98,6 +103,11 @@ export const rateLimitRules: Record<RateLimitAction, { limit: number; windowSeco
   "paystack.initialize": { limit: 5, windowSeconds: 15 * 60 },
   "paystack.cancel": { limit: 5, windowSeconds: 24 * 60 * 60 },
   "paystack.webhook": { limit: 1200, windowSeconds: 60 },
+  "books.checkout": { limit: 5, windowSeconds: 15 * 60 },
+  "books.verify": { limit: 20, windowSeconds: 15 * 60 },
+  "books.download": { limit: 15, windowSeconds: 15 * 60 },
+  "books.recover": { limit: 3, windowSeconds: 60 * 60 },
+  "books.recover.email": { limit: 3, windowSeconds: 60 * 60 },
   "trials.start": { limit: 3, windowSeconds: 24 * 60 * 60 },
   // Wave/Ping anti-spam (feature spec §20, §41).
   "waves.send": { limit: 20, windowSeconds: 60 * 60 },

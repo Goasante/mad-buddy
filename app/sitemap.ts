@@ -9,6 +9,7 @@ const lastModified = new Date("2026-08-30T00:00:00.000Z");
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const articles = await listPublishedArticles();
   return [
+    { url: absoluteUrl("/books/ma-prospecting-playbook"), lastModified: new Date("2026-10-12T00:00:00.000Z"), changeFrequency: "monthly", priority: 0.7 },
     { url: absoluteUrl("/blog"), changeFrequency: "weekly", priority: 0.7 },
     ...articles.map((article) => ({ url: absoluteUrl(`/blog/${article.slug}`), lastModified: new Date(article.updatedAt), changeFrequency: "monthly" as const, priority: 0.6 })),
     { url: absoluteUrl("/"), lastModified, changeFrequency: "monthly", priority: 1 },

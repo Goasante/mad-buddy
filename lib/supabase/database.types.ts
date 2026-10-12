@@ -127,6 +127,12 @@ type RowWithTimestamps = {
 export type Database = {
   public: {
     Tables: {
+      book_orders: {
+        Row: { id: string; product: string; reference: string; email: string; amount_minor: number; currency: string; status: "pending" | "paid" | "revoked"; browser_proof_hash: string; created_at: string; paid_at: string | null; receipt_sent_at: string | null };
+        Insert: { id?: string; product: string; reference: string; email: string; amount_minor: number; currency: string; status?: "pending" | "paid" | "revoked"; browser_proof_hash: string; created_at?: string; paid_at?: string | null; receipt_sent_at?: string | null };
+        Update: { status?: "pending" | "paid" | "revoked"; paid_at?: string | null; receipt_sent_at?: string | null };
+        Relationships: [];
+      };
       blog_images: {
         Row: { id: string; sha256: string; width: number; height: number; bytes: number; created_by: string; created_at: string };
         Insert: { id?: string; sha256: string; width: number; height: number; bytes: number; created_by: string; created_at?: string };
