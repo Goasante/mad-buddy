@@ -67,6 +67,8 @@ export async function proxy(request: NextRequest) {
   function baseRequestHeaders(): Headers {
     const headers = new Headers(request.headers);
     headers.set("x-nonce", nonce);
+    // A private book link must not be sent to page-view analytics.
+    headers.set("x-book-private-route", request.nextUrl.pathname === "/books/ma-prospecting-playbook/access" ? "1" : "0");
     // Next reads the nonce from this request header to nonce its own scripts.
     headers.set("Content-Security-Policy", cspHeader);
     return headers;
