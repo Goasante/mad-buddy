@@ -19,7 +19,7 @@ export function BookCheckout({ enabled }: { enabled: boolean }) {
       window.location.assign(url.toString());
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Please try again."); setBusy(false); }
   }
-  return <form onSubmit={checkout} className={styles.checkout}>
+  return <form method="post" onSubmit={checkout} className={styles.checkout}>
     <label htmlFor="book-email">Email for your personal copy</label>
     <input id="book-email" name="email" type="email" autoComplete="email" maxLength={254} required placeholder="you@company.com" disabled={busy || !enabled} />
     <button className={styles.primary} disabled={!enabled || busy} type="submit">{busy ? "Opening secure checkout…" : enabled ? "Buy the book · GH₵200" : "Purchases open soon"}</button>

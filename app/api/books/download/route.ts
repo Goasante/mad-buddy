@@ -1,3 +1,4 @@
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { MA_BOOK } from "@/lib/books/product";
@@ -10,6 +11,7 @@ import { bookPrivateHeaders, guardBookRequest, readBookJson } from "@/lib/books/
 export const runtime = "nodejs";
 const schema = z.object({ token: z.string().max(1024) }).strict();
 export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request); if (originError) return originError;
   const guard = await guardBookRequest(request, "books.download"); if (guard) return guard;
   if (!bookReady()) return NextResponse.json({ error: "Downloads are temporarily unavailable." }, { status: 503, headers: bookPrivateHeaders });
   const parsed = schema.safeParse(await readBookJson(request));

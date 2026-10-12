@@ -1,3 +1,4 @@
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { MA_BOOK } from "@/lib/books/product";
@@ -8,6 +9,7 @@ import { bookPrivateHeaders, guardBookRequest, readBookJson } from "@/lib/books/
 export const runtime = "nodejs";
 const schema = z.object({ product: z.literal(MA_BOOK.id), email: z.string().max(254) }).strict();
 export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request); if (originError) return originError;
   const guard = await guardBookRequest(request, "books.checkout"); if (guard) return guard;
   const parsed = schema.safeParse(await readBookJson(request));
   const email = parsed.success ? normalizeBookEmail(parsed.data.email) : null;

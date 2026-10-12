@@ -1,3 +1,4 @@
+import { invalidMutationOriginResponse } from "@/lib/security/csrf";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { bookPrivateHeaders, guardBookRequest, readBookJson } from "@/lib/books/
 export const runtime = "nodejs";
 const schema = z.object({ reference: z.string().regex(/^MAB-[a-f0-9-]{36}$/) }).strict();
 export async function POST(request: Request) {
+  const originError = invalidMutationOriginResponse(request); if (originError) return originError;
   const guard = await guardBookRequest(request, "books.verify"); if (guard) return guard;
   const parsed = schema.safeParse(await readBookJson(request));
   if (!parsed.success) return NextResponse.json({ error: "Invalid purchase reference." }, { status: 400, headers: bookPrivateHeaders });

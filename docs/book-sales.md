@@ -27,4 +27,4 @@ Checkout callbacks need their original HTTP-only proof to obtain a token. A refe
 
 ## Verification limits for this implementation
 
-The Vercel connection returned a scope-permission error when reading environment metadata. Live environment configuration, private master upload, real provider payment and mail delivery must be checked before activation. Unit tests and staging database checks do not replace that live purchase check. Feature branches do not deploy automatically in this repository; only `main` does.
+Production migration and private master upload were completed on 12 October 2026. Production signing secret and sales activation flag were configured in Vercel. Browser fallback was used after the Vercel plugin scope error. Payment and email delivery still require a complete purchase check; unit tests and database checks do not replace that check. Feature branches do not deploy automatically in this repository; only `main` does.

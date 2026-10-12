@@ -34,6 +34,6 @@ export function BookAccess({ initialToken, reference }: { initialToken: string; 
   return <div className={styles.accessPanel}>
     {token?<button className={styles.primary} disabled={busy} onClick={download}>{busy?"Preparing your copy…":"Download your personal PDF"}</button>:reference?<button className={styles.primary} disabled={busy} onClick={verify}>{busy?"Checking payment…":"Verify payment and unlock my book"}</button>:null}
     <div role="status" aria-live="polite">{message&&<p>{message}</p>}</div>{error&&<p role="alert" className={styles.error}>{error}</p>}
-    <h2>Need a fresh link?</h2><form onSubmit={recover} className={styles.checkout}><label htmlFor="recovery-email">Email used at checkout</label><input id="recovery-email" name="email" type="email" autoComplete="email" maxLength={254} required disabled={busy}/><button className={styles.secondary} disabled={busy} type="submit">Send a fresh access link</button></form>
+    <h2>Need a fresh link?</h2><form method="post" onSubmit={recover} className={styles.checkout}><label htmlFor="recovery-email">Email used at checkout</label><input id="recovery-email" name="email" type="email" autoComplete="email" maxLength={254} required disabled={busy}/><button className={styles.secondary} disabled={busy} type="submit">Send a fresh access link</button></form>
   </div>;
 }
