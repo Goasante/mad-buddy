@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Book, ShopConfig } from "@/lib/shop/schema";
 const ghs = (minor: number) => "GH₵" + (minor / 100).toFixed(2);
 export function BookActions({
@@ -20,6 +20,19 @@ export function BookActions({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [downloaded, setDownloaded] = useState(false);
+  const downloadDialog = useRef<HTMLDialogElement>(null);
+  const supportForm = useRef<HTMLFormElement>(null);
+  function openDownload() {
+    setMessage("");
+    downloadDialog.current?.showModal();
+  }
+  function openSupport() {
+    downloadDialog.current?.close();
+    setShowSupport(true);
+    requestAnimationFrame(() => {
+      supportForm.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
   async function download() {
     setBusy(true);
     setMessage("Preparing your copy…");
@@ -38,6 +51,7 @@ export function BookActions({
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       setDownloaded(true);
+      downloadDialog.current?.close();
       setMessage(
         "Your copy is ready. If your browser opened the PDF, use its save or share option to keep it."
       );
@@ -79,7 +93,7 @@ export function BookActions({
     <div className="reader-actions">
       {!supportOnly && book.mode !== "paid" && (
         <div className="action-row">
-          <button className="button gold" onClick={download} disabled={busy}>
+          <button className="button gold" onClick={openDownload} disabled={busy}>
             Download free
           </button>
           {book.mode === "support" && (
@@ -92,6 +106,39 @@ export function BookActions({
           )}
         </div>
       )}
+      {!supportOnly && book.mode !== "paid" && (
+        <dialog
+          ref={downloadDialog}
+          className="download-dialog"
+          aria-labelledby={"download-title-" + book.id}
+          aria-describedby={"download-copy-" + book.id}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              const rect = event.currentTarget.getBoundingClientRect();
+              if (event.clientX < rect.left || event.clientX > rect.right ||
+                  event.clientY < rect.top || event.clientY > rect.bottom) {
+                event.currentTarget.close();
+              }
+            }
+          }}
+        >
+          <button className="dialog-close" type="button" aria-label="Close download pop-up"
+            onClick={() => downloadDialog.current?.close()}>Close</button>
+          <p className="eyebrow">Your complimentary copy</p>
+          <h2 id={"download-title-" + book.id}>Your next acquisition starts here.</h2>
+          <p id={"download-copy-" + book.id}>Download your free copy below. If it earns a place in your deal toolkit, help fund the next edition. No term sheet required.</p>
+          <div className="action-row">
+            <button className="button gold" type="button" onClick={download} disabled={busy} autoFocus>
+              {busy ? "Preparing your copy…" : "Download now"}
+            </button>
+            <button className="button outline" type="button" onClick={openSupport} disabled={busy}>
+              Support the next edition
+            </button>
+          </div>
+          <p className="fine">Your download is free. Contributions are entirely optional.</p>
+          <p className="dialog-status" role="status" aria-live="polite">{message}</p>
+        </dialog>
+      )}
       {downloaded && (
         <div className="reader-note">
           <strong>Thank you for reading.</strong>
@@ -99,13 +146,13 @@ export function BookActions({
             If you find the guide useful, even a small contribution helps bring
             the next practical book to life.
           </p>
-          <button className="text-link" onClick={() => setShowSupport(true)}>
+          <button className="text-link" onClick={openSupport}>
             Support the next book
           </button>
         </div>
       )}
       {showSupport && (
-        <form className="support-form" onSubmit={checkout}>
+        <form ref={supportForm} className="support-form" onSubmit={checkout}>
           <h3>
             {book.mode === "paid" && !supportOnly
               ? "Get your personal copy"
