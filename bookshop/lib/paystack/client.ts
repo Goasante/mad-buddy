@@ -33,6 +33,12 @@ export async function paystackRequest<T>(path: string, init: PaystackRequestInit
   const payload = (await response.json().catch(() => null)) as PaystackResponse<T> | null;
 
   if (!response.ok || !payload?.status) {
+    const message = payload?.message ?? "Paystack request failed.";
+    console.error("[bookshop] Paystack request rejected", {
+      status: response.status,
+      message: message.replaceAll(secretKey, "[redacted]")
+        .replace(/(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 160)
+    });
     throw new Error(payload?.message ?? "Paystack request failed.");
   }
 
