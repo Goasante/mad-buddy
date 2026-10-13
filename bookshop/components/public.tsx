@@ -91,7 +91,7 @@ export function Services({ config }: { config: ShopConfig }) {
       <h2>Need more than<br />a playbook?</h2>
       <p>{config.author.services}</p>
       <Link className="button gold" href="/work-with-me">
-        Let's discuss your campaign ↗
+        Let&apos;s discuss your campaign ↗
       </Link>
     </section>
   );
@@ -123,7 +123,7 @@ export function BookPage({ book, config }: { book: Book; config: ShopConfig }) {
         </div>
       </section>
       <section className="section">
-        <p className="eyebrow">01 — WHAT YOU'LL TAKE AWAY</p>
+        <p className="eyebrow">01 — WHAT YOU&apos;LL TAKE AWAY</p>
         <h2>Know more.<br />Move with purpose.</h2>
         <div className="benefits">
           {book.benefits.map((benefit, index) => (
