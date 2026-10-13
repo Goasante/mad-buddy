@@ -669,3 +669,91 @@ details summary { cursor: pointer; font-size: 13px; font-weight: 800; }
   .service-page .service-list article { min-height: 0; }
   .receipt-panel { padding: 25px; }
 }
+
+/* Campaign, contribution and receipt compositions */
+.support-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 740px;
+}
+.support-intro {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(65px, 8vw, 125px) clamp(30px, 7vw, 110px);
+  color: var(--cream);
+  background: var(--navy);
+}
+.support-intro .eyebrow { color: var(--gold); }
+.support-intro h1 { font-size: clamp(3.5rem, 5.7vw, 6.8rem); line-height: 1.03; }
+.support-intro h1 em,
+.service-head h1 em {
+  color: var(--gold);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -.06em;
+}
+.support-intro .lead { max-width: 570px; font-size: 18px; line-height: 1.75; color: #d1dbe0; }
+.support-principle { display: flex; gap: 10px 22px; flex-wrap: wrap; padding-top: 28px; margin-top: 30px; border-top: 1px solid #ffffff3a; }
+.support-principle span { font-size: 10px; color: #e1cda8; letter-spacing: .05em; text-transform: uppercase; }
+.support-checkout { padding: clamp(65px, 7vw, 110px) clamp(25px, 6vw, 100px); align-self: center; }
+.support-checkout h2 { font-size: clamp(2.5rem, 4.3vw, 4.9rem); }
+.support-checkout > p:not(.eyebrow) { color: var(--muted); }
+.support-checkout .reader-actions { margin-top: 28px; }
+.support-checkout .reader-actions > small,
+.support-checkout .reader-actions > .fine,
+.support-checkout .reader-actions .status { color: var(--muted); }
+.support-checkout .support-form { box-shadow: 0 18px 38px #10263813; }
+.service-page { width: 100%; max-width: none; }
+.service-head {
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  align-items: end;
+  gap: clamp(28px, 7vw, 120px);
+  padding: 25px 0 72px;
+}
+.service-head h1 { font-size: clamp(3.25rem, 6vw, 7rem); line-height: 1.04; max-width: 980px; }
+.service-head h1 em { color: #987139; }
+.service-head .lead { font-size: 17px; max-width: 510px; padding-bottom: 9px; }
+.service-page .service-list { margin: 0 0 70px; }
+.service-page .service-list article { min-height: 260px; }
+.service-cta {
+  display: grid;
+  grid-template-columns: 1.3fr .7fr;
+  align-items: center;
+  gap: clamp(30px, 7vw, 110px);
+  padding: clamp(40px, 5vw, 80px);
+  background: var(--navy);
+  color: var(--cream);
+}
+.service-cta .eyebrow { color: var(--gold); }
+.service-cta h2 { font-size: clamp(2.4rem, 3.7vw, 4.3rem); }
+.service-cta p:not(.eyebrow) { color: #d1dce0; }
+.service-cta .fine { font-size: 11px; margin-top: 22px; }
+.service-cta .fine a { color: var(--gold); }
+.receipt-page { min-height: 73vh; }
+.receipt-page .eyebrow { color: #977845; }
+.receipt-page .receipt-panel {
+  max-width: 670px;
+  padding: clamp(24px, 4vw, 48px);
+  background: var(--paper);
+  border: 1px solid #d6dcd6;
+  box-shadow: 0 18px 34px #0b25360c;
+}
+.receipt-panel > p { font-size: 16px; }
+.receipt-panel .button { margin: 15px 0; }
+.receipt-panel details { border-top: 1px solid var(--line); padding-top: 20px; }
+@media (max-width: 900px) {
+  .support-page { grid-template-columns: 1fr; }
+  .support-intro { padding: 75px 6vw; }
+  .support-intro h1 { font-size: clamp(3.3rem, 8.5vw, 5.2rem); }
+  .support-checkout { padding: 65px 6vw; width: 100%; }
+  .service-head { grid-template-columns: 1fr; gap: 22px; }
+  .service-head h1 { font-size: clamp(3.15rem, 8vw, 5.2rem); }
+  .service-cta { grid-template-columns: 1fr; }
+}
+@media (max-width: 460px) {
+  .support-intro h1 { font-size: clamp(3rem, 11.5vw, 4rem); }
+  .support-checkout .support-form { padding: 20px 16px; }
+  .service-cta { padding: 30px 23px; }
+}
