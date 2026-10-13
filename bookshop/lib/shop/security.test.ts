@@ -64,6 +64,10 @@ describe("bookshop security boundaries", () => {
     expect(convertedAmount(5.01, 12)).toBe(6012));
   it("validates a correct payment", () =>
     expect(verified(payment, order)).toBe(true));
+  it("uses the same trimmed key mode for provider calls and verification", () => {
+    process.env.PAYSTACK_SECRET_KEY = "  sk_live_synthetic  ";
+    expect(verified(payment, order)).toBe(true);
+  });
   for (const [field, value] of [
     ["status", "pending"],
     ["amount", 1],

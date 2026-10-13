@@ -13,11 +13,12 @@ import { sendMadBuddyEmail } from "@/lib/email/send";
 import { configuration, shopStore } from "./store";
 import { signToken } from "./auth";
 import { type Order, type Book } from "./schema";
+import { getPaystackSecretKey } from "@/lib/paystack/config";
 export const PRODUCT = "godfred_bookshop_v2";
 export function ready() {
   return (
     process.env.BOOK_SALES_ENABLED === "true" &&
-    Boolean(process.env.PAYSTACK_SECRET_KEY) &&
+    Boolean(getPaystackSecretKey()) &&
     Boolean(process.env.RESEND_API_KEY) &&
     Boolean(process.env.MAD_BUDDY_EMAIL_FROM)
   );
@@ -62,7 +63,7 @@ export function verified(payment: Record<string, unknown>, order: Order) {
     payment.amount === order.amountMinor &&
     payment.currency === order.currency &&
     payment.domain ===
-      (process.env.PAYSTACK_SECRET_KEY?.startsWith("sk_live_")
+      (getPaystackSecretKey()?.startsWith("sk_live_")
         ? "live"
         : "test") &&
     m?.product === PRODUCT &&
