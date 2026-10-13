@@ -149,9 +149,14 @@ export default function Admin({
   return (
     <div className="admin-wrap">
       <header className="admin-header">
-        <div>
-          <p className="eyebrow">PRIVATE BOOKSHOP</p>
-          <h1>Publishing desk</h1>
+        <div className="admin-brand">
+          <Link className="goa-logo" href="/" aria-label="GOA Books home">
+            GOA<span>.</span>
+          </Link>
+          <div>
+            <p className="eyebrow">GOA / PRIVATE PUBLISHING</p>
+            <h1>Publishing desk</h1>
+          </div>
         </div>
         <div className="action-row">
           <Link href="/" className="text-link">
@@ -705,7 +710,10 @@ export function AdminLogin() {
     [busy, setBusy] = useState(false);
   return (
     <main className="login">
-      <p className="eyebrow">GODFRED BOOKS · PRIVATE ACCESS</p>
+      <Link className="goa-logo" href="/" aria-label="GOA Books home">
+        GOA<span>.</span>
+      </Link>
+      <p className="eyebrow" style={{ marginTop: 32 }}>GOA / PRIVATE ACCESS</p>
       <h1>Publishing desk</h1>
       <form
         onSubmit={async (e) => {
