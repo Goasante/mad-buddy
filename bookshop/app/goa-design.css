@@ -560,3 +560,112 @@ details summary { cursor: pointer; font-size: 13px; font-weight: 800; }
   .hero-feature figcaption { font-size: 9px; }
   .admin-brand .goa-logo { font-size: 33px; }
 }
+
+
+/* Distinct editorial page treatments: contributions, consultancy, receipts */
+.support-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, .95fr);
+  background: var(--cream);
+  min-height: 700px;
+}
+.support-intro {
+  padding: clamp(68px, 8vw, 125px) clamp(30px, 6vw, 115px) 85px max(7vw, calc((100vw - 1320px)/2));
+  background: var(--navy);
+  color: #f6f4ee;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.support-intro .eyebrow { color: var(--soft-gold); }
+.support-intro h1 { font-size: clamp(3.15rem, 5.7vw, 6.3rem); margin: 0 0 34px; }
+.support-intro h1 em, .service-head h1 em {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -.07em;
+}
+.support-intro h1 em { color: var(--gold); }
+.support-intro .lead { font-size: 17px; color: #c9d6dd; max-width: 520px; }
+.support-principle {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 40px;
+  border-top: 1px solid #ffffff40;
+}
+.support-principle span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: #d4c6a6;
+  font-weight: 700;
+}
+.support-checkout {
+  padding: clamp(68px, 7vw, 113px) max(6vw, calc((100vw - 1320px)/2)) 75px clamp(30px, 5vw, 85px);
+}
+.support-checkout h2 { font-size: clamp(2.5rem, 4vw, 4.3rem); }
+.support-checkout > p:not(.eyebrow) { max-width: 570px; color: #5b6e73; }
+.support-checkout .reader-actions > small { color: #687981; }
+.support-checkout .reader-actions .status { color: var(--ink); }
+.support-checkout .support-form { box-shadow: none; border-color: #d3d6d0; }
+.support-checkout .support-form .reader-actions { max-width: none; }
+.service-page { max-width: none; }
+.service-head {
+  display: grid;
+  grid-template-columns: 1.25fr .65fr;
+  gap: clamp(30px, 6vw, 110px);
+  align-items: end;
+  padding-bottom: clamp(50px, 7vw, 100px);
+  border-bottom: 1px solid #cfd6d1;
+}
+.service-head h1 { max-width: 1100px; font-size: clamp(3.2rem, 6.5vw, 7rem); margin-bottom: 0; }
+.service-head h1 em { color: #a18148; }
+.service-head .lead { max-width: 440px; color: var(--muted); font-size: 16px; margin-bottom: 5px; }
+.service-page .service-list { margin: 0; padding: 56px 0 80px; }
+.service-page .service-list article { min-height: 260px; }
+.service-page .service-list article::before { font-size: 26px; }
+.service-cta {
+  display: grid;
+  grid-template-columns: 1.25fr .65fr;
+  gap: clamp(30px, 5vw, 85px);
+  align-items: end;
+  margin-bottom: 20px;
+  padding: clamp(42px, 5vw, 80px);
+  background: var(--navy);
+  color: #f6f4ee;
+}
+.service-cta h2 { font-size: clamp(2.25rem, 3.6vw, 4rem); }
+.service-cta p:not(.eyebrow) { color: #c9d5da; max-width: 630px; }
+.service-cta .button { width: 100%; }
+.service-cta .fine { color: #c9d5da; }
+.service-cta .fine a { color: #f2dcb6; }
+.receipt-page { min-height: 65vh; }
+.receipt-page h1 { margin-bottom: 35px; }
+.receipt-panel {
+  max-width: 720px;
+  background: var(--paper);
+  border: 1px solid #d6dcd7;
+  border-top: 4px solid var(--gold);
+  padding: clamp(25px, 4vw, 48px);
+}
+.receipt-panel > p:first-child { font-size: 17px; }
+.receipt-panel .button { margin: 15px 0 20px; }
+@media (max-width: 920px) {
+  .support-page { grid-template-columns: 1fr; }
+  .support-intro { padding: 68px 6vw 58px; }
+  .support-intro h1 { font-size: clamp(3.25rem, 9vw, 5.9rem); }
+  .support-principle { margin-top: 32px; }
+  .support-checkout { padding: 60px 6vw; }
+  .service-head, .service-cta { grid-template-columns: 1fr; }
+  .service-head { gap: 22px; padding-bottom: 55px; }
+  .service-page .service-list { padding: 40px 0 65px; }
+}
+@media (max-width: 550px) {
+  .support-intro h1 { font-size: 3.25rem; }
+  .support-checkout .support-form { padding: 20px 16px; }
+  .service-cta { padding: 35px 25px; }
+  .service-page .service-list article { min-height: 0; }
+  .receipt-panel { padding: 25px; }
+}
