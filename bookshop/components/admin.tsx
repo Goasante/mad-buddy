@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { ShopConfig, Book, Order } from "@/lib/shop/schema";
+import type { PaymentSetup } from "@/lib/shop/setup";
 import Link from "next/link";
 type Reports = {
   downloads: number;
@@ -31,6 +32,7 @@ export default function Admin({
     [busy, setBusy] = useState(false),
     [reports, setReports] = useState<Reports | null>(null),
     [dirty, setDirty] = useState(false);
+  const [paymentSetup, setPaymentSetup] = useState<PaymentSetup | null>(null);
   function update(next: ShopConfig) {
     setConfig(next);
     setDirty(true);
@@ -605,6 +607,25 @@ export default function Admin({
           {tab === "Settings & policies" && (
             <>
               <h2>Store settings</h2>
+              <div className="payment-setup">
+                <h3>Payment connection</h3>
+                <p className="fine">Check the Paystack key and send a test receipt to {initial.author.email}. No payment is made.</p>
+                <button className="button outline" disabled={busy} onClick={async () => {
+                  setBusy(true);
+                  try {
+                    setPaymentSetup(await api("payment-check", {}));
+                    setMessage("Payment connection check complete.");
+                  } catch (error) {
+                    setMessage((error as Error).message);
+                  } finally { setBusy(false); }
+                }}>Check payment setup</button>
+                {paymentSetup && <div role="status" className="fine">
+                  <p>Paystack: {paymentSetup.paystack.ok ? "Connected" : "Not connected"} · Mode: {paymentSetup.paystack.mode ?? "Key not configured"}</p>
+                  <p>Receipt email: {paymentSetup.receipt.ok ? "Accepted by the email provider" : paymentSetup.receipt.skipped ? "Not checked until Paystack connects" : "Not sent (" + paymentSetup.receipt.error + ")"}</p>
+                  <p>Server payments: {paymentSetup.serverEnabled ? "On" : "Off"} · Secure access: {paymentSetup.signingReady ? "Configured" : "Not configured"}</p>
+                  <strong>{paymentSetup.ready ? "Ready to enable live contributions." : "Resolve the connection checks before enabling payments."}</strong>
+                </div>}
+              </div>
               <label>
                 GHS per USD
                 <input
@@ -740,11 +761,13 @@ export function AdminLogin() {
             type="password"
             autoComplete="current-password"
             maxLength={256}
+            minLength={16}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </label>
+        <p className="fine">Use the production administrator password, with at least 16 characters.</p>
         <button className="button gold" disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </button>

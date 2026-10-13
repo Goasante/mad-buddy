@@ -270,3 +270,6 @@ body:has(.download-dialog[open]) { overflow:hidden; }
  .download-dialog h2 { font-size:29px; }
  .support-form { scroll-margin-top:155px; }
 }
+.payment-setup { padding:24px; border:1px solid var(--line); margin-bottom:30px; background:var(--cream); }
+.payment-setup h3 { font-size:24px; margin-bottom:12px; }
+.payment-setup .fine p { margin:12px 0; }

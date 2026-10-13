@@ -6,7 +6,9 @@ const m = vi.hoisted(() => ({
   allow: vi.fn(async () => true),
   store: vi.fn(),
   confirm: vi.fn(),
+  checkPaymentSetup: vi.fn(),
 }));
+vi.mock("@/lib/shop/setup", () => ({ checkPaymentSetup: m.checkPaymentSetup }));
 vi.mock("@/lib/shop/store", () => ({
   configuration: m.configuration,
   shopStore: m.store,
@@ -40,6 +42,15 @@ beforeEach(() => {
     "synthetic-signing-secret-with-thirty-two-characters";
 });
 describe("HTTP authorization and access", () => {
+  it("never calls payment or email providers for an unauthenticated setup check", async () => {
+    expect((await admin(req({}), ctx("payment-check"))).status).toBe(401);
+    expect(m.checkPaymentSetup).not.toHaveBeenCalled();
+  });
+  it("rejects cross-site owner setup checks", async () => {
+    m.isAdmin.mockReturnValue(true);
+    expect((await admin(req({}, "https://evil.example"), ctx("payment-check"))).status).toBe(403);
+    expect(m.checkPaymentSetup).not.toHaveBeenCalled();
+  });
   it("does not expose admin reports to visitors", async () =>
     expect((await adminGet(req({}), ctx("reports"))).status).toBe(401));
   it("requires admin auth before accepting uploads", async () => {

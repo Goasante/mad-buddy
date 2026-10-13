@@ -19,6 +19,7 @@ import {
 } from "@/lib/shop/store";
 import { configSchema, type Order } from "@/lib/shop/schema";
 import { confirm } from "@/lib/shop/payments";
+import { checkPaymentSetup } from "@/lib/shop/setup";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const response = (data: unknown, status = 200) =>
@@ -100,6 +101,14 @@ export async function POST(
     }
     if (!(await isAdmin()))
       return response({ error: "Sign in required." }, 401);
+    if (action === "payment-check") {
+      if (!(await allow(request, "admin-payment-check", 3, 900)))
+        return response({ error: "Please wait before another connection check." }, 429);
+      const { config } = await configuration();
+      const result = await checkPaymentSetup(config.author.email);
+      await audit("payments.setup.checked", result.ready ? "ready" : "not-ready");
+      return response(result);
+    }
     if (action === "logout") {
       const result = response({ ok: true });
       result.cookies.set(ADMIN_COOKIE, "", { path: "/", maxAge: 0 });
