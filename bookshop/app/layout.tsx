@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
+import "./goa-design.css";
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
   title: "Books by Godfred Ofosu Asante",
