@@ -46,6 +46,12 @@ const nextConfig: NextConfig = {
     "/api/messages/media": sharpRuntimeFiles
   },
   typedRoutes: true,
+  async redirects() {
+    return [
+      { source: "/books/:path*", destination: "https://books.mad-buddy.com/books/:path*", permanent: false },
+      { source: "/api/books/:path*", destination: "https://books.mad-buddy.com/api/books/:path*", permanent: false }
+    ];
+  },
   async headers() {
     const productionOnlyHeaders = process.env.NODE_ENV === "production"
       ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
