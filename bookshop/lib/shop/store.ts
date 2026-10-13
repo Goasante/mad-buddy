@@ -4,7 +4,12 @@ import { randomUUID } from "node:crypto";
 import { seed } from "./seed";
 import { configSchema, type ShopConfig } from "./schema";
 export function shopStore() {
-  return getStore({ name: "godfred-bookshop-v2", consistency: "strong" });
+  return getStore({ name: "godfred-bookshop-v2", consistency: "strong", fetch: async (url, init) => {
+    console.info('[bookshop] storage request', new URL(String(url)).hostname);
+    const result = await fetch(url, { ...init, cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    console.info('[bookshop] storage response', result.status);
+    return result;
+  } });
 }
 export async function configuration() {
   if (process.env.NODE_ENV !== "production" && !process.env.NETLIFY)
