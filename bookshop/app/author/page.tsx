@@ -10,7 +10,7 @@ export default async function Page() {
     <Shell config={config}>
       <section className="author-hero">
         <div>
-          <p className="eyebrow">RESEARCH. JUDGMENT. EXECUTION.</p>
+          <p className="eyebrow">GOA / THE AUTHOR</p>
           <h1>{config.author.name}</h1>
           <Text value={config.author.bio} />
           <p className="author-mantra">
