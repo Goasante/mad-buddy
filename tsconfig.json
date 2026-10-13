@@ -39,6 +39,7 @@
     "node_modules",
     "mobile",
     "lib/platform/*.mobile.ts",
-    "lib/platform/*.mobile.tsx"
+    "lib/platform/*.mobile.tsx",
+    "bookshop"
   ]
 }

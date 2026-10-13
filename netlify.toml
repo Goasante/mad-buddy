@@ -1,0 +1,15 @@
+[build]
+  base = "bookshop"
+  command = "npm run build"
+  publish = ".next"
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+[context.deploy-preview.environment]
+  BOOK_SALES_ENABLED = "false"
+[context.branch-deploy.environment]
+  BOOK_SALES_ENABLED = "false"
+[functions]
+  directory = "netlify/functions"

@@ -20,7 +20,7 @@ import {
   type AccessPaystackEvent
 } from "@/lib/access/paystack";
 import { MAD_BUDDY_ACCESS } from "@/lib/access/product";
-import { handleBookWebhook } from "@/lib/books/service";
+import { forwardBookWebhook } from "@/lib/paystack/book-forward";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
 
@@ -112,6 +112,10 @@ export async function POST(request: Request) {
   if (!event || typeof event.event !== "string" || !event.data || typeof event.data !== "object") {
     return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
   }
+  // Keep the existing provider endpoint for app payments. Only signed book
+  // events go to the standalone bookshop; a failed delivery asks for a retry.
+  const bookResponse = await forwardBookWebhook(body, signature, event.data.metadata);
+  if (bookResponse) return bookResponse;
   const admin = createSupabaseAdminClient();
   const eventId = buildEventId(event, body);
   const { data: existingEvent } = await admin
@@ -169,8 +173,6 @@ export async function POST(request: Request) {
 }
 
 async function handlePaystackEvent(event: PaystackWebhookEvent, eventId: string) {
-  // Book purchases are isolated from app subscription and Access entitlements.
-  if (await handleBookWebhook(event)) return;
   const admin = createSupabaseAdminClient();
   const data = event.data;
   const userId = data.metadata?.user_id;
