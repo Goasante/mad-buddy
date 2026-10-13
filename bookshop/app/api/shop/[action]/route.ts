@@ -24,6 +24,26 @@ export const dynamic = "force-dynamic";
 function response(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: privateHeaders });
 }
+export async function GET(request: Request, ctx: { params: Promise<{ action: string }> }) {
+  if ((await ctx.params).action !== "preview") return response({ error: "Not found." }, 404);
+  try {
+    if (!(await allow(request, "preview", 25, 900))) return response({ error: "Please wait before trying again." }, 429);
+    const { config } = await configuration();
+    const bookId = new URL(request.url).searchParams.get("bookId");
+    const book = config.books.find((b) => b.id === bookId && b.published);
+    if (!book?.preview || book.preview === book.pdf) return response({ error: "Preview not available." }, 404);
+    const bytes = await shopStore().get("files/" + book.preview.slice(5), { type: "arrayBuffer" });
+    if (!bytes) return response({ error: "Preview temporarily unavailable." }, 503);
+    return new NextResponse(bytes, { headers: {
+      ...privateHeaders,
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'inline; filename="' + book.slug + '-preview.pdf"',
+      "Content-Length": String(bytes.byteLength),
+    } });
+  } catch {
+    return response({ error: "Preview temporarily unavailable." }, 503);
+  }
+}
 export async function POST(
   request: Request,
   ctx: { params: Promise<{ action: string }> }

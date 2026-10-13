@@ -37,6 +37,10 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_APP_URL = "https://books.example.com";
 });
 describe("bookshop security boundaries", () => {
+  it("rejects using the full edition as the public preview", () => {
+    const file = "file:11111111-1111-4111-8111-111111111111";
+    expect(configSchema.safeParse({ ...seed, books: [{ ...seed.books[0], pdf: file, preview: file }] }).success).toBe(false);
+  });
   it("validates the seed configuration", () =>
     expect(configSchema.safeParse(seed).success).toBe(true));
   it("rejects duplicate book URLs", () =>
