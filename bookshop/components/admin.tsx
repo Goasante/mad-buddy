@@ -457,7 +457,21 @@ export default function Admin({
                         }}
                       />
                     </label>
+                    <label>
+                      Public preview PDF
+                      <input type="file" accept="application/pdf" disabled={busy}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void upload(file, (asset) => {
+                            if (!asset.startsWith("file:")) throw new Error("Upload a PDF.");
+                            editBook("preview", asset);
+                          });
+                        }} />
+                      <small>{book.preview ? "A separate preview is attached." : "Optional: upload only the pages visitors may read for free."}</small>
+                    </label>
                   </div>
+                  {book.preview && <button className="text-link" type="button" disabled={busy}
+                    onClick={() => editBook("preview", undefined)}>Remove public preview</button>}
                   <p className="fine">
                     Maximum 4 MB per upload. Files are versioned; previous
                     purchases retain access to their purchased edition. The

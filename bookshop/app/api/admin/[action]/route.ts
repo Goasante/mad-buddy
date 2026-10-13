@@ -173,6 +173,8 @@ export async function POST(
           400
         );
       for (const book of parsed.data.books) {
+        if (book.preview && !(await shopStore().getMetadata("files/" + book.preview.slice(5))))
+          return response({ error: "Preview upload could not be found." }, 400);
         if (
           book.published &&
           book.id !== "acquisition-v1" &&

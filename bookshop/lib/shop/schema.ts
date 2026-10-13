@@ -25,10 +25,15 @@ export const bookSchema = z
     cover: asset,
     mockup: asset.optional(),
     pdf: z.string().regex(/^(?:seed:acquisition|file:[a-f0-9-]{36})$/),
+    preview: z.string().regex(/^file:[a-f0-9-]{36}$/).optional(),
     chapters: z.array(text(180).min(1)).max(60),
     benefits: z.array(text(250).min(1)).max(12),
   })
-  .strict();
+  .strict()
+  .refine((book) => !book.preview || book.preview !== book.pdf, {
+    message: "The public preview must be a separate PDF from the complete edition.",
+    path: ["preview"],
+  });
 export const configSchema = z
   .object({
     books: z.array(bookSchema).max(100),

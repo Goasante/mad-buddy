@@ -91,6 +91,12 @@ export function BookActions({
   }
   return (
     <div className="reader-actions">
+      {!supportOnly && book.preview && (
+        <div className="action-row">
+          <a className="button outline" href={"/api/shop/preview?bookId=" + encodeURIComponent(book.id)}
+            target="_blank" rel="noopener noreferrer">Read the free preview</a>
+        </div>
+      )}
       {!supportOnly && book.mode !== "paid" && (
         <div className="action-row">
           <button className="button gold" onClick={openDownload} disabled={busy}>
@@ -158,11 +164,18 @@ export function BookActions({
               ? "Get your personal copy"
               : "Support the next book"}
           </h3>
+          {book.mode === "paid" && !supportOnly && (
+            <>
+              <p>Premium Edition · US${(book.priceMinor / 100 / settings.ghsPerUsd).toFixed(2)} equivalent</p>
+              <p>The complete PDF unlocks after verified payment. Your receipt includes a personal access link.</p>
+              <small>Checkout is charged in GHS at the amount shown below. Your bank’s conversion and fees may differ.</small>
+            </>
+          )}
           {(book.mode !== "paid" || supportOnly) && (
             <>
               <p>
-                This book is yours to read for free. If it helps you make your
-                next move, consider supporting the next one.
+                {supportOnly ? "Contributions support future publications and do not purchase a paid book."
+                  : "This book is yours to read for free. If it helps you make your next move, consider supporting the next one."}
               </p>
               <div className="presets">
                 {settings.presets.map((n) => (
@@ -224,7 +237,7 @@ export function BookActions({
               ? (book.mode === "paid" && !supportOnly
                   ? "Buy for "
                   : "Contribute ") + ghs(amount)
-              : "Contributions opening soon"}
+              : book.mode === "paid" && !supportOnly ? "Checkout opening soon" : "Contributions opening soon"}
           </button>
           {!supportOnly && book.mode !== "paid" && (
             <button
@@ -238,7 +251,7 @@ export function BookActions({
           )}
         </form>
       )}
-      {!supportOnly && (
+      {!supportOnly && book.mode !== "paid" && (
         <label className="fine">
           <input
             type="checkbox"
