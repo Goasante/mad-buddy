@@ -49,7 +49,7 @@ export default async function Page() {
         <div className="service-cta">
           <div>
             <p className="eyebrow">START SOMETHING USEFUL</p>
-            <h2>Tell me the brief.<br />I'll help define the approach.</h2>
+            <h2>Tell me the brief.<br />I&apos;ll help define the approach.</h2>
             <p>Include your sector, geography, target company size, objectives and current stage.
               We’ll discuss scope and fees before any work begins.</p>
           </div>
