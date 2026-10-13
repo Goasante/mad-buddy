@@ -1,24 +1,25 @@
-# Standalone bookshop
+# Godfred bookshop
 
-This directory builds independently of Mad Buddy. Only the sample PDF, cover, social card and author portrait are public. The full PDF remains in the existing private Supabase `book-files/ma-prospecting/v1.pdf` object. Purchase records remain in the service-only `book_orders` table.
+Independent Next.js 16 book catalogue, reader pages and owner publishing desk, hosted on Netlify. The Mad Buddy app remains on its existing infrastructure. This project has no Supabase dependency.
 
-## Netlify settings
+## Storage and access
 
-Connect this repository, set the base directory to `bookshop`, build command to `npm run build`, and publish directory to `.next`. Root `netlify.toml` records these settings and explicitly enables the maintained Next.js adapter. Keep branch deployments and deploy previews disabled; production is the only public deployment.
+Netlify Blobs `godfred-bookshop-v2` stores catalogue configuration with optimistic ETag checks, immutable PDF uploads, image uploads, transaction records, download deliveries and admin audit records. New paid PDFs are only reachable through verified download endpoints. The already-free first edition is bundled in the server deployment and is also present in this public source repository; changing its listing cannot retroactively make copies private. Upload a new edition to charge for protected access.
 
-Use `NEXT_PUBLIC_APP_URL=https://books.mad-buddy.com`. Configure the server-only Supabase service role, Paystack secret, Resend key, authorised sender and a random `BOOK_DOWNLOAD_SECRET` of at least 32 characters. Leave `BOOK_SALES_ENABLED=false` until the provider credentials, custom hostname, private PDF and delivery checks are complete. Never put secrets in Git or `NEXT_PUBLIC_*` variables.
+The owner sets `BOOK_ADMIN_PASSWORD` (16+ characters) manually as a production secret. `BOOK_DOWNLOAD_SECRET` signs eight-hour, HTTP-only admin sessions and 24-hour purchase links. Password changes invalidate existing admin sessions. All owner mutations check the configured site Origin. Conditional writes prevent concurrent edits from overwriting one another. Login attempts and public API calls use atomic rate-limit records.
 
-## Cutover order
+## Payments
 
-1. Deploy with purchases closed, verify rendering, the sample and access headers.
-2. Add `books.mad-buddy.com` as a Netlify custom domain. Add the DNS-only CNAME in the existing Cloudflare zone using the exact target returned by Netlify. Verify HTTPS before activating purchases.
-3. Configure payment and email secrets securely in Netlify. Keep the existing merchant webhook at `https://mad-buddy.com/api/paystack/webhook`: it validates the provider signature and forwards only book events, with their unchanged body and signature, to `https://books.mad-buddy.com/api/paystack/webhook`. App payment events remain in the existing app handler. If the merchant already points at the bookshop endpoint, that endpoint handles books and forwards non-book events back to the app. Verify which endpoint is saved in Paystack; neither path works unless the provider has a webhook URL configured.
-4. Verify payment, callback proof, personalised download, email receipt and recovery. Real purchases require the owner's payment authorisation; use Paystack test mode in a protected isolated test environment when no money should move.
-5. Redirect Vercel book pages, samples and API routes to the verified Netlify hostname using the root Next.js redirects. Check for in-flight purchases first. Existing buyer links may need fresh recovery links if the signing secret changes; never discard purchase records. A previous checkout's browser proof cookie stays on the old host; those buyers can recover their paid copy by email on the new host.
-6. Verify the redirects and signed webhook forwarding on production after merging. Switch Netlify's production branch to `main` so both applications deploy from the maintained branch, while using separate build directories and hosts.
+Paystack remains the processor. Both production environment `BOOK_SALES_ENABLED=true` and owner setting `paymentsEnabled=true` are required. A successful callback alone never grants access: amount, currency, mode, order metadata, reference and customer email must match provider verification. Browser proofs are HTTP-only cookies; receipt links expire after 24 hours. Resend sends transactional receipts and recovery links. Repeated webhook deliveries are deduplicated by order reference and provider email idempotency keys. App events retain signature-checked forwarding.
 
-The migration is not complete simply because this project builds. Do not disable the working Vercel book routes before the new host and payment/delivery flow are verified.
+USD contributions are converted server-side using the displayed, owner-managed GHS rate; rate changes require confirmation rather than silently changing the charge. The rate is a displayed store conversion, not a claim to match a customer's bank rate. Paid books have fixed GHS prices.
 
-## Checks
+## Measurements
 
-Run `npm ci`, `npm run typecheck`, `npm test` and `npm run build` in this directory. New webhook tests check book/app routing, unchanged signed payload forwarding and retries on delivery failure. Existing book tests check payment metadata, amount, currency, environment, proof cookies and stamped PDF generation.
+Delivery events count PDFs returned by the server, not proof of saves or reading. Distinct-browser measurement uses a first-party cookie only when a reader selects the optional setting. Scheduled retention deletes expired security counters and download records older than a year. Reports are explicitly partial if their record cap is reached. Paystack is authoritative for refunds, settlements and accounting. Campaign enquiries open the reader's email app and do not create a marketing subscription.
+
+## Operations
+
+Run `npm ci`, `npm run typecheck`, `npm test`, `npm run build`. Production uses Node 22. Keep previews disabled. The owner can publish/archive books, replace assets with versioned uploads, edit author/services copy and policies, manage access modes, choose prices and contribution rates, and recheck payment references. Maximum upload size is 4 MB.
+
+Before opening paid checkout: verify the production Paystack key, successful payment verification, webhook routing, receipt delivery and access recovery in an isolated test mode or with an owner-authorized real payment. No automatic paid transaction is performed during development.

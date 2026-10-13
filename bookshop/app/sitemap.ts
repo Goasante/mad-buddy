@@ -1,4 +1,5 @@
-import type { MetadataRoute } from "next";
-import { absoluteUrl } from "@/lib/seo";
-import { MA_BOOK } from "@/lib/books/product";
-export default function sitemap(): MetadataRoute.Sitemap {return [{url:absoluteUrl(MA_BOOK.path),changeFrequency:"monthly",priority:1}];}
+import type { MetadataRoute } from 'next';
+import { absoluteUrl } from '@/lib/seo';
+import { configuration } from '@/lib/shop/store';
+export const dynamic='force-dynamic';
+export default async function sitemap():Promise<MetadataRoute.Sitemap>{const {config}=await configuration();return ['','/author','/work-with-me',...config.books.filter(b=>b.published).map(b=>'/books/'+b.slug)].map(p=>({url:absoluteUrl(p),changeFrequency:'monthly',priority:p?0.7:1}));}

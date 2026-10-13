@@ -11,3 +11,5 @@
   BOOK_SALES_ENABLED = "false"
 [context.branch-deploy.environment]
   BOOK_SALES_ENABLED = "false"
+[functions]
+  directory = "netlify/functions"

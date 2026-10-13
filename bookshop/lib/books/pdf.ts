@@ -12,6 +12,6 @@ export async function stampBookPdf(master: Uint8Array, email: string, reference:
     page.drawText(label, { x: 42, y: index === 0 ? 45 : 43, size, font,
       color: index === 0 ? rgb(.72,.59,.35) : rgb(.4,.46,.48) });
   }
-  pdf.setSubject("Personal copy of The M&A Prospecting Playbook");
+  pdf.setSubject("Personal copy | Internal professional use");
   return pdf.save();
 }

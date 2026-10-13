@@ -13,11 +13,11 @@
     "node": "22.x"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.110.2",
+    "@netlify/blobs": "^11.1.4",
     "next": "16.3.3",
+    "pdf-lib": "1.17.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "pdf-lib": "1.17.1",
     "server-only": "0.0.1",
     "zod": "4.4.3"
   },
