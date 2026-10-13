@@ -243,3 +243,30 @@ th { color:var(--muted); font-weight:600; background:#efeee8; }
  .admin-header h1 { font-size:27px; }
 }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
+
+/* Native modal: top layer, keyboard focus trap and Escape dismissal. */
+.download-dialog { width:min(520px, calc(100vw - 32px)); max-height:calc(100dvh - 40px); margin:auto; padding:38px; border:1px solid var(--line); background:var(--paper); color:var(--ink); overflow:auto; box-shadow:0 25px 90px #071c3845; }
+.download-dialog::backdrop { background:#071b2ab3; }
+.download-dialog h2 { font-size:34px; line-height:1.16; margin-bottom:20px; }
+.download-dialog > p:not(.eyebrow) { font-size:13px; color:var(--muted); }
+.download-dialog .eyebrow { margin:18px 0; color:#886d3e; }
+.download-dialog .dialog-close { display:block; margin:-12px -12px 0 auto; min-height:36px; padding:8px 12px; background:none; border:0; color:var(--muted); font-size:11px; }
+.download-dialog .action-row { margin:25px 0 18px; gap:12px; }
+.download-dialog .button { flex:1 1 100%; }
+.download-dialog .fine { font-size:10px !important; margin:0; }
+.download-dialog .dialog-status:empty { display:none; }
+body:has(.download-dialog[open]) { overflow:hidden; }
+.support-form { scroll-margin-top:140px; }
+/* Show page introductions promptly on smaller screens. */
+@media (max-width:760px) {
+ .author-hero { padding-top:36px; }
+ .author-hero img { grid-row:auto; }
+ .service-page { padding-top:36px; }
+ .service-head h1 { font-size:clamp(36px,8.5vw,52px); }
+ .support-intro { padding-block:36px; }
+ .support-intro h1 { margin-bottom:22px; }
+ .support-principle { margin-top:18px; padding-top:16px; }
+ .download-dialog { padding:24px; }
+ .download-dialog h2 { font-size:29px; }
+ .support-form { scroll-margin-top:155px; }
+}

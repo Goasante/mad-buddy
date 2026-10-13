@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getSiteUrl } from "@/lib/seo";
+import { PageStart } from "@/components/page-start";
 import "./globals.css";
 import "./goa-design.css";
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><PageStart />{children}</body>
     </html>
   );
 }
