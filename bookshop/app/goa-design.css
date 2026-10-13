@@ -544,3 +544,19 @@ details summary { cursor: pointer; font-size: 13px; font-weight: 800; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Final interaction and contrast refinements */
+.hero-feature figure { margin: 0; }
+.hero-feature:focus-visible { outline: 3px solid var(--gold); outline-offset: 7px; }
+.book-card .book-visual:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; }
+.narrow .reader-actions > small,
+.narrow .reader-actions .status { color: var(--muted); }
+.narrow .reader-actions { max-width: 640px; margin-block: 35px; }
+.narrow .support-form { box-shadow: 0 16px 30px #142e3c0b; }
+.narrow .reader-actions .fine { color: var(--ink); }
+.book-hero .reader-actions > .fine { color: #d2dee0; }
+.support-form label { color: var(--navy); }
+@media (max-width: 760px) {
+  .hero-feature figcaption { font-size: 9px; }
+  .admin-brand .goa-logo { font-size: 33px; }
+}
