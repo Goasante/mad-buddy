@@ -4,7 +4,11 @@ import type { Book, ShopConfig } from "@/lib/shop/schema";
 import { BookActions } from "./reader";
 
 export const imageSource = (value: string) =>
-  value.startsWith("asset:") ? "/api/assets/" + value.slice(6) : value;
+  value.startsWith("asset:")
+    ? "/api/assets/" + value.slice(6)
+    : value === "/books/acquisition-mockup.png"
+      ? "/books/acquisition-upright.webp"
+      : value;
 
 export function Text({ value }: { value: string }) {
   return (
@@ -36,7 +40,7 @@ export function Shell({
           <Link href="/author">About the author</Link>
           <Link href="/work-with-me">Work with me</Link>
           <Link className="nav-support" href="/support">
-            Support the work ↗
+            Support the work
           </Link>
         </nav>
       </header>
@@ -73,11 +77,11 @@ export function AuthorPanel({ config }: { config: ShopConfig }) {
           sizes="(max-width: 760px) 260px, 400px" />
       </div>
       <div>
-        <p className="eyebrow">02 — THE MIND BEHIND THE WORK</p>
-        <h2>Experience.<br />On the page.</h2>
+        <p className="eyebrow">The author</p>
+        <h2>{config.author.name}</h2>
         <p className="author-summary">{config.author.bio.split("\n\n")[0]}</p>
         <Link className="text-link" href="/author">
-          Meet {config.author.name} ↗
+          Meet {config.author.name}
         </Link>
       </div>
     </section>
@@ -87,11 +91,11 @@ export function AuthorPanel({ config }: { config: ShopConfig }) {
 export function Services({ config }: { config: ShopConfig }) {
   return (
     <section className="services">
-      <p className="eyebrow">03 — FROM IDEAS TO EXECUTION</p>
-      <h2>Need more than<br />a playbook?</h2>
+      <p className="eyebrow">Research &amp; outreach</p>
+      <h2>Put your next opportunity in motion.</h2>
       <p>{config.author.services}</p>
       <Link className="button gold" href="/work-with-me">
-        Let&apos;s discuss your campaign ↗
+        Discuss your campaign
       </Link>
     </section>
   );
@@ -102,7 +106,7 @@ export function BookPage({ book, config }: { book: Book; config: ShopConfig }) {
     <Shell config={config}>
       <section className="book-hero">
         <div>
-          <Link className="eyebrow back-link" href="/">← BACK TO THE LIBRARY</Link>
+          <Link className="eyebrow back-link" href="/">Back to the library</Link>
           <p className="eyebrow">{book.category} / GOA EDITIONS</p>
           <h1>{book.title}</h1>
           <p className="lead">{book.subtitle}</p>
@@ -119,12 +123,12 @@ export function BookPage({ book, config }: { book: Book; config: ShopConfig }) {
             src={imageSource(book.mockup || book.cover)}
             alt={book.title + " book cover"} width={560} height={800}
             sizes="(max-width: 760px) 85vw, 42vw" priority />
-          <p>GOA / INDEPENDENT PUBLICATIONS</p>
+          <p>Digital edition · {book.pages} pages</p>
         </div>
       </section>
       <section className="section">
-        <p className="eyebrow">01 — WHAT YOU&apos;LL TAKE AWAY</p>
-        <h2>Know more.<br />Move with purpose.</h2>
+        <p className="eyebrow">What you will learn</p>
+        <h2>From search to a serious conversation.</h2>
         <div className="benefits">
           {book.benefits.map((benefit, index) => (
             <article key={benefit}>
@@ -136,14 +140,14 @@ export function BookPage({ book, config }: { book: Book; config: ShopConfig }) {
       </section>
       <section className="excerpt">
         <div>
-          <p className="eyebrow">02 — AN EXCERPT</p>
-          <h2>From the<br />inside pages.</h2>
+          <p className="eyebrow">Inside the book</p>
+          <h2>A closer look.</h2>
         </div>
         <div className="excerpt-copy"><Text value={book.teaser} /></div>
       </section>
       <section className="section">
-        <p className="eyebrow">03 — THE CONTENTS</p>
-        <h2>Every chapter.<br />A clearer next step.</h2>
+        <p className="eyebrow">The contents</p>
+        <h2>Your guide, chapter by chapter.</h2>
         <ol className="chapters">
           {book.chapters.map((chapter) => <li key={chapter}>{chapter}</li>)}
         </ol>

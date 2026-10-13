@@ -9,90 +9,53 @@ export default async function Home() {
   const { config } = await configuration();
   const books = config.books.filter((book) => book.published);
   const featured = books[0];
-
   return (
     <Shell config={config}>
       <section className="library-hero" aria-labelledby="library-title">
         <div className="hero-copy">
-          <p className="eyebrow">GOA / THE INDEPENDENT LIBRARY</p>
-          <h1 id="library-title">
-            Knowledge<br />with <em>intent.</em>
-          </h1>
-          <p>
-            Clear thinking for decisive people. Practical field guides built
-            to turn good research into confident action.
-          </p>
+          <p className="eyebrow">Independent books by Godfred Ofosu Asante</p>
+          <h1 id="library-title">For your next<br /><em>big move.</em></h1>
+          <p>Practical guides for founders, business buyers and the people who build their next opportunity.</p>
           <div className="hero-actions">
-            <a className="button gold" href="#books">
-              Explore the collection ↗
-            </a>
-            <Link className="text-link" href="/author">
-              Behind the books ↗
-            </Link>
+            <a className="button gold" href="#books">Explore the books</a>
+            <Link className="text-link" href="/work-with-me">Work with Godfred</Link>
           </div>
+          <p className="hero-signature">Research. Relationships. Enterprise.</p>
         </div>
         {featured && (
-          <Link className="hero-feature" href={"/books/" + featured.slug}
-            aria-label={"Explore " + featured.title}>
+          <Link className="hero-feature" href={"/books/" + featured.slug} aria-label={"Explore " + featured.title}>
             <figure>
               <div className="hero-feature-visual">
-                <span className="hero-edition">FEATURED / 001</span>
-                <Image src={imageSource(featured.cover)}
-                  alt={featured.title + " book cover"}
-                  width={360} height={500} priority
-                  sizes="(max-width: 760px) 75vw, 30vw" />
+                <Image src={imageSource(featured.mockup || featured.cover)} alt={featured.title + " book"} width={1049} height={1500} priority sizes="(max-width: 760px) 80vw, 420px" />
               </div>
-              <figcaption>
-                <span>{featured.category}</span>
-                <span>Discover the guide ↗</span>
-              </figcaption>
+              <figcaption><span>Featured publication</span><span>{featured.title}</span></figcaption>
             </figure>
           </Link>
         )}
       </section>
-      <div className="principle-strip" aria-label="What you'll find here">
-        <span>01 / Research <i>↗</i></span>
-        <span>02 / Clarity <i>↗</i></span>
-        <span>03 / Execution <i>↗</i></span>
-        <span>By Godfred Ofosu Asante</span>
-      </div>
-      <section className="section" id="books" aria-labelledby="books-title">
+      <section className="section collection" id="books" aria-labelledby="books-title">
         <div className="section-heading">
-          <div>
-            <p className="eyebrow">01 — THE COLLECTION</p>
-            <h2 id="books-title">Ideas worth<br />putting to work.</h2>
-          </div>
-          <span>
-            {books.length} {books.length === 1 ? "publication" : "publications"}
-            {" "} / Independently published
-          </span>
+          <div><p className="eyebrow">The collection</p><h2 id="books-title">A considered advantage.</h2></div>
+          <p>Field guides with a clear purpose.<br />Built to be used, chapter by chapter.</p>
         </div>
         <div className="book-grid">
           {books.map((book) => (
             <article className="book-card" key={book.id}>
-              <Link className="book-visual" href={"/books/" + book.slug}>
-                <Image src={imageSource(book.cover)}
-                  alt={book.title + " cover"} width={360} height={515}
-                  sizes="(max-width: 760px) 80vw, 340px" />
+              <Link className="book-visual" href={"/books/" + book.slug} aria-label={"Explore " + book.title}>
+                <Image src={imageSource(book.mockup || book.cover)} alt={book.title + " book"} width={1049} height={1500} sizes="(max-width: 760px) 65vw, 280px" />
               </Link>
-              <p className="eyebrow">{book.category}</p>
-              <h3><Link href={"/books/" + book.slug}>{book.title}</Link></h3>
-              <p>{book.subtitle}</p>
-              <div className="card-meta">
-                {book.mode === "paid" ? "GH₵" + (book.priceMinor / 100).toFixed(2) : "Free to read"}
-                {" "} · {book.pages} pages
+              <div className="book-card-copy">
+                <p className="eyebrow">{book.category}</p>
+                <h3><Link href={"/books/" + book.slug}>{book.title}</Link></h3>
+                <p>{book.description}</p>
+                <div className="card-meta"><span>{book.pages} pages · Digital edition</span><span>{book.mode === "paid" ? "GH₵" + (book.priceMinor / 100).toFixed(2) : "Complimentary PDF"}</span></div>
+                <Link className="button gold" href={"/books/" + book.slug}>Discover the book</Link>
               </div>
-              <Link className="text-link" href={"/books/" + book.slug}>
-                Explore this book ↗
-              </Link>
             </article>
           ))}
+          {books.length === 0 && <p>New publications are being prepared. Check back for the next edition.</p>}
         </div>
       </section>
-      <aside className="editorial-note">
-        <p className="eyebrow">A NOTE FROM THE AUTHOR</p>
-        <p>Less noise. Better questions. Stronger decisions. That is the work behind every edition.</p>
-      </aside>
       <AuthorPanel config={config} />
       <Services config={config} />
     </Shell>

@@ -75,7 +75,7 @@ export default function Receipt({
       <p role="status">{message}</p>
       {token && (
         <button className="button gold" disabled={busy} onClick={download}>
-          Download your personal copy ↓
+          Download your personal copy
         </button>
       )}
       <details>
