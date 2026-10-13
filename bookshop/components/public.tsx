@@ -2,17 +2,20 @@ import Link from "next/link";
 import Image from "next/image";
 import type { Book, ShopConfig } from "@/lib/shop/schema";
 import { BookActions } from "./reader";
+
 export const imageSource = (value: string) =>
   value.startsWith("asset:") ? "/api/assets/" + value.slice(6) : value;
+
 export function Text({ value }: { value: string }) {
   return (
     <>
-      {value.split("\n\n").map((p, i) => (
-        <p key={i}>{p}</p>
+      {value.split("\n\n").map((paragraph, index) => (
+        <p key={index}>{paragraph}</p>
       ))}
     </>
   );
 }
+
 export function Shell({
   children,
   config,
@@ -22,126 +25,127 @@ export function Shell({
 }) {
   return (
     <>
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <header className="header">
-        <Link className="wordmark" href="/">
-          GODFRED<span>BOOKS & FIELD GUIDES</span>
+        <Link className="brand-lockup" href="/" aria-label="GOA Books — home">
+          <span className="goa-logo" aria-hidden="true">GOA<span>.</span></span>
+          <span className="brand-descriptor">Books &amp;<br />field guides</span>
         </Link>
         <nav aria-label="Main navigation">
-          <Link href="/">Books</Link>
-          <Link href="/author">The author</Link>
+          <Link href="/">The library</Link>
+          <Link href="/author">About the author</Link>
           <Link href="/work-with-me">Work with me</Link>
           <Link className="nav-support" href="/support">
-            Support the next book ↗
+            Support the work ↗
           </Link>
         </nav>
       </header>
-      <main>{children}</main>
+      <main className="site-main" id="main-content">{children}</main>
       <footer>
-        <div>
-          <strong>{config.author.name}</strong>
-          <p>Clear thinking. Practical execution.</p>
+        <div className="footer-brand">
+          <Link className="goa-logo" href="/" aria-label="GOA Books home">
+            GOA<span>.</span>
+          </Link>
+          <div>
+            <strong>{config.author.name}</strong>
+            <p>Independent books. Decisive thinking.</p>
+          </div>
         </div>
-        <nav aria-label="Footer">
+        <nav aria-label="Footer navigation">
           <Link href="/terms">Terms of use</Link>
           <Link href="/privacy">Privacy notice</Link>
           <Link href="/support">Support</Link>
-          <Link href="/admin">Admin</Link>
+          <Link href="/work-with-me">Work together</Link>
+          <Link href="/admin">Publishing desk</Link>
         </nav>
-        <small>
-          © {new Date().getFullYear()} {config.author.name}
-        </small>
+        <small>© {new Date().getFullYear()} {config.author.name}</small>
       </footer>
     </>
   );
 }
+
 export function AuthorPanel({ config }: { config: ShopConfig }) {
   return (
     <section className="author-panel">
-      <Image
-        src={imageSource(config.author.portrait)}
-        alt={config.author.name}
-        width={200}
-        height={240}
-      />
+      <div className="author-photo">
+        <Image src={imageSource(config.author.portrait)}
+          alt={config.author.name} width={420} height={490}
+          sizes="(max-width: 760px) 260px, 400px" />
+      </div>
       <div>
-        <p className="eyebrow">THE AUTHOR</p>
-        <h2>{config.author.name}</h2>
-        <p>{config.author.bio.split("\n\n")[0]}</p>
+        <p className="eyebrow">02 — THE MIND BEHIND THE WORK</p>
+        <h2>Experience.<br />On the page.</h2>
+        <p className="author-summary">{config.author.bio.split("\n\n")[0]}</p>
         <Link className="text-link" href="/author">
-          Meet the author ↗
+          Meet {config.author.name} ↗
         </Link>
       </div>
     </section>
   );
 }
+
 export function Services({ config }: { config: ShopConfig }) {
   return (
     <section className="services">
-      <p className="eyebrow">RESEARCH. OUTREACH. FOLLOW-THROUGH.</p>
-      <h2>Put the playbook to work.</h2>
+      <p className="eyebrow">03 — FROM IDEAS TO EXECUTION</p>
+      <h2>Need more than<br />a playbook?</h2>
       <p>{config.author.services}</p>
       <Link className="button gold" href="/work-with-me">
-        Discuss your campaign ↗
+        Let's discuss your campaign ↗
       </Link>
     </section>
   );
 }
+
 export function BookPage({ book, config }: { book: Book; config: ShopConfig }) {
   return (
     <Shell config={config}>
       <section className="book-hero">
         <div>
-          <Link className="eyebrow" href="/">
-            ← THE BOOKSHELF
-          </Link>
-          <p className="eyebrow">{book.category}</p>
+          <Link className="eyebrow back-link" href="/">← BACK TO THE LIBRARY</Link>
+          <p className="eyebrow">{book.category} / GOA EDITIONS</p>
           <h1>{book.title}</h1>
           <p className="lead">{book.subtitle}</p>
           <p>{book.description}</p>
           <div className="book-facts">
             <span>{book.pages} pages</span>
-            <span>PDF field guide</span>
+            <span>Digital field guide</span>
             <span>By {config.author.name}</span>
           </div>
           <BookActions book={book} settings={config.settings} />
         </div>
-        <Image
-          className="hero-cover"
-          src={imageSource(book.mockup || book.cover)}
-          alt={book.title + " cover"}
-          width={560}
-          height={800}
-          priority
-        />
+        <div className="book-cover-stage">
+          <Image className="hero-cover"
+            src={imageSource(book.mockup || book.cover)}
+            alt={book.title + " book cover"} width={560} height={800}
+            sizes="(max-width: 760px) 85vw, 42vw" priority />
+          <p>GOA / INDEPENDENT PUBLICATIONS</p>
+        </div>
       </section>
       <section className="section">
-        <p className="eyebrow">THE ADVANTAGE IS IN THE PREPARATION</p>
-        <h2>Build a pipeline you can explain.</h2>
+        <p className="eyebrow">01 — WHAT YOU'LL TAKE AWAY</p>
+        <h2>Know more.<br />Move with purpose.</h2>
         <div className="benefits">
-          {book.benefits.map((b, i) => (
-            <article key={b}>
-              <span>0{i + 1}</span>
-              <p>{b}</p>
+          {book.benefits.map((benefit, index) => (
+            <article key={benefit}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <p>{benefit}</p>
             </article>
           ))}
         </div>
       </section>
       <section className="excerpt">
         <div>
-          <p className="eyebrow">A TASTE OF THE BOOK</p>
-          <h2>Access is earned.</h2>
+          <p className="eyebrow">02 — AN EXCERPT</p>
+          <h2>From the<br />inside pages.</h2>
         </div>
-        <div className="excerpt-copy">
-          <Text value={book.teaser} />
-        </div>
+        <div className="excerpt-copy"><Text value={book.teaser} /></div>
       </section>
       <section className="section">
-        <p className="eyebrow">INSIDE THE GUIDE</p>
-        <h2>From mandate to meaningful conversations.</h2>
+        <p className="eyebrow">03 — THE CONTENTS</p>
+        <h2>Every chapter.<br />A clearer next step.</h2>
         <ol className="chapters">
-          {book.chapters.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
+          {book.chapters.map((chapter) => <li key={chapter}>{chapter}</li>)}
         </ol>
       </section>
       <AuthorPanel config={config} />
