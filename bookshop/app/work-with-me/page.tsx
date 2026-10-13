@@ -18,8 +18,8 @@ export default async function Page() {
       <section className="section service-page">
         <div className="service-head">
           <div>
-            <p className="eyebrow">GOA / BESPOKE RESEARCH &amp; CAMPAIGNS</p>
-            <h1>Better targets.<br /><em>Better conversations.</em></h1>
+            <p className="eyebrow">Research &amp; campaigns</p>
+            <h1>The right companies.<br /><em>The right conversations.</em></h1>
           </div>
           <p className="lead">{config.author.services}</p>
         </div>
@@ -48,13 +48,13 @@ export default async function Page() {
         </div>
         <div className="service-cta">
           <div>
-            <p className="eyebrow">START SOMETHING USEFUL</p>
-            <h2>Tell me the brief.<br />I&apos;ll help define the approach.</h2>
+            <p className="eyebrow">Work with Godfred</p>
+            <h2>Let’s start with your brief.</h2>
             <p>Include your sector, geography, target company size, objectives and current stage.
               We’ll discuss scope and fees before any work begins.</p>
           </div>
           <div>
-            <a className="button gold" href={mail}>Discuss your campaign ↗</a>
+            <a className="button gold" href={mail}>Discuss your campaign</a>
             <p className="fine">Opens your email application. Contact:{" "}
               <a href={"mailto:" + config.author.email}>{config.author.email}</a>.
               Contributions support publications, not campaign services.</p>

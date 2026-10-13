@@ -10,7 +10,7 @@ export default async function Page() {
     <Shell config={config}>
       <section className="author-hero">
         <div>
-          <p className="eyebrow">GOA / THE AUTHOR</p>
+          <p className="eyebrow">About the author</p>
           <h1>{config.author.name}</h1>
           <Text value={config.author.bio} />
           <p className="author-mantra">
@@ -19,10 +19,10 @@ export default async function Page() {
           </p>
           <div className="action-row">
             <Link className="text-link" href={config.author.linkedin}>
-              LinkedIn ↗
+              LinkedIn
             </Link>
             <Link className="text-link" href={config.author.portfolio}>
-              Portfolio ↗
+              Portfolio
             </Link>
           </div>
         </div>

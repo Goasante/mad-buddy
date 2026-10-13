@@ -160,7 +160,7 @@ export default function Admin({
         </div>
         <div className="action-row">
           <Link href="/" className="text-link">
-            View bookshop ↗
+            View bookshop
           </Link>
           <button
             className="button outline"
@@ -750,7 +750,7 @@ export function AdminLogin() {
         </button>
         <p role="status">{message}</p>
       </form>
-      <Link href="/">← Back to books</Link>
+      <Link href="/">Back to books</Link>
     </main>
   );
 }

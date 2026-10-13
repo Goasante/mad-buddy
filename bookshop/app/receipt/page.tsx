@@ -16,8 +16,8 @@ export default async function Page({
   return (
     <Shell config={config}>
       <section className="section narrow receipt-page">
-        <p className="eyebrow">GOA EDITIONS / ACCESS &amp; RECEIPTS</p>
-        <h1>Your next chapter<br />starts here.</h1>
+        <p className="eyebrow">Your bookshop receipt</p>
+        <h1>Your receipt &amp; access.</h1>
         <div className="receipt-panel"><Receipt reference={query.reference} token={query.token} /></div>
       </section>
     </Shell>

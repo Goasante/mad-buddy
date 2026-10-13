@@ -80,7 +80,7 @@ export function BookActions({
       {!supportOnly && book.mode !== "paid" && (
         <div className="action-row">
           <button className="button gold" onClick={download} disabled={busy}>
-            Download free ↓
+            Download free
           </button>
           {book.mode === "support" && (
             <button
@@ -100,7 +100,7 @@ export function BookActions({
             the next practical book to life.
           </p>
           <button className="text-link" onClick={() => setShowSupport(true)}>
-            Support the next book ↗
+            Support the next book
           </button>
         </div>
       )}
@@ -186,7 +186,7 @@ export function BookActions({
               disabled={busy}
               onClick={download}
             >
-              Skip and download free ↓
+              Skip and download free
             </button>
           )}
         </form>
