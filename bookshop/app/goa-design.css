@@ -154,6 +154,7 @@ a, button { -webkit-tap-highlight-color: transparent; }
 .library-hero .hero-actions { margin-top: 34px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .library-hero .hero-actions .text-link { color: #f6f4ee; }
 .hero-feature { position: relative; display: block; min-width: 0; margin: 0; }
+.hero-feature figure { margin: 0; }
 .hero-feature-visual {
   position: relative;
   display: grid;
