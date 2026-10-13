@@ -30,7 +30,7 @@ export function BookActions({
     downloadDialog.current?.close();
     setShowSupport(true);
     requestAnimationFrame(() => {
-      supportForm.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      supportForm.current?.scrollIntoView({ behavior: "instant", block: "start" });
     });
   }
   async function download() {

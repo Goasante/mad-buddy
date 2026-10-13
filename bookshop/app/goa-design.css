@@ -115,7 +115,7 @@ footer small { font-size:10px; }
 .author-hero img { filter:none; position:sticky; top:130px; }
 .author-hero .author-mantra { font-family:Georgia,serif; font-size:22px; font-weight:400; color:var(--ink); }
 .support-page { display:grid; grid-template-columns:1fr 1fr; }
-.support-intro { background:var(--navy); color:var(--cream); padding:90px 6vw; display:flex; flex-direction:column; justify-content:center; }
+.support-intro { background:var(--navy); color:var(--cream); padding:65px 6vw; display:flex; flex-direction:column; justify-content:flex-start; }
 .support-intro .eyebrow { color:var(--gold); }
 .support-intro h1 { font-size:clamp(44px,4.8vw,68px); }
 .support-intro em { color:var(--gold); }
