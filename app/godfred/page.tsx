@@ -8,10 +8,10 @@ const linkedin = "https://www.linkedin.com/in/goasante";
 const instagram = "https://www.instagram.com/alpha_graphix_gh/";
 const cvUrl = "/founder/Godfred-Ofosu-Asante-CV.pdf";
 const rewardsStory = "https://www.linkedin.com/posts/goasante_opstoapps-leadership-techtransformation-activity-7394395108600786944-E9hR";
-const description = "Godfred Ofosu Asante — founder of Mad Buddy, operations leader, B2B lead generation specialist and visual creative based in Ghana.";
+const description = "Godfred Ofosu Asante — founder of Mad Buddy, operations leader, B2B lead generation specialist, author and visual creative based in Ghana.";
 
 export const metadata: Metadata = {
-  title: { absolute: "Godfred Ofosu Asante — Builder, Operator & Creative" },
+  title: { absolute: "Godfred Ofosu Asante — Builder, Operator, Author & Creative" },
   description,
   alternates: { canonical: "/godfred" },
   openGraph: { title: "Godfred Ofosu Asante", description, url: "/godfred", type: "profile", firstName: "Godfred", lastName: "Ofosu Asante" },
@@ -33,7 +33,7 @@ export default function GodfredPortfolio() {
         <div className={styles.headerInner}>
           <a href="#portfolio-content" className={styles.wordmark} aria-label="Godfred Ofosu Asante, back to top">GOA<span>.</span></a>
           <nav aria-label="Portfolio navigation" className={styles.navigation}>
-            <a href="#work">Work</a><a href="#about">About</a><a href="#contact">Connect <ArrowUpRight aria-hidden="true" /></a>
+            <a href="#work">Work</a><a href="#books">Books</a><a href="#about">About</a><a href="#contact">Connect <ArrowUpRight aria-hidden="true" /></a>
           </nav>
           <Link href="/about" className={styles.backLink}>Mad Buddy <ArrowUpRight aria-hidden="true" /></Link>
         </div>
@@ -45,7 +45,7 @@ export default function GodfredPortfolio() {
             <p className={styles.eyebrow}><span className={styles.statusDot} /> Based in Ghana. Building beyond it.</p>
             <h1 id="hero-heading">Godfred<br />Ofosu Asante<span>.</span></h1>
             <p className={styles.heroStatement}>A builder’s mind.<br /><em>A creative’s eye.</em></p>
-            <p className={styles.heroDescription}>I turn ideas into useful products, stronger teams, and meaningful connections. Founder of Mad Buddy. Working across operations, growth, and design.</p>
+            <p className={styles.heroDescription}>I turn ideas into useful products, stronger teams, and meaningful connections. Founder of Mad Buddy and author of practical guides to business acquisition and lead generation. Working across operations, growth, and design.</p>
             <div className={styles.heroActions}>
               <a href="#work" className={styles.button}>Explore my work <ArrowDown aria-hidden="true" /></a>
               <a href={cvUrl} download className={styles.textLink}>Download CV <Download aria-hidden="true" /></a>
@@ -57,12 +57,12 @@ export default function GodfredPortfolio() {
               <Image src="/founder/godfred.jpg" alt="Godfred Ofosu Asante wearing a suit, with his arms folded" width={400} height={400} preload sizes="(max-width: 700px) 85vw, 400px" />
             </div>
             <figcaption><span>Ideas are a start.<br /><strong>Building is the difference.</strong></span><span className={styles.portraitMonogram} aria-hidden="true">GOA.</span></figcaption>
-            <span className={styles.portraitLabel}>Builder · Operator · Creative</span>
+            <span className={styles.portraitLabel}>Builder · Operator · Author · Creative</span>
           </figure>
         </section>
 
         <div className={styles.disciplineStrip} aria-label="Areas of work">
-          <div className={styles.container}><span>Product</span><span aria-hidden="true">·</span><span>People</span><span aria-hidden="true">·</span><span>Growth</span><span aria-hidden="true">·</span><span>Design</span></div>
+          <div className={styles.container}><span>Product</span><span aria-hidden="true">·</span><span>People</span><span aria-hidden="true">·</span><span>Growth</span><span aria-hidden="true">·</span><span>Design</span><span aria-hidden="true">·</span><span>Writing</span></div>
         </div>
 
         <section id="work" className={`${styles.work} ${styles.container}`} aria-labelledby="work-heading">
@@ -125,16 +125,58 @@ export default function GodfredPortfolio() {
           </div>
         </section>
 
+        <section id="books" className={styles.booksSection} aria-labelledby="books-heading">
+          <div className={styles.container}>
+            <div className={styles.sectionHeader}>
+              <div><p className={styles.eyebrow}>02 / Author · Books &amp; writing</p><h2 id="books-heading">Experience, put into words<span>.</span></h2></div>
+              <p>Two practical guides.<br />Built to move you from research to action.</p>
+            </div>
+            <p className={styles.booksIntro}>I write about finding the right businesses, reaching the right people, and building a more disciplined approach to growth. These are the tools, frameworks, and conversations behind the work.</p>
+            <div className={styles.bookGrid}>
+              <article className={styles.bookCard}>
+                <a className={styles.bookCover} href="https://books.mad-buddy.com/books/ma-prospecting-playbook" aria-label="Explore Buy Businesses on Your Terms">
+                  <Image src="/founder/books/buy-businesses-cover.jpg" alt="Buy Businesses on Your Terms by Godfred Ofosu Asante" width={600} height={850} sizes="(max-width: 700px) 65vw, 220px" />
+                </a>
+                <div className={styles.bookCopy}>
+                  <p className={styles.projectType}>Business acquisition</p>
+                  <h3>Buy Businesses<br />on Your Terms</h3>
+                  <p>A practical guide to finding suitable acquisition targets, qualifying opportunities, and starting credible conversations with business owners.</p>
+                  <a href="https://books.mad-buddy.com/books/ma-prospecting-playbook" className={styles.textLink}>Explore the book <ArrowUpRight aria-hidden="true" /></a>
+                </div>
+              </article>
+              <article className={styles.bookCard}>
+                <a className={`${styles.bookCover} ${styles.rainmakerCover}`} href="https://books.mad-buddy.com/books/the-rainmakers-code" aria-label="Explore The Rainmaker’s Code">
+                  <Image src="/founder/books/rainmaker-cover.jpg" alt="The Rainmaker’s Code by Godfred Ofosu Asante" width={600} height={850} sizes="(max-width: 700px) 65vw, 220px" />
+                </a>
+                <div className={styles.bookCopy}>
+                  <p className={styles.projectType}>Lead generation &amp; growth</p>
+                  <h3>The Rainmaker’s<br />Code</h3>
+                  <p>A field guide to prospect research, stronger outreach, and follow-up that turns lead generation into a repeatable practice.</p>
+                  <a href="https://books.mad-buddy.com/books/the-rainmakers-code" className={styles.textLink}>Explore the book <ArrowUpRight aria-hidden="true" /></a>
+                </div>
+              </article>
+            </div>
+            <div className={styles.bookStores}>
+              <div><p className={styles.projectType}>Find my books</p><p>Choose your preferred bookshop.</p></div>
+              <nav aria-label="Bookshops" className={styles.storeLinks}>
+                <a href="https://books.mad-buddy.com" className={styles.button}>GOA Books <ArrowUpRight aria-hidden="true" /></a>
+                <a href="https://payhip.com/GodfredAsanteDigital" className={styles.textLink}>Payhip <ArrowUpRight aria-hidden="true" /></a>
+                <a href="https://asantegodfred5.gumroad.com" className={styles.textLink}>Gumroad <ArrowUpRight aria-hidden="true" /></a>
+              </nav>
+            </div>
+          </div>
+        </section>
+
         <section id="about" className={styles.aboutSection} aria-labelledby="about-heading">
           <div className={`${styles.container} ${styles.aboutGrid}`}>
-            <div><p className={styles.eyebrow}>02 / The person behind the work</p><h2 id="about-heading">Curious by nature.<br /><em>Practical by choice.</em></h2></div>
-            <div className={styles.aboutCopy}><p>I’m Godfred, a Ghana-based builder and operations professional with a creative streak. I like the point where people, business, and technology meet.</p><p>That shows up in the products I build, the teams I’ve led, the prospects I’ve researched, and the visuals I create. My approach is simple: understand the problem, make something useful, and keep improving it.</p><a href={linkedin} className={styles.textLink}>My full professional profile <ArrowUpRight aria-hidden="true" /></a></div>
+            <div><p className={styles.eyebrow}>03 / The person behind the work</p><h2 id="about-heading">Curious by nature.<br /><em>Practical by choice.</em></h2></div>
+            <div className={styles.aboutCopy}><p>I’m Godfred, a Ghana-based builder, author, and operations professional with a creative streak. I like the point where people, business, and technology meet.</p><p>That shows up in the products I build, the teams I’ve led, the prospects I’ve researched, the books I write, and the visuals I create. My approach is simple: understand the problem, make something useful, and keep improving it.</p><a href={linkedin} className={styles.textLink}>My full professional profile <ArrowUpRight aria-hidden="true" /></a></div>
             <div className={styles.capabilities}>{capabilities.map((item) => <div key={item.number}><span>{item.number}</span><h3>{item.title}</h3><p>{item.detail}</p></div>)}</div>
           </div>
         </section>
 
         <section className={`${styles.experience} ${styles.container}`} aria-labelledby="experience-heading">
-          <div className={styles.sectionHeader}><div><p className={styles.eyebrow}>03 / Experience & foundations</p><h2 id="experience-heading">Built along the way<span>.</span></h2></div><a href={linkedin} className={styles.textLink}>View experience on LinkedIn <ArrowUpRight aria-hidden="true" /></a></div>
+          <div className={styles.sectionHeader}><div><p className={styles.eyebrow}>04 / Experience & foundations</p><h2 id="experience-heading">Built along the way<span>.</span></h2></div><a href={linkedin} className={styles.textLink}>View experience on LinkedIn <ArrowUpRight aria-hidden="true" /></a></div>
           <div className={styles.experienceRows}>
             <article><span>Leadership</span><div><h3>Touchforce</h3><p>Operations Officer · Previously Senior Account Manager</p></div><span>August 2024–March 2026</span></article>
             <article><span>Building</span><div><h3>Mad Buddy</h3><p>Founder & creator</p></div><span>Product, experience & technology</span></article>
@@ -148,7 +190,7 @@ export default function GodfredPortfolio() {
 
         <section id="contact" className={styles.contact} aria-labelledby="contact-heading">
           <div className={styles.container}>
-            <p className={styles.eyebrow}>04 / Make the connection</p>
+            <p className={styles.eyebrow}>05 / Make the connection</p>
             <h2 id="contact-heading">Something in mind?<br /><em>Let’s build on it.</em></h2>
             <div className={styles.contactBottom}><p>Products, growth, operations, or creative work.<br />A good conversation is a good place to start.</p><a href="mailto:godfred@mad-buddy.com" className={styles.contactButton}>Start a conversation <Mail aria-hidden="true" /></a></div>
             <div className={styles.emailLinks}><a href="mailto:godfred@mad-buddy.com">godfred@mad-buddy.com</a><a href="mailto:godfredasante004@gmail.com">godfredasante004@gmail.com</a></div>
