@@ -80,6 +80,8 @@ export async function POST(
       const v = parsed.data;
       const book = config.books.find((b) => b.id === v.bookId && b.published);
       if (!book) return response({ error: "Book not found." }, 404);
+      if (v.kind === "purchase" && book.purchaseUrl)
+        return response({ error: "Purchase the complete package through Payhip.", url: book.purchaseUrl }, 409);
       if (!config.settings.paymentsEnabled || !ready())
         return response(
           {
