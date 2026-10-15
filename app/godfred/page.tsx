@@ -8,10 +8,13 @@ const linkedin = "https://www.linkedin.com/in/goasante";
 const instagram = "https://www.instagram.com/alpha_graphix_gh/";
 const cvUrl = "/founder/Godfred-Ofosu-Asante-CV.pdf";
 const rewardsStory = "https://www.linkedin.com/posts/goasante_opstoapps-leadership-techtransformation-activity-7394395108600786944-E9hR";
-const description = "Godfred Ofosu Asante — founder of Mad Buddy, operations leader, B2B lead generation specialist and visual creative based in Ghana.";
+const booksUrl = "https://books.mad-buddy.com/";
+const payhipUrl = "https://payhip.com/GodfredAsanteDigital";
+const gumroadUrl = "https://asantegodfred5.gumroad.com/";
+const description = "Godfred Ofosu Asante — author, founder of Mad Buddy, operations leader and visual creative based in Ghana. Explore my projects, books and digital tools.";
 
 export const metadata: Metadata = {
-  title: { absolute: "Godfred Ofosu Asante — Builder, Operator & Creative" },
+  title: { absolute: "Godfred Ofosu Asante — Author, Builder & Creative" },
   description,
   alternates: { canonical: "/godfred" },
   openGraph: { title: "Godfred Ofosu Asante", description, url: "/godfred", type: "profile", firstName: "Godfred", lastName: "Ofosu Asante" },
@@ -25,6 +28,12 @@ const capabilities = [
   { number: "04", title: "Visual design", detail: "Graphic design and interface thinking. Clear messages, considered typography, and a visual identity with purpose." }
 ];
 
+const publications = [
+  { title: "The Buyer’s Friend", detail: "An AI prompt book for acquisition decisions.", payhip: "https://payhip.com/b/5TKIj", gumroad: "https://asantegodfred5.gumroad.com/l/the-buyers-friend" },
+  { title: "The Rainmaker’s Code", detail: "Practical ideas for business growth and dealmaking.", payhip: "https://payhip.com/b/qJYG1", gumroad: "https://asantegodfred5.gumroad.com/l/the-rainmakers-code" },
+  { title: "Buy Businesses on Your Terms", detail: "Premium Edition · Business acquisition resources.", payhip: "https://payhip.com/b/KV1kz", gumroad: "https://asantegodfred5.gumroad.com/l/buy-businesses-on-your-terms" }
+];
+
 export default function GodfredPortfolio() {
   return (
     <div className={styles.portfolio}>
@@ -33,7 +42,7 @@ export default function GodfredPortfolio() {
         <div className={styles.headerInner}>
           <a href="#portfolio-content" className={styles.wordmark} aria-label="Godfred Ofosu Asante, back to top">GOA<span>.</span></a>
           <nav aria-label="Portfolio navigation" className={styles.navigation}>
-            <a href="#work">Work</a><a href="#about">About</a><a href="#contact">Connect <ArrowUpRight aria-hidden="true" /></a>
+            <a href="#work">Work</a><a href="#books">Books</a><a href="#about">About</a><a href="#contact">Connect <ArrowUpRight aria-hidden="true" /></a>
           </nav>
           <Link href="/about" className={styles.backLink}>Mad Buddy <ArrowUpRight aria-hidden="true" /></Link>
         </div>
@@ -45,7 +54,7 @@ export default function GodfredPortfolio() {
             <p className={styles.eyebrow}><span className={styles.statusDot} /> Based in Ghana. Building beyond it.</p>
             <h1 id="hero-heading">Godfred<br />Ofosu Asante<span>.</span></h1>
             <p className={styles.heroStatement}>A builder’s mind.<br /><em>A creative’s eye.</em></p>
-            <p className={styles.heroDescription}>I turn ideas into useful products, stronger teams, and meaningful connections. Founder of Mad Buddy. Working across operations, growth, and design.</p>
+            <p className={styles.heroDescription}>Author, founder of Mad Buddy, and a builder of useful things. I turn ideas into practical books, digital products, stronger teams, and meaningful connections—working across operations, growth, and design.</p>
             <div className={styles.heroActions}>
               <a href="#work" className={styles.button}>Explore my work <ArrowDown aria-hidden="true" /></a>
               <a href={cvUrl} download className={styles.textLink}>Download CV <Download aria-hidden="true" /></a>
@@ -57,7 +66,7 @@ export default function GodfredPortfolio() {
               <Image src="/founder/godfred.jpg" alt="Godfred Ofosu Asante wearing a suit, with his arms folded" width={400} height={400} preload sizes="(max-width: 700px) 85vw, 400px" />
             </div>
             <figcaption><span>Ideas are a start.<br /><strong>Building is the difference.</strong></span><span className={styles.portraitMonogram} aria-hidden="true">GOA.</span></figcaption>
-            <span className={styles.portraitLabel}>Builder · Operator · Creative</span>
+            <span className={styles.portraitLabel}>Author · Builder · Operator · Creative</span>
           </figure>
         </section>
 
@@ -87,13 +96,35 @@ export default function GodfredPortfolio() {
             </div>
           </article>
 
+          <article id="books" className={styles.booksProject} aria-labelledby="books-heading">
+            <div className={styles.booksIntro}>
+              <p className={styles.projectType}>02 — Author / Digital publishing</p>
+              <h3 id="books-heading">GOA Books<span>.</span></h3>
+              <p className={styles.booksStatement}>Ideas worth reading.<br />Tools worth using.</p>
+              <p>My books and practical resources bring business research, dealmaking, and AI-assisted workflows together. GOA Books is the digital home I built for this work: a curated bookshop with individual book pages and purchase links.</p>
+              <div className={styles.tags}><span>Writing & publishing</span><span>Digital products</span><span>Bookshop website</span></div>
+              <a href={booksUrl} className={styles.button}>Explore my book website <ArrowUpRight aria-hidden="true" /></a>
+              <nav className={styles.storeLinks} aria-label="Book storefronts"><a href={payhipUrl}>Payhip shop <ArrowUpRight aria-hidden="true" /></a><a href={gumroadUrl}>Gumroad shop <ArrowUpRight aria-hidden="true" /></a></nav>
+            </div>
+            <div className={styles.booksShelf}>
+              <p className={styles.eyebrow}>By Godfred Ofosu Asante</p>
+              {publications.map((book, index) => (
+                <div className={styles.bookRow} key={book.title}>
+                  <span className={styles.bookIndex} aria-hidden="true">0{index + 1}</span>
+                  <div><h4>{book.title}</h4><p>{book.detail}</p><div className={styles.bookLinks}><a href={book.payhip} aria-label={`Buy ${book.title} on Payhip`}>Payhip <ArrowUpRight aria-hidden="true" /></a><a href={book.gumroad} aria-label={`Buy ${book.title} on Gumroad`}>Gumroad <ArrowUpRight aria-hidden="true" /></a></div></div>
+                </div>
+              ))}
+              <a href="https://books.mad-buddy.com/books/the-buyers-friend" className={styles.textLink}>Read about The Buyer’s Friend <ArrowUpRight aria-hidden="true" /></a>
+            </div>
+          </article>
+
           <article className={styles.rewardsProject}>
             <div className={styles.rewardsVisual}>
               <Image src="/founder/rewards-system.jpg" alt="A team celebration featured in Godfred’s workplace rewards project write-up" width={1280} height={720} sizes="(max-width: 700px) 90vw, 600px" />
               <div className={styles.rewardsCaption}><span>Beyond the dashboard</span><strong>Make good work<br />worth celebrating.</strong></div>
             </div>
             <div className={styles.rewardsCopy}>
-              <p className={styles.projectType}>02 — Operations / Internal tool</p>
+              <p className={styles.projectType}>03 — Operations / Internal tool</p>
               <h3>Recognition that<br />changes the rhythm.</h3>
               <p>I built a workplace gamification and rewards system to recognise effort, encourage fair competition, and bring the team together through Victory Friday.</p>
               <p>Google Sheets kept records easy to audit. Feedback shaped improvements, including duplicate checks and stronger validation.</p>
@@ -105,7 +136,7 @@ export default function GodfredPortfolio() {
 
           <div className={styles.projectPair}>
             <article className={styles.growthProject}>
-              <p className={styles.projectType}>03 — Research / Growth</p>
+              <p className={styles.projectType}>04 — Research / Growth</p>
               <div className={styles.growthVisual} aria-hidden="true"><span>Research</span><i /><span>Validate</span><i /><span>Connect</span></div>
               <h3>Better prospects.<br />Better conversations.</h3>
               <p>B2B and M&A outreach, recruitment campaigns, copywriting, and email marketing. Company research and validated data help turn prospecting into more informed conversations.</p>
@@ -113,7 +144,7 @@ export default function GodfredPortfolio() {
               <a href="https://gamma.app/docs/Business-Growth-Through-Expert-Lead-Generation-kl2kst8vhu7lxjx" className={styles.textLink}>See the lead generation case study <ArrowUpRight aria-hidden="true" /></a>
             </article>
             <article className={styles.designProject}>
-              <p className={styles.projectType}>04 — Visual / Design practice</p>
+              <p className={styles.projectType}>05 — Visual / Design practice</p>
               <div className={styles.designVisual}>
                 <Image src="/founder/event-design.webp" alt="Godfred’s red and white SRC inter-hall football tournament poster" width={1080} height={1080} sizes="(max-width: 700px) 42vw, 240px" />
                 <Image src="/founder/seasonal-design.webp" alt="Godfred’s blue and white seasonal greetings design for Sambus Geospatial" width={1080} height={1080} sizes="(max-width: 700px) 42vw, 240px" />
@@ -128,7 +159,7 @@ export default function GodfredPortfolio() {
         <section id="about" className={styles.aboutSection} aria-labelledby="about-heading">
           <div className={`${styles.container} ${styles.aboutGrid}`}>
             <div><p className={styles.eyebrow}>02 / The person behind the work</p><h2 id="about-heading">Curious by nature.<br /><em>Practical by choice.</em></h2></div>
-            <div className={styles.aboutCopy}><p>I’m Godfred, a Ghana-based builder and operations professional with a creative streak. I like the point where people, business, and technology meet.</p><p>That shows up in the products I build, the teams I’ve led, the prospects I’ve researched, and the visuals I create. My approach is simple: understand the problem, make something useful, and keep improving it.</p><a href={linkedin} className={styles.textLink}>My full professional profile <ArrowUpRight aria-hidden="true" /></a></div>
+            <div className={styles.aboutCopy}><p>I’m Godfred, a Ghana-based author, builder, and operations professional with a creative streak. I like the point where people, business, and technology meet.</p><p>That shows up in the books I write, the products I build, the teams I’ve led, the prospects I’ve researched, and the visuals I create. My approach is simple: understand the problem, make something useful, and keep improving it.</p><a href={linkedin} className={styles.textLink}>My full professional profile <ArrowUpRight aria-hidden="true" /></a></div>
             <div className={styles.capabilities}>{capabilities.map((item) => <div key={item.number}><span>{item.number}</span><h3>{item.title}</h3><p>{item.detail}</p></div>)}</div>
           </div>
         </section>
@@ -160,3 +191,4 @@ export default function GodfredPortfolio() {
     </div>
   );
 }
+
