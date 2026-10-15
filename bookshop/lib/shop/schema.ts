@@ -20,6 +20,7 @@ export const bookSchema = z
     category: text(60),
     mode: z.enum(["free", "support", "paid"]),
     priceMinor: z.number().int().min(100).max(10000000),
+    purchaseUrl: z.string().regex(/^https:\/\/payhip\.com\/b\/[A-Za-z0-9]+$/).optional(),
     published: z.boolean(),
     pages: z.number().int().min(1).max(2000),
     cover: asset,

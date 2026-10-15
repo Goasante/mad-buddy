@@ -128,7 +128,7 @@ export function BookPage({ book, config }: { book: Book; config: ShopConfig }) {
       </section>
       <section className="section">
         <p className="eyebrow">What you will learn</p>
-        <h2>From search to a serious conversation.</h2>
+        <h2>{book.purchaseUrl ? "From opportunity to an informed decision." : "From search to a serious conversation."}</h2>
         <div className="benefits">
           {book.benefits.map((benefit, index) => (
             <article key={benefit}>

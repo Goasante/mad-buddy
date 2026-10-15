@@ -89,6 +89,17 @@ export function BookActions({
       setMessage(e instanceof Error ? e.message : "Please try again.");
     }
   }
+  if (!supportOnly && book.mode === "paid" && book.purchaseUrl) {
+    return (
+      <div className="reader-actions">
+        <a className="button gold" href={book.purchaseUrl} rel="noreferrer">
+          Buy on Payhip · {ghs(book.priceMinor)}
+        </a>
+        <p className="fine">Secure payment and delivery through Payhip. Your purchase includes the complete ZIP package: book, interactive reader and companion files.</p>
+        <small>Paid single-user license. External service accounts and subscriptions are not included.</small>
+      </div>
+    );
+  }
   return (
     <div className="reader-actions">
       {!supportOnly && book.preview && (

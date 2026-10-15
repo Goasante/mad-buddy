@@ -365,6 +365,16 @@ export default function Admin({
                     />
                   </label>
                   <label>
+                    Payhip purchase URL (optional)
+                    <input
+                      type="url"
+                      placeholder="https://payhip.com/b/product"
+                      value={book.purchaseUrl || ""}
+                      onChange={(e) => editBook("purchaseUrl", e.target.value.trim() || undefined)}
+                    />
+                  </label>
+                  <p className="fine">For a paid book, this replaces local checkout. Payhip handles payment and delivery of the complete package.</p>
+                  <label>
                     Description
                     <textarea
                       value={book.description}
