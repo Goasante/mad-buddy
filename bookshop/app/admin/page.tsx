@@ -9,5 +9,6 @@ export const metadata = {
 export default async function Page() {
   if (!(await isAdmin())) return <AdminLogin />;
   const { config, etag } = await configuration();
-  return <Admin initial={config} initialEtag={etag} />;
+  return <><p style={{ padding: "12px 24px", margin: 0 }}><a href="/admin/previews">Private owner previews →</a></p><Admin initial={config} initialEtag={etag} /></>;
 }
+
